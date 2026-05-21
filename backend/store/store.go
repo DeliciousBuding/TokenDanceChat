@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -59,10 +60,19 @@ func (s *Store) migrate() error {
 		timestamp INTEGER NOT NULL,
 		reply_to_id TEXT DEFAULT '',
 		room_id TEXT DEFAULT '',
-		deleted INTEGER NOT NULL DEFAULT 0
+		deleted INTEGER NOT NULL DEFAULT 0,
+		edited INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
 	CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, timestamp DESC);
+	CREATE TABLE IF NOT EXISTS reactions (
+		message_id TEXT NOT NULL,
+		emoji TEXT NOT NULL,
+		username TEXT NOT NULL,
+		PRIMARY KEY (message_id, emoji, username),
+		FOREIGN KEY (message_id) REFERENCES messages(id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id);
 	`
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -73,6 +83,7 @@ func (s *Store) migrate() error {
 	s.db.Exec("ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")
 	s.db.Exec("ALTER TABLE messages ADD COLUMN reply_to_id TEXT DEFAULT ''")
 	s.db.Exec("ALTER TABLE messages ADD COLUMN room_id TEXT DEFAULT ''")
+	s.db.Exec("ALTER TABLE messages ADD COLUMN edited INTEGER NOT NULL DEFAULT 0")
 
 	// Seed default room if not present.
 	s.ensureDefaultRoom()
@@ -133,24 +144,24 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []hub.St
 	if before > 0 {
 		if roomID != "" {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted FROM messages WHERE room_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages WHERE room_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
 				roomID, before, limit,
 			)
 		} else {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted FROM messages WHERE timestamp < ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages WHERE timestamp < ? ORDER BY timestamp DESC LIMIT ?",
 				before, limit,
 			)
 		}
 	} else {
 		if roomID != "" {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted FROM messages WHERE room_id = ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages WHERE room_id = ? ORDER BY timestamp DESC LIMIT ?",
 				roomID, limit,
 			)
 		} else {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted FROM messages ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages ORDER BY timestamp DESC LIMIT ?",
 				limit,
 			)
 		}
@@ -165,7 +176,7 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []hub.St
 	messages := make([]hub.StoredMessage, 0, limit)
 	for rows.Next() {
 		var m hub.StoredMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited); err != nil {
 			log.Printf("store: scan error: %v", err)
 			continue
 		}
@@ -237,4 +248,103 @@ func (s *Store) DeleteRoom(roomID string) error {
 
 func (s *Store) Close() error {
 	return s.db.Close()
+}
+
+// ToggleReaction adds or removes a reaction. Returns the updated reactions map.
+func (s *Store) ToggleReaction(messageID, emoji, username string) (map[string][]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var count int
+	err := s.db.QueryRow(
+		"SELECT COUNT(*) FROM reactions WHERE message_id = ? AND emoji = ? AND username = ?",
+		messageID, emoji, username,
+	).Scan(&count)
+	if err != nil {
+		return nil, err
+	}
+
+	if count > 0 {
+		_, err = s.db.Exec(
+			"DELETE FROM reactions WHERE message_id = ? AND emoji = ? AND username = ?",
+			messageID, emoji, username,
+		)
+	} else {
+		_, err = s.db.Exec(
+			"INSERT INTO reactions (message_id, emoji, username) VALUES (?, ?, ?)",
+			messageID, emoji, username,
+		)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return s.getReactionsForMessageLocked(messageID), nil
+}
+
+func (s *Store) getReactionsForMessageLocked(messageID string) map[string][]string {
+	rows, err := s.db.Query(
+		"SELECT emoji, username FROM reactions WHERE message_id = ? ORDER BY rowid",
+		messageID,
+	)
+	if err != nil {
+		log.Printf("store: reaction query error: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	result := make(map[string][]string)
+	for rows.Next() {
+		var emoji, username string
+		if err := rows.Scan(&emoji, &username); err != nil {
+			log.Printf("store: reaction scan error: %v", err)
+			continue
+		}
+		result[emoji] = append(result[emoji], username)
+	}
+	return result
+}
+
+func (s *Store) GetReactionsForMessages(messageIDs []string) map[string]map[string][]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make(map[string]map[string][]string)
+	for _, mid := range messageIDs {
+		result[mid] = s.getReactionsForMessageLocked(mid)
+	}
+	return result
+}
+
+func (s *Store) UpdateMessage(messageID, content string) (hub.StoredMessage, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec(
+		"UPDATE messages SET content = ?, edited = 1 WHERE id = ?",
+		content, messageID,
+	)
+	if err != nil {
+		return hub.StoredMessage{}, err
+	}
+
+	return s.getMessageByIDLocked(messageID)
+}
+
+func (s *Store) GetMessageByID(messageID string) (hub.StoredMessage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.getMessageByIDLocked(messageID)
+}
+
+func (s *Store) getMessageByIDLocked(messageID string) (hub.StoredMessage, error) {
+	var m hub.StoredMessage
+	err := s.db.QueryRow(
+		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages WHERE id = ?",
+		messageID,
+	).Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited)
+	if err != nil {
+		return hub.StoredMessage{}, err
+	}
+	return m, nil
 }

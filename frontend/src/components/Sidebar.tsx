@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
-import { cn, avatarGradient, formatLastSeen } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -22,10 +22,23 @@ interface SidebarProps {
   pendingFriendUsers?: string[];
 }
 
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+}
+
+function avatarGradient(username: string): string {
+  const baseHue = hashString(username) % 360;
+  const hue1 = baseHue;
+  const hue2 = (baseHue + 45) % 360;
+  return `linear-gradient(135deg, oklch(65% 0.16 ${hue1}), oklch(58% 0.14 ${hue2}))`;
+}
+
 const UserListItem = memo(function UserListItem({
   user,
-  online,
-  lastSeen,
   isSelf,
   youLabel,
   onStartDM,
@@ -34,8 +47,6 @@ const UserListItem = memo(function UserListItem({
   hasPendingRequest,
 }: {
   user: string;
-  online: boolean;
-  lastSeen?: number;
   isSelf: boolean;
   youLabel: string;
   onStartDM?: (username: string) => void;
@@ -47,10 +58,9 @@ const UserListItem = memo(function UserListItem({
   const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <button
-      onClick={handleClick}
+    <div
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors",
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
         isSelf
           ? "bg-[hsl(220,2.5%,20%)] text-foreground"
           : "text-foreground/80 hover:bg-[hsl(220,2.5%,18%)]",
@@ -68,23 +78,7 @@ const UserListItem = memo(function UserListItem({
         >
           {user.charAt(0).toUpperCase()}
         </div>
-        {/* Online/offline dot */}
-        <span
-          className={cn(
-            "absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-[hsl(231,4%,16%)]",
-            online
-              ? "bg-online animate-pulse-dot"
-              : "bg-muted-foreground/40",
-          )}
-        />
-      </div>
-      <div className="flex-1 min-w-0">
-        <span className="block truncate text-sm">{user}</span>
-        {!online && lastSeenText && (
-          <span className="text-[10px] text-muted-foreground/50">
-            {lastSeenText}
-          </span>
-        )}
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-[hsl(231,4%,16%)] bg-online animate-pulse-dot" />
       </div>
       <span className="flex-1 truncate text-sm">{user}</span>
       {isFriend && !isSelf && (
@@ -159,34 +153,9 @@ export function Sidebar({
     setCurrentChat,
   } = useChatStore();
 
-  // Split users into online and offline groups.
-  const onlineUsers = useMemo(
-    () => userStatusList.filter((u) => u.online),
-    [userStatusList],
-  );
-  const offlineUsers = useMemo(
-    () => userStatusList.filter((u) => !u.online),
-    [userStatusList],
-  );
-
-  // Separate self from the online list.
-  const otherOnline = useMemo(
-    () => onlineUsers.filter((u) => u.username !== username),
-    [onlineUsers, username],
-  );
-  const hasSelfOnline = useMemo(
-    () => onlineUsers.some((u) => u.username === username),
-    [onlineUsers, username],
-  );
-
-  const handleUserClick = useCallback(
-    (clickedUser: string) => {
-      setSelectedProfileUser(clickedUser);
-    },
-    [setSelectedProfileUser],
-  );
-
-  const hasAnyUsers = userStatusList.length > 0;
+  // Separate current user from others for visual grouping
+  const otherUsers = onlineUsers.filter((u) => u !== username);
+  const hasSelf = onlineUsers.includes(username);
 
   // Users with DM history
   const dmPartners = useMemo(() => {
@@ -216,12 +185,6 @@ export function Sidebar({
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold text-foreground truncate">
             {t("sidebar.publicChat")}
-            {unreadCount > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full text-[10px] font-bold text-white"
-                style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}>
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            )}
           </h2>
           <p className="text-xs text-muted-foreground truncate">
             {t("sidebar.publicChatSub")}
@@ -402,13 +365,13 @@ export function Sidebar({
             </span>
           </div>
           <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(220,2.5%,20%)] px-1.5 text-[10px] font-medium text-muted-foreground">
-            {userStatusList.length}
+            {onlineUsers.length}
           </span>
         </div>
 
         {/* User list */}
         <div className="flex-1 overflow-y-auto px-3 py-1">
-          {!hasAnyUsers ? (
+          {onlineUsers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
               <Users className="mb-2 h-6 w-6 opacity-30" />
               <p className="text-xs">{t("sidebar.emptyState")}</p>
@@ -426,53 +389,9 @@ export function Sidebar({
                   {/* Divider between you and others */}
                   {otherUsers.length > 0 && (
                     <div className="flex items-center gap-2 px-3 py-1.5">
-                      <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider">
-                        {t("sidebar.online")} &mdash; {onlineUsers.length}
-                      </div>
                       <div className="h-px flex-1 bg-[hsl(220,2.5%,18%)]" />
                     </div>
                   )}
-                  {!hasSelfOnline && onlineUsers.length > 0 && (
-                    <div className="flex items-center gap-2 px-3 py-1.5">
-                      <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider">
-                        {t("sidebar.online")} &mdash; {onlineUsers.length}
-                      </div>
-                      <div className="h-px flex-1 bg-[hsl(220,2.5%,18%)]" />
-                    </div>
-                  )}
-                  {otherOnline.map((user) => (
-                    <UserListItem
-                      key={user.username}
-                      user={user.username}
-                      online
-                      isSelf={false}
-                      youLabel={t("sidebar.you")}
-                      onClick={handleUserClick}
-                    />
-                  ))}
-                </>
-              )}
-
-              {/* Offline section */}
-              {offlineUsers.length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 px-3 py-1.5 mt-1">
-                    <div className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider">
-                      {t("sidebar.offline")} &mdash; {offlineUsers.length}
-                    </div>
-                    <div className="h-px flex-1 bg-[hsl(220,2.5%,18%)]" />
-                  </div>
-                  {offlineUsers.map((user) => (
-                    <UserListItem
-                      key={user.username}
-                      user={user.username}
-                      online={false}
-                      lastSeen={user.last_seen}
-                      isSelf={false}
-                      youLabel={t("sidebar.you")}
-                      onClick={handleUserClick}
-                    />
-                  ))}
                 </>
               )}
               {/* Other users */}
