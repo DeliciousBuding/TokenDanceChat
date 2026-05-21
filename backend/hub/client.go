@@ -468,7 +468,7 @@ func (c *Client) WritePump() {
 const maxContentLength = 2000
 
 // mentionRegex matches @username patterns in message content.
-var mentionRegex = regexp.MustCompile(`@(\w+)`)
+var mentionRegex = regexp.MustCompile(`@([\p{Han}\p{L}\p{N}_]+)`)
 
 // parseMentions extracts all @mentioned usernames from content.
 func parseMentions(content string) []string {
@@ -1063,6 +1063,20 @@ func (c *Client) handleForward(msg Message) {
 		return
 	}
 
+	// Block forwarding of private DM messages.
+	if stored.ToUser != "" {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "cannot forward private messages",
+			ErrorCode: "FORWARD_BLOCKED",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
 	forwardContent := "Forwarded from " + stored.Username + ":\n" + stored.Content
 
 	// Persist as a new message.
@@ -1104,7 +1118,10 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	})
 
 	// Build conversation history from memory.
-	messages := c.hub.Memory().GetMessages()
+	var messages []llm.Message
+	if mem := c.hub.Memory(); mem != nil {
+		messages = mem.GetMessages()
+	}
 
 	client := c.hub.LLMClient()
 	systemPrompt := c.hub.BuildSystemPrompt()
