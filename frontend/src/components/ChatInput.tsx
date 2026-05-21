@@ -3,7 +3,6 @@ import { Send, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
-import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 
 interface ChatInputProps {
@@ -96,10 +95,10 @@ export function ChatInput({
   useEffect(() => {
     const hasContent = content.trim().length > 0;
     if (hasContent && !isComposing && !disabled && !typingSentRef.current) {
-      chatAPI.sendTypingStart();
+      // chatAPI.sendTypingStart();
       typingSentRef.current = true;
     } else if (!hasContent && typingSentRef.current) {
-      chatAPI.sendTypingStop();
+      // chatAPI.sendTypingStop();
       typingSentRef.current = false;
     }
   }, [content, isComposing, disabled]);
@@ -130,7 +129,7 @@ export function ChatInput({
     setContent("");
     // Clear typing state.
     if (typingSentRef.current) {
-      chatAPI.sendTypingStop();
+      // chatAPI.sendTypingStop();
       typingSentRef.current = false;
     }
     if (textareaRef.current) {
