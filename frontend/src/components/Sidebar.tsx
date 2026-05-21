@@ -65,7 +65,7 @@ const UserListItem = memo(function UserListItem({
 
 export function Sidebar({ collapsed, onClose }: SidebarProps) {
   const { t } = useTranslation();
-  const { onlineUsers, username } = useChatStore();
+  const { onlineUsers, username, unreadCount } = useChatStore();
 
   // Separate current user from others for visual grouping
   const otherUsers = onlineUsers.filter((u) => u !== username);
@@ -91,6 +91,12 @@ export function Sidebar({ collapsed, onClose }: SidebarProps) {
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold text-foreground truncate">
             {t("sidebar.publicChat")}
+            {unreadCount > 0 && (
+              <span className="ml-2 inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full text-[10px] font-bold text-white"
+                style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}>
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </h2>
           <p className="text-xs text-muted-foreground truncate">
             {t("sidebar.publicChatSub")}
