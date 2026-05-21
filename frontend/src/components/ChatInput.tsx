@@ -1,19 +1,15 @@
-import {
-  useState,
-  useRef,
-  useCallback,
-  useEffect,
-  useMemo,
-  type KeyboardEvent,
-} from "react";
-import { Send, Loader2, X } from "lucide-react";
-import { cn, hashString } from "@/lib/utils";
+import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent, type ClipboardEvent } from "react";
+import { Send, Loader2, X, ImagePlus } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
   disabled?: boolean;
+  replyTo?: ChatMessage | null;
+  onCancelReply?: () => void;
+  onUpload?: (file: File) => void;
 }
 
 function hashString(str: string): number {
@@ -24,12 +20,18 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  disabled,
+  replyTo,
+  onCancelReply,
+  onUpload,
+}: ChatInputProps) {
   const { t } = useTranslation();
-  const { onlineUsers, username, replyTo, setReplyTo, currentChat } =
-    useChatStore();
+  const { onlineUsers, username, pendingImage, setPendingImage } = useChatStore();
   const [content, setContent] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [pulseButton, setPulseButton] = useState(false);
   const hadContentRef = useRef(false);
@@ -105,6 +107,77 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
+
+  // Image paste handler
+  const handlePaste = useCallback(
+    (e: ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            // Check file size (5MB limit).
+            if (file.size > 5 * 1024 * 1024) {
+              return;
+            }
+            // Check type.
+            const validTypes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+            if (!validTypes.includes(file.type)) {
+              return;
+            }
+            // Show preview.
+            const reader = new FileReader();
+            reader.onload = () => {
+              setPendingImage(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+            break;
+          }
+        }
+      }
+    },
+    [setPendingImage],
+  );
+
+  // File input handler
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) return;
+      const validTypes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+      if (!validTypes.includes(file.type)) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPendingImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      // Reset input.
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    [setPendingImage],
+  );
+
+  // Cancel pending image
+  const handleCancelImage = useCallback(() => {
+    setPendingImage(null);
+  }, [setPendingImage]);
+
+  // Send pending image
+  const handleSendImage = useCallback(() => {
+    if (!pendingImage || !onUpload) return;
+    // Convert data URL to File and upload.
+    fetch(pendingImage)
+      .then((res) => res.blob())
+      .then((blob) => {
+        const file = new File([blob], `paste-${Date.now()}.png`, { type: blob.type });
+        onUpload(file);
+      });
+  }, [pendingImage, onUpload]);
 
   // Pulse send button when content goes from empty to non-empty
   useEffect(() => {
@@ -250,9 +323,63 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         </div>
       )}
 
+      {/* Image preview */}
+      {pendingImage && (
+        <div className="flex items-center gap-2 px-4 pt-2">
+          <div className="relative inline-block">
+            <img
+              src={pendingImage}
+              alt="Preview"
+              className="h-20 w-auto rounded-lg border border-[hsl(220,2.5%,23.5%)] object-cover"
+            />
+            <button
+              onClick={handleCancelImage}
+              className="absolute -top-1 -right-1 rounded-full bg-[hsl(0,62.8%,50.6%)] p-0.5 text-white hover:bg-[hsl(0,62.8%,45%)] transition-colors"
+              aria-label="Remove image"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+          <button
+            onClick={handleSendImage}
+            className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
+            style={{
+              backgroundColor: "oklch(71.2% 0.194 13.428)",
+              color: "#fff",
+            }}
+          >
+            <Send className="h-3 w-3" />
+            Send
+          </button>
+        </div>
+      )}
+
+      {/* File input (hidden) */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        onChange={handleFileSelect}
+        className="hidden"
+        aria-hidden="true"
+      />
+
       {/* Input area */}
       <div className="flex items-end gap-2 px-4 py-3">
-        <div className="flex-1 relative">
+        {/* Upload button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled}
+          aria-label="Upload image"
+          className={cn(
+            "flex h-[42px] w-[42px] flex-shrink-0 items-center justify-center rounded-xl transition-all duration-200",
+            "bg-[hsl(220,2.5%,20%)] text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed",
+          )}
+        >
+          <ImagePlus className="h-4 w-4" />
+        </button>
+
+        <div className="flex-1 relative input-glow">
           {/* @mention autocomplete dropdown */}
           {mentionActive && (
             <div
@@ -296,6 +423,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             onCompositionStart={() => setIsComposing(true)}
             onCompositionEnd={() => setIsComposing(false)}
             placeholder={placeholder}

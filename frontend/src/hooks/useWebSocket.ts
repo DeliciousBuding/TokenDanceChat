@@ -8,7 +8,9 @@ import {
   type WSHistoryMessage,
   type WSUserEvent,
   type WSTypingEvent,
-  type WSUserStatus,
+  type WSRoomList,
+  type WSRoomJoin,
+  type WSForwardEvent,
 } from "@/lib/api";
 
 // --- Notification utilities ---
@@ -102,13 +104,9 @@ export function useWebSocket() {
     addSystemMessage,
     addTypingUser,
     removeTypingUser,
-    setFriends,
-    addFriendRequest,
-    removeFriendRequest,
-    setGroupMembers,
-    addDMMessage,
-    addGroupMessage,
-    deleteMessage,
+    setRooms,
+    setCurrentRoomID,
+    setPendingImage,
   } = useChatStore();
 
   const connect = useCallback(
@@ -164,6 +162,32 @@ export function useWebSocket() {
     unreadTitleCount = 0;
     updatePageTitle();
   }, [setUnreadCount]);
+
+  const joinRoom = useCallback((roomID: string) => {
+    chatAPI.sendRoomJoin(roomID);
+  }, []);
+
+  const createRoom = useCallback((name: string) => {
+    chatAPI.sendRoomCreate(name);
+  }, []);
+
+  const leaveRoom = useCallback(() => {
+    chatAPI.sendRoomLeave();
+  }, []);
+
+  const forwardMessage = useCallback((messageID: string, toUsername: string) => {
+    chatAPI.sendForward(messageID, toUsername);
+  }, []);
+
+  const uploadImage = useCallback(async (file: File) => {
+    const url = await chatAPI.uploadImage(file);
+    if (url) {
+      // Send as markdown image.
+      const imageMarkdown = `![image](${url})`;
+      chatAPI.sendMessage(imageMarkdown);
+    }
+    setPendingImage(null);
+  }, [setPendingImage]);
 
   useEffect(() => {
     // Tab visibility tracking.
@@ -233,8 +257,41 @@ export function useWebSocket() {
     // History
     unsubs.push(
       chatAPI.on("history", (msg: WSMessage) => {
-        const { messages } = msg as WSHistoryMessage;
+        const { messages, room_id } = msg as WSHistoryMessage;
         setHistory(messages || []);
+        if (room_id) {
+          setCurrentRoomID(room_id);
+        }
+      }),
+    );
+
+    unsubs.push(
+      chatAPI.on("room_list", (msg: WSMessage) => {
+        const { rooms } = msg as WSRoomList;
+        if (rooms) {
+          setRooms(rooms);
+        }
+      }),
+    );
+
+    unsubs.push(
+      chatAPI.on("room_join", (msg: WSMessage) => {
+        const { room_id } = msg as WSRoomJoin;
+        if (room_id) {
+          setCurrentRoomID(room_id);
+        }
+      }),
+    );
+
+    unsubs.push(
+      chatAPI.on("forward", (msg: WSMessage) => {
+        const { id, from, content, timestamp } = msg as WSForwardEvent;
+        addMessage({
+          id: id || `fwd-${Date.now()}`,
+          username: from,
+          content: `[Forwarded] ${content}`,
+          timestamp: timestamp || Date.now(),
+        });
       }),
     );
 
@@ -429,21 +486,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [
-    addMessage,
-    setHistory,
-    setOnlineUsers,
-    addSystemMessage,
-    addTypingUser,
-    removeTypingUser,
-    setFriends,
-    addFriendRequest,
-    removeFriendRequest,
-    setGroupMembers,
-    addDMMessage,
-    addGroupMessage,
-    deleteMessage,
-  ]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID]);
 
-  return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage };
+  return { connect, disconnect, sendMessage, joinRoom, createRoom, leaveRoom, forwardMessage, uploadImage };
 }

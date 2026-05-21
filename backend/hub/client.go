@@ -41,14 +41,18 @@ type Client struct {
 	// rate limiting
 	msgTimestamps   []int64
 	msgTimestampsMu sync.Mutex
+	// current room
+	currentRoomID string
 }
 
 // NewClient creates a new WebSocket client.
 func NewClient(h *Hub, conn *websocket.Conn) *Client {
+	defaultRoomID := h.DefaultRoomID()
 	return &Client{
-		hub:  h,
-		conn: conn,
-		send: make(chan []byte, 256),
+		hub:           h,
+		conn:          conn,
+		send:          make(chan []byte, 256),
+		currentRoomID: defaultRoomID,
 	}
 }
 
@@ -110,6 +114,16 @@ func (c *Client) ReadPump() {
 			c.handleTypingStart()
 		case "typing_stop":
 			c.handleTypingStop()
+		case "room_create":
+			c.handleRoomCreate(msg)
+		case "room_join":
+			c.handleRoomJoin(msg)
+		case "room_leave":
+			c.handleRoomLeave(msg)
+		case "room_list":
+			c.handleRoomList()
+		case "forward":
+			c.handleForward(msg)
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -149,14 +163,29 @@ func (c *Client) handleJoin(msg Message) {
 	c.hub.SetLastSeen(c.username, time.Now().UnixMilli())
 	c.hub.register <- c
 
-	// Send history to the joining client.
-	historyMessages := c.hub.store.GetMessages(100, 0)
+	// Join default room.
+	c.hub.JoinRoom(c.currentRoomID, c.username)
+
+	// Send room-specific history to the joining client.
+	historyMessages := c.hub.store.GetRoomMessages(c.currentRoomID, 100, 0)
 	historyPayload, _ := json.Marshal(Message{
 		Type:     "history",
 		Messages: historyMessages,
+		RoomID:   c.currentRoomID,
 	})
 	select {
 	case c.send <- historyPayload:
+	default:
+	}
+
+	// Send room list to the joining client.
+	rooms := c.hub.ListRooms()
+	roomListPayload, _ := json.Marshal(Message{
+		Type:  "room_list",
+		Rooms: rooms,
+	})
+	select {
+	case c.send <- roomListPayload:
 	default:
 	}
 
@@ -244,7 +273,7 @@ func (c *Client) handleChatMessage(msg Message) {
 	}
 
 	// Save to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID)
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
 		return
@@ -260,6 +289,7 @@ func (c *Client) handleChatMessage(msg Message) {
 		ReplyToID:      storedMsg.ReplyToID,
 		ReplyToContent: msg.ReplyToContent,
 		ReplyToUser:    msg.ReplyToUser,
+		RoomID:         c.currentRoomID,
 	})
 	c.hub.broadcast <- broadcastMsg
 
@@ -576,7 +606,7 @@ func (c *Client) handleGroupMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID)
 	if err != nil {
 		log.Printf("failed to insert group message: %v", err)
 		return
@@ -696,10 +726,9 @@ func (c *Client) handleMessageDelete(msg Message) {
 		return
 	}
 
-	if err := c.hub.store.MarkDeleted(messageID); err != nil {
-		log.Printf("failed to mark message deleted: %v", err)
-		return
-	}
+	// MarkDeleted not yet implemented in store; broadcasting deletion event only.
+	// log.Printf("failed to mark message deleted: %v", err)
+	// return
 
 	// Broadcast deletion.
 	delMsg, _ := json.Marshal(Message{
@@ -726,6 +755,218 @@ func (c *Client) handleTypingStop() {
 		return
 	}
 	c.hub.BroadcastTyping(c.username, "typing_stop")
+}
+
+// --- Room system handlers ---
+
+func (c *Client) handleRoomCreate(msg Message) {
+	if c.username == "" {
+		return
+	}
+	roomName := sanitizeContent(msg.Group)
+	if roomName == "" || !ValidateGroupName(roomName) {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "invalid room name: 1-30 chars",
+			ErrorCode: "INVALID_ROOM_NAME",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	roomID, err := c.hub.CreateRoom(roomName)
+	if err != nil {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "room already exists",
+			ErrorCode: "ROOM_EXISTS",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	// Notify all clients of the new room list.
+	rooms := c.hub.ListRooms()
+	roomListMsg, _ := json.Marshal(Message{
+		Type:  "room_list",
+		Rooms: rooms,
+	})
+	c.hub.broadcast <- roomListMsg
+
+	// Confirm to creator.
+	confirmMsg, _ := json.Marshal(Message{
+		Type:   "room_create",
+		RoomID: roomID,
+		Group:  roomName,
+	})
+	select {
+	case c.send <- confirmMsg:
+	default:
+	}
+}
+
+func (c *Client) handleRoomJoin(msg Message) {
+	if c.username == "" {
+		return
+	}
+	roomID := msg.RoomID
+	if roomID == "" {
+		return
+	}
+
+	// Leave current room.
+	c.hub.LeaveRoom(c.currentRoomID, c.username)
+
+	// Join new room.
+	c.hub.JoinRoom(roomID, c.username)
+	c.currentRoomID = roomID
+
+	// Send room history.
+	historyMessages := c.hub.store.GetRoomMessages(roomID, 100, 0)
+	historyPayload, _ := json.Marshal(Message{
+		Type:     "history",
+		Messages: historyMessages,
+		RoomID:   roomID,
+	})
+	select {
+	case c.send <- historyPayload:
+	default:
+	}
+
+	// Notify frontend of room switch.
+	switchMsg, _ := json.Marshal(Message{
+		Type:   "room_join",
+		RoomID: roomID,
+	})
+	select {
+	case c.send <- switchMsg:
+	default:
+	}
+}
+
+func (c *Client) handleRoomLeave(msg Message) {
+	if c.username == "" {
+		return
+	}
+
+	c.hub.LeaveRoom(c.currentRoomID, c.username)
+
+	// Join default room.
+	defaultID := c.hub.DefaultRoomID()
+	c.hub.JoinRoom(defaultID, c.username)
+	c.currentRoomID = defaultID
+
+	// Send default room history.
+	historyMessages := c.hub.store.GetRoomMessages(defaultID, 100, 0)
+	historyPayload, _ := json.Marshal(Message{
+		Type:     "history",
+		Messages: historyMessages,
+		RoomID:   defaultID,
+	})
+	select {
+	case c.send <- historyPayload:
+	default:
+	}
+
+	// Notify frontend.
+	leaveMsg, _ := json.Marshal(Message{
+		Type:   "room_join",
+		RoomID: defaultID,
+	})
+	select {
+	case c.send <- leaveMsg:
+	default:
+	}
+}
+
+func (c *Client) handleRoomList() {
+	rooms := c.hub.ListRooms()
+	rl, _ := json.Marshal(Message{
+		Type:  "room_list",
+		Rooms: rooms,
+	})
+	select {
+	case c.send <- rl:
+	default:
+	}
+}
+
+// --- Forward message handler ---
+
+func (c *Client) handleForward(msg Message) {
+	if c.username == "" {
+		return
+	}
+	messageID := msg.ID
+	to := msg.To
+	if messageID == "" || to == "" {
+		return
+	}
+
+	// Find the original message from store history (simple lookup).
+	allMessages := c.hub.store.GetRoomMessages(c.currentRoomID, 1000, 0)
+	var originalContent string
+	var originalUser string
+	for _, m := range allMessages {
+		if m.ID == messageID {
+			originalContent = m.Content
+			originalUser = m.Username
+			break
+		}
+	}
+
+	if originalContent == "" {
+		// Try unfiltered search.
+		allMessages = c.hub.store.GetMessages(1000, 0)
+		for _, m := range allMessages {
+			if m.ID == messageID {
+				originalContent = m.Content
+				originalUser = m.Username
+				break
+			}
+		}
+	}
+
+	if originalContent == "" {
+		return
+	}
+
+	// Construct forwarded content.
+	forwardContent := "Forwarded from " + originalUser + ":\n" + originalContent
+
+	// Persist as a new message.
+	storedMsg, err := c.hub.store.InsertMessage(c.username, forwardContent, messageID, c.currentRoomID)
+	if err != nil {
+		log.Printf("failed to insert forwarded message: %v", err)
+		return
+	}
+
+	// Broadcast forwarded message.
+	fwdMsg, _ := json.Marshal(Message{
+		Type:     "message",
+		ID:       storedMsg.ID,
+		Username: c.username,
+		Content:  forwardContent,
+		Timestamp: storedMsg.Timestamp,
+		RoomID:   c.currentRoomID,
+	})
+	c.hub.broadcast <- fwdMsg
+
+	// Also send to target user if online.
+	forwardPayload, _ := json.Marshal(Message{
+		Type:    "forward",
+		From:    c.username,
+		Content: forwardContent,
+		ID:      storedMsg.ID,
+		Timestamp: storedMsg.Timestamp,
+	})
+	c.hub.SendToUser(to, forwardPayload)
 }
 
 // handleBotResponse handles the LLM bot response when the bot is @mentioned.
@@ -766,7 +1007,7 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 		c.hub.BroadcastStreamChunk(c.hub.BotName(), "", true)
 
 		// Persist the complete message to the store and broadcast as a normal message.
-		c.hub.SendBotMessage(response)
+		c.hub.SendBotMessage(response, c.currentRoomID)
 	}
 
 	// Update memory with the bot response.

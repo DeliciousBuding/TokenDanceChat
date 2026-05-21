@@ -90,19 +90,28 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	// Server restart announcement: if there are existing messages, broadcast restart.
 	existingCount := len(st.GetMessages(1, 0))
 	if existingCount > 0 {
-		st.InsertMessage("system", "服务器已重启 Server restarted", "")
+		st.InsertMessage("system", "服务器已重启 Server restarted", "", "")
 		log.Printf("server restart announced (existing messages: %d)", existingCount)
 	}
 
 	go h.Run()
 
-	hdlr := handler.New(h, st)
+	dataDir := filepath.Dir(dbPath)
+	uploadsDir := filepath.Join(dataDir, "uploads")
+	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+		return nil, nil, nil, err
+	}
+
+	hdlr := handler.New(h, st, uploadsDir)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", hdlr.HealthCheck)
 	mux.HandleFunc("/api/messages", hdlr.GetMessages)
 	mux.HandleFunc("/api/users/online", hdlr.GetOnlineUsers)
 	mux.HandleFunc("/api/stats", hdlr.Stats)
+	mux.HandleFunc("/api/link-preview", hdlr.LinkPreview)
+	mux.HandleFunc("/api/upload", hdlr.UploadImage)
+	mux.HandleFunc("/uploads/", hdlr.ServeUpload)
 	mux.HandleFunc("/ws", hdlr.HandleWebSocket)
 
 	fs := http.FileServer(http.Dir(frontendDist))

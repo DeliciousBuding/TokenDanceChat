@@ -16,9 +16,10 @@ import (
 // mockStore is a test implementation of hub.Store.
 type mockStore struct {
 	messages []hub.StoredMessage
+	rooms    []hub.StoredRoom
 }
 
-func (m *mockStore) InsertMessage(username, content, replyToID string) (hub.StoredMessage, error) {
+func (m *mockStore) InsertMessage(username, content, replyToID, roomID string) (hub.StoredMessage, error) {
 	msg := hub.StoredMessage{
 		ID:        "mock-id-" + username,
 		Username:  username,
@@ -33,16 +34,43 @@ func (m *mockStore) GetMessages(limit int, before int64) []hub.StoredMessage {
 	return m.messages
 }
 
+func (m *mockStore) GetRoomMessages(roomID string, limit int, before int64) []hub.StoredMessage {
+	return m.messages
+}
+
 func (m *mockStore) MarkDeleted(msgID string) error { return nil }
 func (m *mockStore) TotalMessages() int64 {
 	return int64(len(m.messages))
+}
+
+func (m *mockStore) CreateRoom(name string) (string, error) {
+	id := "room-" + name
+	m.rooms = append(m.rooms, hub.StoredRoom{ID: id, Name: name})
+	return id, nil
+}
+
+func (m *mockStore) GetRoomID(name string) (string, error) {
+	for _, r := range m.rooms {
+		if r.Name == name {
+			return r.ID, nil
+		}
+	}
+	return "", nil
+}
+
+func (m *mockStore) ListRooms() []hub.StoredRoom {
+	return m.rooms
+}
+
+func (m *mockStore) DeleteRoom(roomID string) error {
+	return nil
 }
 
 func newTestHandler() *Handler {
 	ms := &mockStore{}
 	h := hub.New(ms, nil, "")
 	go h.Run()
-	return New(h, ms)
+	return New(h, ms, "/tmp/test-uploads")
 }
 
 func TestHealthCheck(t *testing.T) {
@@ -110,7 +138,7 @@ func TestGetMessagesAfterInsert(t *testing.T) {
 	h := newTestHandler()
 
 	// Insert a message via the store.
-	h.store.InsertMessage("alice", "hello", "")
+	h.store.InsertMessage("alice", "hello", "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/messages", nil)
 	w := httptest.NewRecorder()
