@@ -559,6 +559,15 @@ func (h *Hub) SendBotMessage(content, roomID string) {
 	h.SendAssistantMessage(h.botName, content, roomID)
 }
 
+// SendBotMessageToRoom persists a bot message and broadcasts only to the given room.
+func (h *Hub) SendBotMessageToRoom(content, roomID string) {
+	if roomID == "" {
+		h.SendAssistantMessage(h.botName, content, roomID)
+		return
+	}
+	h.SendAssistantMessageToRoom(h.botName, content, roomID)
+}
+
 // SendAssistantMessage persists an assistant message to the store and broadcasts it.
 func (h *Hub) SendAssistantMessage(username, content, roomID string) {
 	if username == "" {
@@ -584,6 +593,39 @@ func (h *Hub) SendAssistantMessage(username, content, roomID string) {
 	default:
 		log.Printf("broadcast channel full, dropping assistant message")
 	}
+}
+
+// SendAssistantMessageToRoom persists an assistant message and broadcasts only to the given room.
+func (h *Hub) SendAssistantMessageToRoom(username, content, roomID string) {
+	if username == "" {
+		username = h.botName
+	}
+	storedMsg, err := h.store.InsertMessage(username, content, "", roomID)
+	if err != nil {
+		log.Printf("failed to insert assistant message: %v", err)
+		return
+	}
+
+	broadcastMsg, _ := json.Marshal(Message{
+		Type:      "message",
+		ID:        storedMsg.ID,
+		Username:  storedMsg.Username,
+		Content:   storedMsg.Content,
+		Timestamp: storedMsg.Timestamp,
+		RoomID:    roomID,
+	})
+
+	h.mu.RLock()
+	for c := range h.clients {
+		if c.currentRoomID != roomID {
+			continue
+		}
+		select {
+		case c.send <- broadcastMsg:
+		default:
+		}
+	}
+	h.mu.RUnlock()
 }
 
 // usernameRegex validates: 1-20 chars, alphanumeric, underscore, or Chinese chars.
@@ -693,8 +735,14 @@ func (h *Hub) RemoveGroupMember(groupName, username string) {
 }
 
 // BroadcastStreamChunk sends a streaming chunk to all connected clients.
-// This is used for streaming LLM responses without persisting to the store.
+// Deprecated: use BroadcastStreamChunkToRoom for room-scoped delivery.
 func (h *Hub) BroadcastStreamChunk(username, content string, done bool) {
+	h.BroadcastStreamChunkToRoom(username, content, done, "")
+}
+
+// BroadcastStreamChunkToRoom sends a streaming chunk to clients in a specific room.
+// If roomID is empty, broadcasts to all connected clients.
+func (h *Hub) BroadcastStreamChunkToRoom(username, content string, done bool, roomID string) {
 	msg := Message{
 		Type:     "stream",
 		Username: username,
@@ -706,11 +754,25 @@ func (h *Hub) BroadcastStreamChunk(username, content string, done bool) {
 		log.Printf("marshal stream error: %v", err)
 		return
 	}
-	select {
-	case h.broadcast <- data:
-	default:
-		log.Printf("broadcast channel full, dropping stream chunk")
+	if roomID == "" {
+		select {
+		case h.broadcast <- data:
+		default:
+			log.Printf("broadcast channel full, dropping stream chunk")
+		}
+		return
 	}
+	h.mu.RLock()
+	for c := range h.clients {
+		if c.currentRoomID != roomID {
+			continue
+		}
+		select {
+		case c.send <- data:
+		default:
+		}
+	}
+	h.mu.RUnlock()
 }
 
 // BroadcastTyping sends a typing indicator to all clients except the sender.
