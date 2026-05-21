@@ -3,6 +3,7 @@ package handler
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"tokendancechat/backend/hub"
 
@@ -12,9 +13,21 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	// Allow all origins for development.
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // same-origin requests don't send Origin
+		}
+		host := r.Host
+		// Allow same-origin and vectorcontrol.tech subdomains.
+		if strings.HasSuffix(origin, "://"+host) || strings.HasSuffix(origin, "://"+strings.TrimPrefix(host, "www.")) {
+			return true
+		}
+		if strings.HasSuffix(origin, ".vectorcontrol.tech") || strings.HasSuffix(origin, "://vectorcontrol.tech") {
+			return true
+		}
+		log.Printf("ws: rejected origin %q for host %q", origin, host)
+		return false
 	},
 }
 
