@@ -26,6 +26,7 @@ export function ChatLayout() {
     pendingFriendRequests,
     addSystemMessage,
     currentRoomID,
+    clearConversationUnread,
   } = useChatStore();
   const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, uploadImage } =
     useWebSocket();
@@ -33,6 +34,15 @@ export function ChatLayout() {
   // Mobile keyboard handling
   const mainRef = useRef<HTMLDivElement>(null);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  // Clear unread badge when switching conversations.
+  useEffect(() => {
+    const key =
+      currentChat.type === "dm" ? `dm:${currentChat.username}` :
+      currentChat.type === "group" ? `group:${currentChat.name}` :
+      "public";
+    clearConversationUnread(key);
+  }, [currentChat, clearConversationUnread]);
 
   useEffect(() => {
     const handleResize = () => {

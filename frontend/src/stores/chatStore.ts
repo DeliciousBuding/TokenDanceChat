@@ -67,6 +67,7 @@ interface ChatState {
 
   // Unread count
   unreadCount: number;
+  unreadByConversation: Record<string, number>;
 
   // Actions
   setView: (view: ViewState) => void;
@@ -91,6 +92,8 @@ interface ChatState {
   setGroupMembers: (group: string, members: string[]) => void;
   setPendingImage: (imageDataUrl: string | null) => void;
   setUnreadCount: (count: number) => void;
+  incrementConversationUnread: (key: string) => void;
+  clearConversationUnread: (key: string) => void;
   updateMessageReactions: (messageId: string, reactions: Record<string, string[]>) => void;
   editMessageInPlace: (messageId: string, content: string) => void;
   reset: () => void;
@@ -115,6 +118,7 @@ export const useChatStore = create<ChatState>((set) => ({
   groups: {},
   pendingImage: null,
   unreadCount: 0,
+  unreadByConversation: {},
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
@@ -176,6 +180,20 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
   setPendingImage: (pendingImage) => set({ pendingImage }),
   setUnreadCount: (unreadCount) => set({ unreadCount }),
+  incrementConversationUnread: (key) =>
+    set((state) => ({
+      unreadByConversation: {
+        ...state.unreadByConversation,
+        [key]: (state.unreadByConversation[key] || 0) + 1,
+      },
+    })),
+  clearConversationUnread: (key) =>
+    set((state) => {
+      if (!state.unreadByConversation[key]) return state;
+      const next = { ...state.unreadByConversation };
+      delete next[key];
+      return { unreadByConversation: next };
+    }),
   updateMessageReactions: (messageId, reactions) =>
     set((state) => ({
       messages: state.messages.map((m) =>
@@ -208,5 +226,6 @@ export const useChatStore = create<ChatState>((set) => ({
       groups: {},
       pendingImage: null,
       unreadCount: 0,
+      unreadByConversation: {},
     }),
 }));

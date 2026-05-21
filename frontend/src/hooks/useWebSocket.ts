@@ -185,6 +185,11 @@ export function useWebSocket() {
           reply_to_user,
         } as ChatMessage);
         removeTypingUser(username);
+        // Increment unread for public chat if not currently viewing it.
+        const state = useChatStore.getState();
+        if (state.currentChat.type !== "public") {
+          useChatStore.getState().incrementConversationUnread("public");
+        }
       }),
     );
 
@@ -203,6 +208,12 @@ export function useWebSocket() {
           reply_to_content: m.reply_to_content,
           reply_to_user: m.reply_to_user,
         });
+        // Increment unread for this DM if not currently viewing it.
+        const state = useChatStore.getState();
+        const partner = m.from || m.username;
+        if (!(state.currentChat.type === "dm" && state.currentChat.username === partner)) {
+          useChatStore.getState().incrementConversationUnread(`dm:${partner}`);
+        }
       }),
     );
 
@@ -220,6 +231,12 @@ export function useWebSocket() {
           reply_to_content: m.reply_to_content,
           reply_to_user: m.reply_to_user,
         });
+        // Increment unread for this group if not currently viewing it.
+        const state = useChatStore.getState();
+        const groupName = m.group || m.to;
+        if (groupName && !(state.currentChat.type === "group" && state.currentChat.name === groupName)) {
+          useChatStore.getState().incrementConversationUnread(`group:${groupName}`);
+        }
       }),
     );
 
