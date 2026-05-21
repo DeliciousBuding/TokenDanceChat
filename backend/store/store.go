@@ -13,14 +13,15 @@ import (
 
 // StoredMessage is the message model returned by the store.
 type StoredMessage struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	Content   string `json:"content"`
-	Timestamp int64  `json:"timestamp"`
-	ReplyToID string `json:"reply_to_id,omitempty"`
-	RoomID    string `json:"room_id,omitempty"`
-	Deleted   bool   `json:"deleted"`
-	Edited    bool   `json:"edited"`
+	ID        string              `json:"id"`
+	Username  string              `json:"username"`
+	Content   string              `json:"content"`
+	Timestamp int64               `json:"timestamp"`
+	ReplyToID string              `json:"reply_to_id,omitempty"`
+	RoomID    string              `json:"room_id,omitempty"`
+	Deleted   bool                `json:"deleted"`
+	Edited    bool                `json:"edited"`
+	Reactions map[string][]string `json:"reactions,omitempty"`
 }
 
 // StoredRoom is the room model returned by the store.
@@ -208,7 +209,19 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 		messages[i], messages[j] = messages[j], messages[i]
 	}
 
-	return messages
+		// Enrich with reactions.
+		if len(messages) > 0 {
+			messageIDs := make([]string, len(messages))
+			for i, m := range messages {
+				messageIDs[i] = m.ID
+			}
+			reactions := s.GetReactionsForMessages(messageIDs)
+			for i := range messages {
+				messages[i].Reactions = reactions[messages[i].ID]
+			}
+		}
+
+		return messages
 }
 
 func (s *Store) TotalMessages() int64 {

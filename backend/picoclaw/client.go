@@ -68,10 +68,11 @@ func (c *Client) Connect(ctx context.Context) error {
 	c.ctx, c.cancel = context.WithCancel(ctx)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.connectLocked(c.ctx)
+	return c.connectUnsafe(c.ctx)
 }
 
-func (c *Client) connectLocked(ctx context.Context) error {
+// connectUnsafe connects to PicoClaw WebSocket. Caller must hold c.mu.
+func (c *Client) connectUnsafe(ctx context.Context) error {
 	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
 
 	header := http.Header{}
@@ -119,20 +120,19 @@ func (c *Client) Close() {
 
 func (c *Client) send(handler *ResponseHandler, msg Message) error {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// Replace any stale pending handler (previous timed-out request).
 	if c.pending != nil {
 		c.pending.done_()
 	}
 	c.pending = handler
-	c.mu.Unlock()
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.conn == nil {
 		if c.ctx == nil {
 			c.ctx = context.Background()
 		}
-		if err := c.connectLocked(c.ctx); err != nil {
+		if err := c.connectUnsafe(c.ctx); err != nil {
 			c.pending = nil
 			return err
 		}
@@ -141,7 +141,7 @@ func (c *Client) send(handler *ResponseHandler, msg Message) error {
 	if err := c.conn.WriteJSON(msg); err != nil {
 		_ = c.conn.Close()
 		c.conn = nil
-		if err := c.connectLocked(c.ctx); err != nil {
+		if err := c.connectUnsafe(c.ctx); err != nil {
 			c.pending = nil
 			return err
 		}

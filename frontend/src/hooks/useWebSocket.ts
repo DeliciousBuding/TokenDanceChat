@@ -448,6 +448,35 @@ export function useWebSocket() {
       }),
     );
 
+    // Streaming bot response — accumulate chunks into a streaming message.
+    unsubs.push(
+      chatAPI.on("stream", (msg: WSMessage) => {
+        const { username: streamUser, content, done } = msg as import("@/lib/api").WSStreamEvent;
+        if (!streamUser || streamUser === useChatStore.getState().username) return;
+        const streamId = `stream-${streamUser}`;
+        const state = useChatStore.getState();
+        const existing = state.messages.find((m) => m.id === streamId);
+        if (existing) {
+          // Append chunk to existing streaming message.
+          const updated = { ...existing, content: existing.content + (content || "") };
+          useChatStore.setState({
+            messages: state.messages.map((m) => (m.id === streamId ? updated : m)),
+          });
+          if (done) {
+            removeTypingUser(streamUser);
+          }
+        } else if (content) {
+          // Create new streaming placeholder.
+          addMessage({
+            id: streamId,
+            username: streamUser,
+            content,
+            timestamp: Date.now(),
+          });
+        }
+      }),
+    );
+
     // Typing indicator
     unsubs.push(
       chatAPI.on("typing", (msg: WSMessage) => {
@@ -462,6 +491,17 @@ export function useWebSocket() {
           typingTimers.current.delete(typingUser);
         }, 10000);
         typingTimers.current.set(typingUser, timer);
+      }),
+    );
+
+    // Typing stop — immediately remove user from typing list.
+    unsubs.push(
+      chatAPI.on("typing_stop", (msg: WSMessage) => {
+        const { username: typingUser } = msg as WSTypingEvent;
+        removeTypingUser(typingUser);
+        const existing = typingTimers.current.get(typingUser);
+        if (existing) clearTimeout(existing);
+        typingTimers.current.delete(typingUser);
       }),
     );
 

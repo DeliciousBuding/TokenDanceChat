@@ -146,7 +146,7 @@ export const MessageBubble = memo(function MessageBubble({
       );
     }
 
-    const mentionRegex = /@(\w+)/g;
+    const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
     const parts: (
       | { type: "text"; value: string }
       | { type: "mention"; username: string }

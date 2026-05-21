@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -287,7 +288,15 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 	h.mu.RUnlock()
 
 	// Fetch the URL.
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if req.URL.Scheme != "https" || isPrivateHost(req.URL.Hostname()) {
+				return errors.New("redirect blocked")
+			}
+			return nil
+		},
+	}
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, rawURL, nil)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to create request", "FETCH_ERROR", requestID)
