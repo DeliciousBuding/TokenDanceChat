@@ -4,7 +4,8 @@
   "start_url": ".",
   "display": "standalone",
   "background_color": "#1a1b1e",
-  "theme_color": "#1a1b1e",
+  "theme_color": "#0d0e10",
+  "description": "Lightweight real-time public chat — TokenDanceChat",
   "icons": [
     {
       "src": "/icon-192.png",
