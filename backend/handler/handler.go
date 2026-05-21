@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -225,10 +226,16 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate URL.
+	// Validate URL: https only to prevent SSRF to internal services.
 	parsedURL, err := url.Parse(rawURL)
-	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
-		writeJSONError(w, http.StatusBadRequest, "invalid URL", "INVALID_URL", requestID)
+	if err != nil || parsedURL.Scheme != "https" {
+		writeJSONError(w, http.StatusBadRequest, "invalid URL (https only)", "INVALID_URL", requestID)
+		return
+	}
+
+	// Block private/internal IP ranges to prevent SSRF.
+	if isPrivateHost(parsedURL.Hostname()) {
+		writeJSONError(w, http.StatusBadRequest, "internal URLs are not allowed", "INVALID_URL", requestID)
 		return
 	}
 
@@ -376,4 +383,20 @@ func (h *Handler) ServeUpload(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, media.Body); err != nil {
 		log.Printf("failed to stream upload %s: %v", filename, err)
 	}
+}
+
+
+// isPrivateHost checks if a hostname resolves to a private/internal IP address.
+func isPrivateHost(host string) bool {
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return true // block unresolvable hosts (safety first)
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+			ip.IsPrivate() || ip.IsUnspecified() {
+			return true
+		}
+	}
+	return false
 }

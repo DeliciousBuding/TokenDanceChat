@@ -38,7 +38,7 @@ func TestChatOpenAIUsesReasoningContentFallback(t *testing.T) {
 		BaseURL:  server.URL,
 	})
 
-	got, err := client.Chat(context.Background(), []Message{{Role: "user", Content: "ping"}})
+	got, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
 	if err != nil {
 		t.Fatalf("Chat returned error: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestChatOpenAIStreamIgnoresReasoningContent(t *testing.T) {
 	})
 
 	var chunks []string
-	err := client.ChatStream(context.Background(), []Message{{Role: "user", Content: "ping"}}, func(chunk string) error {
+	err := client.ChatStream(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}}, func(chunk string) error {
 		chunks = append(chunks, chunk)
 		return nil
 	})

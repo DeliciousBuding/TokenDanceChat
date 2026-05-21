@@ -61,12 +61,12 @@ func (c *Client) getMaxTokens() int {
 }
 
 // Chat sends messages and returns the assistant response text.
-func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
+func (c *Client) Chat(ctx context.Context, systemPrompt string, messages []Message) (string, error) {
 	switch c.cfg.Provider {
 	case "anthropic":
-		return c.chatAnthropic(ctx, messages)
+		return c.chatAnthropic(ctx, systemPrompt, messages)
 	case "openai":
-		return c.chatOpenAI(ctx, messages)
+		return c.chatOpenAI(ctx, systemPrompt, messages)
 	default:
 		return "", fmt.Errorf("unknown provider: %s", c.cfg.Provider)
 	}
@@ -76,12 +76,13 @@ func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
 type StreamCallback func(chunk string) error
 
 // ChatStream sends messages and streams the assistant response via onChunk.
-func (c *Client) ChatStream(ctx context.Context, messages []Message, onChunk StreamCallback) error {
+// systemPrompt is passed per-call to avoid shared mutable state across concurrent requests.
+func (c *Client) ChatStream(ctx context.Context, systemPrompt string, messages []Message, onChunk StreamCallback) error {
 	switch c.cfg.Provider {
 	case "anthropic":
-		return c.chatAnthropicStream(ctx, messages, onChunk)
+		return c.chatAnthropicStream(ctx, systemPrompt, messages, onChunk)
 	case "openai":
-		return c.chatOpenAIStream(ctx, messages, onChunk)
+		return c.chatOpenAIStream(ctx, systemPrompt, messages, onChunk)
 	default:
 		return fmt.Errorf("unknown provider: %s", c.cfg.Provider)
 	}
@@ -111,7 +112,7 @@ type anthropicResponse struct {
 	} `json:"error,omitempty"`
 }
 
-func (c *Client) chatAnthropic(ctx context.Context, messages []Message) (string, error) {
+func (c *Client) chatAnthropic(ctx context.Context, systemPrompt string, messages []Message) (string, error) {
 	baseURL := c.cfg.BaseURL
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com"
@@ -134,7 +135,7 @@ func (c *Client) chatAnthropic(ctx context.Context, messages []Message) (string,
 	body := anthropicRequest{
 		Model:     c.cfg.Model,
 		MaxTokens: c.getMaxTokens(),
-		System:    c.systemPrompt,
+		System:    systemPrompt,
 		Messages:  apiMessages,
 	}
 
@@ -213,7 +214,7 @@ type openaiResponse struct {
 	} `json:"error,omitempty"`
 }
 
-func (c *Client) chatOpenAI(ctx context.Context, messages []Message) (string, error) {
+func (c *Client) chatOpenAI(ctx context.Context, systemPrompt string, messages []Message) (string, error) {
 	baseURL := c.cfg.BaseURL
 	if baseURL == "" {
 		baseURL = "https://api.openai.com"
@@ -229,7 +230,7 @@ func (c *Client) chatOpenAI(ctx context.Context, messages []Message) (string, er
 	apiMessages := make([]openaiMessage, 0, len(messages)+1)
 	apiMessages = append(apiMessages, openaiMessage{
 		Role:    "system",
-		Content: c.systemPrompt,
+		Content: systemPrompt,
 	})
 	for _, msg := range messages {
 		apiMessages = append(apiMessages, openaiMessage{
@@ -305,7 +306,7 @@ type openaiStreamChunk struct {
 	} `json:"choices"`
 }
 
-func (c *Client) chatOpenAIStream(ctx context.Context, messages []Message, onChunk StreamCallback) error {
+func (c *Client) chatOpenAIStream(ctx context.Context, systemPrompt string, messages []Message, onChunk StreamCallback) error {
 	baseURL := c.cfg.BaseURL
 	if baseURL == "" {
 		baseURL = "https://api.openai.com"
@@ -320,7 +321,7 @@ func (c *Client) chatOpenAIStream(ctx context.Context, messages []Message, onChu
 	apiMessages := make([]openaiMessage, 0, len(messages)+1)
 	apiMessages = append(apiMessages, openaiMessage{
 		Role:    "system",
-		Content: c.systemPrompt,
+		Content: systemPrompt,
 	})
 	for _, msg := range messages {
 		apiMessages = append(apiMessages, openaiMessage{
@@ -405,7 +406,7 @@ type anthropicStreamEvent struct {
 	} `json:"content_block,omitempty"`
 }
 
-func (c *Client) chatAnthropicStream(ctx context.Context, messages []Message, onChunk StreamCallback) error {
+func (c *Client) chatAnthropicStream(ctx context.Context, systemPrompt string, messages []Message, onChunk StreamCallback) error {
 	baseURL := c.cfg.BaseURL
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com"
@@ -428,7 +429,7 @@ func (c *Client) chatAnthropicStream(ctx context.Context, messages []Message, on
 	body := anthropicStreamRequest{
 		Model:     c.cfg.Model,
 		MaxTokens: c.getMaxTokens(),
-		System:    c.systemPrompt,
+		System:    systemPrompt,
 		Messages:  apiMessages,
 		Stream:    true,
 	}
