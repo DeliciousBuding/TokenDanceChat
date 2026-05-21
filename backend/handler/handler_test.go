@@ -86,6 +86,14 @@ func (m *mockStore) GetMessageByID(messageID string) (hub.StoredMessage, error) 
 func (m *mockStore) SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error) {
 	return nil, nil
 }
+func (m *mockStore) AddFriend(username, friend string) error            { return nil }
+func (m *mockStore) RemoveFriend(username, friend string) error          { return nil }
+func (m *mockStore) GetFriends(username string) []string                  { return nil }
+func (m *mockStore) CreateGroup(name, creator string) error               { return nil }
+func (m *mockStore) AddGroupMember(groupName, username string) error     { return nil }
+func (m *mockStore) RemoveGroupMember(groupName, username string) error  { return nil }
+func (m *mockStore) GetGroupMembers(groupName string) []string           { return nil }
+func (m *mockStore) GetAllGroups() map[string][]string                    { return nil }
 
 func newTestHandler() *Handler {
 	ms := &mockStore{}

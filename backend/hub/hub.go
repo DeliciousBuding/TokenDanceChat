@@ -40,6 +40,18 @@ type Store interface {
 	UpdateMessage(messageID, content string) (StoredMessage, error)
 	GetMessageByID(messageID string) (StoredMessage, error)
 	SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error)
+
+	// Friend persistence
+	AddFriend(username, friend string) error
+	RemoveFriend(username, friend string) error
+	GetFriends(username string) []string
+
+	// Group persistence
+	CreateGroup(name, creator string) error
+	AddGroupMember(groupName, username string) error
+	RemoveGroupMember(groupName, username string) error
+	GetGroupMembers(groupName string) []string
+	GetAllGroups() map[string][]string
 }
 
 // Group represents a chat group.
@@ -196,6 +208,41 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 		groups:          make(map[string]*Group),
 		lastSeen:        make(map[string]int64),
 		rooms:           make(map[string]map[string]bool),
+	}
+}
+
+// LoadPersistedState restores friends and groups from the store into memory.
+func (h *Hub) LoadPersistedState() {
+	if h.store == nil {
+		return
+	}
+	// Restore groups.
+	allGroups := h.store.GetAllGroups()
+	for name, members := range allGroups {
+		g := &Group{Name: name, Members: make(map[string]bool)}
+		for _, m := range members {
+			g.Members[m] = true
+		}
+		h.groupsMu.Lock()
+		h.groups[name] = g
+		h.groupsMu.Unlock()
+	}
+	// Restore friends (stored bidirectionally, reading one side is enough).
+	// We iterate all groups' members as a heuristic to find all known users
+	// and restore their friend lists.
+	for _, members := range allGroups {
+		for _, username := range members {
+			friends := h.store.GetFriends(username)
+			if len(friends) > 0 {
+				h.friendsMu.Lock()
+				set := make(map[string]bool)
+				for _, f := range friends {
+					set[f] = true
+				}
+				h.friends[username] = set
+				h.friendsMu.Unlock()
+			}
+		}
 	}
 }
 
@@ -699,7 +746,6 @@ func (h *Hub) GetFriends(username string) []string {
 // AddFriend adds a bidirectional friend relationship.
 func (h *Hub) AddFriend(a, b string) {
 	h.friendsMu.Lock()
-	defer h.friendsMu.Unlock()
 	if h.friends[a] == nil {
 		h.friends[a] = make(map[string]bool)
 	}
@@ -708,17 +754,29 @@ func (h *Hub) AddFriend(a, b string) {
 	}
 	h.friends[a][b] = true
 	h.friends[b][a] = true
+	h.friendsMu.Unlock()
+
+	// Persist to store.
+	if h.store != nil {
+		h.store.AddFriend(a, b)
+		h.store.AddFriend(b, a)
+	}
 }
 
 // RemoveFriend removes a bidirectional friend relationship.
 func (h *Hub) RemoveFriend(a, b string) {
 	h.friendsMu.Lock()
-	defer h.friendsMu.Unlock()
 	if h.friends[a] != nil {
 		delete(h.friends[a], b)
 	}
 	if h.friends[b] != nil {
 		delete(h.friends[b], a)
+	}
+	h.friendsMu.Unlock()
+
+	if h.store != nil {
+		h.store.RemoveFriend(a, b)
+		h.store.RemoveFriend(b, a)
 	}
 }
 
@@ -735,30 +793,44 @@ func (h *Hub) CreateGroup(name string, creator string) bool {
 		Name:    name,
 		Members: map[string]bool{creator: true},
 	}
+	// Persist to store.
+	if h.store != nil {
+		h.store.CreateGroup(name, creator)
+	}
 	return true
 }
 
 // AddGroupMember adds a member to a group.
 func (h *Hub) AddGroupMember(groupName, username string) bool {
 	h.groupsMu.Lock()
-	defer h.groupsMu.Unlock()
 	g, ok := h.groups[groupName]
 	if !ok {
+		h.groupsMu.Unlock()
 		return false
 	}
 	g.Members[username] = true
+	h.groupsMu.Unlock()
+
+	if h.store != nil {
+		h.store.AddGroupMember(groupName, username)
+	}
 	return true
 }
 
 // RemoveGroupMember removes a member from a group.
 func (h *Hub) RemoveGroupMember(groupName, username string) {
 	h.groupsMu.Lock()
-	defer h.groupsMu.Unlock()
 	g, ok := h.groups[groupName]
 	if !ok {
+		h.groupsMu.Unlock()
 		return
 	}
 	delete(g.Members, username)
+	h.groupsMu.Unlock()
+
+	if h.store != nil {
+		h.store.RemoveGroupMember(groupName, username)
+	}
 }
 
 // BroadcastStreamChunk sends a streaming chunk to all connected clients.

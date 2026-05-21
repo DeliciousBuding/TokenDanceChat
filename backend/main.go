@@ -74,6 +74,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	}
 
 	h := hub.New(st, llmCfg, picoclawCfg, botName, agentName)
+	h.LoadPersistedState()
 
 	// Set up bot memory persistence if LLM is configured and path is set.
 	if llmCfg != nil {
