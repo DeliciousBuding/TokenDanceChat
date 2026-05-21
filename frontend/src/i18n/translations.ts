@@ -42,6 +42,9 @@ export interface TranslationDict {
     createGroup: string;
     sendMessage: string;
     addFriend: string;
+    online: string;
+    lastSeen: string;
+    offline: string;
   };
   transcript: {
     loading: string;
@@ -130,6 +133,9 @@ const zhCN: TranslationDict = {
     createGroup: "创建群组",
     sendMessage: "发送消息",
     addFriend: "添加好友",
+    online: "在线",
+    lastSeen: "最后在线 {{time}}",
+    offline: "离线",
   },
   transcript: {
     loading: "加载消息中...",
@@ -219,6 +225,9 @@ const enUS: TranslationDict = {
     createGroup: "Create Group",
     sendMessage: "Send Message",
     addFriend: "Add Friend",
+    online: "Online",
+    lastSeen: "Last seen {{time}}",
+    offline: "Offline",
   },
   transcript: {
     loading: "Loading messages...",
