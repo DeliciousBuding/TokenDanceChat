@@ -502,7 +502,7 @@ export function useWebSocket() {
         const state = useChatStore.getState();
         if (typingCtx) {
           if (typingCtx === "dm") {
-            if (state.currentChat.type !== "dm" || state.currentChat.username !== typingTarget) return;
+            if (state.currentChat.type !== "dm" || state.currentChat.username !== typingUser) return;
           } else if (typingCtx === "group") {
             if (state.currentChat.type !== "group" || state.currentChat.name !== typingTarget) return;
           } else if (typingCtx === "public") {

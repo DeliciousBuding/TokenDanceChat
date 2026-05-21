@@ -377,9 +377,9 @@ func (s *Store) GetMessageByID(messageID string) (StoredMessage, error) {
 func (s *Store) getMessageByIDLocked(messageID string) (StoredMessage, error) {
 	var m StoredMessage
 	err := s.db.QueryRow(
-		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages WHERE id = ?",
+		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE id = ?",
 		messageID,
-	).Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited)
+	).Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName)
 	if err != nil {
 		return StoredMessage{}, err
 	}
