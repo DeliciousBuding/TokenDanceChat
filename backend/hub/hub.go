@@ -16,10 +16,15 @@ const MaxConnections = 100
 // Store defines the interface for message persistence.
 // This avoids circular imports between hub and store packages.
 type Store interface {
-	InsertMessage(username, content, replyToID string) (StoredMessage, error)
+	InsertMessage(username, content, replyToID, roomID string) (StoredMessage, error)
 	GetMessages(limit int, before int64) []StoredMessage
 	TotalMessages() int64
 	MarkDeleted(messageID string) error
+	GetRoomMessages(roomID string, limit int, before int64) []StoredMessage
+	CreateRoom(name string) (string, error)
+	GetRoomID(name string) (string, error)
+	ListRooms() []StoredRoom
+	DeleteRoom(roomID string) error
 }
 
 // StoredMessage is the message model returned by the store.
@@ -29,7 +34,14 @@ type StoredMessage struct {
 	Content   string `json:"content"`
 	Timestamp int64  `json:"timestamp"`
 	ReplyToID string `json:"reply_to_id,omitempty"`
+	RoomID    string `json:"room_id,omitempty"`
 	Deleted   bool   `json:"deleted"`
+}
+
+// StoredRoom is the room model returned by the store.
+type StoredRoom struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // Group represents a chat group.
@@ -70,6 +82,10 @@ type Message struct {
 
 	// Last seen
 	LastSeen int64 `json:"last_seen,omitempty"`
+
+	// Room system
+	RoomID string        `json:"room_id,omitempty"`
+	Rooms  []StoredRoom  `json:"rooms,omitempty"`
 }
 
 // Hub maintains the set of active clients and broadcasts messages to them.
@@ -112,6 +128,10 @@ type Hub struct {
 	lastSeen   map[string]int64
 	lastSeenMu sync.RWMutex
 
+	// Room system: room ID -> set of member usernames (in-memory).
+	rooms   map[string]map[string]bool
+	roomsMu sync.RWMutex
+
 	mu sync.RWMutex
 }
 
@@ -142,6 +162,7 @@ func New(store Store, llmCfg *llm.Config, botName string) *Hub {
 		friends:         make(map[string]map[string]bool),
 		groups:          make(map[string]*Group),
 		lastSeen:        make(map[string]int64),
+		rooms:           make(map[string]map[string]bool),
 	}
 }
 
@@ -399,8 +420,8 @@ func (h *Hub) BroadcastJSON(msg Message) {
 }
 
 // SendBotMessage persists a bot message to the store and broadcasts it.
-func (h *Hub) SendBotMessage(content string) {
-	storedMsg, err := h.store.InsertMessage(h.botName, content, "")
+func (h *Hub) SendBotMessage(content, roomID string) {
+	storedMsg, err := h.store.InsertMessage(h.botName, content, "", roomID)
 	if err != nil {
 		log.Printf("failed to insert bot message: %v", err)
 		return
@@ -412,6 +433,7 @@ func (h *Hub) SendBotMessage(content string) {
 		Username:  storedMsg.Username,
 		Content:   storedMsg.Content,
 		Timestamp: storedMsg.Timestamp,
+		RoomID:    roomID,
 	})
 
 	select {
@@ -586,4 +608,75 @@ func (h *Hub) ShouldBroadcastTyping(username string) bool {
 	}
 	h.typingRateLimit[username] = now
 	return true
+}
+
+// --- Room system methods ---
+
+// DefaultRoomName is the name of the default public room.
+const DefaultRoomName = "公共聊天"
+
+// DefaultRoomID returns the ID of the default room from the store.
+func (h *Hub) DefaultRoomID() string {
+	id, err := h.store.GetRoomID(DefaultRoomName)
+	if err != nil {
+		log.Printf("warn: default room not found, creating: %v", err)
+		id, err = h.store.CreateRoom(DefaultRoomName)
+		if err != nil {
+			log.Printf("error creating default room: %v", err)
+			return ""
+		}
+	}
+	return id
+}
+
+// JoinRoom adds a user to a room's member set.
+func (h *Hub) JoinRoom(roomID, username string) bool {
+	h.roomsMu.Lock()
+	defer h.roomsMu.Unlock()
+	if h.rooms[roomID] == nil {
+		h.rooms[roomID] = make(map[string]bool)
+	}
+	h.rooms[roomID][username] = true
+	return true
+}
+
+// LeaveRoom removes a user from a room's member set.
+func (h *Hub) LeaveRoom(roomID, username string) {
+	h.roomsMu.Lock()
+	defer h.roomsMu.Unlock()
+	if h.rooms[roomID] != nil {
+		delete(h.rooms[roomID], username)
+	}
+}
+
+// GetRoomMembers returns usernames of members in a room.
+func (h *Hub) GetRoomMembers(roomID string) []string {
+	h.roomsMu.RLock()
+	defer h.roomsMu.RUnlock()
+	members := h.rooms[roomID]
+	usernames := make([]string, 0, len(members))
+	for u := range members {
+		usernames = append(usernames, u)
+	}
+	return usernames
+}
+
+// ListRooms returns all persisted rooms from the store.
+func (h *Hub) ListRooms() []StoredRoom {
+	return h.store.ListRooms()
+}
+
+// CreateRoom creates a new room in the store and returns the room ID.
+func (h *Hub) CreateRoom(name string) (string, error) {
+	return h.store.CreateRoom(name)
+}
+
+// InRoom checks if a user is a member of a room (in-memory, i.e. has joined).
+func (h *Hub) InRoom(roomID, username string) bool {
+	h.roomsMu.RLock()
+	defer h.roomsMu.RUnlock()
+	if h.rooms[roomID] == nil {
+		return false
+	}
+	return h.rooms[roomID][username]
 }

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage } from "@/lib/api";
+import type { ChatMessage, RoomInfo } from "@/lib/api";
 
 export type ViewState = "join" | "chat";
 
@@ -19,6 +19,13 @@ interface ChatState {
   // Typing users
   typingUsers: string[];
 
+  // Rooms
+  rooms: RoomInfo[];
+  currentRoomID: string;
+
+  // Image preview (before sending)
+  pendingImage: string | null;
+
   // Actions
   setView: (view: ViewState) => void;
   setUsername: (username: string) => void;
@@ -30,6 +37,9 @@ interface ChatState {
   setTypingUsers: (users: string[]) => void;
   addTypingUser: (username: string) => void;
   removeTypingUser: (username: string) => void;
+  setRooms: (rooms: RoomInfo[]) => void;
+  setCurrentRoomID: (roomID: string) => void;
+  setPendingImage: (imageDataUrl: string | null) => void;
   reset: () => void;
 }
 
@@ -41,6 +51,9 @@ export const useChatStore = create<ChatState>((set) => ({
   historyLoaded: false,
   onlineUsers: [],
   typingUsers: [],
+  rooms: [],
+  currentRoomID: "",
+  pendingImage: null,
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
@@ -78,6 +91,9 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => ({
       typingUsers: state.typingUsers.filter((u) => u !== username),
     })),
+  setRooms: (rooms) => set({ rooms }),
+  setCurrentRoomID: (currentRoomID) => set({ currentRoomID }),
+  setPendingImage: (pendingImage) => set({ pendingImage }),
   reset: () =>
     set({
       view: "join",
@@ -87,5 +103,8 @@ export const useChatStore = create<ChatState>((set) => ({
       historyLoaded: false,
       onlineUsers: [],
       typingUsers: [],
+      rooms: [],
+      currentRoomID: "",
+      pendingImage: null,
     }),
 }));
