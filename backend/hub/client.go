@@ -870,10 +870,12 @@ func (c *Client) handleDMMessage(msg Message) {
 		ReplyToContent: msg.ReplyToContent,
 		ReplyToUser:    msg.ReplyToUser,
 	})
-	c.hub.SendToUser(to, dmMsgTo)
+	delivered := c.hub.SendToUser(to, dmMsgTo)
 
-	// Mark as delivered so it will not be re-sent on reconnect.
-	c.hub.store.MarkMessagesDelivered([]string{storedMsg.ID})
+	// Only mark delivered if recipient was online.
+	if delivered {
+		c.hub.store.MarkMessagesDelivered([]string{storedMsg.ID})
+	}
 
 	// Send echo back to sender.
 	dmMsgFrom, _ := json.Marshal(Message{
