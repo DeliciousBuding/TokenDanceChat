@@ -44,6 +44,21 @@ type Client struct {
 	msgTimestampsMu sync.Mutex
 	// current room
 	currentRoomID string
+	roomMu        sync.RWMutex
+}
+
+// getCurrentRoomID returns the client's current room ID with read locking.
+func (c *Client) getCurrentRoomID() string {
+	c.roomMu.RLock()
+	defer c.roomMu.RUnlock()
+	return c.currentRoomID
+}
+
+// setCurrentRoomID sets the client's current room ID with write locking.
+func (c *Client) setCurrentRoomID(roomID string) {
+	c.roomMu.Lock()
+	c.setCurrentRoomID(roomID)
+	c.roomMu.Unlock()
 }
 
 // NewClient creates a new WebSocket client.
@@ -1008,7 +1023,7 @@ func (c *Client) handleRoomJoin(msg Message) {
 
 	// Join new room.
 	c.hub.JoinRoom(roomID, c.username)
-	c.currentRoomID = roomID
+	c.setCurrentRoomID(roomID)
 
 	// Send room history.
 	historyMessages := c.hub.store.GetRoomMessages(roomID, 100, 0)
@@ -1043,7 +1058,7 @@ func (c *Client) handleRoomLeave(msg Message) {
 	// Join default room.
 	defaultID := c.hub.DefaultRoomID()
 	c.hub.JoinRoom(defaultID, c.username)
-	c.currentRoomID = defaultID
+	c.setCurrentRoomID(defaultID)
 
 	// Send default room history.
 	historyMessages := c.hub.store.GetRoomMessages(defaultID, 100, 0)
@@ -1179,7 +1194,7 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	var fullResponse strings.Builder
 	err := client.ChatStream(ctx, systemPrompt, messages, func(chunk string) error {
 		fullResponse.WriteString(chunk)
-		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), chunk, false, c.currentRoomID)
+		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), chunk, false, c.getCurrentRoomID())
 		return nil
 	})
 
@@ -1187,8 +1202,8 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 		log.Printf("LLM stream error: %v", err)
 		errorContent := "Sorry, I encountered an error while generating a response."
 		// Send the error as a final stream chunk and persist.
-		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), errorContent, true, c.currentRoomID)
-		c.hub.SendBotMessageToRoom(errorContent, c.currentRoomID)
+		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), errorContent, true, c.getCurrentRoomID())
+		c.hub.SendBotMessageToRoom(errorContent, c.getCurrentRoomID())
 		c.hub.BroadcastTyping(c.hub.BotName(), "typing_stop", "", "")
 		return
 	}
@@ -1196,10 +1211,10 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	response := fullResponse.String()
 	if response != "" {
 		// Broadcast the final done signal for the stream.
-		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), "", true, c.currentRoomID)
+		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), "", true, c.getCurrentRoomID())
 
 		// Persist the complete message to the store and broadcast as a normal message.
-		c.hub.SendBotMessageToRoom(response, c.currentRoomID)
+		c.hub.SendBotMessageToRoom(response, c.getCurrentRoomID())
 
 		// Stop typing indicator after bot finishes responding.
 		c.hub.BroadcastTyping(c.hub.BotName(), "typing_stop", "", "")
@@ -1236,7 +1251,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 	if err != nil {
 		log.Printf("PicoClaw send error: %v", err)
 		errorContent := "PicoClaw 当前未连接，无法执行 Agent 工作流。"
-		c.hub.SendAssistantMessageToRoom(agentName, errorContent, c.currentRoomID)
+		c.hub.SendAssistantMessageToRoom(agentName, errorContent, c.getCurrentRoomID())
 		return
 	}
 
@@ -1280,7 +1295,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 					fullResponse.Reset()
 					fullResponse.WriteString(lastPicoContent)
 					if delta != "" {
-						c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, c.currentRoomID)
+						c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, c.getCurrentRoomID())
 					}
 				} else {
 					// Complete message -- initial chunk from message.create.
@@ -1289,7 +1304,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 					fullResponse.Reset()
 					fullResponse.WriteString(lastPicoContent)
 					if delta != "" {
-						c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, c.currentRoomID)
+						c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, c.getCurrentRoomID())
 					}
 				}
 			case start := <-typing:
@@ -1319,9 +1334,9 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 
 	if response != "" {
 		// Signal stream done.
-		c.hub.BroadcastStreamChunkToRoom(agentName, "", true, c.currentRoomID)
+		c.hub.BroadcastStreamChunkToRoom(agentName, "", true, c.getCurrentRoomID())
 		// Persist to store and broadcast.
-		c.hub.SendAssistantMessageToRoom(agentName, response, c.currentRoomID)
+		c.hub.SendAssistantMessageToRoom(agentName, response, c.getCurrentRoomID())
 
 		// Stop typing indicator after agent finishes responding.
 		c.hub.BroadcastTyping(agentName, "typing_stop", "", "")
