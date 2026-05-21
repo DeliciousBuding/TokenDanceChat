@@ -334,6 +334,9 @@ func (c *Client) handleReaction(msg Message) {
 	if c.username == "" {
 		return
 	}
+	if !c.checkRateLimit() {
+		return
+	}
 	messageID := msg.ID
 	if messageID == "" {
 		messageID = msg.MessageID
@@ -1136,10 +1139,11 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	if err != nil {
 		log.Printf("LLM stream error: %v", err)
 		errorContent := "Sorry, I encountered an error while generating a response."
-		fullResponse.Reset()
-		fullResponse.WriteString(errorContent)
-		// Send the error as a final stream chunk.
+		// Send the error as a final stream chunk and persist.
 		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), errorContent, true, c.currentRoomID)
+		c.hub.SendBotMessageToRoom(errorContent, c.currentRoomID)
+		c.hub.BroadcastTyping(c.hub.BotName(), "typing_stop", "", "")
+		return
 	}
 
 	response := fullResponse.String()
