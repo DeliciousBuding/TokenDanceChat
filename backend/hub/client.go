@@ -760,24 +760,16 @@ func (c *Client) handleGroupInvite(msg Message) {
 		return
 	}
 
-	c.hub.AddGroupMember(groupName, username)
+	// Record pending invite.
+	c.hub.AddPendingInvite(username, groupName, c.username)
 
-	// Notify invited user.
+	// Notify invited user — they must accept or decline.
 	inviteMsg, _ := json.Marshal(Message{
 		Type:  "group_invite",
 		Group: groupName,
 		From:  c.username,
 	})
 	c.hub.SendToUser(username, inviteMsg)
-
-	// Notify all group members about membership update.
-	members := c.hub.GroupMembers(groupName)
-	updateMsg, _ := json.Marshal(Message{
-		Type:    "group_join",
-		Group:   groupName,
-		Members: members,
-	})
-	c.hub.SendToGroup(groupName, updateMsg)
 }
 
 func (c *Client) handleGroupMessage(msg Message) {
@@ -1224,6 +1216,76 @@ func (c *Client) handleForward(msg Message) {
 		Timestamp: storedMsg.Timestamp,
 	})
 	c.hub.SendToUser(to, forwardPayload)
+}
+
+// handlePinMessage pins a message in the current room.
+func (c *Client) handlePinMessage(msg Message) {
+	if c.username == "" {
+		return
+	}
+	messageID := msg.ID
+	if messageID == "" {
+		return
+	}
+	roomID := c.getCurrentRoomID()
+	if err := c.hub.PinMessage(roomID, messageID, c.username); err != nil {
+		log.Printf("pin error: %v", err)
+		return
+	}
+	// Broadcast pin event.
+	pinMsg, _ := json.Marshal(Message{
+		Type:      "pinned",
+		ID:        messageID,
+		RoomID:    roomID,
+		PinnedBy:  c.username,
+		PinnedAt:  time.Now().UnixMilli(),
+		Pinned:    true,
+	})
+	c.hub.BroadcastToRoom(pinMsg, roomID)
+}
+
+// handleUnpinMessage unpins a message in the current room.
+func (c *Client) handleUnpinMessage(msg Message) {
+	if c.username == "" {
+		return
+	}
+	messageID := msg.ID
+	if messageID == "" {
+		return
+	}
+	roomID := c.getCurrentRoomID()
+	c.hub.UnpinMessage(roomID, messageID)
+	// Broadcast unpin event.
+	unpinMsg, _ := json.Marshal(Message{
+		Type:   "unpinned",
+		ID:     messageID,
+		RoomID: roomID,
+		Pinned: false,
+	})
+	c.hub.BroadcastToRoom(unpinMsg, roomID)
+}
+
+// handleLoadHistory sends older messages to the requesting client for pagination.
+func (c *Client) handleLoadHistory(msg Message) {
+	if c.username == "" {
+		return
+	}
+	roomID := c.getCurrentRoomID()
+	limit := 50
+	before := msg.Timestamp
+	if before <= 0 {
+		return
+	}
+	messages := c.hub.store.GetRoomMessages(roomID, limit, before)
+	historyPayload, _ := json.Marshal(Message{
+		Type:     "history",
+		Messages: messages,
+		RoomID:   roomID,
+	})
+	select {
+	case c.send <- historyPayload:
+	default:
+	}
 }
 
 // handleMarkRead broadcasts a read receipt so message senders know their messages were seen.

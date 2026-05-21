@@ -428,6 +428,14 @@ class ChatAPI {
     this.send({ type: "group_invite", group, username });
   }
 
+  sendGroupInviteAccept(group: string, from: string): void {
+    this.send({ type: "group_invite_accept", group, from });
+  }
+
+  sendGroupInviteDecline(group: string): void {
+    this.send({ type: "group_invite_decline", group });
+  }
+
   deleteMessage(id: string): void {
     this.send({ type: "message_delete", id });
   }
@@ -478,6 +486,18 @@ class ChatAPI {
 
   sendBlockList(): void {
     this.send({ type: "block_list" });
+  }
+
+  sendLoadHistory(before: number): void {
+    this.send({ type: "load_history", timestamp: before });
+  }
+
+  sendPinMessage(messageId: string): void {
+    this.send({ type: "pin_message", id: messageId });
+  }
+
+  sendUnpinMessage(messageId: string): void {
+    this.send({ type: "unpin_message", id: messageId });
   }
 
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {

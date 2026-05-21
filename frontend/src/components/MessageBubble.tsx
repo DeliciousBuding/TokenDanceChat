@@ -23,6 +23,8 @@ interface MessageBubbleProps {
   onDelete?: (messageId: string) => void;
   /** Callback for forward action */
   onForward?: (message: ChatMessage) => void;
+  /** Number of replies to this message */
+  replyCount?: number;
 }
 
 /** Simple code block renderer with syntax highlighting and copy button */
@@ -108,6 +110,7 @@ export const MessageBubble = memo(function MessageBubble({
   onReply,
   onDelete,
   onForward,
+  replyCount = 0,
 }: MessageBubbleProps) {
   const { t } = useTranslation();
   const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
@@ -381,9 +384,21 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
-        {/* Reply preview (quoted message) */}
+        {/* Reply preview (quoted message) — clickable to jump to original */}
         {(message.reply_to_id || message.reply_to_content) && (
-          <div className="mb-1 ml-0 border-l-2 border-[hsl(220,2.5%,30%)] pl-2 py-0.5 rounded-sm bg-card">
+          <div
+            className="mb-1 ml-0 border-l-2 border-[hsl(220,2.5%,30%)] pl-2 py-0.5 rounded-sm bg-card cursor-pointer hover:border-[hsl(220,2.5%,45%)] transition-colors"
+            onClick={() => {
+              if (message.reply_to_id) {
+                const el = document.getElementById(`msg-${message.reply_to_id}`);
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el.classList.add("highlight-flash");
+                  setTimeout(() => el.classList.remove("highlight-flash"), 2000);
+                }
+              }
+            }}
+          >
             <span className="text-[10px] font-medium text-muted-foreground/70">
               {message.reply_to_user || "..."}
             </span>
@@ -440,11 +455,33 @@ export const MessageBubble = memo(function MessageBubble({
           <div
             className={cn(
               "flex flex-wrap items-center gap-1 mt-0.5 transition-opacity",
-              !message.reactions || Object.values(message.reactions).every((users) => users.length === 0)
+              (!message.reactions || Object.values(message.reactions).every((users) => users.length === 0)) && replyCount === 0
                 ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100"
                 : "opacity-100",
             )}
           >
+            {replyCount > 0 && (
+              <button
+                onClick={() => {
+                  const el = document.getElementById(`msg-${message.id}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }
+                  // Dispatch event to filter thread view.
+                  window.dispatchEvent(
+                    new CustomEvent("tdchat:view-thread", { detail: { messageId: message.id } }),
+                  );
+                }}
+                className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs border border-[hsl(220,2.5%,20%)] bg-card hover:bg-accent transition-colors text-muted-foreground/70"
+                aria-label={`${replyCount} replies`}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 17 4 12 9 7" />
+                  <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                </svg>
+                <span className="text-[10px]">{replyCount}</span>
+              </button>
+            )}
             {message.reactions &&
               Object.entries(message.reactions).map(
                 ([emoji, users]) =>
@@ -475,6 +512,16 @@ export const MessageBubble = memo(function MessageBubble({
               aria-label="Add reaction"
             >
               <span className="text-xs">+</span>
+            </button>
+            <button
+              onClick={() => chatAPI.sendPinMessage(message.id)}
+              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-[hsl(220,2.5%,20%)] hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
+              aria-label="Pin message"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="17" x2="12" y2="22" />
+                <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+              </svg>
             </button>
           </div>
         )}

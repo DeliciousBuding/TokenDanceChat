@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Menu, LogOut, Globe, ArrowLeft, AtSign, X } from "lucide-react";
+import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
@@ -26,11 +26,13 @@ export function ChatLayout() {
     setCurrentChat,
     setReplyTo,
     pendingFriendRequests,
+    pendingGroupInvites,
     addSystemMessage,
     currentRoomID,
     clearConversationUnread,
     latestMention,
     setLatestMention,
+    pinnedMessages,
   } = useChatStore();
   const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, uploadImage, forwardMessage } =
     useWebSocket();
@@ -323,6 +325,42 @@ export function ChatLayout() {
           </div>
         )}
 
+        {/* Group invite notifications */}
+        {pendingGroupInvites.length > 0 && (
+          <div className="border-b border-[hsl(220,2.5%,25%)] bg-[hsl(220,40%,45%/0.06)] px-6 py-2 space-y-1">
+            {pendingGroupInvites.map((inv) => (
+              <div
+                key={inv.group}
+                className="flex items-center gap-3 text-xs animate-fade-in"
+              >
+                <span className="text-muted-foreground/70 flex-1">
+                  {t("system.groupInvited", { group: inv.group, username: inv.from })}
+                </span>
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      chatAPI.sendGroupInviteAccept(inv.group, inv.from);
+                      useChatStore.getState().removeGroupInvite(inv.group);
+                    }}
+                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-white bg-primary"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => {
+                      chatAPI.sendGroupInviteDecline(inv.group);
+                      useChatStore.getState().removeGroupInvite(inv.group);
+                    }}
+                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-muted-foreground bg-muted hover:bg-secondary"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Mention notification toast */}
         {latestMention && (
           <div className="border-b border-[hsl(20,80%,45%)] bg-[hsl(20,80%,45%/0.08)] px-6 py-2 flex items-center gap-3 text-xs animate-slide-up">
@@ -359,6 +397,29 @@ export function ChatLayout() {
             >
               <X className="h-3 w-3" />
             </button>
+          </div>
+        )}
+
+        {/* Pinned messages banner */}
+        {pinnedMessages.length > 0 && currentChat.type === "public" && (
+          <div className="border-b border-[hsl(220,2.5%,25%)] bg-[hsl(220,40%,45%/0.04)] px-6 py-1.5 flex items-center gap-2 overflow-x-auto scrollbar-thin">
+            <Pin className="h-3 w-3 text-muted-foreground/50 flex-shrink-0" />
+            {pinnedMessages.map((pm) => (
+              <button
+                key={pm.id}
+                onClick={() => {
+                  const el = document.getElementById(`msg-${pm.id}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    el.classList.add("highlight-flash");
+                    setTimeout(() => el.classList.remove("highlight-flash"), 2000);
+                  }
+                }}
+                className="flex-shrink-0 rounded-md px-2 py-0.5 text-[10px] bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors truncate max-w-[200px]"
+              >
+                {pm.username}: {(pm.content || "").slice(0, 40)}{(pm.content || "").length > 40 ? "..." : ""}
+              </button>
+            ))}
           </div>
         )}
 

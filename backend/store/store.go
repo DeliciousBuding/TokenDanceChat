@@ -746,3 +746,51 @@ func (s *Store) GetBlockedUsers(username string) []string {
 	}
 	return blocked
 }
+
+
+// --- Message pinning ---
+
+func (s *Store) PinMessage(roomID, messageID, pinnedBy string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(
+		"INSERT OR IGNORE INTO pinned_messages (room_id, message_id, pinned_by, pinned_at) VALUES (?, ?, ?, ?)",
+		roomID, messageID, pinnedBy, time.Now().UnixMilli(),
+	)
+	return err
+}
+
+func (s *Store) UnpinMessage(roomID, messageID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM pinned_messages WHERE room_id = ? AND message_id = ?", roomID, messageID)
+	return err
+}
+
+func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query(
+		"SELECT m.id, m.username, m.content, m.timestamp, m.reply_to_id, m.room_id, m.deleted, m.edited, m.to_user, m.group_name FROM pinned_messages p JOIN messages m ON p.message_id = m.id WHERE p.room_id = ? ORDER BY p.pinned_at DESC",
+		roomID,
+	)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var msgs []StoredMessage
+	for rows.Next() {
+		var m StoredMessage
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName); err != nil {
+			continue
+		}
+		if m.Deleted {
+			m.Content = ""
+		}
+		msgs = append(msgs, m)
+	}
+	if msgs == nil {
+		msgs = []StoredMessage{}
+	}
+	return msgs
+}
