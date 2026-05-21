@@ -91,6 +91,18 @@ func (s *Store) migrate() error {
 		FOREIGN KEY (message_id) REFERENCES messages(id)
 	);
 	CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id);
+
+	CREATE TABLE IF NOT EXISTS friends (
+		username TEXT NOT NULL,
+		friend TEXT NOT NULL,
+		PRIMARY KEY (username, friend)
+	);
+
+	CREATE TABLE IF NOT EXISTS group_members (
+		group_name TEXT NOT NULL,
+		username TEXT NOT NULL,
+		PRIMARY KEY (group_name, username)
+	);
 	`
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -480,4 +492,103 @@ func (s *Store) SearchMessages(query string, roomID string, limit int) ([]Search
 		results = []SearchResult{}
 	}
 	return results, nil
+}
+
+// --- Friends persistence ---
+
+func (s *Store) AddFriend(username, friend string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("INSERT OR IGNORE INTO friends (username, friend) VALUES (?, ?)", username, friend)
+	return err
+}
+
+func (s *Store) RemoveFriend(username, friend string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM friends WHERE username = ? AND friend = ?", username, friend)
+	return err
+}
+
+func (s *Store) GetFriends(username string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query("SELECT friend FROM friends WHERE username = ?", username)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var friends []string
+	for rows.Next() {
+		var f string
+		if err := rows.Scan(&f); err == nil {
+			friends = append(friends, f)
+		}
+	}
+	if friends == nil {
+		friends = []string{}
+	}
+	return friends
+}
+
+// --- Group persistence ---
+
+func (s *Store) CreateGroup(name, creator string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("INSERT OR IGNORE INTO group_members (group_name, username) VALUES (?, ?)", name, creator)
+	return err
+}
+
+func (s *Store) AddGroupMember(groupName, username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("INSERT OR IGNORE INTO group_members (group_name, username) VALUES (?, ?)", groupName, username)
+	return err
+}
+
+func (s *Store) RemoveGroupMember(groupName, username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ? AND username = ?", groupName, username)
+	return err
+}
+
+func (s *Store) GetGroupMembers(groupName string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query("SELECT username FROM group_members WHERE group_name = ?", groupName)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var members []string
+	for rows.Next() {
+		var m string
+		if err := rows.Scan(&m); err == nil {
+			members = append(members, m)
+		}
+	}
+	if members == nil {
+		members = []string{}
+	}
+	return members
+}
+
+func (s *Store) GetAllGroups() map[string][]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query("SELECT group_name, username FROM group_members ORDER BY group_name")
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	groups := make(map[string][]string)
+	for rows.Next() {
+		var g, u string
+		if err := rows.Scan(&g, &u); err == nil {
+			groups[g] = append(groups[g], u)
+		}
+	}
+	return groups
 }
