@@ -107,7 +107,7 @@ func TestGetMessagesLimit(t *testing.T) {
 	defer s.Close()
 
 	for i := 0; i < 10; i++ {
-		s.InsertMessage("user", fmt.Sprintf("msg%d", i))
+		s.InsertMessage("user", fmt.Sprintf("msg%d", i), "")
 		time.Sleep(time.Millisecond)
 	}
 
@@ -194,7 +194,7 @@ func TestConcurrentInsert(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_, err := s.InsertMessage("user", fmt.Sprintf("concurrent-%d", idx))
+			_, err := s.InsertMessage("user", fmt.Sprintf("concurrent-%d", idx), "")
 			if err != nil {
 				errCh <- err
 			}

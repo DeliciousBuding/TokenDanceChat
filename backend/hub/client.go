@@ -225,7 +225,7 @@ func (c *Client) handleChatMessage(msg Message) {
 	}
 
 	// Save to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "")
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID)
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
 		return
@@ -246,7 +246,7 @@ func (c *Client) handleChatMessage(msg Message) {
 
 	// Store the user message in LLM memory.
 	if mem := c.hub.Memory(); mem != nil {
-		mem.Add(llm.Message{Role: "user", Content: content})
+		mem.Add(llm.Message{Role: "user", Content: content, Username: c.username})
 	}
 
 	// Check for @mentions and trigger bot response.
@@ -557,7 +557,7 @@ func (c *Client) handleGroupMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "")
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID)
 	if err != nil {
 		log.Printf("failed to insert group message: %v", err)
 		return
@@ -621,6 +621,12 @@ func (c *Client) handleMessageDelete(msg Message) {
 		return
 	}
 
+	// Mark message as deleted in store; broadcast deletion event.
+	if err := c.hub.store.MarkDeleted(messageID); err != nil {
+		log.Printf("failed to mark message deleted: %v", err)
+		return
+	}
+
 	// Broadcast deletion.
 	delMsg, _ := json.Marshal(Message{
 		Type:    "message_delete",
@@ -660,9 +666,11 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	// Build conversation history from memory.
 	messages := c.hub.Memory().GetMessages()
 
-	// Call the LLM with streaming.
-	var fullResponse strings.Builder
+	// Set the system prompt with bot identity, rules, and memory context.
 	client := c.hub.LLMClient()
+	client.SetSystemPrompt(c.hub.BuildSystemPrompt())
+
+	var fullResponse strings.Builder
 	err := client.ChatStream(ctx, messages, func(chunk string) error {
 		fullResponse.WriteString(chunk)
 		c.hub.BroadcastStreamChunk(c.hub.BotName(), chunk, false)
@@ -689,7 +697,7 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 
 	// Update memory with the bot response.
 	if mem := c.hub.Memory(); mem != nil {
-		mem.Add(llm.Message{Role: "assistant", Content: response})
+		mem.Add(llm.Message{Role: "assistant", Content: response, Username: c.hub.BotName()})
 	}
 }
 
