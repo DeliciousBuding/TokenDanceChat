@@ -22,16 +22,11 @@ type Config struct {
 	MemorySize int    // max context messages (default 20)
 }
 
-// Message represents a chat message.
-type Message struct {
-	Role    string // "user" or "assistant"
-	Content string
-}
-
 // Client is a lightweight LLM adapter supporting both Anthropic and OpenAI APIs.
 type Client struct {
-	cfg    Config
-	client *http.Client
+	cfg          Config
+	client       *http.Client
+	systemPrompt string
 }
 
 // New creates a new LLM Client.
@@ -44,7 +39,13 @@ func New(cfg Config) *Client {
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
+		systemPrompt: "You are a helpful chatbot in a public chat room. Keep responses concise.",
 	}
+}
+
+// SetSystemPrompt updates the system prompt used for subsequent LLM calls.
+func (c *Client) SetSystemPrompt(prompt string) {
+	c.systemPrompt = prompt
 }
 
 func (c *Client) getMaxTokens() int {
@@ -81,7 +82,6 @@ func (c *Client) ChatStream(ctx context.Context, messages []Message, onChunk Str
 	}
 }
 
-const systemPrompt = "You are a helpful chatbot in a public chat room. Keep responses concise."
 
 // anthropicRequest is the request body for the Anthropic Messages API.
 type anthropicRequest struct {
@@ -130,7 +130,7 @@ func (c *Client) chatAnthropic(ctx context.Context, messages []Message) (string,
 	body := anthropicRequest{
 		Model:     c.cfg.Model,
 		MaxTokens: c.getMaxTokens(),
-		System:    systemPrompt,
+		System:    c.systemPrompt,
 		Messages:  apiMessages,
 	}
 
@@ -224,7 +224,7 @@ func (c *Client) chatOpenAI(ctx context.Context, messages []Message) (string, er
 	apiMessages := make([]openaiMessage, 0, len(messages)+1)
 	apiMessages = append(apiMessages, openaiMessage{
 		Role:    "system",
-		Content: systemPrompt,
+		Content: c.systemPrompt,
 	})
 	for _, msg := range messages {
 		apiMessages = append(apiMessages, openaiMessage{
@@ -307,7 +307,7 @@ func (c *Client) chatOpenAIStream(ctx context.Context, messages []Message, onChu
 	apiMessages := make([]openaiMessage, 0, len(messages)+1)
 	apiMessages = append(apiMessages, openaiMessage{
 		Role:    "system",
-		Content: systemPrompt,
+		Content: c.systemPrompt,
 	})
 	for _, msg := range messages {
 		apiMessages = append(apiMessages, openaiMessage{
@@ -415,7 +415,7 @@ func (c *Client) chatAnthropicStream(ctx context.Context, messages []Message, on
 	body := anthropicStreamRequest{
 		Model:     c.cfg.Model,
 		MaxTokens: c.getMaxTokens(),
-		System:    systemPrompt,
+		System:    c.systemPrompt,
 		Messages:  apiMessages,
 		Stream:    true,
 	}
