@@ -1184,7 +1184,6 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 	if err != nil {
 		log.Printf("PicoClaw send error: %v", err)
 		errorContent := "PicoClaw 当前未连接，无法执行 Agent 工作流。"
-		c.hub.BroadcastStreamChunkToRoom(agentName, errorContent, true, c.currentRoomID)
 		c.hub.SendAssistantMessageToRoom(agentName, errorContent, c.currentRoomID)
 		return
 	}
