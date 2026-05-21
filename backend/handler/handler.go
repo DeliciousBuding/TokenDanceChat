@@ -384,9 +384,14 @@ func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
 
 	// Validate file type.
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	allowedExts := map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true}
+		allowedExts := map[string]bool{
+			".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
+			".pdf": true, ".doc": true, ".docx": true, ".txt": true, ".md": true,
+			".csv": true, ".json": true, ".xml": true,
+			".zip": true, ".tar": true, ".gz": true, ".7z": true, ".rar": true,
+		}
 	if !allowedExts[ext] {
-		writeJSONError(w, http.StatusBadRequest, "unsupported file type (allowed: PNG, JPEG, GIF, WebP)", "INVALID_FILE_TYPE", requestID)
+		writeJSONError(w, http.StatusBadRequest, "unsupported file type", "INVALID_FILE_TYPE", requestID)
 		return
 	}
 

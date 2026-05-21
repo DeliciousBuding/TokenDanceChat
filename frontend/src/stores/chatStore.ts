@@ -25,6 +25,15 @@ export interface PendingFriendRequest {
   timestamp: number;
 }
 
+export interface MentionNotification {
+  from: string;
+  content: string;
+  messageId: string;
+  roomId?: string;
+  group?: string;
+  timestamp: number;
+}
+
 interface ChatState {
   // Connection state
   view: ViewState;
@@ -71,6 +80,12 @@ interface ChatState {
   unreadCount: number;
   unreadByConversation: Record<string, number>;
 
+  // Mention notifications
+  latestMention: MentionNotification | null;
+
+  // Blocked users
+  blockedUsers: string[];
+
   // Actions
   setView: (view: ViewState) => void;
   setUsername: (username: string) => void;
@@ -99,6 +114,11 @@ interface ChatState {
   clearAllConversationUnreads: () => void;
   updateMessageReactions: (messageId: string, reactions: Record<string, string[]>) => void;
   editMessageInPlace: (messageId: string, content: string) => void;
+  markMessagesReadBy: (reader: string) => void;
+  setLatestMention: (mention: MentionNotification | null) => void;
+  setBlockedUsers: (users: string[]) => void;
+  addBlockedUser: (username: string) => void;
+  removeBlockedUser: (username: string) => void;
   reset: () => void;
 }
 
@@ -122,12 +142,16 @@ export const useChatStore = create<ChatState>((set) => ({
   pendingImage: null,
   unreadCount: 0,
   unreadByConversation: {},
+  latestMention: null,
+  blockedUsers: [],
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
   setConnected: (connected) => set({ connected }),
   addMessage: (message) =>
     set((state) => {
+      // Filter out messages from blocked users.
+      if (state.blockedUsers.includes(message.username)) return state;
       const messages = [...state.messages, message];
       if (messages.length > MESSAGE_CAP) {
         messages.splice(0, messages.length - MESSAGE_CAP);
@@ -218,6 +242,27 @@ export const useChatStore = create<ChatState>((set) => ({
         m.id === messageId ? { ...m, content, edited: true } : m,
       ),
     })),
+  markMessagesReadBy: (reader) =>
+    set((state) => ({
+      messages: state.messages.map((m) => {
+        if (m.username !== state.username) return m;
+        const readBy = m.read_by || [];
+        if (readBy.includes(reader)) return m;
+        return { ...m, read_by: [...readBy, reader] };
+      }),
+    })),
+  setLatestMention: (latestMention) => set({ latestMention }),
+  setBlockedUsers: (blockedUsers) => set({ blockedUsers }),
+  addBlockedUser: (username) =>
+    set((state) => ({
+      blockedUsers: state.blockedUsers.includes(username)
+        ? state.blockedUsers
+        : [...state.blockedUsers, username],
+    })),
+  removeBlockedUser: (username) =>
+    set((state) => ({
+      blockedUsers: state.blockedUsers.filter((u) => u !== username),
+    })),
   reset: () =>
     set({
       view: "join",
@@ -239,5 +284,7 @@ export const useChatStore = create<ChatState>((set) => ({
       pendingImage: null,
       unreadCount: 0,
       unreadByConversation: {},
+      latestMention: null,
+      blockedUsers: [],
     }),
 }));

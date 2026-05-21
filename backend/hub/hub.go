@@ -57,6 +57,12 @@ type Store interface {
 	// DM delivery tracking
 	GetUndeliveredDMs(username string, limit int) []StoredMessage
 	MarkMessagesDelivered(ids []string) error
+
+	// User blocking
+	BlockUser(username, blocked string) error
+	UnblockUser(username, blocked string) error
+	IsBlocked(username, blocked string) bool
+	GetBlockedUsers(username string) []string
 }
 
 // Group represents a chat group.
@@ -846,6 +852,23 @@ func (h *Hub) RemoveGroupMember(groupName, username string) {
 	if h.store != nil {
 		h.store.RemoveGroupMember(groupName, username)
 	}
+}
+
+// --- User blocking methods ---
+
+// BlockUser blocks a user. Delegates to the store.
+func (h *Hub) BlockUser(username, blocked string) error {
+	return h.store.BlockUser(username, blocked)
+}
+
+// UnblockUser unblocks a user.
+func (h *Hub) UnblockUser(username, blocked string) error {
+	return h.store.UnblockUser(username, blocked)
+}
+
+// IsBlocked checks if a user has blocked another.
+func (h *Hub) IsBlocked(username, blocked string) bool {
+	return h.store.IsBlocked(username, blocked)
 }
 
 // BroadcastStreamChunk sends a streaming chunk to all connected clients.

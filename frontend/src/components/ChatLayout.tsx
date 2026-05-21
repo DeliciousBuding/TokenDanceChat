@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Menu, LogOut, Globe, ArrowLeft } from "lucide-react";
+import { Menu, LogOut, Globe, ArrowLeft, AtSign, X } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
@@ -29,6 +29,8 @@ export function ChatLayout() {
     addSystemMessage,
     currentRoomID,
     clearConversationUnread,
+    latestMention,
+    setLatestMention,
   } = useChatStore();
   const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, uploadImage, forwardMessage } =
     useWebSocket();
@@ -318,6 +320,45 @@ export function ChatLayout() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Mention notification toast */}
+        {latestMention && (
+          <div className="border-b border-[hsl(20,80%,45%)] bg-[hsl(20,80%,45%/0.08)] px-6 py-2 flex items-center gap-3 text-xs animate-slide-up">
+            <AtSign className="h-3.5 w-3.5 text-[hsl(20,80%,55%)] flex-shrink-0" />
+            <span className="text-foreground/80 flex-1 truncate">
+              <span className="font-medium">{latestMention.from}</span> mentioned you{latestMention.group ? ` in ${latestMention.group}` : ""}:{" "}
+              <span className="text-muted-foreground/60">{latestMention.content}</span>
+            </span>
+            <button
+              onClick={() => {
+                if (latestMention.group) {
+                  setCurrentChat({ type: "group", name: latestMention.group });
+                } else {
+                  setCurrentChat({ type: "public" });
+                }
+                setLatestMention(null);
+                // Jump to the message.
+                if (latestMention.messageId) {
+                  window.dispatchEvent(
+                    new CustomEvent("tdchat:scroll-to-message", {
+                      detail: { id: latestMention.messageId },
+                    }),
+                  );
+                }
+              }}
+              className="rounded-md px-2 py-0.5 text-[10px] font-medium text-[hsl(20,80%,55%)] hover:bg-[hsl(20,80%,45%/0.15)] flex-shrink-0"
+            >
+              View
+            </button>
+            <button
+              onClick={() => setLatestMention(null)}
+              className="rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground flex-shrink-0"
+              aria-label="Dismiss"
+            >
+              <X className="h-3 w-3" />
+            </button>
           </div>
         )}
 

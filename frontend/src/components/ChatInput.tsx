@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent, type ClipboardEvent } from "react";
-import { Send, Loader2, X, ImagePlus } from "lucide-react";
+import { Send, Loader2, X, ImagePlus, Paperclip } from "lucide-react";
 import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
@@ -64,6 +64,7 @@ export function ChatInput({
     return () => clearTimeout(saveDraftRef.current);
   }, [content, draftStorageKey]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [pulseButton, setPulseButton] = useState(false);
@@ -178,7 +179,7 @@ export function ChatInput({
     };
   }, [adjustHeight, content]);
 
-  // Image paste handler
+  // Image paste handler — works for all image types.
   const handlePaste = useCallback(
     (e: ClipboardEvent<HTMLTextAreaElement>) => {
       const items = e.clipboardData?.items;
@@ -189,16 +190,7 @@ export function ChatInput({
           e.preventDefault();
           const file = item.getAsFile();
           if (file) {
-            // Check file size (5MB limit).
-            if (file.size > 5 * 1024 * 1024) {
-              return;
-            }
-            // Check type.
-            const validTypes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-            if (!validTypes.includes(file.type)) {
-              return;
-            }
-            // Show preview.
+            if (file.size > 20 * 1024 * 1024) return;
             const reader = new FileReader();
             reader.onload = () => {
               setPendingImage(reader.result as string);
@@ -212,24 +204,32 @@ export function ChatInput({
     [setPendingImage],
   );
 
-  // File input handler
-  const handleFileSelect = useCallback(
+  // Image file select handler
+  const handleImageSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (file.size > 5 * 1024 * 1024) return;
-      const validTypes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-      if (!validTypes.includes(file.type)) return;
-
+      if (file.size > 20 * 1024 * 1024) return;
       const reader = new FileReader();
       reader.onload = () => {
         setPendingImage(reader.result as string);
       };
       reader.readAsDataURL(file);
-      // Reset input.
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (imageInputRef.current) imageInputRef.current.value = "";
     },
     [setPendingImage],
+  );
+
+  // General file upload handler — upload directly and insert link.
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !onUpload) return;
+      if (file.size > 20 * 1024 * 1024) return;
+      onUpload(file);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    [onUpload],
   );
 
   // Cancel pending image
@@ -431,11 +431,19 @@ export function ChatInput({
         </div>
       )}
 
-      {/* File input (hidden) */}
+      {/* Hidden file inputs */}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        onChange={handleImageSelect}
+        className="hidden"
+        aria-hidden="true"
+      />
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp"
+        accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.zip,.tar,.gz,.7z,.rar"
         onChange={handleFileSelect}
         className="hidden"
         aria-hidden="true"
@@ -443,9 +451,9 @@ export function ChatInput({
 
       {/* Input area */}
       <div className="flex items-end gap-2 px-4 py-3">
-        {/* Upload button */}
+        {/* Image upload button */}
         <button
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => imageInputRef.current?.click()}
           disabled={disabled}
           aria-label="Upload image"
           className={cn(
@@ -454,6 +462,19 @@ export function ChatInput({
           )}
         >
           <ImagePlus className="h-4 w-4" />
+        </button>
+
+        {/* File upload button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled}
+          aria-label="Upload file"
+          className={cn(
+            "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
+            "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+          )}
+        >
+          <Paperclip className="h-4 w-4" />
         </button>
 
         <div className="flex-1 relative input-glow">
