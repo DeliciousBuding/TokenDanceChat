@@ -3,7 +3,7 @@ import { Send, Loader2, X, ImagePlus } from "lucide-react";
 import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
-import { chatAPI, type ChatMessage } from "@/lib/api";
+import { chatAPI, type ChatMessage, type TypingContext } from "@/lib/api";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
@@ -101,17 +101,24 @@ export function ChatInput({
     adjustHeight();
   }, [content, adjustHeight]);
 
+  // Compute typing context from current chat
+  const typingContext = useMemo((): TypingContext => {
+    if (currentChat.type === "dm") return { channel: "dm", target: currentChat.username };
+    if (currentChat.type === "group") return { channel: "group", target: currentChat.name };
+    return { channel: "public" };
+  }, [currentChat]);
+
   // Dispatch typing_start / typing_stop events
   useEffect(() => {
     const hasContent = content.trim().length > 0;
     if (hasContent && !isComposing && !disabled && !typingSentRef.current) {
-      chatAPI.sendTypingStart();
+      chatAPI.sendTypingStart(typingContext);
       typingSentRef.current = true;
     } else if (!hasContent && typingSentRef.current) {
-      chatAPI.sendTypingStop();
+      chatAPI.sendTypingStop(typingContext);
       typingSentRef.current = false;
     }
-  }, [content, isComposing, disabled]);
+  }, [content, isComposing, disabled, typingContext]);
 
   // Focus textarea when component mounts
   useEffect(() => {

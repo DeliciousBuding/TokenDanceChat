@@ -72,6 +72,7 @@ type Message struct {
 	To      string   `json:"to,omitempty"`
 	From    string   `json:"from,omitempty"`
 	Friends []string `json:"friends,omitempty"`
+	Context string   `json:"context,omitempty"`
 
 	// Group system
 	Group   string   `json:"group,omitempty"`
@@ -778,10 +779,12 @@ func (h *Hub) BroadcastStreamChunkToRoom(username, content string, done bool, ro
 
 // BroadcastTyping sends a typing indicator to all clients except the sender.
 // Rate limit is enforced by the caller via shouldBroadcastTyping.
-func (h *Hub) BroadcastTyping(username, eventType string) {
+func (h *Hub) BroadcastTyping(username, eventType, context, to string) {
 	msg := Message{
 		Type:     eventType,
 		Username: username,
+		Context:  context,
+		To:       to,
 	}
 	data, err := json.Marshal(msg)
 	if err != nil {

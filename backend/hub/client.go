@@ -116,9 +116,9 @@ func (c *Client) ReadPump() {
 		case "message_delete":
 			c.handleMessageDelete(msg)
 		case "typing_start":
-			c.handleTypingStart()
+			c.handleTypingStart(msg)
 		case "typing_stop":
-			c.handleTypingStop()
+			c.handleTypingStop(msg)
 		case "room_create":
 			c.handleRoomCreate(msg)
 		case "room_join":
@@ -887,22 +887,22 @@ func (c *Client) handleMessageDelete(msg Message) {
 }
 
 // Rate limited to once per 3 seconds per user.
-func (c *Client) handleTypingStart() {
+func (c *Client) handleTypingStart(msg Message) {
 	if c.username == "" {
 		return
 	}
 	if !c.hub.ShouldBroadcastTyping(c.username) {
 		return
 	}
-	c.hub.BroadcastTyping(c.username, "typing")
+	c.hub.BroadcastTyping(c.username, "typing", msg.Context, msg.To)
 }
 
 // handleTypingStop broadcasts that the user stopped typing.
-func (c *Client) handleTypingStop() {
+func (c *Client) handleTypingStop(msg Message) {
 	if c.username == "" {
 		return
 	}
-	c.hub.BroadcastTyping(c.username, "typing_stop")
+	c.hub.BroadcastTyping(c.username, "typing_stop", msg.Context, msg.To)
 }
 
 // --- Room system handlers ---
@@ -1134,7 +1134,7 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 		c.hub.SendBotMessageToRoom(response, c.currentRoomID)
 
 		// Stop typing indicator after bot finishes responding.
-		c.hub.BroadcastTyping(c.hub.BotName(), "typing_stop")
+		c.hub.BroadcastTyping(c.hub.BotName(), "typing_stop", "", "")
 	}
 
 	// Update memory with the bot response.
@@ -1256,7 +1256,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 		c.hub.SendAssistantMessageToRoom(agentName, response, c.currentRoomID)
 
 		// Stop typing indicator after agent finishes responding.
-		c.hub.BroadcastTyping(agentName, "typing_stop")
+		c.hub.BroadcastTyping(agentName, "typing_stop", "", "")
 	}
 
 	// Update memory with bot response.
