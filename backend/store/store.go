@@ -611,6 +611,25 @@ func (s *Store) GetAllGroups() map[string][]string {
 	return groups
 }
 
+// GetAllFriends returns all friend relationships as (username, friend) pairs.
+func (s *Store) GetAllFriends() map[string][]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query("SELECT username, friend FROM friends")
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	result := make(map[string][]string)
+	for rows.Next() {
+		var u, f string
+		if err := rows.Scan(&u, &f); err == nil {
+			result[u] = append(result[u], f)
+		}
+	}
+	return result
+}
+
 // GetUndeliveredDMs returns recent DMs addressed to a user that haven't been delivered yet.
 func (s *Store) GetUndeliveredDMs(username string, limit int) []StoredMessage {
 	s.mu.RLock()

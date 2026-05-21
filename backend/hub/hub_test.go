@@ -77,6 +77,7 @@ func (m *mockStore) SearchMessages(query, roomID string, limit int) ([]store.Sea
 }
 func (m *mockStore) AddFriend(username, friend string) error            { return nil }
 func (m *mockStore) RemoveFriend(username, friend string) error          { return nil }
+func (m *mockStore) GetAllFriends() map[string][]string                   { return nil }
 func (m *mockStore) GetFriends(username string) []string                  { return nil }
 func (m *mockStore) CreateGroup(name, creator string) error               { return nil }
 func (m *mockStore) AddGroupMember(groupName, username string) error     { return nil }

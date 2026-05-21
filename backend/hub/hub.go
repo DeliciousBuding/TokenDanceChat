@@ -45,6 +45,7 @@ type Store interface {
 	AddFriend(username, friend string) error
 	RemoveFriend(username, friend string) error
 	GetFriends(username string) []string
+	GetAllFriends() map[string][]string
 
 	// Group persistence
 	CreateGroup(name, creator string) error
@@ -231,25 +232,19 @@ func (h *Hub) LoadPersistedState() {
 		h.groups[name] = g
 		h.groupsMu.Unlock()
 	}
-	// Restore friends (stored bidirectionally, reading one side is enough).
-	// We iterate all groups' members as a heuristic to find all known users
-	// and restore their friend lists.
-	for _, members := range allGroups {
-		for _, username := range members {
-			friends := h.store.GetFriends(username)
-			if len(friends) > 0 {
-				h.friendsMu.Lock()
-				set := make(map[string]bool)
-				for _, f := range friends {
-					set[f] = true
-				}
-				h.friends[username] = set
-				h.friendsMu.Unlock()
-			}
+	// Restore friends from the friends table directly.
+	allFriends := h.store.GetAllFriends()
+	for username, friends := range allFriends {
+		h.friendsMu.Lock()
+		set := make(map[string]bool)
+		for _, f := range friends {
+			set[f] = true
 		}
+		h.friends[username] = set
+		h.friendsMu.Unlock()
 	}
-}
 
+}
 // Run starts the hub's event loop. It should be run in a goroutine.
 func (h *Hub) Run() {
 	syncTicker := time.NewTicker(30 * time.Second)
