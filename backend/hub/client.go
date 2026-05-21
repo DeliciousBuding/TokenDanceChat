@@ -292,7 +292,7 @@ func (c *Client) handleChatMessage(msg Message) {
 	}
 
 	// Save to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID, "", "")
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
 		return
@@ -733,7 +733,7 @@ func (c *Client) handleGroupMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID, "", groupName)
 	if err != nil {
 		log.Printf("failed to insert group message: %v", err)
 		return
@@ -804,7 +804,7 @@ func (c *Client) handleDMMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID, c.currentRoomID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID, c.currentRoomID, msg.To, "")
 	if err != nil {
 		log.Printf("failed to insert DM message: %v", err)
 		return
@@ -1066,7 +1066,7 @@ func (c *Client) handleForward(msg Message) {
 	forwardContent := "Forwarded from " + stored.Username + ":\n" + stored.Content
 
 	// Persist as a new message.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, forwardContent, messageID, c.currentRoomID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, forwardContent, messageID, c.currentRoomID, "", "")
 	if err != nil {
 		log.Printf("failed to insert forwarded message: %v", err)
 		return

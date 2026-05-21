@@ -114,7 +114,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	// Server restart announcement: if there are existing messages, broadcast restart.
 	existingCount := len(st.GetMessages(1, 0))
 	if existingCount > 0 {
-		st.InsertMessage("system", "服务器已重启 Server restarted", "", "")
+		st.InsertMessage("system", "服务器已重启 Server restarted", "", "", "", "")
 		log.Printf("server restart announced (existing messages: %d)", existingCount)
 	}
 
