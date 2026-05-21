@@ -201,7 +201,7 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 			)
 		} else {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE timestamp < ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE to_user = '' AND group_name = '' AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
 				before, limit,
 			)
 		}
@@ -213,7 +213,7 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 			)
 		} else {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE to_user = '' AND group_name = '' ORDER BY timestamp DESC LIMIT ?",
 				limit,
 			)
 		}
@@ -479,7 +479,7 @@ func (s *Store) SearchMessages(query string, roomID string, limit int) ([]Search
 				bm25(messages_fts) AS rank
 			FROM messages_fts
 			JOIN messages m ON m.rowid = messages_fts.rowid
-			WHERE messages_fts MATCH ? AND messages_fts.room_id = ?
+			WHERE m.deleted = 0 AND messages_fts MATCH ? AND messages_fts.room_id = ?
 			ORDER BY rank LIMIT ?`, query, roomID, limit)
 	} else {
 		rows, err = s.db.Query(`
