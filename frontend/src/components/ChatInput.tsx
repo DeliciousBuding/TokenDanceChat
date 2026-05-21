@@ -276,7 +276,7 @@ export function ChatInput({
     try { localStorage.removeItem(draftStorageKey); } catch { /* ignore */ }
     // Clear typing state.
     if (typingSentRef.current) {
-      chatAPI.sendTypingStop();
+      chatAPI.sendTypingStop(typingContext);
       typingSentRef.current = false;
     }
     if (textareaRef.current) {
