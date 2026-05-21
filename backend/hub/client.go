@@ -27,7 +27,7 @@ const (
 	pingPeriod = (pongWait * 9) / 10
 
 	// Maximum message size allowed from peer.
-	maxMessageSize = 4096
+	maxMessageSize = 8192
 
 	// Rate limit: max messages per second per connection.
 	maxMessagesPerSecond = 5
@@ -156,6 +156,20 @@ func (c *Client) handleJoin(msg Message) {
 			Type:      "error",
 			Content:   "username already taken, please choose another",
 			ErrorCode: "USERNAME_TAKEN",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	// Block reserved usernames.
+	if isReservedUsername(username) {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "username is reserved",
+			ErrorCode: "RESERVED_USERNAME",
 		})
 		select {
 		case c.send <- errMsg:
@@ -1270,4 +1284,16 @@ func sanitizeContent(content string) string {
 		content = string([]rune(content)[:maxContentLength])
 	}
 	return content
+}
+
+// isReservedUsername blocks system and infrastructure usernames.
+func isReservedUsername(username string) bool {
+	lower := strings.ToLower(username)
+	reserved := []string{"system", "server", "admin", "moderator", "mod", "root", "null", "undefined", "everyone", "all", "chat", "here", "channel"}
+	for _, r := range reserved {
+		if lower == r {
+			return true
+		}
+	}
+	return false
 }
