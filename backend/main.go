@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -73,6 +74,19 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 		}
 	}
 
+	// Set up AGENTS.md and MEMORY.md in the data directory.
+	dataDir := filepath.Dir(dbPath)
+	if err := writeAgentsMD(dataDir, botName); err != nil {
+		log.Printf("warn: failed to write AGENTS.md: %v", err)
+	} else {
+		log.Printf("AGENTS.md written to %s", dataDir)
+	}
+
+	// Set MEMORY.md path for periodic summarization.
+	memoryMDPath := filepath.Join(dataDir, "MEMORY.md")
+	h.SetMemoryPath(memoryMDPath)
+	log.Printf("MEMORY.md path set to %s", memoryMDPath)
+
 	// Server restart announcement: if there are existing messages, broadcast restart.
 	existingCount := len(st.GetMessages(1, 0))
 	if existingCount > 0 {
@@ -141,6 +155,29 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	}
 
 	return server, st, h, nil
+}
+
+// writeAgentsMD writes the AGENTS.md file with bot rules and system prompt.
+func writeAgentsMD(dataDir, botName string) error {
+	content := fmt.Sprintf(`# AGENTS.md
+
+## System Prompt
+You are a helpful chatbot named %s. Speak Chinese by default. Be concise and friendly.
+
+## Rules
+- No offensive content
+- No roleplaying
+- Identify yourself as a bot named %s
+- When mentioning users, use @username format
+- Be helpful, concise, and friendly
+
+## Identity
+Bot name: %s
+This file is auto-generated from config on server startup.
+`, botName, botName, botName)
+
+	agentsPath := filepath.Join(dataDir, "AGENTS.md")
+	return os.WriteFile(agentsPath, []byte(content), 0644)
 }
 
 func main() {
