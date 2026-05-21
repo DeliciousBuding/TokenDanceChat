@@ -28,8 +28,41 @@ export function ChatInput({
   onUpload,
 }: ChatInputProps) {
   const { t } = useTranslation();
-  const { onlineUsers, username, currentChat, pendingImage, setPendingImage, setReplyTo } = useChatStore();
+  const { onlineUsers, username, currentChat, pendingImage, setPendingImage, setReplyTo, connected } = useChatStore();
   const [content, setContent] = useState("");
+  const draftKey = useMemo(() => {
+    if (currentChat.type === "dm") return `dm-${currentChat.username}`;
+    if (currentChat.type === "group") return `group-${currentChat.name}`;
+    return "public";
+  }, [currentChat]);
+  const draftStorageKey = `tdchat-draft-${draftKey}`;
+  const draftLoadedRef = useRef(false);
+
+  // Load draft when conversation changes.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(draftStorageKey);
+      setContent(saved ?? "");
+    } catch { setContent(""); }
+    draftLoadedRef.current = true;
+  }, [draftStorageKey]);
+
+  // Save draft on content change (debounced via ref).
+  const saveDraftRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    if (!draftLoadedRef.current) return;
+    clearTimeout(saveDraftRef.current);
+    saveDraftRef.current = setTimeout(() => {
+      try {
+        if (content.trim()) {
+          localStorage.setItem(draftStorageKey, content);
+        } else {
+          localStorage.removeItem(draftStorageKey);
+        }
+      } catch { /* quota exceeded, ignore */ }
+    }, 500);
+    return () => clearTimeout(saveDraftRef.current);
+  }, [content, draftStorageKey]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isComposing, setIsComposing] = useState(false);
@@ -233,8 +266,14 @@ export function ChatInput({
   const handleSend = useCallback(() => {
     const trimmed = content.trim();
     if (!trimmed || disabled) return;
+    if (!connected) {
+      // Keep content in input so user can retry when reconnected.
+      return;
+    }
     onSend(trimmed);
     setContent("");
+    // Clear draft.
+    try { localStorage.removeItem(draftStorageKey); } catch { /* ignore */ }
     // Clear typing state.
     if (typingSentRef.current) {
       chatAPI.sendTypingStop();
@@ -244,7 +283,7 @@ export function ChatInput({
       textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`;
       textareaRef.current.style.overflowY = "hidden";
     }
-  }, [content, disabled, onSend]);
+  }, [content, disabled, connected, onSend]);
 
   // Insert @username at cursor position.
   const insertMention = useCallback(
