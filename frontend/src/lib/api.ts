@@ -8,6 +8,13 @@ export interface ChatMessage {
   username: string;
   content: string;
   timestamp: number;
+  reply_to_id?: string;
+  reply_to_content?: string;
+  reply_to_user?: string;
+  deleted?: boolean;
+  to?: string;
+  from?: string;
+  group?: string;
 }
 
 export interface WSChatMessage extends WSMessage {
@@ -16,6 +23,9 @@ export interface WSChatMessage extends WSMessage {
   username: string;
   content: string;
   timestamp: number;
+  reply_to_id?: string;
+  reply_to_content?: string;
+  reply_to_user?: string;
 }
 
 export interface WSHistoryMessage extends WSMessage {
@@ -48,6 +58,59 @@ export interface WSJoinRequest {
 export interface WSSendMessage {
   type: "message";
   content: string;
+  reply_to_id?: string;
+  reply_to_content?: string;
+  reply_to_user?: string;
+}
+
+export interface WSDMMessage {
+  type: "dm_message";
+  content: string;
+  to: string;
+  reply_to_id?: string;
+  reply_to_content?: string;
+  reply_to_user?: string;
+}
+
+export interface WSGroupMessage {
+  type: "group_message";
+  content: string;
+  group: string;
+  reply_to_id?: string;
+  reply_to_content?: string;
+  reply_to_user?: string;
+}
+
+export interface WSFriendRequest {
+  type: "friend_request";
+  to: string;
+}
+
+export interface WSFriendAccept {
+  type: "friend_accept";
+  from: string;
+}
+
+export interface WSFriendReject {
+  type: "friend_reject";
+  from: string;
+}
+
+export interface WSGroupCreate {
+  type: "group_create";
+  group: string;
+  members?: string[];
+}
+
+export interface WSGroupInvite {
+  type: "group_invite";
+  group: string;
+  username: string;
+}
+
+export interface WSMessageDelete {
+  type: "message_delete";
+  id: string;
 }
 
 export type WSEventHandler = (msg: WSMessage) => void;
@@ -179,7 +242,11 @@ class ChatAPI {
     }, delay);
   }
 
-  send(data: WSJoinRequest | WSSendMessage): void {
+  get readyState(): number {
+    return this.ws?.readyState ?? WebSocket.CLOSED;
+  }
+
+  send(data: Record<string, unknown>): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
     } else {
@@ -187,8 +254,76 @@ class ChatAPI {
     }
   }
 
-  sendMessage(content: string): void {
-    this.send({ type: "message", content });
+  sendMessage(content: string, replyTo?: ChatMessage): void {
+    if (replyTo) {
+      this.send({
+        type: "message",
+        content,
+        reply_to_id: replyTo.id,
+        reply_to_content: replyTo.content,
+        reply_to_user: replyTo.username,
+      });
+    } else {
+      this.send({ type: "message", content });
+    }
+  }
+
+  sendDMMessage(to: string, content: string, replyTo?: ChatMessage): void {
+    this.send({
+      type: "dm_message",
+      content,
+      to,
+      ...(replyTo
+        ? {
+            reply_to_id: replyTo.id,
+            reply_to_content: replyTo.content,
+            reply_to_user: replyTo.username,
+          }
+        : {}),
+    });
+  }
+
+  sendGroupMessage(
+    group: string,
+    content: string,
+    replyTo?: ChatMessage,
+  ): void {
+    this.send({
+      type: "group_message",
+      content,
+      group,
+      ...(replyTo
+        ? {
+            reply_to_id: replyTo.id,
+            reply_to_content: replyTo.content,
+            reply_to_user: replyTo.username,
+          }
+        : {}),
+    });
+  }
+
+  sendFriendRequest(to: string): void {
+    this.send({ type: "friend_request", to });
+  }
+
+  sendFriendAccept(from: string): void {
+    this.send({ type: "friend_accept", from });
+  }
+
+  sendFriendReject(from: string): void {
+    this.send({ type: "friend_reject", from });
+  }
+
+  sendGroupCreate(name: string, members?: string[]): void {
+    this.send({ type: "group_create", group: name, members });
+  }
+
+  sendGroupInvite(group: string, username: string): void {
+    this.send({ type: "group_invite", group, username });
+  }
+
+  deleteMessage(id: string): void {
+    this.send({ type: "message_delete", id });
   }
 
   on(event: string, handler: WSEventHandler): () => void {

@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn, formatTime } from "@/lib/utils";
+import { useTranslation } from "@/i18n/context";
 import type { ChatMessage } from "@/lib/api";
 
 interface MessageBubbleProps {
@@ -17,6 +18,10 @@ interface MessageBubbleProps {
   forceShowTimestamp?: boolean;
   /** Whether this message is part of a group (adjusts spacing) */
   isGrouped?: boolean;
+  /** Callback when reply button is clicked */
+  onReply?: (message: ChatMessage) => void;
+  /** Callback when delete button is clicked */
+  onDelete?: (messageId: string) => void;
 }
 
 function hashString(str: string): number {
@@ -46,24 +51,51 @@ export const MessageBubble = memo(function MessageBubble({
   hideUsername = false,
   forceShowTimestamp = false,
   isGrouped = false,
+  onReply,
+  onDelete,
 }: MessageBubbleProps) {
-  const gradient = useMemo(() => avatarGradient(message.username), [message.username]);
-  const hue = useMemo(() => usernameHue(message.username), [message.username]);
+  const { t } = useTranslation();
+  const gradient = useMemo(
+    () => avatarGradient(message.username),
+    [message.username],
+  );
+  const hue = useMemo(
+    () => usernameHue(message.username),
+    [message.username],
+  );
   const nameColor = `oklch(72% 0.16 ${hue})`;
   const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
   const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
 
+  const isDeleted = message.deleted === true;
+
   // Parse @mentions and render with highlighting.
   const mentionContent = useMemo(() => {
-    const content = message.content;
+    const content = isDeleted
+      ? t("chat.deletedMessage")
+      : message.content;
+    if (isDeleted) {
+      return (
+        <span className="italic text-muted-foreground/50 line-through">
+          {content}
+        </span>
+      );
+    }
+
     const mentionRegex = /@(\w+)/g;
-    const parts: ({ type: "text"; value: string } | { type: "mention"; username: string })[] = [];
+    const parts: (
+      | { type: "text"; value: string }
+      | { type: "mention"; username: string }
+    )[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
     while ((match = mentionRegex.exec(content)) !== null) {
       if (match.index > lastIndex) {
-        parts.push({ type: "text", value: content.slice(lastIndex, match.index) });
+        parts.push({
+          type: "text",
+          value: content.slice(lastIndex, match.index),
+        });
       }
       parts.push({ type: "mention", username: match[1] });
       lastIndex = match.index + match[0].length;
@@ -73,11 +105,8 @@ export const MessageBubble = memo(function MessageBubble({
     }
 
     if (parts.length === 0) {
-      // No mentions, render normally with ReactMarkdown.
       return (
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {content}
-        </ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
       );
     }
 
@@ -107,15 +136,18 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             );
           }
-          // For text parts, render with ReactMarkdown (inline).
-          return <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>{part.value}</ReactMarkdown>;
+          return (
+            <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>
+              {part.value}
+            </ReactMarkdown>
+          );
         })}
       </>
     );
-  }, [message.content, currentUsername]);
+  }, [message.content, currentUsername, isDeleted, t]);
 
-  // In a group, non-first messages get tighter top padding
-  const paddingY = isGrouped && hideAvatar ? "py-0.5" : "py-1.5";
+  const paddingY =
+    isGrouped && hideAvatar ? "py-0.5" : "py-1.5";
 
   return (
     <div
@@ -125,6 +157,36 @@ export const MessageBubble = memo(function MessageBubble({
         paddingY,
       )}
     >
+      {/* Reply button (left side, appears on hover) */}
+      {!isDeleted && onReply && !hideUsername && (
+        <div
+          className={cn(
+            "flex items-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0",
+            isOwn ? "order-last" : "-mr-1",
+          )}
+        >
+          <button
+            onClick={() => onReply(message)}
+            aria-label={t("input.replyTo")}
+            className="rounded-md p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] transition-colors"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="9 17 4 12 9 7" />
+              <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Avatar for others */}
       {!isOwn && !hideAvatar && (
         <div className="mt-0.5 flex-shrink-0">
@@ -138,8 +200,9 @@ export const MessageBubble = memo(function MessageBubble({
         </div>
       )}
 
-      {/* Spacer (replaces hidden avatar to keep alignment) */}
-      {!isOwn && hideAvatar && <div className="w-8 flex-shrink-0" aria-hidden="true" />}
+      {!isOwn && hideAvatar && (
+        <div className="w-8 flex-shrink-0" aria-hidden="true" />
+      )}
 
       <div className={cn("max-w-[75%]", isOwn ? "items-end" : "items-start")}>
         {/* Username + timestamp header */}
@@ -158,7 +221,6 @@ export const MessageBubble = memo(function MessageBubble({
                 {message.username}
               </span>
             )}
-            {/* Timestamp in header: only for solo messages (not first in group) */}
             {isOwn && !isGrouped && (
               <span className="text-xs text-muted-foreground/60">
                 {formatTime(message.timestamp)}
@@ -169,6 +231,45 @@ export const MessageBubble = memo(function MessageBubble({
                 {formatTime(message.timestamp)}
               </span>
             )}
+
+            {/* Delete button for own messages (on hover) */}
+            {isOwn && !isDeleted && onDelete && (
+              <button
+                onClick={() => onDelete(message.id)}
+                aria-label="Delete message"
+                className="opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all"
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Reply preview (quoted message) */}
+        {(message.reply_to_id || message.reply_to_content) && (
+          <div className="mb-1 ml-0 border-l-2 border-[hsl(220,2.5%,30%)] pl-2 py-0.5 rounded-sm bg-[hsl(231,4%,14%)]">
+            <span className="text-[10px] font-medium text-muted-foreground/70">
+              {message.reply_to_user || "..."}
+            </span>
+            <span className="text-[10px] text-muted-foreground/50 block truncate max-w-[200px]">
+              {(message.reply_to_content || "").slice(0, 80)}
+              {(message.reply_to_content || "").length > 80 ? "..." : ""}
+            </span>
           </div>
         )}
 
@@ -179,6 +280,7 @@ export const MessageBubble = memo(function MessageBubble({
             isOwn
               ? "rounded-br-md"
               : "rounded-bl-md bg-[hsl(231,4%,18%)]",
+            isDeleted && "opacity-40",
           )}
           style={
             isOwn
@@ -212,7 +314,6 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
-        {/* Timestamp for others: show below bubble when forced (last in group) */}
         {!isOwn && forceShowTimestamp && (
           <div className="mt-1 flex justify-start">
             <span className="text-[10px] text-muted-foreground/50">
@@ -235,7 +336,9 @@ export const MessageBubble = memo(function MessageBubble({
         </div>
       )}
 
-      {isOwn && hideAvatar && <div className="w-8 flex-shrink-0" aria-hidden="true" />}
+      {isOwn && hideAvatar && (
+        <div className="w-8 flex-shrink-0" aria-hidden="true" />
+      )}
     </div>
   );
 });

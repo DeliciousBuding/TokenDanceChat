@@ -318,3 +318,26 @@
     opacity: 1;
   }
 }
+
+/* Reply preview border accent */
+.reply-preview {
+  border-left-color: hsl(220, 2.5%, 30%);
+}
+
+/* Friend request notification bar */
+.friend-request-bar {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 50px;
+  }
+}
