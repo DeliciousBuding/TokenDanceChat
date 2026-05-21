@@ -65,10 +65,22 @@ func (m *mockStore) ListRooms() []hub.StoredRoom {
 func (m *mockStore) DeleteRoom(roomID string) error {
 	return nil
 }
+func (m *mockStore) ToggleReaction(messageID, emoji, username string) (map[string][]string, error) {
+	return nil, nil
+}
+func (m *mockStore) GetReactionsForMessages(messageIDs []string) map[string]map[string][]string {
+	return nil
+}
+func (m *mockStore) UpdateMessage(messageID, content string) (hub.StoredMessage, error) {
+	return hub.StoredMessage{}, nil
+}
+func (m *mockStore) GetMessageByID(messageID string) (hub.StoredMessage, error) {
+	return hub.StoredMessage{}, nil
+}
 
 func newTestHandler() *Handler {
 	ms := &mockStore{}
-	h := hub.New(ms, nil, "")
+	h := hub.New(ms, nil, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
 }

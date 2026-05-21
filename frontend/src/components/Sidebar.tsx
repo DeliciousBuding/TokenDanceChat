@@ -148,7 +148,7 @@ export function Sidebar({
     username,
     friends,
     groups,
-    dmMessages,
+    messages,
     currentChat,
     setCurrentChat,
   } = useChatStore();
@@ -157,10 +157,22 @@ export function Sidebar({
   const otherUsers = onlineUsers.filter((u) => u !== username);
   const hasSelf = onlineUsers.includes(username);
 
-  // Users with DM history
+  // Users with DM history (derived from messages)
   const dmPartners = useMemo(() => {
-    return Object.keys(dmMessages).filter((k) => dmMessages[k].length > 0);
-  }, [dmMessages]);
+    const partners = new Set<string>();
+    for (const m of messages) {
+      if (m.from && m.from !== username && !partners.has(m.from)) {
+        partners.add(m.from);
+      }
+      if (m.to && m.to !== username && m.username === username && !partners.has(m.to)) {
+        partners.add(m.to);
+      }
+    }
+    return [...partners];
+  }, [messages, username]);
+
+  // Convert groups record to array
+  const groupList = useMemo(() => Object.values(groups), [groups]);
 
   // Friend users who are online
   const onlineFriends = friends.filter((f) => onlineUsers.includes(f));
@@ -273,7 +285,7 @@ export function Sidebar({
             </button>
           )}
         </div>
-        {groups.map((g) => (
+        {groupList.map((g) => (
           <button
             key={g.name}
             onClick={() => setCurrentChat({ type: "group", name: g.name })}
@@ -292,7 +304,7 @@ export function Sidebar({
           </button>
         ))}
         {/* Groups: empty state */}
-        {Object.keys(groups).length === 0 && groups.length === 0 && (
+        {groupList.length === 0 && (
           <div className="px-2 py-1">
             <span className="text-[10px] text-muted-foreground/40">
               {t("sidebar.noGroups")}

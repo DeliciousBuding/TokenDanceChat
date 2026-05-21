@@ -5,8 +5,6 @@ import { useTranslation } from "@/i18n/context";
 import { usePullDownGesture } from "@/hooks/useTouchGestures";
 import { MessageBubble } from "./MessageBubble";
 import { SystemMessage } from "./SystemMessage";
-import { LinkPreview } from "./LinkPreview";
-import { ImageLightbox } from "./ImageLightbox";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/api";
 
@@ -15,6 +13,8 @@ const GROUP_WINDOW_MS = 2 * 60 * 1000;
 
 interface MessageTranscriptProps {
   className?: string;
+  onReply?: (message: ChatMessage) => void;
+  onDelete?: (messageId: string) => void;
   onForward?: (message: ChatMessage) => void;
 }
 
@@ -31,6 +31,14 @@ interface SystemMessageGroup {
 }
 
 type MessageGroup = UserMessageGroup | SystemMessageGroup;
+
+interface ContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+  message: ChatMessage | null;
+  isOwn: boolean;
+}
 
 function buildMessageGroups(messages: ChatMessage[]): MessageGroup[] {
   const groups: MessageGroup[] = [];
@@ -59,12 +67,11 @@ export function MessageTranscript({
   className,
   onReply,
   onDelete,
+  onForward,
 }: MessageTranscriptProps) {
   const { t } = useTranslation();
   const {
     messages,
-    dmMessages,
-    groupMessages,
     username,
     historyLoaded,
     typingUsers,
@@ -74,19 +81,26 @@ export function MessageTranscript({
   const containerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showAllMessages, setShowAllMessages] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadLocalCount, setUnreadLocalCount] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const prevMessageCountRef = useRef(0);
 
-  // Determine which messages to display based on currentChat mode.
+  // Filter messages based on current chat context.
   const effectiveMessages = useMemo(() => {
     if (currentChat.type === "dm") {
-      return dmMessages[currentChat.username] || [];
+      return messages.filter(
+        (m) =>
+          (m.to === currentChat.username && m.from === username) ||
+          (m.from === currentChat.username && m.to === username) ||
+          (m.username === currentChat.username && m.to === username) ||
+          (m.username === username && m.to === currentChat.username),
+      );
     }
     if (currentChat.type === "group") {
-      return groupMessages[currentChat.name] || [];
+      return messages.filter((m) => m.to === currentChat.name || (m as ChatMessage & { group?: string }).group === currentChat.name);
     }
     return messages;
-  }, [currentChat, messages, dmMessages, groupMessages]);
+  }, [currentChat, messages, username]);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false, x: 0, y: 0, message: null, isOwn: false,
@@ -113,10 +127,10 @@ export function MessageTranscript({
     const prev = prevMessageCountRef.current;
     const curr = effectiveMessages.length;
     if (curr > prev && !shouldAutoScroll) {
-      setUnreadCount((c) => c + (curr - prev));
+      setUnreadLocalCount((c) => c + (curr - prev));
     }
     if (shouldAutoScroll) {
-      setUnreadCount(0);
+      setUnreadLocalCount(0);
     }
     prevMessageCountRef.current = curr;
   }, [effectiveMessages.length, shouldAutoScroll]);
@@ -138,7 +152,7 @@ export function MessageTranscript({
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     setShouldAutoScroll(true);
-    setUnreadCount(0);
+    setUnreadLocalCount(0);
   }, []);
 
   const handleLoadOlder = useCallback(() => {
@@ -155,21 +169,10 @@ export function MessageTranscript({
     setContextMenu((prev) => ({ ...prev, visible: false }));
   }, []);
 
-  const createLongPressHandler = useCallback(
-    (message: ChatMessage, isOwn: boolean) => {
-      return () => {
-        const x = window.innerWidth / 2;
-        const y = window.innerHeight / 2;
-        setContextMenu({ visible: true, x, y, message, isOwn });
-      };
-    },
-    [],
-  );
-
   const handleContextReply = useCallback(() => {
-    if (contextMenu.message && onReplyToMessage) onReplyToMessage(contextMenu.message);
+    if (contextMenu.message && onReply) onReply(contextMenu.message);
     closeContextMenu();
-  }, [contextMenu.message, onReplyToMessage, closeContextMenu]);
+  }, [contextMenu.message, onReply, closeContextMenu]);
 
   const handleContextCopy = useCallback(() => {
     if (contextMenu.message) navigator.clipboard.writeText(contextMenu.message.content).catch(() => {});
@@ -177,14 +180,14 @@ export function MessageTranscript({
   }, [contextMenu.message, closeContextMenu]);
 
   const handleContextDelete = useCallback(() => {
-    if (contextMenu.message && onDeleteMessage) onDeleteMessage(contextMenu.message.id);
+    if (contextMenu.message && onDelete) onDelete(contextMenu.message.id);
     closeContextMenu();
-  }, [contextMenu.message, onDeleteMessage, closeContextMenu]);
+  }, [contextMenu.message, onDelete, closeContextMenu]);
 
   const handleContextForward = useCallback(() => {
-    if (contextMenu.message && onForwardMessage) onForwardMessage(contextMenu.message.content);
+    if (contextMenu.message && onForward) onForward(contextMenu.message);
     closeContextMenu();
-  }, [contextMenu.message, onForwardMessage, closeContextMenu]);
+  }, [contextMenu.message, onForward, closeContextMenu]);
 
   const menuStyle = useMemo(() => {
     const menuWidth = 180;
@@ -284,6 +287,7 @@ export function MessageTranscript({
                       isGrouped={!isSolo}
                       onReply={onReply}
                       onDelete={onDelete}
+                      onForward={onForward}
                     />
                   );
                 })}
@@ -317,9 +321,9 @@ export function MessageTranscript({
           aria-label={t("transcript.scrollToBottom")}
         >
           <ArrowDown className="h-5 w-5" />
-          {unreadCount > 0 && (
+          {unreadLocalCount > 0 && (
             <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white px-1">
-              {unreadCount > 99 ? "99+" : unreadCount}
+              {unreadLocalCount > 99 ? "99+" : unreadLocalCount}
             </span>
           )}
         </button>
@@ -333,7 +337,7 @@ export function MessageTranscript({
           aria-label={t("transcript.scrollToBottom")}
         >
           <ArrowDown className="h-3.5 w-3.5" />
-          {unreadCount > 0 ? t("transcript.newMessages", { count: unreadCount }) : t("transcript.scrollToBottom")}
+          {unreadLocalCount > 0 ? t("transcript.newMessages", { count: unreadLocalCount }) : t("transcript.scrollToBottom")}
         </button>
       )}
 

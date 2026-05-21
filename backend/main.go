@@ -16,6 +16,7 @@ import (
 	"tokendancechat/backend/handler"
 	"tokendancechat/backend/hub"
 	"tokendancechat/backend/llm"
+	"tokendancechat/backend/picoclaw"
 	"tokendancechat/backend/store"
 )
 
@@ -58,7 +59,17 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 		}
 	}
 
-	h := hub.New(st, llmCfg, botName)
+	// PicoClaw configuration (preferred over legacy LLM).
+	pcURL := os.Getenv("CHAT_PICOCLAW_URL")
+	var picoclawCfg *picoclaw.Config
+	if pcURL != "" {
+		picoclawCfg = &picoclaw.Config{
+			WSURL: pcURL,
+			Token: os.Getenv("CHAT_PICOCLAW_TOKEN"),
+		}
+	}
+
+	h := hub.New(st, llmCfg, picoclawCfg, botName)
 
 	// Set up bot memory persistence if LLM is configured and path is set.
 	if llmCfg != nil {
@@ -71,6 +82,15 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 					log.Printf("bot memory loaded from %s", memPath)
 				}
 			}
+		}
+	}
+
+	// Connect to PicoClaw gateway if configured.
+	if picoclawCfg != nil && h.PicoclawClient() != nil {
+		if err := h.PicoclawClient().Connect(context.Background()); err != nil {
+			log.Printf("warn: failed to connect PicoClaw: %v", err)
+		} else {
+			log.Printf("PicoClaw connected to %s", picoclawCfg.WSURL)
 		}
 	}
 
@@ -208,7 +228,7 @@ func main() {
 		addr = envAddr
 	}
 
-	server, st, _, err := Server(dbPath, frontendDist, addr)
+	server, st, h, err := Server(dbPath, frontendDist, addr)
 	if err != nil {
 		log.Fatalf("failed to create server: %v", err)
 	}
@@ -225,6 +245,12 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("shutting down server...")
+
+	// Disconnect PicoClaw client.
+	if pc := h.PicoclawClient(); pc != nil {
+		pc.Close()
+		log.Println("PicoClaw disconnected")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tokendancechat/backend/llm"
+	"tokendancechat/backend/picoclaw"
 
 	"github.com/gorilla/websocket"
 )
@@ -302,12 +303,16 @@ func (c *Client) handleChatMessage(msg Message) {
 		mem.Add(llm.Message{Role: "user", Content: content, Username: c.username})
 	}
 
-	// Check for @mentions and trigger bot response.
-	if botName := c.hub.BotName(); botName != "" && c.hub.LLMClient() != nil && c.username != botName {
+	// Check for @mentions and trigger bot response via PicoClaw (preferred) or legacy LLM.
+	if botName := c.hub.BotName(); botName != "" && c.username != botName {
 		mentions := parseMentions(content)
 		for _, m := range mentions {
 			if strings.EqualFold(m, botName) {
-				go c.handleBotResponse(context.Background(), content)
+				if pc := c.hub.PicoclawClient(); pc != nil {
+					go c.handleBotResponsePicoClaw(context.Background(), content)
+				} else if c.hub.LLMClient() != nil {
+					go c.handleBotResponse(context.Background(), content)
+				}
 				break
 			}
 		}
@@ -1090,6 +1095,115 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	}
 
 	// Update memory with the bot response.
+	if mem := c.hub.Memory(); mem != nil {
+		mem.Add(llm.Message{Role: "assistant", Content: response, Username: c.hub.BotName()})
+	}
+}
+
+// handleBotResponsePicoClaw handles the bot response via PicoClaw gateway.
+// It sends the user content to PicoClaw and streams the response chunks.
+func (c *Client) handleBotResponsePicoClaw(ctx context.Context, userContent string) {
+	pc := c.hub.PicoclawClient()
+	if pc == nil {
+		return
+	}
+
+	// Send typing indicator.
+	c.hub.BroadcastJSON(Message{
+		Type:     "typing",
+		Username: c.hub.BotName(),
+	})
+
+	// Channels to collect the response from PicoClaw callbacks.
+	chunks := make(chan picoclaw.Message, 64)
+	typing := make(chan bool, 4)
+	done := make(chan struct{})
+
+	// Set temporary handlers for this request.
+	pc.OnMessage(func(msg picoclaw.Message) {
+		select {
+		case chunks <- msg:
+		case <-done:
+		}
+	})
+	pc.OnTyping(func(start bool) {
+		select {
+		case typing <- start:
+		case <-done:
+		}
+	})
+
+	// Send the user message to PicoClaw.
+	_, err := pc.SendMessage(userContent)
+	if err != nil {
+		log.Printf("PicoClaw send error: %v", err)
+		c.hub.BroadcastStreamChunk(c.hub.BotName(), "Sorry, I encountered an error.", true)
+		c.hub.SendBotMessage("Sorry, I encountered an error.", c.currentRoomID)
+		close(done)
+		return
+	}
+
+	// Store user message in memory.
+	if mem := c.hub.Memory(); mem != nil {
+		mem.Add(llm.Message{Role: "user", Content: userContent, Username: c.username})
+	}
+
+	// Collect streaming response.
+	var fullResponse strings.Builder
+	timedOut := false
+	collectDone := make(chan struct{})
+
+	go func() {
+		defer close(collectDone)
+		timeout := time.After(30 * time.Second)
+		for {
+			select {
+			case msg := <-chunks:
+				if msg.IsThought {
+					continue // skip thinking/reasoning chunks for now
+				}
+				if msg.IsPartial {
+					// Streaming update -- send as stream chunk to frontend.
+					fullResponse.WriteString(msg.Content)
+					c.hub.BroadcastStreamChunk(c.hub.BotName(), msg.Content, false)
+				} else {
+					// Complete message -- initial chunk from message.create.
+					fullResponse.WriteString(msg.Content)
+					c.hub.BroadcastStreamChunk(c.hub.BotName(), msg.Content, false)
+				}
+			case start := <-typing:
+				if !start {
+					// typing.stop signals end of response.
+					timeout = nil
+					return
+				}
+			case <-timeout:
+				timedOut = true
+				return
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	<-collectDone
+	close(done)
+
+	response := fullResponse.String()
+	if timedOut && response == "" {
+		response = "Sorry, I didn't get a response in time."
+	}
+
+	if response != "" {
+		// Signal stream done.
+		c.hub.BroadcastStreamChunk(c.hub.BotName(), "", true)
+		// Persist to store and broadcast.
+		c.hub.SendBotMessage(response, c.currentRoomID)
+	}
+
+	// Update memory with bot response.
 	if mem := c.hub.Memory(); mem != nil {
 		mem.Add(llm.Message{Role: "assistant", Content: response, Username: c.hub.BotName()})
 	}

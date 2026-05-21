@@ -1,9 +1,12 @@
 import { memo, useMemo, useCallback, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, Check, Forward, Lightbulb } from "lucide-react";
+import { Copy, Check, Forward } from "lucide-react";
 import { cn, formatTime } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
+import { useChatStore } from "@/stores/chatStore";
+import { chatAPI } from "@/lib/api";
+import { EmojiPicker } from "@/components/EmojiPicker";
 import type { ChatMessage } from "@/lib/api";
 
 interface MessageBubbleProps {
@@ -14,6 +17,10 @@ interface MessageBubbleProps {
   hideUsername?: boolean;
   forceShowTimestamp?: boolean;
   isGrouped?: boolean;
+  /** Callback for reply action */
+  onReply?: (message: ChatMessage) => void;
+  /** Callback for delete action */
+  onDelete?: (messageId: string) => void;
   /** Callback for forward action */
   onForward?: (message: ChatMessage) => void;
 }
@@ -117,9 +124,14 @@ export const MessageBubble = memo(function MessageBubble({
   hideUsername = false,
   forceShowTimestamp = false,
   isGrouped = false,
+  onReply,
+  onDelete,
   onForward,
 }: MessageBubbleProps) {
   const { t } = useTranslation();
+  const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const isDeleted = message.deleted === true;
   const gradient = useMemo(
     () => avatarGradient(message.username),
     [message.username],
@@ -132,11 +144,13 @@ export const MessageBubble = memo(function MessageBubble({
   const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
   const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
 
-  // Parse content for code blocks
-  const contentParts = useMemo(
-    () => parseContentForCodeBlocks(message.content),
-    [message.content],
-  );
+  const handleAvatarClick = useCallback(() => {
+    setSelectedProfileUser(message.username);
+  }, [message.username, setSelectedProfileUser]);
+
+  const handleNameClick = useCallback(() => {
+    setSelectedProfileUser(message.username);
+  }, [message.username, setSelectedProfileUser]);
 
   // Parse @mentions and render with highlighting.
   const mentionContent = useMemo(() => {
@@ -270,7 +284,6 @@ export const MessageBubble = memo(function MessageBubble({
         isOwn ? "justify-end" : "justify-start",
         paddingY,
       )}
-      {...touchHandlers}
     >
       {/* Reply button (left side, appears on hover) */}
       {!isDeleted && onReply && !hideUsername && (
@@ -340,6 +353,11 @@ export const MessageBubble = memo(function MessageBubble({
             {isOwn && !isGrouped && (
               <span className="text-xs text-muted-foreground/60">
                 {formatTime(message.timestamp)}
+                {message.edited && (
+                  <span className="text-[10px] text-muted-foreground/40 ml-1">
+                    (edited)
+                  </span>
+                )}
               </span>
             )}
             {!isOwn && !isGrouped && (
@@ -430,6 +448,50 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         </div>
 
+        {/* Reaction bar */}
+        {!isDeleted && (
+          <div className="flex flex-wrap items-center gap-1 mt-0.5">
+            {message.reactions &&
+              Object.entries(message.reactions).map(
+                ([emoji, users]) =>
+                  users.length > 0 && (
+                    <button
+                      key={emoji}
+                      onClick={() =>
+                        chatAPI.sendReaction(message.id, emoji)
+                      }
+                      className={cn(
+                        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs border border-[hsl(220,2.5%,20%)] bg-[hsl(231,4%,14%)] hover:bg-[hsl(231,4%,20%)] transition-colors",
+                        currentUsername &&
+                          users.includes(currentUsername) &&
+                          "border-[hsl(220,2.5%,30%)] bg-[hsl(231,4%,24%)]",
+                      )}
+                      aria-label={`${emoji} ${users.length} reactions`}
+                    >
+                      <span className="text-sm leading-none">{emoji}</span>
+                      <span className="text-[10px] text-muted-foreground/70">
+                        {users.length}
+                      </span>
+                    </button>
+                  ),
+              )}
+            <button
+              onClick={() => setShowEmojiPicker(true)}
+              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-[hsl(220,2.5%,20%)] hover:bg-[hsl(231,4%,14%)] text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
+              aria-label="Add reaction"
+            >
+              <span className="text-xs">+</span>
+            </button>
+          </div>
+        )}
+
+        {showEmojiPicker && (
+          <EmojiPicker
+            onSelect={(emoji) => chatAPI.sendReaction(message.id, emoji)}
+            onClose={() => setShowEmojiPicker(false)}
+          />
+        )}
+
         {isOwn && (
           <div className="mt-1 flex justify-end">
             <span
@@ -441,6 +503,11 @@ export const MessageBubble = memo(function MessageBubble({
               )}
             >
               {formatTime(message.timestamp)}
+              {message.edited && (
+                <span className="text-[10px] text-muted-foreground/40 ml-1">
+                  (edited)
+                </span>
+              )}
             </span>
           </div>
         )}

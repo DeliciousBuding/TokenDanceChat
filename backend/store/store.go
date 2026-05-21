@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"log"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Menu, LogOut, Globe, ArrowLeft } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
@@ -26,9 +26,6 @@ export function ChatLayout() {
   } = useChatStore();
   const { disconnect, sendMessage, sendDMMessage, sendGroupMessage } =
     useWebSocket();
-
-  // Reply state
-  const [replyTo] = useState<ChatMessage | null>(null);
 
   // Mobile keyboard handling
   const mainRef = useRef<HTMLDivElement>(null);

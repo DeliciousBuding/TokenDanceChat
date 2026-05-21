@@ -11,7 +11,7 @@ interface ForwardModalProps {
 }
 
 export function ForwardModal({ message, onClose, onForward }: ForwardModalProps) {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const { onlineUsers, username } = useChatStore();
   const [selectedUser, setSelectedUser] = useState("");
 
