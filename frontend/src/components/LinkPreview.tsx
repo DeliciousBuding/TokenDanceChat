@@ -40,7 +40,7 @@ export const LinkPreview = memo(function LinkPreview({ url }: LinkPreviewProps) 
   if (!data.title && !data.description) return null;
 
   return (
-    <div className="mt-2 border border-[hsl(220,2.5%,23.5%)] rounded-lg overflow-hidden bg-[hsl(220,2.5%,12%)] max-w-sm">
+    <div className="mt-2 border border-border rounded-lg overflow-hidden bg-[hsl(220,2.5%,12%)] max-w-sm">
       {data.image && (
         <div className="w-full h-32 overflow-hidden bg-[hsl(220,2.5%,8%)]">
           <img

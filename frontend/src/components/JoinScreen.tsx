@@ -97,13 +97,13 @@ export function JoinScreen() {
   }, [lang, setLang]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[hsl(223,4%,13%)] p-4">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="animate-blur-in w-full max-w-md">
         {/* Card */}
-        <div className="rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] p-8 shadow-2xl transition-colors duration-300">
+        <div className="rounded-xl border border-border bg-card p-8 shadow-2xl transition-colors duration-300">
           {/* Logo / Icon */}
           <div className="mb-6 flex justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[hsl(231,4%,20%)] ring-1 ring-[hsl(220,2.5%,28.5%)]">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent ring-1 ring-[hsl(220,2.5%,28.5%)]">
               <MessageCircle
                 className="h-8 w-8"
                 style={{ color: "oklch(71.2% 0.194 13.428)" }}
@@ -135,7 +135,7 @@ export function JoinScreen() {
                 maxLength={20}
                 disabled={connecting}
                 aria-label={t("join.placeholder")}
-                className="w-full rounded-lg border border-[hsl(220,2.5%,23.5%)] bg-[hsl(223,4%,13%)] px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
+                className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
               />
               {error && (
                 <p className="mt-2 text-xs text-destructive animate-fade-in" role="alert">
@@ -177,7 +177,7 @@ export function JoinScreen() {
           <div className="mt-4 flex justify-center">
             <button
               onClick={toggleLang}
-              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] transition-all duration-200"
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-all duration-200"
               aria-label={t("lang.label")}
             >
               <Globe className="h-3 w-3" />

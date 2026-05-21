@@ -266,7 +266,7 @@ export function MessageTranscript({
       ) : effectiveMessages.length === 0 ? (
         /* Empty state with animated chat bubble */
         <div className="flex flex-col items-center justify-center h-full py-12 px-4">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[hsl(231,4%,18%)] ring-1 ring-[hsl(220,2.5%,20%)] animate-chat-bubble">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-[hsl(220,2.5%,20%)] animate-chat-bubble">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2% 0.194 13.428 / 0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
             </svg>
@@ -285,7 +285,7 @@ export function MessageTranscript({
             <div className="flex justify-center pb-3">
               <button
                 onClick={() => { setShowAllMessages(true); setIsLoadingMore(false); }}
-                className="touch-target rounded-full border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-1.5 text-xs text-muted-foreground hover:bg-[hsl(231,4%,20%)] hover:text-foreground transition-all"
+                className="touch-target rounded-full border border-border bg-card px-4 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
               >
                 {t("transcript.newMessages", { count: hiddenCount })}
               </button>
@@ -375,7 +375,7 @@ export function MessageTranscript({
       {!shouldAutoScroll && messages.length > 0 && (
         <button
           onClick={scrollToBottom}
-          className="hidden md:flex absolute bottom-4 left-1/2 -translate-x-1/2 items-center gap-1.5 rounded-full border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2 text-xs text-muted-foreground shadow-lg hover:bg-[hsl(231,4%,20%)] hover:text-foreground transition-all animate-fade-in backdrop-blur-sm z-10"
+          className="hidden md:flex absolute bottom-4 left-1/2 -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-lg hover:bg-accent hover:text-foreground transition-all animate-fade-in backdrop-blur-sm z-10"
           aria-label={t("transcript.scrollToBottom")}
         >
           <ArrowDown className="h-3.5 w-3.5" />
@@ -387,12 +387,12 @@ export function MessageTranscript({
       {contextMenu.visible && (
         <>
           <div className="context-menu-backdrop" onClick={closeContextMenu} onTouchEnd={closeContextMenu} />
-          <div className="context-menu border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,14%)] shadow-2xl" style={menuStyle}>
-            <button onClick={handleContextReply} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground touch-target">
+          <div className="context-menu border border-border bg-card shadow-2xl" style={menuStyle}>
+            <button onClick={handleContextReply} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
               <Reply className="h-4 w-4 text-muted-foreground" />
               <span>{t("input.replyTo")}</span>
             </button>
-            <button onClick={handleContextCopy} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground touch-target">
+            <button onClick={handleContextCopy} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
               <Copy className="h-4 w-4 text-muted-foreground" />
               <span>Copy</span>
             </button>
@@ -402,7 +402,7 @@ export function MessageTranscript({
                 <span>Delete</span>
               </button>
             )}
-            <button onClick={handleContextForward} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground touch-target">
+            <button onClick={handleContextForward} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
               <Forward className="h-4 w-4 text-muted-foreground" />
               <span>Forward</span>
             </button>

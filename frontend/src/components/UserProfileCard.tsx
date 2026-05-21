@@ -96,8 +96,8 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
     <div
       className={cn(
         isMobile
-          ? "rounded-t-2xl bg-[hsl(231,4%,16%)] border-t border-[hsl(220,2.5%,23.5%)] px-6 pt-8 pb-8 animate-slide-up"
-          : "rounded-xl bg-[hsl(231,4%,16%)] border border-[hsl(220,2.5%,23.5%)] p-6 shadow-2xl animate-scale-in",
+          ? "rounded-t-2xl bg-card border-t border-border px-6 pt-8 pb-8 animate-slide-up"
+          : "rounded-xl bg-card border border-border p-6 shadow-2xl animate-scale-in",
         "w-full max-w-sm",
       )}
       style={isMobile ? { transform: `translateY(${dragOffset}px)`, transition: isDragging ? "none" : "transform 0.3s ease-out" } : undefined}
@@ -117,7 +117,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
         onClick={onClose}
         aria-label="Close"
         className={cn(
-          "absolute rounded-full p-1.5 text-muted-foreground hover:bg-[hsl(220,2.5%,20%)] hover:text-foreground transition-colors",
+          "absolute rounded-full p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors",
           isMobile ? "top-3 right-3" : "top-3 right-3",
         )}
       >
@@ -168,7 +168,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
       <div className="space-y-2">
         <button
           onClick={handleSendMessage}
-          className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-foreground/80 hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground transition-colors"
+          className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
         >
           <Send className="h-4 w-4 text-muted-foreground" />
           Send Message
@@ -178,7 +178,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
             chatAPI.sendFriendRequest(username);
             onClose();
           }}
-          className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-foreground/80 hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground transition-colors"
+          className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
         >
           <UserPlus className="h-4 w-4 text-muted-foreground" />
           Add Friend

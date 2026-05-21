@@ -54,8 +54,8 @@ const UserListItem = memo(function UserListItem({
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
         isSelf
-          ? "bg-[hsl(220,2.5%,20%)] text-foreground"
-          : "text-foreground/80 hover:bg-[hsl(220,2.5%,18%)]",
+          ? "bg-accent text-foreground"
+          : "text-foreground/80 hover:bg-accent",
       )}
       onClick={() => {
         if (!isSelf) {
@@ -87,13 +87,13 @@ const UserListItem = memo(function UserListItem({
       {/* Context menu for non-self users */}
       {!isSelf && showMenu && (
         <div
-          className="absolute right-3 z-30 mt-12 rounded-lg border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,12%)] shadow-xl py-1 animate-scale-in"
+          className="absolute right-3 z-30 mt-12 rounded-lg border border-border bg-[hsl(231,4%,12%)] shadow-xl py-1 animate-scale-in"
           onClick={(e) => e.stopPropagation()}
           style={{ minWidth: "140px" }}
         >
           {onStartDM && (
             <button
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-[hsl(220,2.5%,18%)] transition-colors"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
               onClick={() => {
                 setShowMenu(false);
                 onStartDM(user);
@@ -105,7 +105,7 @@ const UserListItem = memo(function UserListItem({
           )}
           {onAddFriend && !isFriend && !hasPendingRequest && (
             <button
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-[hsl(220,2.5%,18%)] transition-colors"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
               onClick={() => {
                 setShowMenu(false);
                 onAddFriend(user);
@@ -173,14 +173,14 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "flex h-full flex-col border-r border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)]",
+        "flex h-full flex-col border-r border-border bg-card",
         collapsed ? "hidden" : "flex",
         "md:flex md:w-[280px] md:min-w-[280px]",
         "w-full animate-fade-in",
       )}
     >
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-[hsl(220,2.5%,23.5%)] px-5 py-4">
+      <div className="flex items-center gap-3 border-b border-border px-5 py-4">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[hsl(231,4%,22%)]">
           <MessageCircle
             className="h-5 w-5"
@@ -200,7 +200,7 @@ export function Sidebar({
           <button
             onClick={onClose}
             aria-label="Close sidebar"
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-[hsl(220,2.5%,20%)] hover:text-foreground md:hidden"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
           >
             <X className="h-4 w-4" />
           </button>
@@ -214,8 +214,8 @@ export function Sidebar({
           className={cn(
             "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
             currentChat.type === "public"
-              ? "bg-[hsl(220,2.5%,20%)] text-foreground"
-              : "text-foreground/70 hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground",
+              ? "bg-accent text-foreground"
+              : "text-foreground/70 hover:bg-accent hover:text-foreground",
           )}
         >
           <Hash className="h-4 w-4 text-muted-foreground" />
@@ -239,7 +239,7 @@ export function Sidebar({
               onMentionAssistant?.(name);
               onClose?.();
             }}
-            className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground/80 transition-colors hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground"
+            className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
           >
             <Icon className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="truncate">{name}</span>
@@ -263,8 +263,8 @@ export function Sidebar({
                 "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
                 currentChat.type === "dm" &&
                   currentChat.username === partner
-                  ? "bg-[hsl(220,2.5%,20%)] text-foreground"
-                  : "text-foreground/70 hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground",
+                  ? "bg-accent text-foreground"
+                  : "text-foreground/70 hover:bg-accent hover:text-foreground",
               )}
             >
               <User className="h-3.5 w-3.5 text-muted-foreground" />
@@ -296,7 +296,7 @@ export function Sidebar({
             <button
               onClick={onCreateGroup}
               aria-label={t("sidebar.createGroup")}
-              className="rounded p-0.5 text-muted-foreground/60 hover:text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] transition-colors"
+              className="rounded p-0.5 text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -309,8 +309,8 @@ export function Sidebar({
             className={cn(
               "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
               currentChat.type === "group" && currentChat.name === g.name
-                ? "bg-[hsl(220,2.5%,20%)] text-foreground"
-                : "text-foreground/70 hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground",
+                ? "bg-accent text-foreground"
+                : "text-foreground/70 hover:bg-accent hover:text-foreground",
             )}
           >
             <Hash className="h-3.5 w-3.5 text-muted-foreground" />
@@ -347,7 +347,7 @@ export function Sidebar({
                 onClick={() =>
                   setCurrentChat({ type: "dm", username: friend })
                 }
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-[hsl(220,2.5%,18%)] transition-colors"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent transition-colors"
               >
                 <div
                   className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
@@ -393,7 +393,7 @@ export function Sidebar({
               {t("sidebar.onlineUsers")}
             </span>
           </div>
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(220,2.5%,20%)] px-1.5 text-[10px] font-medium text-muted-foreground">
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-medium text-muted-foreground">
             {onlineUsers.length}
           </span>
         </div>
@@ -420,7 +420,7 @@ export function Sidebar({
                   {/* Divider between you and others */}
                   {otherUsers.length > 0 && (
                     <div className="flex items-center gap-2 px-3 py-1.5">
-                      <div className="h-px flex-1 bg-[hsl(220,2.5%,18%)]" />
+                      <div className="h-px flex-1 bg-accent" />
                     </div>
                   )}
                 </>
@@ -446,7 +446,7 @@ export function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="border-t border-[hsl(220,2.5%,23.5%)] px-5 py-3">
+      <div className="border-t border-border px-5 py-3">
         <div className="flex items-center gap-2">
           <span className="flex h-2 w-2 rounded-full bg-online animate-pulse-dot" />
           <span className="text-xs text-muted-foreground">

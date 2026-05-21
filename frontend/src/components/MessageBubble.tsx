@@ -46,7 +46,7 @@ const CodeBlock = memo(function CodeBlock({
   }, [code]);
 
   return (
-    <div className="relative group/code my-2 rounded-lg overflow-hidden border border-[hsl(220,2.5%,23.5%)]">
+    <div className="relative group/code my-2 rounded-lg overflow-hidden border border-border">
       {/* Header bar */}
       <div className="flex items-center justify-between bg-[hsl(220,2.5%,12%)] px-3 py-1.5 border-b border-[hsl(220,2.5%,18%)]">
         <span className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">
@@ -54,7 +54,7 @@ const CodeBlock = memo(function CodeBlock({
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/50 hover:text-foreground hover:bg-[hsl(220,2.5%,18%)] opacity-0 group-hover/code:opacity-100 transition-opacity"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/50 hover:text-foreground hover:bg-accent opacity-0 group-hover/code:opacity-100 transition-opacity"
           aria-label="Copy code"
         >
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
@@ -277,7 +277,7 @@ export const MessageBubble = memo(function MessageBubble({
           <button
             onClick={() => onReply(message)}
             aria-label={t("input.replyTo")}
-            className="rounded-md p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] transition-colors"
+            className="rounded-md p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
           >
             <svg
               width="14"
@@ -382,7 +382,7 @@ export const MessageBubble = memo(function MessageBubble({
 
         {/* Reply preview (quoted message) */}
         {(message.reply_to_id || message.reply_to_content) && (
-          <div className="mb-1 ml-0 border-l-2 border-[hsl(220,2.5%,30%)] pl-2 py-0.5 rounded-sm bg-[hsl(231,4%,14%)]">
+          <div className="mb-1 ml-0 border-l-2 border-[hsl(220,2.5%,30%)] pl-2 py-0.5 rounded-sm bg-card">
             <span className="text-[10px] font-medium text-muted-foreground/70">
               {message.reply_to_user || "..."}
             </span>
@@ -398,7 +398,7 @@ export const MessageBubble = memo(function MessageBubble({
             "rounded-2xl px-4 py-2.5 text-sm leading-relaxed relative",
             isOwn
               ? "rounded-br-md"
-              : "rounded-bl-md bg-[hsl(231,4%,18%)]",
+              : "rounded-bl-md bg-secondary",
             isDeleted && "opacity-40",
           )}
           style={
@@ -454,7 +454,7 @@ export const MessageBubble = memo(function MessageBubble({
                         chatAPI.sendReaction(message.id, emoji)
                       }
                       className={cn(
-                        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs border border-[hsl(220,2.5%,20%)] bg-[hsl(231,4%,14%)] hover:bg-[hsl(231,4%,20%)] transition-colors",
+                        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs border border-[hsl(220,2.5%,20%)] bg-card hover:bg-accent transition-colors",
                         currentUsername &&
                           users.includes(currentUsername) &&
                           "border-[hsl(220,2.5%,30%)] bg-[hsl(231,4%,24%)]",
@@ -470,7 +470,7 @@ export const MessageBubble = memo(function MessageBubble({
               )}
             <button
               onClick={() => setShowEmojiPicker(true)}
-              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-[hsl(220,2.5%,20%)] hover:bg-[hsl(231,4%,14%)] text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
+              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-[hsl(220,2.5%,20%)] hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
               aria-label="Add reaction"
             >
               <span className="text-xs">+</span>
