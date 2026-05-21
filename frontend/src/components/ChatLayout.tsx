@@ -4,7 +4,7 @@ import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
 import { GroupCreateModal } from "./GroupCreateModal";
-import { SearchBar } from "./SearchBar";
+import { ThemeToggle } from "./ThemeToggle";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
@@ -167,7 +167,7 @@ export function ChatLayout() {
   );
 
   return (
-    <div ref={mainRef} className="flex h-screen-mobile overflow-hidden bg-[hsl(223,4%,13%)]">
+    <div ref={mainRef} className="flex h-screen-mobile overflow-hidden bg-background">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -198,11 +198,11 @@ export function ChatLayout() {
       {/* Main chat area */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden" style={{ paddingBottom: keyboardPadding }}>
         {/* Mobile top bar */}
-        <div className="flex items-center gap-3 border-b border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2.5 md:hidden pt-safe">
+        <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-2.5 md:hidden pt-safe">
           <button
             onClick={() => setSidebarOpen(true)}
             aria-label="Open sidebar"
-            className="touch-target rounded-lg p-2 text-muted-foreground hover:bg-[hsl(220,2.5%,20%)] hover:text-foreground"
+            className="touch-target rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -214,27 +214,28 @@ export function ChatLayout() {
           <button
             onClick={toggleLang}
             aria-label={t("lang.label")}
-            className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-[hsl(220,2.5%,20%)] hover:text-foreground transition-colors"
+            className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
           >
             <Globe className="h-3.5 w-3.5" />
           </button>
+          <ThemeToggle />
           <button
             onClick={handleDisconnect}
             aria-label={t("chat.disconnect")}
-            className="touch-target rounded-lg p-2 text-muted-foreground hover:bg-[hsl(0,62%,25%)] hover:text-destructive transition-colors"
+            className="touch-target rounded-lg p-2 text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
           >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
 
         {/* Desktop header */}
-        <div className="hidden md:flex items-center justify-between border-b border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-6 py-3 transition-colors duration-300">
+        <div className="hidden md:flex items-center justify-between border-b border-border bg-card px-6 py-3 transition-colors duration-300">
           <div className="flex items-center gap-3">
             {/* Back to public chat button (when in DM or group) */}
             {currentChat.type !== "public" && (
               <button
                 onClick={() => setCurrentChat({ type: "public" })}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground transition-colors"
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 aria-label={t("chat.publicChat")}
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
@@ -251,15 +252,16 @@ export function ChatLayout() {
             <button
               onClick={toggleLang}
               aria-label={t("lang.label")}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] transition-all duration-200"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
             >
               <Globe className="h-3 w-3" />
               {t("lang.switchTo")}
             </button>
+            <ThemeToggle />
             <button
               onClick={handleDisconnect}
               aria-label={t("chat.disconnect")}
-              className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-[hsl(0,62%,20%)] hover:text-destructive/80 transition-colors"
+              className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive/80 transition-colors"
             >
               <LogOut className="h-3.5 w-3.5" />
               {t("chat.leave")}
@@ -269,7 +271,7 @@ export function ChatLayout() {
 
         {/* Friend request notifications */}
         {pendingFriendRequests.length > 0 && currentChat.type === "public" && (
-          <div className="border-b border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-6 py-2 space-y-1">
+          <div className="border-b border-border bg-card px-6 py-2 space-y-1">
             {pendingFriendRequests.map((req) => (
               <div
                 key={req.from}
@@ -281,16 +283,13 @@ export function ChatLayout() {
                 <div className="flex gap-1.5 flex-shrink-0">
                   <button
                     onClick={() => handleFriendAccept(req.from)}
-                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-white"
-                    style={{
-                      backgroundColor: "oklch(71.2% 0.194 13.428)",
-                    }}
+                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-white bg-primary"
                   >
                     Accept
                   </button>
                   <button
                     onClick={() => handleFriendReject(req.from)}
-                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-muted-foreground bg-[hsl(220,2.5%,20%)] hover:bg-[hsl(220,2.5%,25%)]"
+                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-muted-foreground bg-muted hover:bg-secondary"
                   >
                     Reject
                   </button>
