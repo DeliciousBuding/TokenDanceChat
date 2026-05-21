@@ -144,6 +144,7 @@ export function Sidebar({
     messages,
     currentChat,
     setCurrentChat,
+    unreadByConversation,
   } = useChatStore();
 
   // Separate current user from others for visual grouping
@@ -269,9 +270,19 @@ export function Sidebar({
             >
               <User className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="truncate">{partner}</span>
-              {onlineUsers.includes(partner) && (
-                <span className="ml-auto h-2 w-2 rounded-full bg-online" />
-              )}
+              {(() => {
+                const count = unreadByConversation[`dm:${partner}`];
+                if (count) {
+                  return (
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                      {count > 99 ? "99+" : count}
+                    </span>
+                  );
+                }
+                return onlineUsers.includes(partner) && (
+                  <span className="ml-auto h-2 w-2 rounded-full bg-online" />
+                );
+              })()}
             </button>
           ))}
         </div>
@@ -315,9 +326,21 @@ export function Sidebar({
           >
             <Hash className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="truncate">{g.name}</span>
-            <span className="ml-auto text-[10px] text-muted-foreground/50">
-              {g.members.length}
-            </span>
+            {(() => {
+              const count = unreadByConversation[`group:${g.name}`];
+              if (count) {
+                return (
+                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                    {count > 99 ? "99+" : count}
+                  </span>
+                );
+              }
+              return (
+                <span className="ml-auto text-[10px] text-muted-foreground/50">
+                  {g.members.length}
+                </span>
+              );
+            })()}
           </button>
         ))}
         {/* Groups: empty state */}
