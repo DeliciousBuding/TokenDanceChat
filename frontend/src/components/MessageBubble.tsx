@@ -1,6 +1,7 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useCallback, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Copy, Check, Forward, Lightbulb } from "lucide-react";
 import { cn, formatTime } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/api";
 
@@ -17,6 +18,8 @@ interface MessageBubbleProps {
   forceShowTimestamp?: boolean;
   /** Whether this message is part of a group (adjusts spacing) */
   isGrouped?: boolean;
+  /** Callback for forward action */
+  onForward?: (message: ChatMessage) => void;
 }
 
 function hashString(str: string): number {
@@ -38,6 +41,78 @@ function usernameHue(username: string): number {
   return hashString(username) % 360;
 }
 
+/** Simple code block renderer with syntax highlighting and copy button */
+const CodeBlock = memo(function CodeBlock({
+  language,
+  code,
+}: {
+  language: string;
+  code: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may not be available.
+    }
+  }, [code]);
+
+  return (
+    <div className="relative group/code my-2 rounded-lg overflow-hidden border border-[hsl(220,2.5%,23.5%)]">
+      {/* Header bar */}
+      <div className="flex items-center justify-between bg-[hsl(220,2.5%,12%)] px-3 py-1.5 border-b border-[hsl(220,2.5%,18%)]">
+        <span className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">
+          {language || "code"}
+        </span>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/50 hover:text-foreground hover:bg-[hsl(220,2.5%,18%)] opacity-0 group-hover/code:opacity-100 transition-opacity"
+          aria-label="Copy code"
+        >
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          <span>{copied ? "Copied" : "Copy"}</span>
+        </button>
+      </div>
+      {/* Code content */}
+      <pre className="!bg-[hsl(220,2.5%,10%)] !p-3 !m-0 overflow-x-auto text-[0.8125rem] leading-relaxed">
+        <code className={`language-${language || ""}`}>{code}</code>
+      </pre>
+    </div>
+  );
+});
+
+/** Helper: extract code blocks from plain text and render with highlighting */
+function parseContentForCodeBlocks(
+  content: string,
+): Array<{ type: "text"; value: string } | { type: "code"; language: string; code: string }> {
+  const parts: Array<
+    { type: "text"; value: string } | { type: "code"; language: string; code: string }
+  > = [];
+  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = codeBlockRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: "text", value: content.slice(lastIndex, match.index) });
+    }
+    parts.push({
+      type: "code",
+      language: match[1] || "",
+      code: match[2].trimEnd(),
+    });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < content.length) {
+    parts.push({ type: "text", value: content.slice(lastIndex) });
+  }
+  return parts;
+}
+
 export const MessageBubble = memo(function MessageBubble({
   message,
   isOwn,
@@ -46,6 +121,7 @@ export const MessageBubble = memo(function MessageBubble({
   hideUsername = false,
   forceShowTimestamp = false,
   isGrouped = false,
+  onForward,
 }: MessageBubbleProps) {
   const gradient = useMemo(() => avatarGradient(message.username), [message.username]);
   const hue = useMemo(() => usernameHue(message.username), [message.username]);
@@ -53,11 +129,20 @@ export const MessageBubble = memo(function MessageBubble({
   const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
   const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
 
+  // Parse content for code blocks
+  const contentParts = useMemo(
+    () => parseContentForCodeBlocks(message.content),
+    [message.content],
+  );
+
   // Parse @mentions and render with highlighting.
   const mentionContent = useMemo(() => {
     const content = message.content;
     const mentionRegex = /@(\w+)/g;
-    const parts: ({ type: "text"; value: string } | { type: "mention"; username: string })[] = [];
+    const parts: (
+      | { type: "text"; value: string }
+      | { type: "mention"; username: string }
+    )[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
@@ -73,14 +158,39 @@ export const MessageBubble = memo(function MessageBubble({
     }
 
     if (parts.length === 0) {
-      // No mentions, render normally with ReactMarkdown.
+      // No mentions, check for code blocks.
+      const codeParts = parseContentForCodeBlocks(content);
+      if (codeParts.length === 1 && codeParts[0].type === "text") {
+        // No code blocks: render with ReactMarkdown.
+        return (
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        );
+      }
+
+      // Has code blocks: render parts.
       return (
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {content}
-        </ReactMarkdown>
+        <>
+          {codeParts.map((part, i) => {
+            if (part.type === "code") {
+              return (
+                <CodeBlock
+                  key={i}
+                  language={part.language}
+                  code={part.code}
+                />
+              );
+            }
+            return (
+              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>
+                {part.value}
+              </ReactMarkdown>
+            );
+          })}
+        </>
       );
     }
 
+    // Has mentions: render parts with mentions and code blocks.
     return (
       <>
         {parts.map((part, i) => {
@@ -107,8 +217,28 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             );
           }
-          // For text parts, render with ReactMarkdown (inline).
-          return <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>{part.value}</ReactMarkdown>;
+          // Text parts: may contain code blocks.
+          const subParts = parseContentForCodeBlocks(part.value);
+          return (
+            <span key={i}>
+              {subParts.map((sp, j) => {
+                if (sp.type === "code") {
+                  return (
+                    <CodeBlock
+                      key={j}
+                      language={sp.language}
+                      code={sp.code}
+                    />
+                  );
+                }
+                return (
+                  <ReactMarkdown key={j} remarkPlugins={[remarkGfm]}>
+                    {sp.value}
+                  </ReactMarkdown>
+                );
+              })}
+            </span>
+          );
         })}
       </>
     );
@@ -175,7 +305,7 @@ export const MessageBubble = memo(function MessageBubble({
         {/* Message content bubble */}
         <div
           className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed relative",
             isOwn
               ? "rounded-br-md"
               : "rounded-bl-md bg-[hsl(231,4%,18%)]",
@@ -194,6 +324,23 @@ export const MessageBubble = memo(function MessageBubble({
           <div className="markdown-body text-foreground/90">
             {mentionContent}
           </div>
+
+          {/* Forward button (appears on hover) */}
+          {onForward && (
+            <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onForward(message);
+                }}
+                className="flex items-center gap-1 rounded-lg bg-[hsl(231,4%,22%)] border border-[hsl(220,2.5%,28%)] px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-[hsl(231,4%,26%)] transition-colors shadow-md"
+                aria-label="Forward message"
+              >
+                <Forward className="h-3 w-3" />
+                Forward
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Timestamp shown below bubble for own messages (hover) or last in group */}

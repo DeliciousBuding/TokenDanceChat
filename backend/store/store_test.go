@@ -42,7 +42,7 @@ func TestInsertMessage(t *testing.T) {
 	}
 	defer s.Close()
 
-	msg, err := s.InsertMessage("alice", "hello world", "")
+	msg, err := s.InsertMessage("alice", "hello world", "", "")
 	if err != nil {
 		t.Fatalf("InsertMessage returned error: %v", err)
 	}
@@ -72,11 +72,11 @@ func TestGetMessagesChronological(t *testing.T) {
 	}
 	defer s.Close()
 
-	s.InsertMessage("alice", "first", "")
+	s.InsertMessage("alice", "first", "", "")
 	time.Sleep(time.Millisecond)
-	s.InsertMessage("bob", "second", "")
+	s.InsertMessage("bob", "second", "", "")
 	time.Sleep(time.Millisecond)
-	s.InsertMessage("alice", "third", "")
+	s.InsertMessage("alice", "third", "", "")
 
 	msgs := s.GetMessages(100, 0)
 	if len(msgs) != 3 {
@@ -107,7 +107,7 @@ func TestGetMessagesLimit(t *testing.T) {
 	defer s.Close()
 
 	for i := 0; i < 10; i++ {
-		s.InsertMessage("user", fmt.Sprintf("msg%d", i))
+		s.InsertMessage("user", fmt.Sprintf("msg%d", i), "", "")
 		time.Sleep(time.Millisecond)
 	}
 
@@ -135,11 +135,11 @@ func TestGetMessagesBefore(t *testing.T) {
 	}
 	defer s.Close()
 
-	msg1, _ := s.InsertMessage("alice", "first", "")
+	msg1, _ := s.InsertMessage("alice", "first", "", "")
 	time.Sleep(time.Millisecond)
-	msg2, _ := s.InsertMessage("bob", "second", "")
+	msg2, _ := s.InsertMessage("bob", "second", "", "")
 	time.Sleep(time.Millisecond)
-	msg3, _ := s.InsertMessage("alice", "third", "")
+	msg3, _ := s.InsertMessage("alice", "third", "", "")
 
 	// Get messages before msg3's timestamp (should exclude msg3).
 	msgs := s.GetMessages(100, msg3.Timestamp)
@@ -194,7 +194,7 @@ func TestConcurrentInsert(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_, err := s.InsertMessage("user", fmt.Sprintf("concurrent-%d", idx))
+			_, err := s.InsertMessage("user", fmt.Sprintf("concurrent-%d", idx), "", "")
 			if err != nil {
 				errCh <- err
 			}

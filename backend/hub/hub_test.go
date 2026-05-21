@@ -8,9 +8,10 @@ import (
 // mockStore is a test implementation of the Store interface.
 type mockStore struct {
 	messages []StoredMessage
+	rooms    []StoredRoom
 }
 
-func (m *mockStore) InsertMessage(username, content, replyToID string) (StoredMessage, error) {
+func (m *mockStore) InsertMessage(username, content, replyToID, roomID string) (StoredMessage, error) {
 	msg := StoredMessage{
 		ID:        "mock-id-" + username,
 		Username:  username,
@@ -25,9 +26,36 @@ func (m *mockStore) GetMessages(limit int, before int64) []StoredMessage {
 	return m.messages
 }
 
+func (m *mockStore) GetRoomMessages(roomID string, limit int, before int64) []StoredMessage {
+	return m.messages
+}
+
 func (m *mockStore) MarkDeleted(msgID string) error { return nil }
 func (m *mockStore) TotalMessages() int64 {
 	return int64(len(m.messages))
+}
+
+func (m *mockStore) CreateRoom(name string) (string, error) {
+	id := "room-" + name
+	m.rooms = append(m.rooms, StoredRoom{ID: id, Name: name})
+	return id, nil
+}
+
+func (m *mockStore) GetRoomID(name string) (string, error) {
+	for _, r := range m.rooms {
+		if r.Name == name {
+			return r.ID, nil
+		}
+	}
+	return "", nil
+}
+
+func (m *mockStore) ListRooms() []StoredRoom {
+	return m.rooms
+}
+
+func (m *mockStore) DeleteRoom(roomID string) error {
+	return nil
 }
 
 func TestNew(t *testing.T) {

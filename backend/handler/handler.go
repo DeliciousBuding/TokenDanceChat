@@ -3,9 +3,17 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"tokendancechat/backend/hub"
 
@@ -14,8 +22,20 @@ import (
 
 // Handler holds dependencies for HTTP handlers.
 type Handler struct {
-	hub   *hub.Hub
-	store hub.Store
+	hub              *hub.Hub
+	store            hub.Store
+	mu               sync.RWMutex
+	uploadsDir       string
+	linkPreviewCache map[string]linkPreviewResult
+}
+
+// linkPreviewResult stores cached OpenGraph data for a URL.
+type linkPreviewResult struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Image       string `json:"image"`
+	URL         string `json:"url"`
+	fetchedAt   time.Time
 }
 
 // contextKey is a private type to avoid collisions in context.WithValue.
@@ -24,8 +44,13 @@ type contextKey string
 const requestIDKey contextKey = "request_id"
 
 // New creates a new Handler.
-func New(h *hub.Hub, s hub.Store) *Handler {
-	return &Handler{hub: h, store: s}
+func New(h *hub.Hub, s hub.Store, uploadsDir string) *Handler {
+	return &Handler{
+		hub:              h,
+		store:            s,
+		uploadsDir:       uploadsDir,
+		linkPreviewCache: make(map[string]linkPreviewResult),
+	}
 }
 
 // writeJSONError writes a consistent JSON error response.
@@ -168,4 +193,193 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		log.Printf("[%s] %s %s %s", reqID, r.Method, r.URL.Path, r.RemoteAddr)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// --- Link Preview ---
+
+var (
+	ogTitleRegex       = regexp.MustCompile(`<meta[^>]+property="og:title"[^>]+content="([^"]*)"`)
+	ogDescriptionRegex = regexp.MustCompile(`<meta[^>]+property="og:description"[^>]+content="([^"]*)"`)
+	ogImageRegex       = regexp.MustCompile(`<meta[^>]+property="og:image"[^>]+content="([^"]*)"`)
+)
+
+// LinkPreview handles GET /api/link-preview?url=...
+func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	rawURL := r.URL.Query().Get("url")
+	if rawURL == "" {
+		writeJSONError(w, http.StatusBadRequest, "url parameter is required", "MISSING_URL", requestID)
+		return
+	}
+
+	// Validate URL.
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		writeJSONError(w, http.StatusBadRequest, "invalid URL", "INVALID_URL", requestID)
+		return
+	}
+
+	// Check cache (entries expire after 1 hour).
+	h.mu.RLock()
+	if cached, ok := h.linkPreviewCache[rawURL]; ok {
+		if time.Since(cached.fetchedAt) < 1*time.Hour {
+			h.mu.RUnlock()
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(cached)
+			return
+		}
+	}
+	h.mu.RUnlock()
+
+	// Fetch the URL.
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, rawURL, nil)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to create request", "FETCH_ERROR", requestID)
+		return
+	}
+	req.Header.Set("User-Agent", "TokenDanceChat/1.0 LinkPreview")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, "failed to fetch URL", "FETCH_ERROR", requestID)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Read up to 1MB of the response body.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, "failed to read response", "FETCH_ERROR", requestID)
+		return
+	}
+
+	bodyStr := string(body)
+
+	// Parse OG tags.
+	result := linkPreviewResult{
+		URL:         rawURL,
+		fetchedAt:   time.Now(),
+	}
+
+	if matches := ogTitleRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
+		result.Title = strings.TrimSpace(matches[1])
+	}
+	if matches := ogDescriptionRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
+		result.Description = strings.TrimSpace(matches[1])
+	}
+	if matches := ogImageRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
+		result.Image = strings.TrimSpace(matches[1])
+	}
+
+	// If no OG title, try <title> tag as fallback.
+	if result.Title == "" {
+		titleRegex := regexp.MustCompile(`<title[^>]*>([^<]+)</title>`)
+		if matches := titleRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
+			result.Title = strings.TrimSpace(matches[1])
+		}
+	}
+
+	// Cache the result.
+	h.mu.Lock()
+	h.linkPreviewCache[rawURL] = result
+	h.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// --- Image Upload ---
+
+const maxUploadSize = 5 << 20 // 5 MB
+
+// UploadImage handles POST /api/upload (multipart form).
+func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	// Limit request body to maxUploadSize.
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "file too large (max 5MB)", "FILE_TOO_LARGE", requestID)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing file field", "MISSING_FILE", requestID)
+		return
+	}
+	defer file.Close()
+
+	// Validate file type.
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	allowedExts := map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true}
+	if !allowedExts[ext] {
+		writeJSONError(w, http.StatusBadRequest, "unsupported file type (allowed: PNG, JPEG, GIF, WebP)", "INVALID_FILE_TYPE", requestID)
+		return
+	}
+
+	// Ensure uploads directory exists.
+	if err := os.MkdirAll(h.uploadsDir, 0755); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to create upload directory", "SERVER_ERROR", requestID)
+		return
+	}
+
+	// Generate a unique filename.
+	filename := uuid.New().String() + ext
+	savePath := filepath.Join(h.uploadsDir, filename)
+
+	dst, err := os.Create(savePath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to save file", "SERVER_ERROR", requestID)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to write file", "SERVER_ERROR", requestID)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"url":      "/uploads/" + filename,
+		"filename": filename,
+	})
+}
+
+// ServeUpload handles GET /uploads/{filename}
+func (h *Handler) ServeUpload(w http.ResponseWriter, r *http.Request) {
+	// Extract filename from path.
+	filename := filepath.Base(r.URL.Path)
+	if filename == "." || filename == "/" || filename == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	filePath := filepath.Join(h.uploadsDir, filename)
+
+	// Ensure the file is within the uploads directory.
+	absUploads, err := filepath.Abs(h.uploadsDir)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	absFile, err := filepath.Abs(filePath)
+	if err != nil || !strings.HasPrefix(absFile, absUploads+string(filepath.Separator)) {
+		http.NotFound(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, filePath)
 }

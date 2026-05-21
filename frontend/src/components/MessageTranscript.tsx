@@ -4,6 +4,8 @@ import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
 import { MessageBubble } from "./MessageBubble";
 import { SystemMessage } from "./SystemMessage";
+import { LinkPreview } from "./LinkPreview";
+import { ImageLightbox } from "./ImageLightbox";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/api";
 
@@ -14,6 +16,7 @@ const GROUP_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
 
 interface MessageTranscriptProps {
   className?: string;
+  onForward?: (message: ChatMessage) => void;
 }
 
 interface UserMessageGroup {
