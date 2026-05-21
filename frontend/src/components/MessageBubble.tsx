@@ -2,7 +2,7 @@ import { memo, useMemo, useCallback, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Copy, Check, Forward } from "lucide-react";
-import { cn, formatTime, hashString, avatarGradient, usernameHue } from "@/lib/utils";
+import { cn, formatTime, avatarGradient, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI } from "@/lib/api";

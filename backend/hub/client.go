@@ -1132,6 +1132,9 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 
 		// Persist the complete message to the store and broadcast as a normal message.
 		c.hub.SendBotMessageToRoom(response, c.currentRoomID)
+
+		// Stop typing indicator after bot finishes responding.
+		c.hub.BroadcastTyping(c.hub.BotName(), "typing_stop")
 	}
 
 	// Update memory with the bot response.
@@ -1251,6 +1254,9 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 		c.hub.BroadcastStreamChunkToRoom(agentName, "", true, c.currentRoomID)
 		// Persist to store and broadcast.
 		c.hub.SendAssistantMessageToRoom(agentName, response, c.currentRoomID)
+
+		// Stop typing indicator after agent finishes responding.
+		c.hub.BroadcastTyping(agentName, "typing_stop")
 	}
 
 	// Update memory with bot response.

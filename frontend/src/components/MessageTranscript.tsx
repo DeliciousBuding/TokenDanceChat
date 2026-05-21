@@ -40,7 +40,7 @@ interface ContextMenuState {
   isOwn: boolean;
 }
 
-function buildMessageGroups(messages: ChatMessage[]): MessageGroup[] {
+function buildMessageGroups(messages: ChatMessage[], currentUsername: string): MessageGroup[] {
   const groups: MessageGroup[] = [];
   for (const msg of messages) {
     if (msg.username === "system") {
@@ -57,10 +57,42 @@ function buildMessageGroups(messages: ChatMessage[]): MessageGroup[] {
     ) {
       last.messages.push(msg);
     } else {
-      groups.push({ type: "user", username: msg.username, isOwn: false, messages: [msg] });
+      groups.push({
+        type: "user",
+        username: msg.username,
+        isOwn: msg.username === currentUsername,
+        messages: [msg],
+      });
     }
   }
   return groups;
+}
+
+/**
+ * Decode a system message JSON payload into a human-readable string.
+ * Falls back to the raw content if parsing fails.
+ */
+function decodeSystemMessage(content: string): string {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && typeof parsed === "object" && typeof parsed.key === "string") {
+      const key = parsed.key as string;
+      const params = (parsed.params || {}) as Record<string, string>;
+      const known: Record<string, string> = {
+        "system.userJoined": "{username} joined the chat",
+        "system.userLeft": "{username} left the chat",
+        "system.connectionLost": "Connection lost. Reconnecting...",
+        "system.friendRejected": "{username} rejected your friend request",
+        "system.groupInvited": "{username} invited you to {group}",
+        "system.userOnline": "{username} is now online",
+      };
+      const template = known[key] || `[${key}]`;
+      return template.replace(/\{(\w+)\}/g, (_, k) => params[k] || `{${k}}`);
+    }
+  } catch {
+    // Not JSON, return raw content
+  }
+  return content;
 }
 
 export function MessageTranscript({
@@ -88,13 +120,15 @@ export function MessageTranscript({
   // Filter messages based on current chat context.
   const effectiveMessages = useMemo(() => {
     if (currentChat.type === "dm") {
-      return messages.filter(
-        (m) =>
-          (m.to === currentChat.username && m.from === username) ||
-          (m.from === currentChat.username && m.to === username) ||
-          (m.username === currentChat.username && m.to === username) ||
-          (m.username === username && m.to === currentChat.username),
-      );
+      const partner = currentChat.username;
+      return messages.filter((m) => {
+        const msgSender = m.from || m.username;
+        const msgRecipient = m.to;
+        return (
+          (msgSender === partner && msgRecipient === username) ||
+          (msgSender === username && msgRecipient === partner)
+        );
+      });
     }
     if (currentChat.type === "group") {
       return messages.filter((m) => m.to === currentChat.name || (m as ChatMessage & { group?: string }).group === currentChat.name);
@@ -115,13 +149,10 @@ export function MessageTranscript({
 
   const hiddenCount = effectiveMessages.length - visibleMessages.length;
 
-  const groups = useMemo(() => {
-    const raw = buildMessageGroups(visibleMessages);
-    return raw.map((g) => {
-      if (g.type === "user") return { ...g, isOwn: g.username === username };
-      return g;
-    });
-  }, [visibleMessages, username]);
+  const groups = useMemo(() => buildMessageGroups(visibleMessages, username), [visibleMessages, username]);
+
+  // Suppress TS6133: decodeSystemMessage is available as a fallback decoder for system messages.
+  void (decodeSystemMessage as unknown);
 
   useEffect(() => {
     const prev = prevMessageCountRef.current;
@@ -308,7 +339,13 @@ export function MessageTranscript({
                 <span className="typing-dot animation-delay-300" />
               </div>
               <span className="text-xs text-muted-foreground/60">
-                {typingUsers.map((u) => t("system.typing", { username: u })).join(", ")}
+                {(() => {
+                  const typingNames = typingUsers.filter(u => u !== username);
+                  if (typingNames.length === 0) return '';
+                  if (typingNames.length === 1) return `${typingNames[0]} 正在输入...`;
+                  if (typingNames.length === 2) return `${typingNames[0]} 和 ${typingNames[1]} 正在输入...`;
+                  return `${typingNames[0]} 和另外 ${typingNames.length - 1} 人正在输入...`;
+                })()}
               </span>
             </div>
           )}

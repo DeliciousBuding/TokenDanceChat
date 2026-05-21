@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
-import { cn } from "@/lib/utils";
+import { cn, avatarGradient } from "@/lib/utils";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -23,21 +23,6 @@ interface SidebarProps {
   onMentionAssistant?: (name: string) => void;
   /** Sets for which users have pending friend requests */
   pendingFriendUsers?: string[];
-}
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return Math.abs(hash);
-}
-
-function avatarGradient(username: string): string {
-  const baseHue = hashString(username) % 360;
-  const hue1 = baseHue;
-  const hue2 = (baseHue + 45) % 360;
-  return `linear-gradient(135deg, oklch(65% 0.16 ${hue1}), oklch(58% 0.14 ${hue2}))`;
 }
 
 const UserListItem = memo(function UserListItem({
