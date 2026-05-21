@@ -164,7 +164,7 @@ func (c *Client) chatAnthropic(ctx context.Context, systemPrompt string, message
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Sprintf("Sorry, the LLM returned an error (status %d).", resp.StatusCode), fmt.Errorf("anthropic status %d: %s", resp.StatusCode, string(respBytes))
+		return fmt.Sprintf("Sorry, the LLM returned an error (status %d).", resp.StatusCode), fmt.Errorf("anthropic status %d: response body omitted for security", resp.StatusCode)
 	}
 
 	var result anthropicResponse
@@ -269,7 +269,7 @@ func (c *Client) chatOpenAI(ctx context.Context, systemPrompt string, messages [
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Sprintf("Sorry, the LLM returned an error (status %d).", resp.StatusCode), fmt.Errorf("openai status %d: %s", resp.StatusCode, string(respBytes))
+		return fmt.Sprintf("Sorry, the LLM returned an error (status %d).", resp.StatusCode), fmt.Errorf("openai status %d: response body omitted for security", resp.StatusCode)
 	}
 
 	var result openaiResponse
