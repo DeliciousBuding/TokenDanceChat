@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { ChatMessage, RoomInfo, UserStatus } from "@/lib/api";
 
+const MESSAGE_CAP = 500;
+
 export type ViewState = "join" | "chat";
 
 export interface DM {
@@ -124,9 +126,13 @@ export const useChatStore = create<ChatState>((set) => ({
   setUsername: (username) => set({ username }),
   setConnected: (connected) => set({ connected }),
   addMessage: (message) =>
-    set((state) => ({
-      messages: [...state.messages, message],
-    })),
+    set((state) => {
+      const messages = [...state.messages, message];
+      if (messages.length > MESSAGE_CAP) {
+        messages.splice(0, messages.length - MESSAGE_CAP);
+      }
+      return { messages };
+    }),
   deleteMessage: (id) =>
     set((state) => ({
       messages: state.messages.filter((m) => m.id !== id),
