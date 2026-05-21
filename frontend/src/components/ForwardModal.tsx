@@ -33,20 +33,20 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md mx-4 rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] shadow-2xl animate-scale-in">
+      <div className="relative w-full max-w-md mx-4 rounded-xl border border-border bg-card shadow-2xl animate-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[hsl(220,2.5%,23.5%)]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h3 className="text-sm font-semibold text-foreground">Forward Message</h3>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-[hsl(220,2.5%,20%)]"
+            className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Original message preview */}
-        <div className="px-4 py-3 border-b border-[hsl(220,2.5%,23.5%)]">
+        <div className="px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2 mb-1">
             <User className="h-3 w-3 text-muted-foreground/50" />
             <span className="text-xs text-muted-foreground/70">{message.username}</span>
@@ -75,8 +75,8 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
                   onClick={() => setSelectedUser(user)}
                   className={`w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-left transition-colors ${
                     selectedUser === user
-                      ? "bg-[hsl(220,2.5%,20%)] text-foreground ring-1 ring-[hsl(220,2.5%,35%)]"
-                      : "text-foreground/70 hover:bg-[hsl(220,2.5%,18%)]"
+                      ? "bg-accent text-foreground ring-1 ring-[hsl(220,2.5%,35%)]"
+                      : "text-foreground/70 hover:bg-accent"
                   }`}
                 >
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[hsl(231,4%,22%)] text-[10px] font-semibold text-foreground/80">
@@ -90,10 +90,10 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-[hsl(220,2.5%,23.5%)]">
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border">
           <button
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground transition-colors"
+            className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             Cancel
           </button>

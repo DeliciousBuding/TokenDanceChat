@@ -40,7 +40,7 @@ export const SystemMessage = memo(function SystemMessage({
     >
       <div className="flex items-center gap-3 max-w-md">
         {/* Left line */}
-        <div className="h-px flex-1 bg-[hsl(220,2.5%,18%)]" />
+        <div className="h-px flex-1 bg-accent" />
 
         {/* Content */}
         <div className="flex flex-col items-center">
@@ -53,7 +53,7 @@ export const SystemMessage = memo(function SystemMessage({
         </div>
 
         {/* Right line */}
-        <div className="h-px flex-1 bg-[hsl(220,2.5%,18%)]" />
+        <div className="h-px flex-1 bg-accent" />
       </div>
     </div>
   );

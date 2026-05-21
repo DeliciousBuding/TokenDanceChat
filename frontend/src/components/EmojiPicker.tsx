@@ -48,7 +48,7 @@ export const EmojiPicker = memo(function EmojiPicker({
       onClick={handleBackdrop}
     >
       <div
-        className="animate-scale-in rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,12%)] shadow-2xl p-3 w-[320px] max-h-[420px] flex flex-col"
+        className="animate-scale-in rounded-xl border border-border bg-[hsl(231,4%,12%)] shadow-2xl p-3 w-[320px] max-h-[420px] flex flex-col"
       >
         {/* Quick access row */}
         <div className="flex gap-1 mb-2 pb-2 border-b border-[hsl(220,2.5%,16%)]">
@@ -56,7 +56,7 @@ export const EmojiPicker = memo(function EmojiPicker({
             <button
               key={emoji}
               onClick={() => handleSelect(emoji)}
-              className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[hsl(220,2.5%,20%)] text-lg transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-accent text-lg transition-colors"
               aria-label={`React with ${emoji}`}
             >
               {emoji}
@@ -71,7 +71,7 @@ export const EmojiPicker = memo(function EmojiPicker({
               <button
                 key={emoji}
                 onClick={() => handleSelect(emoji)}
-                className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-[hsl(220,2.5%,20%)] text-lg transition-colors"
+                className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-accent text-lg transition-colors"
                 aria-label={`React with ${emoji}`}
               >
                 {emoji}

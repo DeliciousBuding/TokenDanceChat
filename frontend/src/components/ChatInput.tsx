@@ -325,14 +325,14 @@ export function ChatInput({
   }, [currentChat, t]);
 
   return (
-    <div className="relative border-t border-[hsl(220,2.5%,23.5%)] bg-[hsl(223,4%,13%)]">
+    <div className="relative border-t border-border bg-background">
       {/* Gradient overlay */}
 
 
       {/* Reply indicator */}
       {replyTo && (
         <div className="flex items-center gap-2 px-4 pt-2">
-          <div className="flex-1 flex items-center gap-2 rounded-lg bg-[hsl(231,4%,16%)] border border-[hsl(220,2.5%,23.5%)] px-3 py-1.5">
+          <div className="flex-1 flex items-center gap-2 rounded-lg bg-card border border-border px-3 py-1.5">
             <span className="text-xs text-muted-foreground">
               {t("input.replyTo")}{" "}
               <span className="font-medium text-foreground/70">
@@ -347,7 +347,7 @@ export function ChatInput({
           <button
             onClick={() => setReplyTo(null)}
             aria-label={t("input.replyTo")}
-            className="flex-shrink-0 rounded-md p-1 text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground transition-colors"
+            className="flex-shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -361,7 +361,7 @@ export function ChatInput({
             <img
               src={pendingImage}
               alt="Preview"
-              className="h-20 w-auto rounded-lg border border-[hsl(220,2.5%,23.5%)] object-cover"
+              className="h-20 w-auto rounded-lg border border-border object-cover"
             />
             <button
               onClick={handleCancelImage}
@@ -403,8 +403,8 @@ export function ChatInput({
           disabled={disabled}
           aria-label="Upload image"
           className={cn(
-            "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[hsl(220,2.5%,23.5%)] transition-colors duration-200",
-            "bg-[hsl(220,2.5%,20%)] text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+            "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
+            "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
           )}
         >
           <ImagePlus className="h-4 w-4" />
@@ -415,7 +415,7 @@ export function ChatInput({
           {mentionActive && (
             <div
               ref={mentionRef}
-              className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,14%)] shadow-lg animate-scale-in z-20"
+              className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-border bg-card shadow-lg animate-scale-in z-20"
               style={{ maxHeight: "200px", overflowY: "auto" }}
             >
               {mentionFiltered.map((user, idx) => (
@@ -426,7 +426,7 @@ export function ChatInput({
                   className={cn(
                     "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
                     idx === mentionIndex
-                      ? "bg-[hsl(220,2.5%,18%)] text-foreground"
+                      ? "bg-accent text-foreground"
                       : "text-muted-foreground hover:bg-[hsl(220,2.5%,16%)] hover:text-foreground",
                   )}
                 >
@@ -440,7 +440,7 @@ export function ChatInput({
                   </span>
                   <span className="truncate">{user}</span>
                   {ASSISTANTS.some((assistant) => assistant.name === user) && (
-                    <span className="ml-auto rounded border border-[hsl(220,2.5%,23.5%)] px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
+                    <span className="ml-auto rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
                       {ASSISTANTS.find((assistant) => assistant.name === user)?.label}
                     </span>
                   )}
@@ -467,7 +467,7 @@ export function ChatInput({
             maxLength={2000}
             disabled={disabled}
             aria-label={placeholder}
-            className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-[13px] text-sm leading-5 text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
+            className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-border bg-card px-4 py-[13px] text-sm leading-5 text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
             style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT }}
           />
         </div>

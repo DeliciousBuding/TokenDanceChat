@@ -66,15 +66,15 @@ export function GroupCreateModal({
       />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-sm mx-4 rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,14%)] shadow-2xl animate-scale-in">
+      <div className="relative z-10 w-full max-w-sm mx-4 rounded-xl border border-border bg-card shadow-2xl animate-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[hsl(220,2.5%,23.5%)] px-5 py-4">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h3 className="text-sm font-semibold text-foreground">
             {t("group.createTitle")}
           </h3>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground transition-colors"
+            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
@@ -94,7 +94,7 @@ export function GroupCreateModal({
               placeholder={t("group.namePlaceholder")}
               maxLength={30}
               autoFocus
-              className="w-full rounded-lg border border-[hsl(220,2.5%,23.5%)] bg-[hsl(223,4%,13%)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-[hsl(220,2.5%,35%)] transition-colors"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-[hsl(220,2.5%,35%)] transition-colors"
             />
             {error && (
               <p className="mt-1 text-xs text-destructive">{error}</p>
@@ -107,15 +107,15 @@ export function GroupCreateModal({
               <p className="mb-2 text-xs text-muted-foreground">
                 {t("group.selectMembers")}
               </p>
-              <div className="max-h-40 overflow-y-auto space-y-1 border border-[hsl(220,2.5%,23.5%)] rounded-lg p-2">
+              <div className="max-h-40 overflow-y-auto space-y-1 border border-border rounded-lg p-2">
                 {availableUsers.map((user) => (
                   <label
                     key={user}
                     className={cn(
                       "flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors",
                       selected.has(user)
-                        ? "bg-[hsl(220,2.5%,20%)] text-foreground"
-                        : "text-foreground/70 hover:bg-[hsl(220,2.5%,18%)]",
+                        ? "bg-accent text-foreground"
+                        : "text-foreground/70 hover:bg-accent",
                     )}
                   >
                     <div
@@ -151,10 +151,10 @@ export function GroupCreateModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-[hsl(220,2.5%,23.5%)] px-5 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-4">
           <button
             onClick={onClose}
-            className="rounded-lg px-4 py-2 text-xs text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground transition-colors"
+            className="rounded-lg px-4 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             {t("group.cancel")}
           </button>

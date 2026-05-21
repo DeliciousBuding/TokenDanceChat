@@ -79,14 +79,14 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
     <>
       <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
       <div className="fixed inset-x-0 top-[15%] z-50 mx-auto w-full max-w-lg px-4">
-        <div className="rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,14%)] shadow-2xl overflow-hidden">
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-[hsl(220,2.5%,23.5%)]">
+        <div className="rounded-xl border border-border bg-card shadow-2xl overflow-hidden">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
             <Search className="h-4 w-4 text-muted-foreground/60 flex-shrink-0" />
             <input ref={inputRef} type="text" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKeyDown}
               placeholder="Search messages..." className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none" />
             {loading ? <Loader2 className="h-4 w-4 text-muted-foreground/60 animate-spin flex-shrink-0" />
             : query ? <button onClick={() => { setQuery(""); setResults([]); inputRef.current?.focus(); }} className="flex-shrink-0 rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
-            : <kbd className="hidden sm:inline-flex items-center rounded border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,18%)] px-1.5 py-0.5 text-[10px] text-muted-foreground/60">ESC</kbd>}
+            : <kbd className="hidden sm:inline-flex items-center rounded border border-border bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground/60">ESC</kbd>}
           </div>
           <div className="max-h-72 overflow-y-auto">
             {!query && <div className="px-4 py-8 text-center"><p className="text-xs text-muted-foreground/50">Type to search messages</p></div>}
@@ -94,15 +94,15 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
             {error && !loading && query && <div className="px-4 py-8 text-center"><Search className="mx-auto h-5 w-5 text-muted-foreground/30 mb-2" /><p className="text-xs text-muted-foreground/50">No messages found</p></div>}
             {results.length > 0 && results.map((r, i) => (
               <button key={r.id} onClick={() => handleClickResult(r)}
-                className={cn("w-full text-left px-4 py-3 border-b border-[hsl(220,2.5%,23.5%)] last:border-b-0 transition-colors",
-                  i === selectedIndex ? "bg-[hsl(220,2.5%,18%)]" : "hover:bg-[hsl(220,2.5%,16%)]")}>
+                className={cn("w-full text-left px-4 py-3 border-b border-border last:border-b-0 transition-colors",
+                  i === selectedIndex ? "bg-accent" : "hover:bg-[hsl(220,2.5%,16%)]")}>
                 <div className="flex items-center gap-2 mb-1"><span className="text-xs font-medium text-muted-foreground/70">{r.username}</span></div>
                 <p className="text-xs text-muted-foreground/80 line-clamp-2" dangerouslySetInnerHTML={{ __html: r.snippet || r.content.substring(0, 120) }} />
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 border-t border-[hsl(220,2.5%,23.5%)]">
-            <kbd className="rounded border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,18%)] px-1.5 py-0.5 text-[10px] text-muted-foreground/50">Ctrl+K</kbd>
+          <div className="flex items-center gap-2 px-4 py-2 border-t border-border">
+            <kbd className="rounded border border-border bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground/50">Ctrl+K</kbd>
             <span className="text-[10px] text-muted-foreground/50 ml-auto">toggle search</span>
           </div>
         </div>
