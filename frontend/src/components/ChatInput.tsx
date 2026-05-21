@@ -21,6 +21,13 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
+const INPUT_MIN_HEIGHT = 48;
+const INPUT_MAX_HEIGHT = 160;
+const ASSISTANTS = [
+  { name: "TokenBot", label: "Bot", aliases: ["bot", "tokenbot"] },
+  { name: "PicoClaw", label: "Agent", aliases: ["claw", "picoclaw"] },
+];
+
 export function ChatInput({
   onSend,
   disabled,
@@ -58,19 +65,24 @@ export function ChatInput({
     };
   }, [content]);
 
-  // Derive filtered user list and whether dropdown should be open.
-  const BOT_NAME = "bot";
+  // Derive filtered mention list and whether dropdown should be open.
   const mentionFiltered = useMemo(() => {
     const { query, startPos } = mentionQuery;
     if (startPos < 0) return [];
     const lower = query.toLowerCase();
+    const assistantNames = new Set(ASSISTANTS.map((assistant) => assistant.name));
+    const assistants = ASSISTANTS.filter((assistant) => {
+      if (lower === "") return true;
+      return (
+        assistant.name.toLowerCase().includes(lower) ||
+        assistant.aliases.some((alias) => alias.includes(lower))
+      );
+    }).map((assistant) => assistant.name);
     const users = onlineUsers
+      .filter((u) => !assistantNames.has(u))
       .filter((u) => u.toLowerCase().includes(lower))
-      .slice(0, 9);
-    if (BOT_NAME.includes(lower) || lower === "") {
-      return [BOT_NAME, ...users].slice(0, 10);
-    }
-    return users;
+      .slice(0, Math.max(0, 10 - assistants.length));
+    return [...assistants, ...users].slice(0, 10);
   }, [mentionQuery, onlineUsers]);
 
   // Sync mentionActive with whether we have matches.
@@ -84,8 +96,13 @@ export function ChatInput({
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    const newHeight = Math.min(textarea.scrollHeight, 200);
+    const newHeight = Math.min(
+      Math.max(textarea.scrollHeight, INPUT_MIN_HEIGHT),
+      INPUT_MAX_HEIGHT,
+    );
     textarea.style.height = `${newHeight}px`;
+    textarea.style.overflowY =
+      textarea.scrollHeight > INPUT_MAX_HEIGHT ? "auto" : "hidden";
   }, []);
 
   useEffect(() => {
@@ -108,6 +125,26 @@ export function ChatInput({
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    const handleInsertAssistant = (event: Event) => {
+      const assistant = (event as CustomEvent<{ name?: string }>).detail?.name;
+      if (!assistant) return;
+      const textarea = textareaRef.current;
+      const prefix = content.trim().length > 0 ? " " : "";
+      const nextContent = `${content}${prefix}@${assistant} `;
+      setContent(nextContent);
+      requestAnimationFrame(() => {
+        textarea?.focus();
+        textarea?.setSelectionRange(nextContent.length, nextContent.length);
+        adjustHeight();
+      });
+    };
+    window.addEventListener("tdchat:insert-mention", handleInsertAssistant);
+    return () => {
+      window.removeEventListener("tdchat:insert-mention", handleInsertAssistant);
+    };
+  }, [adjustHeight, content]);
 
   // Image paste handler
   const handlePaste = useCallback(
@@ -205,7 +242,8 @@ export function ChatInput({
       typingSentRef.current = false;
     }
     if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`;
+      textareaRef.current.style.overflowY = "hidden";
     }
   }, [content, disabled, onSend]);
 
@@ -373,8 +411,8 @@ export function ChatInput({
           disabled={disabled}
           aria-label="Upload image"
           className={cn(
-            "flex h-[42px] w-[42px] flex-shrink-0 items-center justify-center rounded-xl transition-all duration-200",
-            "bg-[hsl(220,2.5%,20%)] text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed",
+            "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[hsl(220,2.5%,23.5%)] transition-colors duration-200",
+            "bg-[hsl(220,2.5%,20%)] text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
           )}
         >
           <ImagePlus className="h-4 w-4" />
@@ -409,6 +447,11 @@ export function ChatInput({
                     {user.charAt(0).toUpperCase()}
                   </span>
                   <span className="truncate">{user}</span>
+                  {ASSISTANTS.some((assistant) => assistant.name === user) && (
+                    <span className="ml-auto rounded border border-[hsl(220,2.5%,23.5%)] px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
+                      {ASSISTANTS.find((assistant) => assistant.name === user)?.label}
+                    </span>
+                  )}
                   {user === username && (
                     <span className="ml-auto text-[10px] text-muted-foreground/50">
                       {t("sidebar.you")}
@@ -432,8 +475,8 @@ export function ChatInput({
             maxLength={2000}
             disabled={disabled}
             aria-label={placeholder}
-            className="w-full resize-none rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-all duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50 max-h-[160px]"
-            style={{ scrollbarWidth: "thin" }}
+            className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-[13px] text-sm leading-5 text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
+            style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT }}
           />
         </div>
 
@@ -446,8 +489,8 @@ export function ChatInput({
             disabled ? t("join.buttonConnecting") : t("input.placeholder")
           }
           className={cn(
-            "flex h-[42px] w-[42px] flex-shrink-0 items-center justify-center rounded-xl transition-all duration-200",
-            "disabled:opacity-30 disabled:cursor-not-allowed",
+            "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-all duration-200",
+            "disabled:cursor-not-allowed disabled:opacity-30",
             pulseButton && "animate-pulse-once",
           )}
           style={{

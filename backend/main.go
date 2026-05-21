@@ -30,7 +30,11 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	// Read bot config from environment.
 	botName := os.Getenv("CHAT_BOT_NAME")
 	if botName == "" {
-		botName = "bot"
+		botName = "TokenBot"
+	}
+	agentName := os.Getenv("CHAT_AGENT_NAME")
+	if agentName == "" {
+		agentName = "PicoClaw"
 	}
 
 	var llmCfg *llm.Config
@@ -69,7 +73,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 		}
 	}
 
-	h := hub.New(st, llmCfg, picoclawCfg, botName)
+	h := hub.New(st, llmCfg, picoclawCfg, botName, agentName)
 
 	// Set up bot memory persistence if LLM is configured and path is set.
 	if llmCfg != nil {
@@ -96,7 +100,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 
 	// Set up AGENTS.md and MEMORY.md in the data directory.
 	dataDir := filepath.Dir(dbPath)
-	if err := writeAgentsMD(dataDir, botName); err != nil {
+	if err := writeAgentsMD(dataDir, botName, agentName); err != nil {
 		log.Printf("warn: failed to write AGENTS.md: %v", err)
 	} else {
 		log.Printf("AGENTS.md written to %s", dataDir)
@@ -123,6 +127,14 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	}
 
 	hdlr := handler.New(h, st, uploadsDir)
+	if endpoint := os.Getenv("CHAT_MEDIA_WEBDAV_ENDPOINT"); endpoint != "" {
+		hdlr.SetMediaStore(handler.NewWebDAVMediaStore(
+			endpoint,
+			os.Getenv("CHAT_MEDIA_WEBDAV_USER"),
+			os.Getenv("CHAT_MEDIA_WEBDAV_PASS"),
+		))
+		log.Printf("media uploads configured for WebDAV endpoint %s", endpoint)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", hdlr.HealthCheck)
@@ -187,23 +199,29 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 }
 
 // writeAgentsMD writes the AGENTS.md file with bot rules and system prompt.
-func writeAgentsMD(dataDir, botName string) error {
+func writeAgentsMD(dataDir, botName, agentName string) error {
 	content := fmt.Sprintf(`# AGENTS.md
 
 ## System Prompt
-You are a helpful chatbot named %s. Speak Chinese by default. Be concise and friendly.
+TokenDanceChat has two assistant identities:
+- %s: normal chat bot backed by the LLM adapter.
+- %s: Agent workflow bot backed by PicoClaw.
+
+Speak Chinese by default. Be concise and friendly.
 
 ## Rules
 - No offensive content
 - No roleplaying
-- Identify yourself as a bot named %s
+- Identify yourself as %s when responding as the normal bot
+- Identify yourself as %s when responding as the Agent workflow bot
 - When mentioning users, use @username format
 - Be helpful, concise, and friendly
 
 ## Identity
 Bot name: %s
+Agent name: %s
 This file is auto-generated from config on server startup.
-`, botName, botName, botName)
+`, botName, agentName, botName, agentName, botName, agentName)
 
 	agentsPath := filepath.Join(dataDir, "AGENTS.md")
 	return os.WriteFile(agentsPath, []byte(content), 0644)

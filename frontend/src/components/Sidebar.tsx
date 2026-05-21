@@ -7,6 +7,8 @@ import {
   Hash,
   User,
   Plus,
+  Bot,
+  Workflow,
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -18,6 +20,7 @@ interface SidebarProps {
   onStartDM?: (username: string) => void;
   onAddFriend?: (username: string) => void;
   onCreateGroup?: () => void;
+  onMentionAssistant?: (name: string) => void;
   /** Sets for which users have pending friend requests */
   pendingFriendUsers?: string[];
 }
@@ -41,6 +44,8 @@ const UserListItem = memo(function UserListItem({
   user,
   isSelf,
   youLabel,
+  sendMessageLabel,
+  addFriendLabel,
   onStartDM,
   onAddFriend,
   isFriend,
@@ -49,6 +54,8 @@ const UserListItem = memo(function UserListItem({
   user: string;
   isSelf: boolean;
   youLabel: string;
+  sendMessageLabel: string;
+  addFriendLabel: string;
   onStartDM?: (username: string) => void;
   onAddFriend?: (username: string) => void;
   isFriend?: boolean;
@@ -108,7 +115,7 @@ const UserListItem = memo(function UserListItem({
               }}
             >
               <MessageCircle className="h-3 w-3" />
-              Send Message
+              {sendMessageLabel}
             </button>
           )}
           {onAddFriend && !isFriend && !hasPendingRequest && (
@@ -120,7 +127,7 @@ const UserListItem = memo(function UserListItem({
               }}
             >
               <UserPlus className="h-3 w-3" />
-              Add Friend
+              {addFriendLabel}
             </button>
           )}
           {hasPendingRequest && (
@@ -140,6 +147,7 @@ export function Sidebar({
   onStartDM,
   onAddFriend,
   onCreateGroup,
+  onMentionAssistant,
   pendingFriendUsers = [],
 }: SidebarProps) {
   const { t } = useTranslation();
@@ -228,6 +236,30 @@ export function Sidebar({
           <Hash className="h-4 w-4 text-muted-foreground" />
           <span>{t("sidebar.publicChat")}</span>
         </button>
+      </div>
+
+      {/* Assistants */}
+      <div className="px-3 pt-2 pb-1">
+        <span className="px-2 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+          {t("sidebar.assistants")}
+        </span>
+        {[
+          { name: "TokenBot", Icon: Bot },
+          { name: "PicoClaw", Icon: Workflow },
+        ].map(({ name, Icon }) => (
+          <button
+            key={name}
+            onClick={() => {
+              setCurrentChat({ type: "public" });
+              onMentionAssistant?.(name);
+              onClose?.();
+            }}
+            className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground/80 transition-colors hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground"
+          >
+            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="truncate">{name}</span>
+          </button>
+        ))}
       </div>
 
       {/* Direct Messages */}
@@ -397,6 +429,8 @@ export function Sidebar({
                     user={username}
                     isSelf
                     youLabel={t("sidebar.you")}
+                    sendMessageLabel={t("sidebar.sendMessage")}
+                    addFriendLabel={t("sidebar.addFriend")}
                   />
                   {/* Divider between you and others */}
                   {otherUsers.length > 0 && (
@@ -413,6 +447,8 @@ export function Sidebar({
                   user={user}
                   isSelf={false}
                   youLabel={t("sidebar.you")}
+                  sendMessageLabel={t("sidebar.sendMessage")}
+                  addFriendLabel={t("sidebar.addFriend")}
                   onStartDM={onStartDM}
                   onAddFriend={onAddFriend}
                   isFriend={friends.includes(user)}

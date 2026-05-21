@@ -135,10 +135,11 @@ type Hub struct {
 	StartTime time.Time
 
 	// LLM bot support (deprecated: llmClient is legacy; picoclawClient is preferred).
-	llmClient       *llm.Client
-	picoclawClient  *picoclaw.Client
-	memory          *llm.Memory
-	botName         string
+	llmClient      *llm.Client
+	picoclawClient *picoclaw.Client
+	memory         *llm.Memory
+	botName        string
+	agentName      string
 
 	// typingRateLimit tracks the last time a typing broadcast was sent per username.
 	typingRateLimit map[string]time.Time
@@ -162,13 +163,17 @@ type Hub struct {
 	mu sync.RWMutex
 }
 
-// New creates a new Hub with the given store. llmCfg and botName are optional;
-// pass nil for llmCfg to disable legacy LLM bot support. picoclawCfg enables the
-// PicoClaw adapter (preferred). If both are set, PicoClaw takes precedence.
-func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName string) *Hub {
+// New creates a new Hub with the given store. llmCfg, picoclawCfg, botName and
+// agentName are optional. TokenBot uses the legacy LLM adapter; PicoClaw uses
+// the PicoClaw gateway.
+func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName string, agentNames ...string) *Hub {
 	var llmClient *llm.Client
 	var pcClient *picoclaw.Client
 	var mem *llm.Memory
+	agentName := "PicoClaw"
+	if len(agentNames) > 0 && agentNames[0] != "" {
+		agentName = agentNames[0]
+	}
 
 	if picoclawCfg != nil {
 		pcClient = picoclaw.New(*picoclawCfg)
@@ -194,6 +199,7 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 		picoclawClient:  pcClient,
 		memory:          mem,
 		botName:         botName,
+		agentName:       agentName,
 		typingRateLimit: make(map[string]time.Time),
 		friends:         make(map[string]map[string]bool),
 		groups:          make(map[string]*Group),
@@ -363,6 +369,11 @@ func (h *Hub) Uptime() time.Duration {
 // BotName returns the configured bot username, or empty string if no bot is configured.
 func (h *Hub) BotName() string {
 	return h.botName
+}
+
+// AgentName returns the configured agent username, or empty string if disabled.
+func (h *Hub) AgentName() string {
+	return h.agentName
 }
 
 // LLMClient returns the legacy LLM client, or nil if not configured.
@@ -556,9 +567,17 @@ func (h *Hub) BroadcastJSON(msg Message) {
 
 // SendBotMessage persists a bot message to the store and broadcasts it.
 func (h *Hub) SendBotMessage(content, roomID string) {
-	storedMsg, err := h.store.InsertMessage(h.botName, content, "", roomID)
+	h.SendAssistantMessage(h.botName, content, roomID)
+}
+
+// SendAssistantMessage persists an assistant message to the store and broadcasts it.
+func (h *Hub) SendAssistantMessage(username, content, roomID string) {
+	if username == "" {
+		username = h.botName
+	}
+	storedMsg, err := h.store.InsertMessage(username, content, "", roomID)
 	if err != nil {
-		log.Printf("failed to insert bot message: %v", err)
+		log.Printf("failed to insert assistant message: %v", err)
 		return
 	}
 
@@ -574,7 +593,7 @@ func (h *Hub) SendBotMessage(content, roomID string) {
 	select {
 	case h.broadcast <- broadcastMsg:
 	default:
-		log.Printf("broadcast channel full, dropping bot message")
+		log.Printf("broadcast channel full, dropping assistant message")
 	}
 }
 

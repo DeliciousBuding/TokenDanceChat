@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -26,6 +25,7 @@ type Handler struct {
 	store            hub.Store
 	mu               sync.RWMutex
 	uploadsDir       string
+	mediaStore       MediaStore
 	linkPreviewCache map[string]linkPreviewResult
 }
 
@@ -49,7 +49,15 @@ func New(h *hub.Hub, s hub.Store, uploadsDir string) *Handler {
 		hub:              h,
 		store:            s,
 		uploadsDir:       uploadsDir,
+		mediaStore:       NewLocalMediaStore(uploadsDir),
 		linkPreviewCache: make(map[string]linkPreviewResult),
+	}
+}
+
+// SetMediaStore replaces the default local upload storage.
+func (h *Handler) SetMediaStore(store MediaStore) {
+	if store != nil {
+		h.mediaStore = store
 	}
 }
 
@@ -172,10 +180,10 @@ func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"connections":     connections,
-		"messages_total":  messagesTotal,
-		"uptime_seconds":  int64(uptime.Seconds()),
-		"started_at":      h.hub.StartTime.UTC().Format("2006-01-02T15:04:05Z"),
+		"connections":    connections,
+		"messages_total": messagesTotal,
+		"uptime_seconds": int64(uptime.Seconds()),
+		"started_at":     h.hub.StartTime.UTC().Format("2006-01-02T15:04:05Z"),
 	})
 }
 
@@ -263,8 +271,8 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 
 	// Parse OG tags.
 	result := linkPreviewResult{
-		URL:         rawURL,
-		fetchedAt:   time.Now(),
+		URL:       rawURL,
+		fetchedAt: time.Now(),
 	}
 
 	if matches := ogTitleRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
@@ -329,24 +337,11 @@ func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure uploads directory exists.
-	if err := os.MkdirAll(h.uploadsDir, 0755); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to create upload directory", "SERVER_ERROR", requestID)
-		return
-	}
-
 	// Generate a unique filename.
 	filename := uuid.New().String() + ext
-	savePath := filepath.Join(h.uploadsDir, filename)
+	contentType := contentTypeForFilename(filename)
 
-	dst, err := os.Create(savePath)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to save file", "SERVER_ERROR", requestID)
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
+	if err := h.mediaStore.Save(r.Context(), filename, contentType, file); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to write file", "SERVER_ERROR", requestID)
 		return
 	}
@@ -367,19 +362,18 @@ func (h *Handler) ServeUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := filepath.Join(h.uploadsDir, filename)
-
-	// Ensure the file is within the uploads directory.
-	absUploads, err := filepath.Abs(h.uploadsDir)
+	media, err := h.mediaStore.Open(r.Context(), filename)
 	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	absFile, err := filepath.Abs(filePath)
-	if err != nil || !strings.HasPrefix(absFile, absUploads+string(filepath.Separator)) {
 		http.NotFound(w, r)
 		return
 	}
+	defer media.Body.Close()
 
-	http.ServeFile(w, r, filePath)
+	if media.ContentType != "" {
+		w.Header().Set("Content-Type", media.ContentType)
+	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	if _, err := io.Copy(w, media.Body); err != nil {
+		log.Printf("failed to stream upload %s: %v", filename, err)
+	}
 }

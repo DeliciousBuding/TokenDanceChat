@@ -244,7 +244,12 @@ export function MessageTranscript({
           <p className="text-xs text-muted-foreground/60 text-center max-w-xs">{t("transcript.emptyDescription")}</p>
         </div>
       ) : (
-        <div role="log" aria-live="polite" aria-label={t("chat.roomName")} className="py-4">
+        <div
+          role="log"
+          aria-live="polite"
+          aria-label={t("chat.roomName")}
+          className="mx-auto w-full max-w-5xl py-4"
+        >
           {hiddenCount > 0 && (
             <div className="flex justify-center pb-3">
               <button

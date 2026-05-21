@@ -16,41 +16,10 @@ import {
   type WSMessageEditBroadcast,
 } from "@/lib/api";
 
-// --- Notification utilities ---
-
-let notificationPermission: NotificationPermission = "default";
-let lastNotificationTime = 0;
-const NOTIFICATION_THROTTLE_MS = 5000;
-
-function requestNotificationPermission(): void {
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "granted" || Notification.permission === "denied") {
-    notificationPermission = Notification.permission;
-    return;
-  }
-  Notification.requestPermission().then((perm) => {
-    notificationPermission = perm;
-  });
-}
-
-function showNotification(title: string, body: string): void {
-  if (!("Notification" in window)) return;
-  if (notificationPermission !== "granted") return;
-  const now = Date.now();
-  if (now - lastNotificationTime < NOTIFICATION_THROTTLE_MS) return;
-  lastNotificationTime = now;
-  try {
-    new Notification(title, { body });
-  } catch {
-    // Notification API not available.
-  }
-}
-
 // --- Page title utilities ---
 
 const BASE_TITLE = "TokenDanceChat";
 let unreadTitleCount = 0;
-let flashTitleTimer: ReturnType<typeof setInterval> | null = null;
 let isTabActive = true;
 
 function updatePageTitle(): void {
@@ -59,31 +28,6 @@ function updatePageTitle(): void {
   } else {
     document.title = BASE_TITLE;
   }
-}
-
-function flashMentionTitle(username: string): void {
-  if (flashTitleTimer) clearInterval(flashTitleTimer);
-  let flashes = 0;
-  const maxFlashes = 10;
-  flashTitleTimer = setInterval(() => {
-    if (flashes >= maxFlashes) {
-      if (flashTitleTimer) {
-        clearInterval(flashTitleTimer);
-        flashTitleTimer = null;
-      }
-      updatePageTitle();
-      return;
-    }
-    document.title = flashes % 2 === 0
-      ? `@${username} mentioned you - ${BASE_TITLE}`
-      : BASE_TITLE;
-    flashes++;
-  }, 500);
-}
-
-function hasMention(content: string, username: string): boolean {
-  const regex = new RegExp(`@${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-  return regex.test(content);
 }
 
 function i18nSys(key: string, params?: Record<string, string>): string {
@@ -200,9 +144,16 @@ export function useWebSocket() {
   const uploadImage = useCallback(async (file: File) => {
     const url = await chatAPI.uploadImage(file);
     if (url) {
-      // Send as markdown image.
+      const state = useChatStore.getState();
       const imageMarkdown = `![image](${url})`;
-      chatAPI.sendMessage(imageMarkdown);
+      if (state.currentChat.type === "dm") {
+        chatAPI.sendDMMessage(state.currentChat.username, imageMarkdown, state.replyTo || undefined);
+      } else if (state.currentChat.type === "group") {
+        chatAPI.sendGroupMessage(state.currentChat.name, imageMarkdown, state.replyTo || undefined);
+      } else {
+        chatAPI.sendMessage(imageMarkdown, state.replyTo || undefined);
+      }
+      state.setReplyTo(null);
     }
     setPendingImage(null);
   }, [setPendingImage]);
@@ -516,10 +467,6 @@ export function useWebSocket() {
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
-      if (flashTitleTimer) {
-        clearInterval(flashTitleTimer);
-        flashTitleTimer = null;
-      }
       unsubs.forEach((unsub) => unsub());
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
