@@ -7,6 +7,7 @@ import {
   type WSHistoryMessage,
   type WSUserEvent,
   type WSTypingEvent,
+  type WSUserStatus,
 } from "@/lib/api";
 
 function i18nSys(key: string, params?: Record<string, string>): string {
@@ -18,11 +19,13 @@ function i18nSys(key: string, params?: Record<string, string>): string {
 
 export function useWebSocket() {
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const prevStatusRef = useRef<Record<string, boolean>>({});
   const {
     setConnected,
     addMessage,
     setHistory,
     setOnlineUsers,
+    setUserStatusList,
     addSystemMessage,
     addTypingUser,
     removeTypingUser,
@@ -110,6 +113,33 @@ export function useWebSocket() {
     );
 
     unsubs.push(
+      chatAPI.on("user_status", (msg: WSMessage) => {
+        const { users } = msg as WSUserStatus;
+        if (users && users.length > 0) {
+          // Detect online/offline transitions and show system messages.
+          for (const user of users) {
+            const prevOnline = prevStatusRef.current[user.username];
+            if (prevOnline === false && user.online === true) {
+              // User came online.
+              addSystemMessage(
+                i18nSys("system.userOnline", { username: user.username }),
+                Date.now(),
+              );
+            }
+          }
+          // Update tracking ref.
+          const newMap: Record<string, boolean> = {};
+          for (const user of users) {
+            newMap[user.username] = user.online;
+          }
+          prevStatusRef.current = newMap;
+
+          setUserStatusList(users);
+        }
+      }),
+    );
+
+    unsubs.push(
       chatAPI.on("connection_lost", () => {
         addSystemMessage(
           i18nSys("system.connectionLost"),
@@ -143,7 +173,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser]);
+  }, [addMessage, setHistory, setOnlineUsers, setUserStatusList, addSystemMessage, addTypingUser, removeTypingUser]);
 
   return { connect, disconnect, sendMessage };
 }

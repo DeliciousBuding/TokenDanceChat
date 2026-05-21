@@ -26,6 +26,9 @@ export interface TranslationDict {
     emptyState: string;
     connectedAs: string;
     you: string;
+    online: string;
+    offline: string;
+    lastSeen: string;
   };
   transcript: {
     loading: string;
@@ -42,6 +45,7 @@ export interface TranslationDict {
   system: {
     userJoined: string;
     userLeft: string;
+    userOnline: string;
     connectionLost: string;
     typing: string;
   };
@@ -83,6 +87,9 @@ const zhCN: TranslationDict = {
     emptyState: "暂无在线用户",
     connectedAs: "已连接为",
     you: "你",
+    online: "在线",
+    offline: "离线",
+    lastSeen: "{{time}}前在线",
   },
   transcript: {
     loading: "加载消息中...",
@@ -99,6 +106,7 @@ const zhCN: TranslationDict = {
   system: {
     userJoined: "{{username}} 加入了聊天室",
     userLeft: "{{username}} 离开了聊天室",
+    userOnline: "{{username}} 上线了",
     connectionLost: "连接已断开，正在尝试重新连接...",
     typing: "{{username}} 正在输入...",
   },
@@ -141,6 +149,9 @@ const enUS: TranslationDict = {
     emptyState: "No users online",
     connectedAs: "Connected as",
     you: "You",
+    online: "Online",
+    offline: "Offline",
+    lastSeen: "last seen {{time}} ago",
   },
   transcript: {
     loading: "Loading messages...",
@@ -157,6 +168,7 @@ const enUS: TranslationDict = {
   system: {
     userJoined: "{{username}} joined the chat",
     userLeft: "{{username}} left the chat",
+    userOnline: "{{username}} is now online",
     connectionLost: "Connection lost, attempting to reconnect...",
     typing: "{{username}} is typing...",
   },

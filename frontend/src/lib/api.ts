@@ -40,6 +40,17 @@ export interface WSTypingEvent extends WSMessage {
   username: string;
 }
 
+export interface UserStatus {
+  username: string;
+  online: boolean;
+  last_seen: number;
+}
+
+export interface WSUserStatus extends WSMessage {
+  type: "user_status";
+  users: UserStatus[];
+}
+
 export interface WSJoinRequest {
   type: "join";
   username: string;
