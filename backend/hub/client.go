@@ -102,6 +102,8 @@ func (c *Client) ReadPump() {
 			c.handleGroupMessage(msg)
 		case "group_join":
 			c.handleGroupJoin(msg)
+			case "dm_message":
+				c.handleDMMessage(msg)
 		case "message_delete":
 			c.handleMessageDelete(msg)
 		case "typing_start":
@@ -242,7 +244,7 @@ func (c *Client) handleChatMessage(msg Message) {
 	}
 
 	// Save to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "")
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID)
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
 		return
@@ -574,7 +576,7 @@ func (c *Client) handleGroupMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "")
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID)
 	if err != nil {
 		log.Printf("failed to insert group message: %v", err)
 		return
@@ -627,7 +629,63 @@ func (c *Client) handleGroupJoin(msg Message) {
 	}
 }
 
-// --- Message delete handler ---
+func (c *Client) handleDMMessage(msg Message) {
+	if c.username == "" {
+		return
+	}
+	to := msg.To
+	if to == "" || to == c.username {
+		return
+	}
+	content := sanitizeContent(msg.Content)
+	if content == "" {
+		return
+	}
+
+	if !c.checkRateLimit() {
+		return
+	}
+
+	// Persist to store.
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID)
+	if err != nil {
+		log.Printf("failed to insert DM message: %v", err)
+		return
+	}
+
+	// Send to recipient.
+	dmMsgTo, _ := json.Marshal(Message{
+		Type:           "dm_message",
+		ID:             storedMsg.ID,
+		Username:       c.username,
+		Content:        content,
+		Timestamp:      storedMsg.Timestamp,
+		To:             to,
+		From:           c.username,
+		ReplyToID:      msg.ReplyToID,
+		ReplyToContent: msg.ReplyToContent,
+		ReplyToUser:    msg.ReplyToUser,
+	})
+	c.hub.SendToUser(to, dmMsgTo)
+
+	// Send echo back to sender.
+	dmMsgFrom, _ := json.Marshal(Message{
+		Type:           "dm_message",
+		ID:             storedMsg.ID,
+		Username:       c.username,
+		Content:        content,
+		Timestamp:      storedMsg.Timestamp,
+		To:             to,
+		From:           c.username,
+		ReplyToID:      msg.ReplyToID,
+		ReplyToContent: msg.ReplyToContent,
+		ReplyToUser:    msg.ReplyToUser,
+	})
+	select {
+	case c.send <- dmMsgFrom:
+	default:
+	}
+}
 
 func (c *Client) handleMessageDelete(msg Message) {
 	if c.username == "" {
@@ -638,8 +696,10 @@ func (c *Client) handleMessageDelete(msg Message) {
 		return
 	}
 
-	// MarkDeleted not yet implemented in store; broadcasting deletion event only.
-	// log.Printf("failed to mark message deleted: %v", err)
+	if err := c.hub.store.MarkDeleted(messageID); err != nil {
+		log.Printf("failed to mark message deleted: %v", err)
+		return
+	}
 
 	// Broadcast deletion.
 	delMsg, _ := json.Marshal(Message{
