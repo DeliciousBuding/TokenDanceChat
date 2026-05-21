@@ -1,7 +1,5 @@
-const CACHE_NAME = "tdchat-v1";
+const CACHE_NAME = "tdchat-v2";
 const STATIC_ASSETS = [
-  "/",
-  "/index.html",
   "/offline.html",
   "/manifest.json",
   "/icon-192.png",
@@ -39,9 +37,15 @@ function isApiRequest(url) {
 function isStaticAsset(url) {
   return (
     url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot)$/) ||
-    url.pathname === "/" ||
-    url.pathname.endsWith(".html") ||
     url.pathname === "/manifest.json"
+  );
+}
+
+function isNavigationRequest(request, url) {
+  return (
+    request.mode === "navigate" ||
+    url.pathname === "/" ||
+    url.pathname.endsWith(".html")
   );
 }
 
@@ -54,6 +58,12 @@ self.addEventListener("fetch", (event) => {
 
   // WebSocket requests: pass through
   if (url.pathname.startsWith("/ws")) return;
+
+  // App shell must be network-first so users do not keep running stale bundles.
+  if (isNavigationRequest(event.request, url)) {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
 
   // API requests: network-first
   if (isApiRequest(url)) {

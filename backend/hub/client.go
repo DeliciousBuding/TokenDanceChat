@@ -111,8 +111,8 @@ func (c *Client) ReadPump() {
 			c.handleGroupMessage(msg)
 		case "group_join":
 			c.handleGroupJoin(msg)
-			case "dm_message":
-				c.handleDMMessage(msg)
+		case "dm_message":
+			c.handleDMMessage(msg)
 		case "message_delete":
 			c.handleMessageDelete(msg)
 		case "typing_start":
@@ -303,18 +303,14 @@ func (c *Client) handleChatMessage(msg Message) {
 		mem.Add(llm.Message{Role: "user", Content: content, Username: c.username})
 	}
 
-	// Check for @mentions and trigger bot response via PicoClaw (preferred) or legacy LLM.
-	if botName := c.hub.BotName(); botName != "" && c.username != botName {
-		mentions := parseMentions(content)
-		for _, m := range mentions {
-			if strings.EqualFold(m, botName) {
-				if pc := c.hub.PicoclawClient(); pc != nil {
-					go c.handleBotResponsePicoClaw(context.Background(), content)
-				} else if c.hub.LLMClient() != nil {
-					go c.handleBotResponse(context.Background(), content)
-				}
-				break
-			}
+	// Check for @mentions and route TokenBot and PicoClaw independently.
+	targets := assistantMentionTarget(content, c.hub.BotName(), c.hub.AgentName())
+	if targets.TokenBot && c.username != c.hub.BotName() && c.hub.LLMClient() != nil {
+		go c.handleBotResponse(context.Background(), content)
+	}
+	if targets.Agent && c.username != c.hub.AgentName() {
+		if pc := c.hub.PicoclawClient(); pc != nil {
+			go c.handleAgentResponsePicoClaw(context.Background(), content)
 		}
 	}
 }
@@ -474,6 +470,36 @@ func parseMentions(content string) []string {
 	return mentions
 }
 
+type assistantMentionTargets struct {
+	TokenBot bool
+	Agent    bool
+}
+
+func assistantMentionTarget(content, botName, agentName string) assistantMentionTargets {
+	targets := assistantMentionTargets{}
+	for _, mention := range parseMentions(content) {
+		if isAssistantAlias(mention, botName, "bot", "tokenbot") {
+			targets.TokenBot = true
+		}
+		if isAssistantAlias(mention, agentName, "claw", "picoclaw") {
+			targets.Agent = true
+		}
+	}
+	return targets
+}
+
+func isAssistantAlias(mention, canonical string, aliases ...string) bool {
+	if canonical != "" && strings.EqualFold(mention, canonical) {
+		return true
+	}
+	for _, alias := range aliases {
+		if strings.EqualFold(mention, alias) {
+			return true
+		}
+	}
+	return false
+}
+
 // --- Friend system handlers ---
 
 func (c *Client) handleFriendRequest(msg Message) {
@@ -502,9 +528,9 @@ func (c *Client) handleFriendRequest(msg Message) {
 
 	// Send friend_request to the target user.
 	reqMsg, _ := json.Marshal(Message{
-		Type:     "friend_request",
-		From:     c.username,
-		To:       to,
+		Type: "friend_request",
+		From: c.username,
+		To:   to,
 	})
 	c.hub.SendToUser(to, reqMsg)
 }
@@ -822,6 +848,7 @@ func (c *Client) handleMessageDelete(msg Message) {
 	})
 	c.hub.broadcast <- delMsg
 }
+
 // Rate limited to once per 3 seconds per user.
 func (c *Client) handleTypingStart() {
 	if c.username == "" {
@@ -1033,21 +1060,21 @@ func (c *Client) handleForward(msg Message) {
 
 	// Broadcast forwarded message.
 	fwdMsg, _ := json.Marshal(Message{
-		Type:     "message",
-		ID:       storedMsg.ID,
-		Username: c.username,
-		Content:  forwardContent,
+		Type:      "message",
+		ID:        storedMsg.ID,
+		Username:  c.username,
+		Content:   forwardContent,
 		Timestamp: storedMsg.Timestamp,
-		RoomID:   c.currentRoomID,
+		RoomID:    c.currentRoomID,
 	})
 	c.hub.broadcast <- fwdMsg
 
 	// Also send to target user if online.
 	forwardPayload, _ := json.Marshal(Message{
-		Type:    "forward",
-		From:    c.username,
-		Content: forwardContent,
-		ID:      storedMsg.ID,
+		Type:      "forward",
+		From:      c.username,
+		Content:   forwardContent,
+		ID:        storedMsg.ID,
 		Timestamp: storedMsg.Timestamp,
 	})
 	c.hub.SendToUser(to, forwardPayload)
@@ -1100,18 +1127,19 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	}
 }
 
-// handleBotResponsePicoClaw handles the bot response via PicoClaw gateway.
+// handleAgentResponsePicoClaw handles the PicoClaw agent response via gateway.
 // It sends the user content to PicoClaw and streams the response chunks.
-func (c *Client) handleBotResponsePicoClaw(ctx context.Context, userContent string) {
+func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent string) {
 	pc := c.hub.PicoclawClient()
 	if pc == nil {
 		return
 	}
+	agentName := c.hub.AgentName()
 
 	// Send typing indicator.
 	c.hub.BroadcastJSON(Message{
 		Type:     "typing",
-		Username: c.hub.BotName(),
+		Username: agentName,
 	})
 
 	// Channels to collect the response from PicoClaw callbacks.
@@ -1137,8 +1165,9 @@ func (c *Client) handleBotResponsePicoClaw(ctx context.Context, userContent stri
 	_, err := pc.SendMessage(userContent)
 	if err != nil {
 		log.Printf("PicoClaw send error: %v", err)
-		c.hub.BroadcastStreamChunk(c.hub.BotName(), "Sorry, I encountered an error.", true)
-		c.hub.SendBotMessage("Sorry, I encountered an error.", c.currentRoomID)
+		errorContent := "PicoClaw 当前未连接，无法执行 Agent 工作流。"
+		c.hub.BroadcastStreamChunk(agentName, errorContent, true)
+		c.hub.SendAssistantMessage(agentName, errorContent, c.currentRoomID)
 		close(done)
 		return
 	}
@@ -1150,6 +1179,7 @@ func (c *Client) handleBotResponsePicoClaw(ctx context.Context, userContent stri
 
 	// Collect streaming response.
 	var fullResponse strings.Builder
+	lastPicoContent := ""
 	timedOut := false
 	collectDone := make(chan struct{})
 
@@ -1164,12 +1194,22 @@ func (c *Client) handleBotResponsePicoClaw(ctx context.Context, userContent stri
 				}
 				if msg.IsPartial {
 					// Streaming update -- send as stream chunk to frontend.
-					fullResponse.WriteString(msg.Content)
-					c.hub.BroadcastStreamChunk(c.hub.BotName(), msg.Content, false)
+					var delta string
+					lastPicoContent, delta = picoStreamDelta(lastPicoContent, msg.Content)
+					fullResponse.Reset()
+					fullResponse.WriteString(lastPicoContent)
+					if delta != "" {
+						c.hub.BroadcastStreamChunk(agentName, delta, false)
+					}
 				} else {
 					// Complete message -- initial chunk from message.create.
-					fullResponse.WriteString(msg.Content)
-					c.hub.BroadcastStreamChunk(c.hub.BotName(), msg.Content, false)
+					var delta string
+					lastPicoContent, delta = picoStreamDelta(lastPicoContent, msg.Content)
+					fullResponse.Reset()
+					fullResponse.WriteString(lastPicoContent)
+					if delta != "" {
+						c.hub.BroadcastStreamChunk(agentName, delta, false)
+					}
 				}
 			case start := <-typing:
 				if !start {
@@ -1193,20 +1233,30 @@ func (c *Client) handleBotResponsePicoClaw(ctx context.Context, userContent stri
 
 	response := fullResponse.String()
 	if timedOut && response == "" {
-		response = "Sorry, I didn't get a response in time."
+		response = "PicoClaw 响应超时，请稍后重试。"
 	}
 
 	if response != "" {
 		// Signal stream done.
-		c.hub.BroadcastStreamChunk(c.hub.BotName(), "", true)
+		c.hub.BroadcastStreamChunk(agentName, "", true)
 		// Persist to store and broadcast.
-		c.hub.SendBotMessage(response, c.currentRoomID)
+		c.hub.SendAssistantMessage(agentName, response, c.currentRoomID)
 	}
 
 	// Update memory with bot response.
 	if mem := c.hub.Memory(); mem != nil {
-		mem.Add(llm.Message{Role: "assistant", Content: response, Username: c.hub.BotName()})
+		mem.Add(llm.Message{Role: "assistant", Content: response, Username: agentName})
 	}
+}
+
+func picoStreamDelta(previous, current string) (string, string) {
+	if current == "" {
+		return previous, ""
+	}
+	if strings.HasPrefix(current, previous) {
+		return current, strings.TrimPrefix(current, previous)
+	}
+	return current, current
 }
 
 // sanitizeContent trims whitespace, strips null bytes, and enforces max length.

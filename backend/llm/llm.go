@@ -87,7 +87,6 @@ func (c *Client) ChatStream(ctx context.Context, messages []Message, onChunk Str
 	}
 }
 
-
 // anthropicRequest is the request body for the Anthropic Messages API.
 type anthropicRequest struct {
 	Model     string             `json:"model"`
@@ -205,7 +204,8 @@ type openaiMessage struct {
 type openaiResponse struct {
 	Choices []struct {
 		Message struct {
-			Content string `json:"content"`
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"message"`
 	} `json:"choices"`
 	Error *struct {
@@ -284,14 +284,22 @@ func (c *Client) chatOpenAI(ctx context.Context, messages []Message) (string, er
 		return "Sorry, I received an empty response.", fmt.Errorf("openai: no choices in response")
 	}
 
-	return result.Choices[0].Message.Content, nil
+	content := result.Choices[0].Message.Content
+	if content == "" {
+		content = result.Choices[0].Message.ReasoningContent
+	}
+	if strings.TrimSpace(content) == "" {
+		return "Sorry, I received an empty response.", fmt.Errorf("openai: empty message content")
+	}
+	return content, nil
 }
 
 // openaiStreamChunk represents a single SSE chunk from OpenAI streaming API.
 type openaiStreamChunk struct {
 	Choices []struct {
 		Delta struct {
-			Content string `json:"content"`
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`

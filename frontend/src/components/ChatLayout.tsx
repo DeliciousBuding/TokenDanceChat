@@ -24,7 +24,7 @@ export function ChatLayout() {
     pendingFriendRequests,
     addSystemMessage,
   } = useChatStore();
-  const { disconnect, sendMessage, sendDMMessage, sendGroupMessage } =
+  const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, uploadImage } =
     useWebSocket();
 
   // Mobile keyboard handling
@@ -85,6 +85,14 @@ export function ChatLayout() {
     chatAPI.sendFriendRequest(targetUsername);
     setSidebarOpen(false);
   }, []);
+
+  const handleMentionAssistant = useCallback((name: string) => {
+    setCurrentChat({ type: "public" });
+    window.dispatchEvent(
+      new CustomEvent("tdchat:insert-mention", { detail: { name } }),
+    );
+    setSidebarOpen(false);
+  }, [setCurrentChat]);
 
   const handleCreateGroup = useCallback(
     (name: string, members: string[]) => {
@@ -180,6 +188,7 @@ export function ChatLayout() {
           onStartDM={handleStartDM}
           onAddFriend={handleAddFriend}
           onCreateGroup={() => setGroupModalOpen(true)}
+          onMentionAssistant={handleMentionAssistant}
           pendingFriendUsers={pendingUsers}
         />
       </div>
@@ -294,7 +303,7 @@ export function ChatLayout() {
           <MessageTranscript onReply={handleReply} onDelete={handleDelete} />
 
           {/* Chat input - fixed at bottom */}
-          <ChatInput onSend={sendHandler} disabled={false} />
+          <ChatInput onSend={sendHandler} onUpload={uploadImage} disabled={false} />
         </div>
       </div>
 

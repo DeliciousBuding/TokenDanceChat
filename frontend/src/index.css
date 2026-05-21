@@ -190,6 +190,38 @@
   animation: blurIn 0.5s ease-out;
 }
 
+@utility h-screen-mobile {
+  height: 100vh;
+  height: 100dvh;
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@utility fab {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 40;
+  display: inline-flex;
+  height: 3rem;
+  width: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  box-shadow: 0 12px 30px hsl(0deg 0% 0% / 0.3);
+}
+
 /* Gradient overlay above input */
 .gradient-overlay-top {
   background: linear-gradient(to top, hsl(223, 4%, 13%), transparent);
@@ -277,15 +309,8 @@
   background: hsl(220, 2.5%, 16%);
 }
 
-/*
- * Use content-visibility: auto on message groups so the browser
- * can skip rendering work for off-screen messages entirely.
- * This is a lightweight precursor to full virtual scrolling with
- * @legendapp/list or react-virtuoso.
- */
 .message-group {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 80px;
+  display: block;
 }
 
 /* ---------- Responsive fixes ---------- */

@@ -333,7 +333,12 @@ export const MessageBubble = memo(function MessageBubble({
         <div className="w-8 flex-shrink-0" aria-hidden="true" />
       )}
 
-      <div className={cn("max-w-[75%]", isOwn ? "items-end" : "items-start")}>
+      <div
+        className={cn(
+          "flex min-w-0 max-w-[min(75%,42rem)] flex-col",
+          isOwn ? "items-end" : "items-start",
+        )}
+      >
         {!hideUsername && (
           <div
             className={cn(
@@ -450,7 +455,14 @@ export const MessageBubble = memo(function MessageBubble({
 
         {/* Reaction bar */}
         {!isDeleted && (
-          <div className="flex flex-wrap items-center gap-1 mt-0.5">
+          <div
+            className={cn(
+              "flex flex-wrap items-center gap-1 mt-0.5 transition-opacity",
+              !message.reactions || Object.values(message.reactions).every((users) => users.length === 0)
+                ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100"
+                : "opacity-100",
+            )}
+          >
             {message.reactions &&
               Object.entries(message.reactions).map(
                 ([emoji, users]) =>

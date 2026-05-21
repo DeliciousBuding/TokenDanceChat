@@ -1,9 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -392,5 +396,120 @@ func TestWebSocketFullFlow(t *testing.T) {
 	users := h.hub.OnlineUsers()
 	if len(users) != 0 {
 		t.Errorf("expected 0 online users after disconnect, got %d: %v", len(users), users)
+	}
+}
+
+func TestUploadImageStoresViaMediaStore(t *testing.T) {
+	var storedPath string
+	var storedContentType string
+	var storedBody []byte
+
+	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			storedPath = r.URL.Path
+			storedContentType = r.Header.Get("Content-Type")
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("failed to read PUT body: %v", err)
+			}
+			storedBody = body
+			w.WriteHeader(http.StatusCreated)
+		default:
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+	}))
+	defer webdav.Close()
+
+	h := newTestHandler()
+	h.mediaStore = NewWebDAVMediaStore(webdav.URL, "", "")
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "photo.png")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	if _, err := part.Write([]byte("png-bytes")); err != nil {
+		t.Fatalf("failed to write test upload: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	h.UploadImage(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if path.Dir(storedPath) != "/uploads" {
+		t.Fatalf("expected WebDAV upload under /uploads, got %s", storedPath)
+	}
+	if !strings.HasSuffix(storedPath, ".png") {
+		t.Fatalf("expected generated .png filename, got %s", storedPath)
+	}
+	if storedContentType != "image/png" {
+		t.Fatalf("expected image/png content type, got %s", storedContentType)
+	}
+	if string(storedBody) != "png-bytes" {
+		t.Fatalf("expected uploaded bytes to be stored, got %q", string(storedBody))
+	}
+
+	var payload map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode upload response: %v", err)
+	}
+	if !strings.HasPrefix(payload["url"], "/uploads/") {
+		t.Fatalf("expected same-origin upload URL, got %q", payload["url"])
+	}
+	if payload["filename"] == "" {
+		t.Fatal("expected generated filename in response")
+	}
+}
+
+func TestServeUploadReadsViaMediaStore(t *testing.T) {
+	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+		if r.URL.Path != "/uploads/sample.webp" {
+			t.Fatalf("expected /uploads/sample.webp, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "image/webp")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("webp-bytes"))
+	}))
+	defer webdav.Close()
+
+	h := newTestHandler()
+	h.mediaStore = NewWebDAVMediaStore(webdav.URL, "", "")
+
+	req := httptest.NewRequest(http.MethodGet, "/uploads/sample.webp", nil)
+	w := httptest.NewRecorder()
+
+	h.ServeUpload(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "image/webp" {
+		t.Fatalf("expected image/webp content type, got %s", ct)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+	if string(body) != "webp-bytes" {
+		t.Fatalf("expected media bytes, got %q", string(body))
 	}
 }
