@@ -225,9 +225,6 @@ func (m *Message) normalizePayload() {
 			m.Thought = thought
 		}
 	}
-	if m.IsThought {
-		return
-	}
 	if kind, ok := m.Payload["kind"].(string); ok && kind == "thought" {
 		m.IsThought = true
 	}

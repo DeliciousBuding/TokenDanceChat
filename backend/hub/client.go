@@ -780,7 +780,7 @@ func (c *Client) handleGroupMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID, "", groupName)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", "", "", groupName)
 	if err != nil {
 		log.Printf("failed to insert group message: %v", err)
 		return
