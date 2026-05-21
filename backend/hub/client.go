@@ -1098,7 +1098,7 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	var fullResponse strings.Builder
 	err := client.ChatStream(ctx, systemPrompt, messages, func(chunk string) error {
 		fullResponse.WriteString(chunk)
-		c.hub.BroadcastStreamChunk(c.hub.BotName(), chunk, false)
+		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), chunk, false, c.currentRoomID)
 		return nil
 	})
 
@@ -1108,16 +1108,16 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 		fullResponse.Reset()
 		fullResponse.WriteString(errorContent)
 		// Send the error as a final stream chunk.
-		c.hub.BroadcastStreamChunk(c.hub.BotName(), errorContent, true)
+		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), errorContent, true, c.currentRoomID)
 	}
 
 	response := fullResponse.String()
 	if response != "" {
 		// Broadcast the final done signal for the stream.
-		c.hub.BroadcastStreamChunk(c.hub.BotName(), "", true)
+		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), "", true, c.currentRoomID)
 
 		// Persist the complete message to the store and broadcast as a normal message.
-		c.hub.SendBotMessage(response, c.currentRoomID)
+		c.hub.SendBotMessageToRoom(response, c.currentRoomID)
 	}
 
 	// Update memory with the bot response.
@@ -1165,8 +1165,8 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 	if err != nil {
 		log.Printf("PicoClaw send error: %v", err)
 		errorContent := "PicoClaw 当前未连接，无法执行 Agent 工作流。"
-		c.hub.BroadcastStreamChunk(agentName, errorContent, true)
-		c.hub.SendAssistantMessage(agentName, errorContent, c.currentRoomID)
+		c.hub.BroadcastStreamChunkToRoom(agentName, errorContent, true, c.currentRoomID)
+		c.hub.SendAssistantMessageToRoom(agentName, errorContent, c.currentRoomID)
 		close(done)
 		return
 	}
@@ -1198,7 +1198,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 					fullResponse.Reset()
 					fullResponse.WriteString(lastPicoContent)
 					if delta != "" {
-						c.hub.BroadcastStreamChunk(agentName, delta, false)
+						c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, c.currentRoomID)
 					}
 				} else {
 					// Complete message -- initial chunk from message.create.
@@ -1207,7 +1207,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 					fullResponse.Reset()
 					fullResponse.WriteString(lastPicoContent)
 					if delta != "" {
-						c.hub.BroadcastStreamChunk(agentName, delta, false)
+						c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, c.currentRoomID)
 					}
 				}
 			case start := <-typing:
@@ -1237,9 +1237,9 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 
 	if response != "" {
 		// Signal stream done.
-		c.hub.BroadcastStreamChunk(agentName, "", true)
+		c.hub.BroadcastStreamChunkToRoom(agentName, "", true, c.currentRoomID)
 		// Persist to store and broadcast.
-		c.hub.SendAssistantMessage(agentName, response, c.currentRoomID)
+		c.hub.SendAssistantMessageToRoom(agentName, response, c.currentRoomID)
 	}
 
 	// Update memory with bot response.
