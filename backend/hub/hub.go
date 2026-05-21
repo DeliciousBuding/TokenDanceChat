@@ -1003,11 +1003,12 @@ func (h *Hub) InRoom(roomID, username string) bool {
 // Shutdown gracefully stops the hub and closes all client connections.
 func (h *Hub) Shutdown() {
 	h.mu.Lock()
+	count := len(h.clients)
 	for c := range h.clients {
 		close(c.send)
 		c.conn.Close()
 	}
 	h.clients = make(map[*Client]bool)
 	h.mu.Unlock()
-	log.Printf("hub: shutdown complete, %d clients disconnected", len(h.clients))
+	log.Printf("hub: shutdown complete, %d clients disconnected", count)
 }

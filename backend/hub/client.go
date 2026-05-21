@@ -1164,6 +1164,7 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	c.hub.BroadcastJSON(Message{
 		Type:     "typing",
 		Username: c.hub.BotName(),
+		Context:  "public",
 	})
 
 	// Build conversation history from memory.
@@ -1222,6 +1223,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 	c.hub.BroadcastJSON(Message{
 		Type:     "typing",
 		Username: agentName,
+		Context:  "public",
 	})
 
 	// Channels to collect the response from PicoClaw callbacks.
