@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tokendancechat/backend/hub"
+	"tokendancechat/backend/store"
 
 	"github.com/gorilla/websocket"
 )
@@ -80,6 +81,10 @@ func (m *mockStore) UpdateMessage(messageID, content string) (hub.StoredMessage,
 }
 func (m *mockStore) GetMessageByID(messageID string) (hub.StoredMessage, error) {
 	return hub.StoredMessage{}, nil
+}
+
+func (m *mockStore) SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error) {
+	return nil, nil
 }
 
 func newTestHandler() *Handler {

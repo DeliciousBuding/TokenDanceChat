@@ -34,14 +34,30 @@ type Message struct {
 type Callback func(msg Message)
 type TypingCallback func(start bool)
 
+// ResponseHandler is returned by SendMessage. The caller sets callbacks
+// and calls Wait() to block until the response is complete.
+type ResponseHandler struct {
+	OnMessage Callback
+	OnTyping  TypingCallback
+	done      chan struct{}
+}
+
+func (h *ResponseHandler) Wait() { <-h.done }
+func (h *ResponseHandler) done_() {
+	select {
+	case <-h.done:
+	default:
+		close(h.done)
+	}
+}
+
 type Client struct {
-	cfg       Config
-	conn      *websocket.Conn
-	mu        sync.Mutex
-	onMessage Callback
-	onTyping  TypingCallback
-	ctx       context.Context
-	cancel    context.CancelFunc
+	cfg     Config
+	conn    *websocket.Conn
+	mu      sync.Mutex
+	pending *ResponseHandler
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 func New(cfg Config) *Client {
@@ -76,9 +92,13 @@ func (c *Client) connectLocked(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) SendMessage(content string) (string, error) {
+// SendMessage sends content to PicoClaw and returns a ResponseHandler.
+// The caller must set OnMessage/OnTyping callbacks on the handler, then
+// call handler.Wait() to block until the response completes.
+func (c *Client) SendMessage(content string) (*ResponseHandler, error) {
 	id := fmt.Sprintf("tdchat-%d", time.Now().UnixNano())
-	return id, c.send(Message{
+	handler := &ResponseHandler{done: make(chan struct{})}
+	return handler, c.send(handler, Message{
 		Type:      "message.send",
 		ID:        id,
 		Timestamp: time.Now().UnixMilli(),
@@ -87,9 +107,6 @@ func (c *Client) SendMessage(content string) (string, error) {
 		},
 	})
 }
-
-func (c *Client) OnMessage(cb Callback)      { c.onMessage = cb }
-func (c *Client) OnTyping(cb TypingCallback) { c.onTyping = cb }
 
 func (c *Client) Close() {
 	if c.cancel != nil {
@@ -100,7 +117,15 @@ func (c *Client) Close() {
 	}
 }
 
-func (c *Client) send(msg Message) error {
+func (c *Client) send(handler *ResponseHandler, msg Message) error {
+	c.mu.Lock()
+	// Replace any stale pending handler (previous timed-out request).
+	if c.pending != nil {
+		c.pending.done_()
+	}
+	c.pending = handler
+	c.mu.Unlock()
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.conn == nil {
@@ -108,6 +133,7 @@ func (c *Client) send(msg Message) error {
 			c.ctx = context.Background()
 		}
 		if err := c.connectLocked(c.ctx); err != nil {
+			c.pending = nil
 			return err
 		}
 	}
@@ -116,10 +142,14 @@ func (c *Client) send(msg Message) error {
 		_ = c.conn.Close()
 		c.conn = nil
 		if err := c.connectLocked(c.ctx); err != nil {
+			c.pending = nil
 			return err
 		}
 		c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		return c.conn.WriteJSON(msg)
+		if err := c.conn.WriteJSON(msg); err != nil {
+			c.pending = nil
+			return err
+		}
 	}
 	return nil
 }
@@ -150,28 +180,32 @@ func (c *Client) readLoop(conn *websocket.Conn) {
 		}
 		msg.normalizePayload()
 
+		c.mu.Lock()
+		handler := c.pending
+		c.mu.Unlock()
+
 		switch msg.Type {
 		case "message.create":
-			if c.onMessage != nil {
-				c.onMessage(msg)
+			if handler != nil && handler.OnMessage != nil {
+				handler.OnMessage(msg)
 			}
 		case "message.update":
 			msg.IsPartial = true
-			if c.onMessage != nil {
-				c.onMessage(msg)
+			if handler != nil && handler.OnMessage != nil {
+				handler.OnMessage(msg)
 			}
 		case "typing.start":
-			if c.onTyping != nil {
-				c.onTyping(true)
+			if handler != nil && handler.OnTyping != nil {
+				handler.OnTyping(true)
 			}
 		case "typing.stop":
-			if c.onTyping != nil {
-				c.onTyping(false)
+			if handler != nil && handler.OnTyping != nil {
+				handler.OnTyping(false)
 			}
 		case "thought":
 			msg.IsThought = true
-			if c.onMessage != nil {
-				c.onMessage(msg)
+			if handler != nil && handler.OnMessage != nil {
+				handler.OnMessage(msg)
 			}
 		}
 	}

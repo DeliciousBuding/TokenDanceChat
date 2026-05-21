@@ -188,6 +188,41 @@ func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Search handles GET /api/search?q=...&room=...&limit=...
+func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		writeJSONError(w, http.StatusBadRequest, "q parameter is required", "MISSING_QUERY", requestID)
+		return
+	}
+
+	roomID := r.URL.Query().Get("room")
+	limit := 20
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+
+	results, err := h.store.SearchMessages(q, roomID, limit)
+	if err != nil {
+		log.Printf("search error: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode([]interface{}{})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
 // requestIDFromContext retrieves the request ID from the context, or returns "".
 func requestIDFromContext(ctx context.Context) string {
 	id, _ := ctx.Value(requestIDKey).(string)

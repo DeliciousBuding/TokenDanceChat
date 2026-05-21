@@ -1141,7 +1141,6 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 }
 
 // handleAgentResponsePicoClaw handles the PicoClaw agent response via gateway.
-// It sends the user content to PicoClaw and streams the response chunks.
 func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent string) {
 	pc := c.hub.PicoclawClient()
 	if pc == nil {
@@ -1160,29 +1159,27 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 	typing := make(chan bool, 4)
 	done := make(chan struct{})
 
-	// Set temporary handlers for this request.
-	pc.OnMessage(func(msg picoclaw.Message) {
-		select {
-		case chunks <- msg:
-		case <-done:
-		}
-	})
-	pc.OnTyping(func(start bool) {
-		select {
-		case typing <- start:
-		case <-done:
-		}
-	})
-
-	// Send the user message to PicoClaw.
-	_, err := pc.SendMessage(userContent)
+	// Send the user message to PicoClaw with per-request handler.
+	handler, err := pc.SendMessage(userContent)
 	if err != nil {
 		log.Printf("PicoClaw send error: %v", err)
 		errorContent := "PicoClaw 当前未连接，无法执行 Agent 工作流。"
 		c.hub.BroadcastStreamChunkToRoom(agentName, errorContent, true, c.currentRoomID)
 		c.hub.SendAssistantMessageToRoom(agentName, errorContent, c.currentRoomID)
-		close(done)
 		return
+	}
+
+	handler.OnMessage = func(msg picoclaw.Message) {
+		select {
+		case chunks <- msg:
+		case <-done:
+		}
+	}
+	handler.OnTyping = func(start bool) {
+		select {
+		case typing <- start:
+		case <-done:
+		}
 	}
 
 	// Store user message in memory.
