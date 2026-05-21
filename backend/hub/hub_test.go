@@ -13,7 +13,7 @@ type mockStore struct {
 	rooms    []StoredRoom
 }
 
-func (m *mockStore) InsertMessage(username, content, replyToID, roomID string) (StoredMessage, error) {
+func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName string) (StoredMessage, error) {
 	msg := StoredMessage{
 		ID:        "mock-id-" + username,
 		Username:  username,

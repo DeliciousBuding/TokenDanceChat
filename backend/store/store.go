@@ -21,6 +21,8 @@ type StoredMessage struct {
 	RoomID    string              `json:"room_id,omitempty"`
 	Deleted   bool                `json:"deleted"`
 	Edited    bool                `json:"edited"`
+	ToUser    string              `json:"to,omitempty"`
+	GroupName string              `json:"group,omitempty"`
 	Reactions map[string][]string `json:"reactions,omitempty"`
 }
 
@@ -100,6 +102,8 @@ func (s *Store) migrate() error {
 	s.db.Exec("ALTER TABLE messages ADD COLUMN reply_to_id TEXT DEFAULT ''")
 	s.db.Exec("ALTER TABLE messages ADD COLUMN room_id TEXT DEFAULT ''")
 	s.db.Exec("ALTER TABLE messages ADD COLUMN edited INTEGER NOT NULL DEFAULT 0")
+	s.db.Exec("ALTER TABLE messages ADD COLUMN to_user TEXT DEFAULT ''")
+	s.db.Exec("ALTER TABLE messages ADD COLUMN group_name TEXT DEFAULT ''")
 
 	// Seed default room if not present.
 	s.ensureDefaultRoom()
@@ -120,7 +124,7 @@ func (s *Store) ensureDefaultRoom() {
 	}
 }
 
-func (s *Store) InsertMessage(username, content, replyToID, roomID string) (StoredMessage, error) {
+func (s *Store) InsertMessage(username, content, replyToID, roomID, toUser, groupName string) (StoredMessage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -128,8 +132,8 @@ func (s *Store) InsertMessage(username, content, replyToID, roomID string) (Stor
 	ts := time.Now().UnixMilli()
 
 	_, err := s.db.Exec(
-		"INSERT INTO messages (id, username, content, timestamp, reply_to_id, room_id) VALUES (?, ?, ?, ?, ?, ?)",
-		id, username, content, ts, replyToID, roomID,
+		"INSERT INTO messages (id, username, content, timestamp, reply_to_id, room_id, to_user, group_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		id, username, content, ts, replyToID, roomID, toUser, groupName,
 	)
 	if err != nil {
 		return StoredMessage{}, err
@@ -165,24 +169,24 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 	if before > 0 {
 		if roomID != "" {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages WHERE room_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE room_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
 				roomID, before, limit,
 			)
 		} else {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages WHERE timestamp < ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE timestamp < ? ORDER BY timestamp DESC LIMIT ?",
 				before, limit,
 			)
 		}
 	} else {
 		if roomID != "" {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages WHERE room_id = ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE room_id = ? ORDER BY timestamp DESC LIMIT ?",
 				roomID, limit,
 			)
 		} else {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages ORDER BY timestamp DESC LIMIT ?",
 				limit,
 			)
 		}
@@ -197,7 +201,7 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 	messages := make([]StoredMessage, 0, limit)
 	for rows.Next() {
 		var m StoredMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName); err != nil {
 			log.Printf("store: scan error: %v", err)
 			continue
 		}

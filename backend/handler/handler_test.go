@@ -24,7 +24,7 @@ type mockStore struct {
 	rooms    []hub.StoredRoom
 }
 
-func (m *mockStore) InsertMessage(username, content, replyToID, roomID string) (hub.StoredMessage, error) {
+func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName string) (hub.StoredMessage, error) {
 	msg := hub.StoredMessage{
 		ID:        "mock-id-" + username,
 		Username:  username,
@@ -159,7 +159,7 @@ func TestGetMessagesAfterInsert(t *testing.T) {
 	h := newTestHandler()
 
 	// Insert a message via the store.
-	h.store.InsertMessage("alice", "hello", "", "")
+	h.store.InsertMessage("alice", "hello", "", "", "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/messages", nil)
 	w := httptest.NewRecorder()

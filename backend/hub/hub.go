@@ -26,7 +26,7 @@ type StoredRoom = store.StoredRoom
 
 // Store defines the interface for message persistence.
 type Store interface {
-	InsertMessage(username, content, replyToID, roomID string) (StoredMessage, error)
+	InsertMessage(username, content, replyToID, roomID, toUser, groupName string) (StoredMessage, error)
 	GetMessages(limit int, before int64) []StoredMessage
 	TotalMessages() int64
 	MarkDeleted(messageID string) error
@@ -574,7 +574,7 @@ func (h *Hub) SendAssistantMessage(username, content, roomID string) {
 	if username == "" {
 		username = h.botName
 	}
-	storedMsg, err := h.store.InsertMessage(username, content, "", roomID)
+	storedMsg, err := h.store.InsertMessage(username, content, "", roomID, "", "")
 	if err != nil {
 		log.Printf("failed to insert assistant message: %v", err)
 		return
@@ -601,7 +601,7 @@ func (h *Hub) SendAssistantMessageToRoom(username, content, roomID string) {
 	if username == "" {
 		username = h.botName
 	}
-	storedMsg, err := h.store.InsertMessage(username, content, "", roomID)
+	storedMsg, err := h.store.InsertMessage(username, content, "", roomID, "", "")
 	if err != nil {
 		log.Printf("failed to insert assistant message: %v", err)
 		return

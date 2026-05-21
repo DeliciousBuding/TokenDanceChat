@@ -17,6 +17,7 @@ export interface ChatMessage {
   deleted?: boolean;
   to?: string;
   from?: string;
+  group?: string;
 }
 
 export interface WSChatMessage extends WSMessage {
