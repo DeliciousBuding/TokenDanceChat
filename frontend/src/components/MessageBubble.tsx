@@ -2,21 +2,20 @@ import { memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn, formatTime } from "@/lib/utils";
+import { useTouchGestures } from "@/hooks/useTouchGestures";
 import type { ChatMessage } from "@/lib/api";
 
 interface MessageBubbleProps {
   message: ChatMessage;
   isOwn: boolean;
-  /** Current user's username, used for self-mention highlighting. */
   currentUsername?: string;
-  /** Hide avatar (for grouped messages after the first) */
   hideAvatar?: boolean;
-  /** Hide username header (for grouped messages after the first) */
   hideUsername?: boolean;
-  /** Show timestamp on the bubble (only for last in group or solo) */
   forceShowTimestamp?: boolean;
-  /** Whether this message is part of a group (adjusts spacing) */
   isGrouped?: boolean;
+  onSwipeLeft?: () => void;
+  onSwipeRight?: () => void;
+  onLongPress?: () => void;
 }
 
 function hashString(str: string): number {
@@ -46,12 +45,21 @@ export const MessageBubble = memo(function MessageBubble({
   hideUsername = false,
   forceShowTimestamp = false,
   isGrouped = false,
+  onSwipeLeft,
+  onSwipeRight,
+  onLongPress,
 }: MessageBubbleProps) {
   const gradient = useMemo(() => avatarGradient(message.username), [message.username]);
   const hue = useMemo(() => usernameHue(message.username), [message.username]);
   const nameColor = `oklch(72% 0.16 ${hue})`;
   const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
   const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
+
+  const touchHandlers = useTouchGestures({
+    onSwipeLeft,
+    onSwipeRight,
+    onLongPress,
+  });
 
   // Parse @mentions and render with highlighting.
   const mentionContent = useMemo(() => {
@@ -73,7 +81,6 @@ export const MessageBubble = memo(function MessageBubble({
     }
 
     if (parts.length === 0) {
-      // No mentions, render normally with ReactMarkdown.
       return (
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
           {content}
@@ -107,25 +114,23 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             );
           }
-          // For text parts, render with ReactMarkdown (inline).
           return <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>{part.value}</ReactMarkdown>;
         })}
       </>
     );
   }, [message.content, currentUsername]);
 
-  // In a group, non-first messages get tighter top padding
   const paddingY = isGrouped && hideAvatar ? "py-0.5" : "py-1.5";
 
   return (
     <div
       className={cn(
-        "group flex gap-3 px-4 animate-slide-up",
+        "group flex gap-3 px-4 animate-slide-up select-none",
         isOwn ? "justify-end" : "justify-start",
         paddingY,
       )}
+      {...touchHandlers}
     >
-      {/* Avatar for others */}
       {!isOwn && !hideAvatar && (
         <div className="mt-0.5 flex-shrink-0">
           <div
@@ -138,11 +143,9 @@ export const MessageBubble = memo(function MessageBubble({
         </div>
       )}
 
-      {/* Spacer (replaces hidden avatar to keep alignment) */}
       {!isOwn && hideAvatar && <div className="w-8 flex-shrink-0" aria-hidden="true" />}
 
       <div className={cn("max-w-[75%]", isOwn ? "items-end" : "items-start")}>
-        {/* Username + timestamp header */}
         {!hideUsername && (
           <div
             className={cn(
@@ -158,7 +161,6 @@ export const MessageBubble = memo(function MessageBubble({
                 {message.username}
               </span>
             )}
-            {/* Timestamp in header: only for solo messages (not first in group) */}
             {isOwn && !isGrouped && (
               <span className="text-xs text-muted-foreground/60">
                 {formatTime(message.timestamp)}
@@ -172,7 +174,6 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
-        {/* Message content bubble */}
         <div
           className={cn(
             "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
@@ -196,7 +197,6 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         </div>
 
-        {/* Timestamp shown below bubble for own messages (hover) or last in group */}
         {isOwn && (
           <div className="mt-1 flex justify-end">
             <span
@@ -212,7 +212,6 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
-        {/* Timestamp for others: show below bubble when forced (last in group) */}
         {!isOwn && forceShowTimestamp && (
           <div className="mt-1 flex justify-start">
             <span className="text-[10px] text-muted-foreground/50">
@@ -222,7 +221,6 @@ export const MessageBubble = memo(function MessageBubble({
         )}
       </div>
 
-      {/* Avatar for own messages */}
       {isOwn && !hideAvatar && (
         <div className="mt-0.5 flex-shrink-0">
           <div

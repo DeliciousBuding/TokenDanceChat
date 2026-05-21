@@ -3,7 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+
 	"log"
 	"regexp"
 	"strings"
@@ -108,8 +108,6 @@ func (c *Client) ReadPump() {
 			c.handleTypingStart()
 		case "typing_stop":
 			c.handleTypingStop()
-		case "mark_read":
-			c.handleMarkRead()
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}

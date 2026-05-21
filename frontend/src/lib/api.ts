@@ -50,6 +50,10 @@ export interface WSSendMessage {
   content: string;
 }
 
+export interface WSMarkRead {
+  type: "mark_read";
+}
+
 export type WSEventHandler = (msg: WSMessage) => void;
 
 export const ErrorCode = {
@@ -179,7 +183,7 @@ class ChatAPI {
     }, delay);
   }
 
-  send(data: WSJoinRequest | WSSendMessage): void {
+  send(data: WSJoinRequest | WSSendMessage | WSMarkRead): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
     } else {
@@ -189,6 +193,10 @@ class ChatAPI {
 
   sendMessage(content: string): void {
     this.send({ type: "message", content });
+  }
+
+  sendMarkRead(): void {
+    this.send({ type: "mark_read" });
   }
 
   on(event: string, handler: WSEventHandler): () => void {
