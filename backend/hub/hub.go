@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	"tokendancechat/backend/llm"
 )
 
 // MaxConnections is the hard limit on concurrent WebSocket connections.
@@ -60,11 +62,27 @@ type Hub struct {
 	// StartTime is the time the hub was created.
 	StartTime time.Time
 
+	// LLM bot support.
+	llmClient *llm.Client
+	memory    *llm.Memory
+	botName   string
+
 	mu sync.RWMutex
 }
 
-// New creates a new Hub with the given store.
-func New(store Store) *Hub {
+// New creates a new Hub with the given store. llmCfg and botName are optional;
+// pass nil for llmCfg to disable LLM bot support.
+func New(store Store, llmCfg *llm.Config, botName string) *Hub {
+	var client *llm.Client
+	var mem *llm.Memory
+	if llmCfg != nil {
+		client = llm.New(*llmCfg)
+		memSize := llmCfg.MemorySize
+		if memSize <= 0 {
+			memSize = 20
+		}
+		mem = llm.NewMemory(memSize)
+	}
 	return &Hub{
 		clients:    make(map[*Client]bool),
 		broadcast:  make(chan []byte, 256),
@@ -72,6 +90,9 @@ func New(store Store) *Hub {
 		unregister: make(chan *Client),
 		store:      store,
 		StartTime:  time.Now(),
+		llmClient:  client,
+		memory:     mem,
+		botName:    botName,
 	}
 }
 
@@ -204,6 +225,59 @@ func (h *Hub) IsFull() bool {
 // Uptime returns the duration since the hub was created.
 func (h *Hub) Uptime() time.Duration {
 	return time.Since(h.StartTime)
+}
+
+// BotName returns the configured bot username, or empty string if no bot is configured.
+func (h *Hub) BotName() string {
+	return h.botName
+}
+
+// LLMClient returns the LLM client, or nil if not configured.
+func (h *Hub) LLMClient() *llm.Client {
+	return h.llmClient
+}
+
+// Memory returns the LLM context memory, or nil if not configured.
+func (h *Hub) Memory() *llm.Memory {
+	return h.memory
+}
+
+// BroadcastJSON marshals a Message and sends it to the broadcast channel.
+// This is used for system messages like typing indicators that don't need store persistence.
+func (h *Hub) BroadcastJSON(msg Message) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("marshal broadcast error: %v", err)
+		return
+	}
+	select {
+	case h.broadcast <- data:
+	default:
+		log.Printf("broadcast channel full, dropping message")
+	}
+}
+
+// SendBotMessage persists a bot message to the store and broadcasts it.
+func (h *Hub) SendBotMessage(content string) {
+	storedMsg, err := h.store.InsertMessage(h.botName, content)
+	if err != nil {
+		log.Printf("failed to insert bot message: %v", err)
+		return
+	}
+
+	broadcastMsg, _ := json.Marshal(Message{
+		Type:      "message",
+		ID:        storedMsg.ID,
+		Username:  storedMsg.Username,
+		Content:   storedMsg.Content,
+		Timestamp: storedMsg.Timestamp,
+	})
+
+	select {
+	case h.broadcast <- broadcastMsg:
+	default:
+		log.Printf("broadcast channel full, dropping bot message")
+	}
 }
 
 // usernameRegex validates: 1-20 chars, alphanumeric, underscore, or Chinese chars.

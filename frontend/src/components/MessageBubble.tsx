@@ -7,6 +7,8 @@ import type { ChatMessage } from "@/lib/api";
 interface MessageBubbleProps {
   message: ChatMessage;
   isOwn: boolean;
+  /** Current user's username, used for self-mention highlighting. */
+  currentUsername?: string;
   /** Hide avatar (for grouped messages after the first) */
   hideAvatar?: boolean;
   /** Hide username header (for grouped messages after the first) */
@@ -39,6 +41,7 @@ function usernameHue(username: string): number {
 export const MessageBubble = memo(function MessageBubble({
   message,
   isOwn,
+  currentUsername,
   hideAvatar = false,
   hideUsername = false,
   forceShowTimestamp = false,
@@ -49,6 +52,67 @@ export const MessageBubble = memo(function MessageBubble({
   const nameColor = `oklch(72% 0.16 ${hue})`;
   const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
   const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
+
+  // Parse @mentions and render with highlighting.
+  const mentionContent = useMemo(() => {
+    const content = message.content;
+    const mentionRegex = /@(\w+)/g;
+    const parts: ({ type: "text"; value: string } | { type: "mention"; username: string })[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = mentionRegex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ type: "text", value: content.slice(lastIndex, match.index) });
+      }
+      parts.push({ type: "mention", username: match[1] });
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < content.length) {
+      parts.push({ type: "text", value: content.slice(lastIndex) });
+    }
+
+    if (parts.length === 0) {
+      // No mentions, render normally with ReactMarkdown.
+      return (
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {content}
+        </ReactMarkdown>
+      );
+    }
+
+    return (
+      <>
+        {parts.map((part, i) => {
+          if (part.type === "mention") {
+            const isSelfMention = currentUsername === part.username;
+            return (
+              <span
+                key={i}
+                className={isSelfMention ? "mention-self" : "mention-other"}
+                style={{
+                  color: "oklch(71.2% 0.194 13.428)",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  ...(isSelfMention
+                    ? {
+                        backgroundColor: "oklch(71.2% 0.194 13.428 / 0.12)",
+                        borderRadius: "3px",
+                        padding: "0 2px",
+                      }
+                    : {}),
+                }}
+              >
+                @{part.username}
+              </span>
+            );
+          }
+          // For text parts, render with ReactMarkdown (inline).
+          return <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>{part.value}</ReactMarkdown>;
+        })}
+      </>
+    );
+  }, [message.content, currentUsername]);
 
   // In a group, non-first messages get tighter top padding
   const paddingY = isGrouped && hideAvatar ? "py-0.5" : "py-1.5";
@@ -128,9 +192,7 @@ export const MessageBubble = memo(function MessageBubble({
           }
         >
           <div className="markdown-body text-foreground/90">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content}
-            </ReactMarkdown>
+            {mentionContent}
           </div>
         </div>
 

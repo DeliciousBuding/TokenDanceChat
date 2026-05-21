@@ -43,6 +43,7 @@ export interface TranslationDict {
     userJoined: string;
     userLeft: string;
     connectionLost: string;
+    typing: string;
   };
   error: {
     timeout: string;
@@ -99,6 +100,7 @@ const zhCN: TranslationDict = {
     userJoined: "{{username}} 加入了聊天室",
     userLeft: "{{username}} 离开了聊天室",
     connectionLost: "连接已断开，正在尝试重新连接...",
+    typing: "{{username}} 正在输入...",
   },
   error: {
     timeout: "连接超时，请检查服务器是否运行",
@@ -156,6 +158,7 @@ const enUS: TranslationDict = {
     userJoined: "{{username}} joined the chat",
     userLeft: "{{username}} left the chat",
     connectionLost: "Connection lost, attempting to reconnect...",
+    typing: "{{username}} is typing...",
   },
   error: {
     timeout: "Connection timed out. Please check if the server is running",

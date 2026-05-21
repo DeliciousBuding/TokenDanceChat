@@ -1,11 +1,15 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"log"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"tokendancechat/backend/llm"
 
 	"github.com/gorilla/websocket"
 )
@@ -200,6 +204,22 @@ func (c *Client) handleChatMessage(msg Message) {
 		Timestamp: storedMsg.Timestamp,
 	})
 	c.hub.broadcast <- broadcastMsg
+
+	// Store the user message in LLM memory.
+	if mem := c.hub.Memory(); mem != nil {
+		mem.Add(llm.Message{Role: "user", Content: content})
+	}
+
+	// Check for @mentions and trigger bot response.
+	if botName := c.hub.BotName(); botName != "" && c.hub.LLMClient() != nil && c.username != botName {
+		mentions := parseMentions(content)
+		for _, m := range mentions {
+			if strings.EqualFold(m, botName) {
+				go c.handleBotResponse(context.Background(), content)
+				break
+			}
+		}
+	}
 }
 
 // checkRateLimit returns true if the message is allowed (within rate limit).
@@ -261,6 +281,54 @@ func (c *Client) WritePump() {
 }
 
 const maxContentLength = 2000
+
+// mentionRegex matches @username patterns in message content.
+var mentionRegex = regexp.MustCompile(`@(\w+)`)
+
+// parseMentions extracts all @mentioned usernames from content.
+func parseMentions(content string) []string {
+	matches := mentionRegex.FindAllStringSubmatch(content, -1)
+	mentions := make([]string, 0, len(matches))
+	seen := make(map[string]bool)
+	for _, m := range matches {
+		if len(m) > 1 {
+			username := m[1]
+			if !seen[username] {
+				seen[username] = true
+				mentions = append(mentions, username)
+			}
+		}
+	}
+	return mentions
+}
+
+// handleBotResponse handles the LLM bot response when the bot is @mentioned.
+// This runs in its own goroutine.
+func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
+	// Send typing indicator.
+	c.hub.BroadcastJSON(Message{
+		Type:     "typing",
+		Username: c.hub.BotName(),
+	})
+
+	// Build conversation history from memory.
+	messages := c.hub.Memory().GetMessages()
+
+	// Call the LLM.
+	client := c.hub.LLMClient()
+	response, err := client.Chat(ctx, messages)
+	if err != nil {
+		log.Printf("LLM error: %v", err)
+	}
+
+	// Broadcast the bot response (goes through store + broadcast, no rate limiting).
+	c.hub.SendBotMessage(response)
+
+	// Update memory with the bot response.
+	if mem := c.hub.Memory(); mem != nil {
+		mem.Add(llm.Message{Role: "assistant", Content: response})
+	}
+}
 
 // sanitizeContent trims whitespace, strips null bytes, and enforces max length.
 // Returns empty string if the result is whitespace-only.

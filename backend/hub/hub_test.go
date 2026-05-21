@@ -31,7 +31,7 @@ func (m *mockStore) TotalMessages() int64 {
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms)
+	h := New(ms, nil, "")
 
 	if h == nil {
 		t.Fatal("New() returned nil")
@@ -87,7 +87,7 @@ func TestValidateUsername(t *testing.T) {
 
 func TestIsUsernameTaken(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms)
+	h := New(ms, nil, "")
 	go h.Run()
 
 	// Initially, no username should be taken.
@@ -118,7 +118,7 @@ func TestIsUsernameTaken(t *testing.T) {
 
 func TestOnlineUsers(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms)
+	h := New(ms, nil, "")
 	go h.Run()
 
 	// Initially, no users.
@@ -170,8 +170,7 @@ func TestOnlineUsers(t *testing.T) {
 
 func TestHubRunStartStop(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms)
-
+	h := New(ms, nil, "")
 	// Start the hub.
 	go h.Run()
 
