@@ -205,6 +205,9 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 			log.Printf("store: scan error: %v", err)
 			continue
 		}
+		if m.Deleted {
+			m.Content = ""
+		}
 		messages = append(messages, m)
 	}
 

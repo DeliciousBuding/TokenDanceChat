@@ -214,14 +214,16 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	results, err := h.store.SearchMessages(q, roomID, limit)
 	if err != nil {
 		log.Printf("search error: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode([]interface{}{})
+		writeJSONError(w, http.StatusInternalServerError, "search failed", "SEARCH_ERROR", requestID)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"results": results,
+		"total":   len(results),
+		"query":   q,
+	})
 }
 
 // requestIDFromContext retrieves the request ID from the context, or returns "".

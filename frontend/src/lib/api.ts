@@ -496,7 +496,8 @@ class ChatAPI {
       if (roomID) params.set("room", roomID);
       const resp = await fetch(`/api/search?${params}`);
       if (!resp.ok) return [];
-      return await resp.json() as SearchResult[];
+      const data = await resp.json();
+      return data.results ?? data as SearchResult[];
     } catch {
       return [];
     }
