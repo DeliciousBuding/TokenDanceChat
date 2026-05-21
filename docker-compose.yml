@@ -1,0 +1,11 @@
+services:
+  chat:
+    build: .
+    container_name: chat-vectorcontrol
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
