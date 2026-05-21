@@ -477,7 +477,13 @@ export function useWebSocket() {
 
         let acc = streamAcc.current.get(streamId);
         if (!acc) {
-          acc = { content: existing?.content || "", lastFlush: 0 };
+          // New stream: clear any stale message from previous stream.
+          if (existing) {
+            useChatStore.setState({
+              messages: state.messages.filter((m) => m.id !== streamId),
+            });
+          }
+          acc = { content: "", lastFlush: 0 };
           streamAcc.current.set(streamId, acc);
         }
         acc.content += content || "";
