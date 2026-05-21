@@ -103,6 +103,9 @@ func (c *Client) ReadPump() {
 			c.handleFriendReject(msg)
 		case "friend_list":
 			c.handleFriendList()
+		case "mark_read":
+			// Client acknowledges they've read messages up to this point.
+			// Future: track per-user read cursor for unread count sync.
 		case "group_create":
 			c.handleGroupCreate(msg)
 		case "group_invite":
