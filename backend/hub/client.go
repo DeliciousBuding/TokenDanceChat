@@ -90,6 +90,10 @@ func (c *Client) ReadPump() {
 			c.handleJoin(msg)
 		case "message":
 			c.handleChatMessage(msg)
+		case "reaction":
+			c.handleReaction(msg)
+		case "message_edit":
+			c.handleMessageEdit(msg)
 		case "friend_request":
 			c.handleFriendRequest(msg)
 		case "friend_accept":
@@ -308,6 +312,81 @@ func (c *Client) handleChatMessage(msg Message) {
 			}
 		}
 	}
+}
+
+// handleReaction processes a reaction toggle request.
+func (c *Client) handleReaction(msg Message) {
+	if c.username == "" {
+		return
+	}
+	messageID := msg.ID
+	emoji := msg.Emoji
+	if messageID == "" || emoji == "" {
+		return
+	}
+
+	reactions, err := c.hub.store.ToggleReaction(messageID, emoji, c.username)
+	if err != nil {
+		log.Printf("failed to toggle reaction: %v", err)
+		return
+	}
+
+	reactionMsg, _ := json.Marshal(Message{
+		Type:      "reaction_update",
+		ID:        messageID,
+		Reactions: reactions,
+	})
+	c.hub.broadcast <- reactionMsg
+}
+
+// handleMessageEdit processes a message edit request.
+func (c *Client) handleMessageEdit(msg Message) {
+	if c.username == "" {
+		return
+	}
+	messageID := msg.ID
+	content := sanitizeContent(msg.Content)
+	if messageID == "" || content == "" {
+		return
+	}
+
+	stored, err := c.hub.store.GetMessageByID(messageID)
+	if err != nil {
+		log.Printf("message_edit: message not found: %v", err)
+		return
+	}
+	if stored.Username != c.username {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "you can only edit your own messages",
+			ErrorCode: "NOT_OWNER",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	if !c.checkRateLimit() {
+		return
+	}
+
+	updated, err := c.hub.store.UpdateMessage(messageID, content)
+	if err != nil {
+		log.Printf("failed to update message: %v", err)
+		return
+	}
+
+	editMsg, _ := json.Marshal(Message{
+		Type:      "message_edit",
+		ID:        updated.ID,
+		Username:  updated.Username,
+		Content:   updated.Content,
+		Timestamp: updated.Timestamp,
+		Edited:    true,
+	})
+	c.hub.broadcast <- editMsg
 }
 
 // checkRateLimit returns true if the message is allowed (within rate limit).
@@ -677,7 +756,7 @@ func (c *Client) handleDMMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID, c.currentRoomID)
 	if err != nil {
 		log.Printf("failed to insert DM message: %v", err)
 		return

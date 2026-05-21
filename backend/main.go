@@ -96,7 +96,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 
 	go h.Run()
 
-	dataDir := filepath.Dir(dbPath)
+	dataDir = filepath.Dir(dbPath)
 	uploadsDir := filepath.Join(dataDir, "uploads")
 	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
 		return nil, nil, nil, err

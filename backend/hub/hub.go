@@ -28,6 +28,10 @@ type Store interface {
 	GetRoomID(name string) (string, error)
 	ListRooms() []StoredRoom
 	DeleteRoom(roomID string) error
+	ToggleReaction(messageID, emoji, username string) (map[string][]string, error)
+	GetReactionsForMessages(messageIDs []string) map[string]map[string][]string
+	UpdateMessage(messageID, content string) (StoredMessage, error)
+	GetMessageByID(messageID string) (StoredMessage, error)
 }
 
 // StoredMessage is the message model returned by the store.
@@ -39,6 +43,7 @@ type StoredMessage struct {
 	ReplyToID string `json:"reply_to_id,omitempty"`
 	RoomID    string `json:"room_id,omitempty"`
 	Deleted   bool   `json:"deleted"`
+	Edited    bool   `json:"edited"`
 }
 
 // StoredRoom is the room model returned by the store.
@@ -93,9 +98,19 @@ type Message struct {
 	// Last seen
 	LastSeen int64 `json:"last_seen,omitempty"`
 
+	// User status list
+	Users []UserStatus `json:"users,omitempty"`
+
 	// Room system
-	RoomID string        `json:"room_id,omitempty"`
-	Rooms  []StoredRoom  `json:"rooms,omitempty"`
+	RoomID string       `json:"room_id,omitempty"`
+	Rooms  []StoredRoom `json:"rooms,omitempty"`
+
+	// Reaction system
+	Reactions map[string][]string `json:"reactions,omitempty"`
+	Emoji     string              `json:"emoji,omitempty"`
+
+	// Edit system
+	Edited bool `json:"edited,omitempty"`
 }
 
 // Hub maintains the set of active clients and broadcasts messages to them.

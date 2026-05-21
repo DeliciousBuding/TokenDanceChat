@@ -28,7 +28,7 @@ export function ChatLayout() {
     useWebSocket();
 
   // Reply state
-  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [replyTo] = useState<ChatMessage | null>(null);
 
   // Mobile keyboard handling
   const mainRef = useRef<HTMLDivElement>(null);
