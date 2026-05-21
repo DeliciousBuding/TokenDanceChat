@@ -3,6 +3,7 @@ import { Send, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
+import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 
 interface ChatInputProps {
@@ -34,6 +35,7 @@ export function ChatInput({
   const [pulseButton, setPulseButton] = useState(false);
   const hadContentRef = useRef(false);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
+  const typingSentRef = useRef(false);
 
   // @mention autocomplete state
   const [mentionActive, setMentionActive] = useState(false);
@@ -82,13 +84,25 @@ export function ChatInput({
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    const newHeight = Math.min(textarea.scrollHeight, 160);
+    const newHeight = Math.min(textarea.scrollHeight, 200);
     textarea.style.height = `${newHeight}px`;
   }, []);
 
   useEffect(() => {
     adjustHeight();
   }, [content, adjustHeight]);
+
+  // Dispatch typing_start / typing_stop events
+  useEffect(() => {
+    const hasContent = content.trim().length > 0;
+    if (hasContent && !isComposing && !disabled && !typingSentRef.current) {
+      chatAPI.sendTypingStart();
+      typingSentRef.current = true;
+    } else if (!hasContent && typingSentRef.current) {
+      chatAPI.sendTypingStop();
+      typingSentRef.current = false;
+    }
+  }, [content, isComposing, disabled]);
 
   // Focus textarea when component mounts
   useEffect(() => {
@@ -114,6 +128,11 @@ export function ChatInput({
     if (!trimmed || disabled) return;
     onSend(trimmed);
     setContent("");
+    // Clear typing state.
+    if (typingSentRef.current) {
+      chatAPI.sendTypingStop();
+      typingSentRef.current = false;
+    }
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -187,7 +206,7 @@ export function ChatInput({
   return (
     <div className="relative border-t border-[hsl(220,2.5%,23.5%)] bg-[hsl(223,4%,13%)]">
       {/* Gradient overlay */}
-      <div className="gradient-overlay-top absolute bottom-full left-0 right-0 h-8 pointer-events-none" />
+
 
       {/* Reply indicator */}
       {replyTo && (
@@ -214,7 +233,7 @@ export function ChatInput({
 
       {/* Input area */}
       <div className="flex items-end gap-2 px-4 py-3">
-        <div className="flex-1 relative input-glow">
+        <div className="flex-1 relative">
           {/* @mention autocomplete dropdown */}
           {mentionActive && (
             <div
@@ -265,8 +284,8 @@ export function ChatInput({
             maxLength={2000}
             disabled={disabled}
             aria-label={t("input.placeholder")}
-            className="w-full resize-none rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-all duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50 max-h-[160px]"
-            style={{ scrollbarWidth: "thin" }}
+            className="w-full rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-all duration-200 focus:border-[hsl(220,2.5%,35%)] disabled:opacity-50 max-h-[200px] overflow-y-auto"
+            style={{ resize: "none", scrollbarWidth: "thin", scrollbarColor: "hsl(220,2.5%,28%) transparent" }}
           />
         </div>
 
