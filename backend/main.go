@@ -37,20 +37,33 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 
 	fs := http.FileServer(http.Dir(frontendDist))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Resolve the cleaned path — prevent path traversal.
 		cleanPath := filepath.Clean(r.URL.Path)
+
+		// SPA fallback: root or empty path serves index.html.
+		if cleanPath == "/" || cleanPath == "." {
+			http.ServeFile(w, r, filepath.Join(frontendDist, "index.html"))
+			return
+		}
+
 		resolved := filepath.Join(frontendDist, cleanPath)
-		// Compute absolute prefix to verify containment.
+
+		// Path traversal guard: ensure resolved path is within frontendDist.
 		absBase, err := filepath.Abs(frontendDist)
 		if err != nil {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
 		absResolved, err := filepath.Abs(resolved)
-		if err != nil || !strings.HasPrefix(absResolved, absBase+string(filepath.Separator)) && absResolved != absBase {
+		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
+		if !strings.HasPrefix(absResolved, absBase+string(filepath.Separator)) && absResolved != absBase {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Serve file directly, fall back to index.html for SPA routes.
 		if _, err := os.Stat(resolved); os.IsNotExist(err) {
 			http.ServeFile(w, r, filepath.Join(frontendDist, "index.html"))
 			return

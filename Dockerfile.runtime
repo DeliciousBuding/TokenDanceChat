@@ -1,0 +1,12 @@
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates tzdata
+RUN addgroup -g 996 appgroup && adduser -u 996 -G appgroup -D appuser
+WORKDIR /app
+COPY tokendancechat /app/tokendancechat
+COPY frontend/dist/ /app/frontend/dist/
+RUN mkdir -p /app/data && chown appuser:appgroup /app/data && chmod +x /app/tokendancechat
+ENV CHAT_DB_PATH=/app/data/chat.db
+ENV CHAT_FRONTEND_DIR=/app/frontend/dist
+USER appuser
+EXPOSE 8080
+CMD ["/app/tokendancechat"]
