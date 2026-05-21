@@ -282,14 +282,20 @@ func (c *Client) handleJoin(msg Message) {
 		Online:    c.hub.onlineUsers(),
 		Timestamp: now,
 	})
-	c.hub.broadcast <- joinMsg
+	select {
+	case c.hub.broadcast <- joinMsg:
+	default:
+	}
 
 	// Broadcast updated user_status to all clients.
 	statusBroadcast, _ := json.Marshal(Message{
 		Type:  "user_status",
 		Users: c.hub.AllUserStatus(),
 	})
-	c.hub.broadcast <- statusBroadcast
+	select {
+	case c.hub.broadcast <- statusBroadcast:
+	default:
+	}
 }
 
 func (c *Client) handleChatMessage(msg Message) {
@@ -354,7 +360,10 @@ func (c *Client) handleChatMessage(msg Message) {
 		ReplyToUser:    msg.ReplyToUser,
 		RoomID:         c.currentRoomID,
 	})
-	c.hub.broadcast <- broadcastMsg
+	select {
+	case c.hub.broadcast <- broadcastMsg:
+	default:
+	}
 
 	// Store the user message in LLM memory.
 	if mem := c.hub.Memory(); mem != nil {
@@ -401,7 +410,10 @@ func (c *Client) handleReaction(msg Message) {
 		ID:        messageID,
 		Reactions: reactions,
 	})
-	c.hub.broadcast <- reactionMsg
+	select {
+	case c.hub.broadcast <- reactionMsg:
+	default:
+	}
 }
 
 // handleMessageEdit processes a message edit request.
@@ -935,7 +947,10 @@ func (c *Client) handleMessageDelete(msg Message) {
 		ID:      messageID,
 		Deleted: true,
 	})
-	c.hub.broadcast <- delMsg
+	select {
+	case c.hub.broadcast <- delMsg:
+	default:
+	}
 }
 
 // Rate limited to once per 3 seconds per user.
@@ -1254,6 +1269,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 		log.Printf("PicoClaw send error: %v", err)
 		errorContent := "PicoClaw 当前未连接，无法执行 Agent 工作流。"
 		c.hub.SendAssistantMessageToRoom(agentName, errorContent, c.getCurrentRoomID())
+		c.hub.BroadcastTyping(agentName, "typing_stop", "public", "")
 		return
 	}
 
