@@ -49,7 +49,7 @@ export function ChatInput({
     if (!textarea) return { query: "", startPos: -1 };
     const cursorPos = textarea.selectionStart;
     const textBeforeCursor = content.slice(0, cursorPos);
-    const match = textBeforeCursor.match(/@(\w*)$/);
+    const match = textBeforeCursor.match(/@([\p{L}\p{N}_]*)$/u);
     if (!match) return { query: "", startPos: -1 };
     return {
       query: match[1] || "",
