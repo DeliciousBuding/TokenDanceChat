@@ -402,7 +402,7 @@ export function MessageTranscript({
       )}
 
       {/* Desktop scroll-to-bottom */}
-      {!shouldAutoScroll && messages.length > 0 && (
+      {!shouldAutoScroll && effectiveMessages.length > 0 && (
         <button
           onClick={scrollToBottom}
           className="hidden md:flex absolute bottom-4 left-1/2 -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-lg hover:bg-accent hover:text-foreground transition-all animate-fade-in backdrop-blur-sm z-10"
