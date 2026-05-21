@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent } from "react";
 import { Send, Loader2, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import type { ChatMessage } from "@/lib/api";
@@ -10,14 +10,6 @@ interface ChatInputProps {
   disabled?: boolean;
   replyTo?: ChatMessage | null;
   onCancelReply?: () => void;
-}
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return Math.abs(hash);
 }
 
 export function ChatInput({
