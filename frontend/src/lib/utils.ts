@@ -42,3 +42,49 @@ export function formatTime(timestamp: number): string {
 function pad(n: number): string {
   return n.toString().padStart(2, "0");
 }
+
+/**
+ * Consistent string hashing used for avatar colors across all components.
+ */
+export function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * Returns a CSS gradient string for a user avatar background.
+ */
+export function avatarGradient(username: string): string {
+  const baseHue = hashString(username) % 360;
+  const hue1 = baseHue;
+  const hue2 = (baseHue + 45) % 360;
+  return `linear-gradient(135deg, oklch(65% 0.16 ${hue1}), oklch(58% 0.14 ${hue2}))`;
+}
+
+/**
+ * Returns the hue value for a username (for name coloring).
+ */
+export function usernameHue(username: string): number {
+  return hashString(username) % 360;
+}
+
+/**
+ * Formats a "last seen" timestamp into a human-readable relative time string.
+ */
+export function formatLastSeen(lastSeenTs: number): string {
+  const now = Date.now();
+  const diffMs = now - lastSeenTs;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 60) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay < 30) return `${diffDay}d ago`;
+  return formatTime(lastSeenTs);
+}

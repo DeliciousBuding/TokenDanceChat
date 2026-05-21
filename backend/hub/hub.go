@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
-	"strings"
+	"sort"
 	"sync"
 	"time"
 
@@ -40,6 +40,13 @@ type Group struct {
 	Members map[string]bool `json:"members"`
 }
 
+// UserStatus represents a user with their online/offline status.
+type UserStatus struct {
+	Username string `json:"username"`
+	Online   bool   `json:"online"`
+	LastSeen int64  `json:"last_seen"`
+}
+
 // Message represents a WebSocket protocol message.
 type Message struct {
 	Type      string          `json:"type,omitempty"`
@@ -72,6 +79,9 @@ type Message struct {
 
 	// Last seen
 	LastSeen int64 `json:"last_seen,omitempty"`
+
+	// User status list
+	Users []UserStatus `json:"users,omitempty"`
 }
 
 // Hub maintains the set of active clients and broadcasts messages to them.
@@ -202,6 +212,22 @@ func (h *Hub) Run() {
 				}
 			}
 			log.Printf("client unregistered (total: %d)", len(h.clients))
+
+			// Broadcast user_status to all remaining clients after unregister.
+			statusMsg := Message{
+				Type:  "user_status",
+				Users: h.AllUserStatus(),
+			}
+			if statusData, err := json.Marshal(statusMsg); err == nil {
+				h.mu.RLock()
+				for c := range h.clients {
+					select {
+					case c.send <- statusData:
+					default:
+					}
+				}
+				h.mu.RUnlock()
+			}
 
 		case message := <-h.broadcast:
 			h.mu.RLock()
@@ -346,6 +372,47 @@ func (h *Hub) LastSeen(username string) int64 {
 	h.lastSeenMu.RLock()
 	defer h.lastSeenMu.RUnlock()
 	return h.lastSeen[username]
+}
+
+// SetLastSeen sets the last seen timestamp for a username.
+func (h *Hub) SetLastSeen(username string, ts int64) {
+	h.lastSeenMu.Lock()
+	h.lastSeen[username] = ts
+	h.lastSeenMu.Unlock()
+}
+
+// AllUserStatus returns all known users with their online/offline status,
+// sorted by online first, then by last seen descending.
+func (h *Hub) AllUserStatus() []UserStatus {
+	onlineMap := make(map[string]bool)
+	h.mu.RLock()
+	for c := range h.clients {
+		if c.username != "" {
+			onlineMap[c.username] = true
+		}
+	}
+	h.mu.RUnlock()
+
+	h.lastSeenMu.RLock()
+	defer h.lastSeenMu.RUnlock()
+
+	users := make([]UserStatus, 0, len(h.lastSeen))
+	for username, ls := range h.lastSeen {
+		users = append(users, UserStatus{
+			Username: username,
+			Online:   onlineMap[username],
+			LastSeen: ls,
+		})
+	}
+
+	sort.Slice(users, func(i, j int) bool {
+		if users[i].Online != users[j].Online {
+			return users[i].Online
+		}
+		return users[i].LastSeen > users[j].LastSeen
+	})
+
+	return users
 }
 
 // IsOnline returns true if the username is currently connected.

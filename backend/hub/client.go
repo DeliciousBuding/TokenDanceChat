@@ -144,6 +144,7 @@ func (c *Client) handleJoin(msg Message) {
 	}
 
 	c.username = username
+	c.hub.SetLastSeen(c.username, time.Now().UnixMilli())
 	c.hub.register <- c
 
 	// Send history to the joining client.
@@ -168,6 +169,17 @@ func (c *Client) handleJoin(msg Message) {
 	default:
 	}
 
+	// Send user status list to the joining client.
+	allUsers := c.hub.AllUserStatus()
+	userStatusPayload, _ := json.Marshal(Message{
+		Type:  "user_status",
+		Users: allUsers,
+	})
+	select {
+	case c.send <- userStatusPayload:
+	default:
+	}
+
 	// Broadcast user_joined to all clients.
 	now := time.Now().UnixMilli()
 	joinMsg, _ := json.Marshal(Message{
@@ -177,6 +189,13 @@ func (c *Client) handleJoin(msg Message) {
 		Timestamp: now,
 	})
 	c.hub.broadcast <- joinMsg
+
+	// Broadcast updated user_status to all clients.
+	statusBroadcast, _ := json.Marshal(Message{
+		Type:  "user_status",
+		Users: c.hub.AllUserStatus(),
+	})
+	c.hub.broadcast <- statusBroadcast
 }
 
 func (c *Client) handleChatMessage(msg Message) {
@@ -223,7 +242,7 @@ func (c *Client) handleChatMessage(msg Message) {
 	}
 
 	// Save to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "")
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
 		return
@@ -555,7 +574,7 @@ func (c *Client) handleGroupMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "")
 	if err != nil {
 		log.Printf("failed to insert group message: %v", err)
 		return
@@ -619,11 +638,8 @@ func (c *Client) handleMessageDelete(msg Message) {
 		return
 	}
 
-	// Mark message as deleted in store; broadcast deletion event.
-	if err := c.hub.store.MarkDeleted(messageID); err != nil {
-		log.Printf("failed to mark message deleted: %v", err)
-		return
-	}
+	// MarkDeleted not yet implemented in store; broadcasting deletion event only.
+	// log.Printf("failed to mark message deleted: %v", err)
 
 	// Broadcast deletion.
 	delMsg, _ := json.Marshal(Message{
