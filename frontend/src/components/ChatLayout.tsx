@@ -1,19 +1,31 @@
-import { useState, useCallback } from "react";
-import { Menu, LogOut, Globe } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { Menu, LogOut, Globe, ArrowLeft } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
+import { GroupCreateModal } from "./GroupCreateModal";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
 import { cn } from "@/lib/utils";
+import { chatAPI } from "@/lib/api";
+import type { ChatMessage } from "@/lib/api";
 import type { Language } from "@/i18n/translations";
 
 export function ChatLayout() {
   const { t, lang, setLang } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { reset } = useChatStore();
-  const { disconnect, sendMessage } = useWebSocket();
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const {
+    reset,
+    currentChat,
+    setCurrentChat,
+    setReplyTo,
+    pendingFriendRequests,
+    addSystemMessage,
+  } = useChatStore();
+  const { disconnect, sendMessage, sendDMMessage, sendGroupMessage } =
+    useWebSocket();
 
   const handleDisconnect = useCallback(() => {
     disconnect();
@@ -24,6 +36,100 @@ export function ChatLayout() {
     const next: Language = lang === "zh-CN" ? "en-US" : "zh-CN";
     setLang(next);
   }, [lang, setLang]);
+
+  const handleReply = useCallback(
+    (message: ChatMessage) => {
+      setReplyTo(message);
+    },
+    [setReplyTo],
+  );
+
+  const handleDelete = useCallback((messageId: string) => {
+    chatAPI.deleteMessage(messageId);
+  }, []);
+
+  const handleStartDM = useCallback(
+    (targetUsername: string) => {
+      setCurrentChat({ type: "dm", username: targetUsername });
+      setSidebarOpen(false);
+    },
+    [setCurrentChat],
+  );
+
+  const handleAddFriend = useCallback((targetUsername: string) => {
+    chatAPI.sendFriendRequest(targetUsername);
+    setSidebarOpen(false);
+  }, []);
+
+  const handleCreateGroup = useCallback(
+    (name: string, members: string[]) => {
+      chatAPI.sendGroupCreate(name, members);
+      // Invite selected members (backend group_create with members stubs - we use separate invites)
+      members.forEach((m) => {
+        chatAPI.sendGroupInvite(name, m);
+      });
+      setCurrentChat({ type: "group", name });
+    },
+    [setCurrentChat],
+  );
+
+  // Handle friend request accept/reject
+  const handleFriendAccept = useCallback(
+    (from: string) => {
+      chatAPI.sendFriendAccept(from);
+      addSystemMessage(
+        JSON.stringify({
+          key: "system.friendAccepted",
+          params: { username: from },
+        }),
+        Date.now(),
+      );
+    },
+    [addSystemMessage],
+  );
+
+  const handleFriendReject = useCallback((from: string) => {
+    chatAPI.sendFriendReject(from);
+  }, []);
+
+  // Compute the send handler based on current chat context.
+  const sendHandler = useMemo(() => {
+    if (currentChat.type === "dm") {
+      return (content: string) => sendDMMessage(currentChat.username, content);
+    }
+    if (currentChat.type === "group") {
+      return (content: string) =>
+        sendGroupMessage(currentChat.name, content);
+    }
+    return sendMessage;
+  }, [currentChat, sendDMMessage, sendGroupMessage, sendMessage]);
+
+  // Compute header title
+  const headerTitle = useMemo(() => {
+    if (currentChat.type === "dm") {
+      return t("chat.dmWith", { username: currentChat.username });
+    }
+    if (currentChat.type === "group") {
+      return t("chat.groupChat", { name: currentChat.name });
+    }
+    return t("chat.roomName");
+  }, [currentChat, t]);
+
+  // Compute header subtitle
+  const headerSubtitle = useMemo(() => {
+    if (currentChat.type === "dm") {
+      return t("chat.dmIndicator");
+    }
+    if (currentChat.type === "group") {
+      return t("chat.groupIndicator");
+    }
+    return t("chat.subtitle");
+  }, [currentChat, t]);
+
+  const pendingUsers = useMemo(
+    () => pendingFriendRequests.map((r) => r.from),
+    [pendingFriendRequests],
+  );
 
   return (
     <div className="flex h-screen overflow-hidden bg-[hsl(223,4%,13%)]">
@@ -46,6 +152,10 @@ export function ChatLayout() {
         <Sidebar
           collapsed={false}
           onClose={() => setSidebarOpen(false)}
+          onStartDM={handleStartDM}
+          onAddFriend={handleAddFriend}
+          onCreateGroup={() => setGroupModalOpen(true)}
+          pendingFriendUsers={pendingUsers}
         />
       </div>
 
@@ -62,7 +172,7 @@ export function ChatLayout() {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-foreground truncate">
-              {t("chat.roomName")}
+              {headerTitle}
             </h1>
           </div>
           <button
@@ -83,13 +193,23 @@ export function ChatLayout() {
 
         {/* Desktop header */}
         <div className="hidden md:flex items-center justify-between border-b border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-6 py-3 transition-colors duration-300">
-          <div>
-            <h1 className="text-sm font-semibold text-foreground">
-              {t("chat.roomName")}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              {t("chat.subtitle")}
-            </p>
+          <div className="flex items-center gap-3">
+            {/* Back to public chat button (when in DM or group) */}
+            {currentChat.type !== "public" && (
+              <button
+                onClick={() => setCurrentChat({ type: "public" })}
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground transition-colors"
+                aria-label={t("chat.publicChat")}
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <div>
+              <h1 className="text-sm font-semibold text-foreground">
+                {headerTitle}
+              </h1>
+              <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -111,17 +231,54 @@ export function ChatLayout() {
           </div>
         </div>
 
+        {/* Friend request notifications */}
+        {pendingFriendRequests.length > 0 && currentChat.type === "public" && (
+          <div className="border-b border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-6 py-2 space-y-1">
+            {pendingFriendRequests.map((req) => (
+              <div
+                key={req.from}
+                className="flex items-center gap-3 text-xs animate-fade-in"
+              >
+                <span className="text-muted-foreground/70 flex-1">
+                  {t("system.friendRequest", { username: req.from })}
+                </span>
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={() => handleFriendAccept(req.from)}
+                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-white"
+                    style={{
+                      backgroundColor: "oklch(71.2% 0.194 13.428)",
+                    }}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => handleFriendReject(req.from)}
+                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-muted-foreground bg-[hsl(220,2.5%,20%)] hover:bg-[hsl(220,2.5%,25%)]"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Message transcript */}
         <div className="relative flex-1 overflow-hidden flex flex-col">
-          <MessageTranscript />
+          <MessageTranscript onReply={handleReply} onDelete={handleDelete} />
 
           {/* Chat input - fixed at bottom */}
-          <ChatInput
-            onSend={sendMessage}
-            disabled={false}
-          />
+          <ChatInput onSend={sendHandler} disabled={false} />
         </div>
       </div>
+
+      {/* Group create modal */}
+      <GroupCreateModal
+        open={groupModalOpen}
+        onClose={() => setGroupModalOpen(false)}
+        onCreate={handleCreateGroup}
+      />
     </div>
   );
 }

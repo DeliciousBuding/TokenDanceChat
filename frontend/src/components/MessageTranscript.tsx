@@ -14,6 +14,8 @@ const GROUP_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
 
 interface MessageTranscriptProps {
   className?: string;
+  onReply?: (message: ChatMessage) => void;
+  onDelete?: (messageId: string) => void;
 }
 
 interface UserMessageGroup {
@@ -44,7 +46,9 @@ function buildMessageGroups(messages: ChatMessage[]): MessageGroup[] {
     if (
       last?.type === "user" &&
       last.username === msg.username &&
-      msg.timestamp - last.messages[last.messages.length - 1].timestamp < GROUP_WINDOW_MS
+      !msg.deleted &&
+      msg.timestamp - last.messages[last.messages.length - 1].timestamp <
+        GROUP_WINDOW_MS
     ) {
       last.messages.push(msg);
     } else {
@@ -60,25 +64,48 @@ function buildMessageGroups(messages: ChatMessage[]): MessageGroup[] {
   return groups;
 }
 
-export function MessageTranscript({ className }: MessageTranscriptProps) {
+export function MessageTranscript({
+  className,
+  onReply,
+  onDelete,
+}: MessageTranscriptProps) {
   const { t } = useTranslation();
-  const { messages, username, historyLoaded, typingUsers } = useChatStore();
+  const {
+    messages,
+    dmMessages,
+    groupMessages,
+    username,
+    historyLoaded,
+    typingUsers,
+    currentChat,
+  } = useChatStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showAllMessages, setShowAllMessages] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const prevMessageCountRef = useRef(messages.length);
+  const prevMessageCountRef = useRef(0);
+
+  // Determine which messages to display based on currentChat mode.
+  const effectiveMessages = useMemo(() => {
+    if (currentChat.type === "dm") {
+      return dmMessages[currentChat.username] || [];
+    }
+    if (currentChat.type === "group") {
+      return groupMessages[currentChat.name] || [];
+    }
+    return messages;
+  }, [currentChat, messages, dmMessages, groupMessages]);
 
   // Truncate messages list to last MAX_VISIBLE_MESSAGES when not showing all.
   const visibleMessages = useMemo(() => {
-    if (showAllMessages || messages.length <= MAX_VISIBLE_MESSAGES) {
-      return messages;
+    if (showAllMessages || effectiveMessages.length <= MAX_VISIBLE_MESSAGES) {
+      return effectiveMessages;
     }
-    return messages.slice(-MAX_VISIBLE_MESSAGES);
-  }, [messages, showAllMessages]);
+    return effectiveMessages.slice(-MAX_VISIBLE_MESSAGES);
+  }, [effectiveMessages, showAllMessages]);
 
-  const hiddenCount = messages.length - visibleMessages.length;
+  const hiddenCount = effectiveMessages.length - visibleMessages.length;
 
   // Build message groups with memoization.
   const groups = useMemo(() => {
@@ -94,7 +121,7 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
   // Track unread messages when scrolled up.
   useEffect(() => {
     const prev = prevMessageCountRef.current;
-    const curr = messages.length;
+    const curr = effectiveMessages.length;
     if (curr > prev && !shouldAutoScroll) {
       setUnreadCount((c) => c + (curr - prev));
     }
@@ -102,7 +129,7 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
       setUnreadCount(0);
     }
     prevMessageCountRef.current = curr;
-  }, [messages.length, shouldAutoScroll]);
+  }, [effectiveMessages.length, shouldAutoScroll]);
 
   // Detect if user has scrolled up.
   const handleScroll = useCallback(() => {
@@ -139,7 +166,11 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
     >
       {!historyLoaded ? (
         /* Loading skeleton */
-        <div className="flex flex-col items-center justify-center h-full gap-3 py-12" role="status" aria-label={t("transcript.loading")}>
+        <div
+          className="flex flex-col items-center justify-center h-full gap-3 py-12"
+          role="status"
+          aria-label={t("transcript.loading")}
+        >
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
               <div
@@ -152,9 +183,11 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
               />
             ))}
           </div>
-          <p className="text-xs text-muted-foreground/60">{t("transcript.loading")}</p>
+          <p className="text-xs text-muted-foreground/60">
+            {t("transcript.loading")}
+          </p>
         </div>
-      ) : messages.length === 0 ? (
+      ) : effectiveMessages.length === 0 ? (
         /* Empty state with animated chat bubble */
         <div className="flex flex-col items-center justify-center h-full py-12 px-4">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[hsl(231,4%,18%)] ring-1 ring-[hsl(220,2.5%,20%)] animate-chat-bubble">
@@ -228,6 +261,8 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
                       hideUsername={!isFirst}
                       forceShowTimestamp={isLast}
                       isGrouped={!isSolo}
+                      onReply={onReply}
+                      onDelete={onDelete}
                     />
                   );
                 })}
@@ -257,7 +292,7 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
       )}
 
       {/* Scroll-to-bottom button (when scrolled up) */}
-      {!shouldAutoScroll && messages.length > 0 && (
+      {!shouldAutoScroll && effectiveMessages.length > 0 && (
         <button
           onClick={scrollToBottom}
           className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2 text-xs text-muted-foreground shadow-lg hover:bg-[hsl(231,4%,20%)] hover:text-foreground transition-all animate-fade-in backdrop-blur-sm z-10"
