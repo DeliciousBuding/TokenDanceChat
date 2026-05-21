@@ -7,11 +7,27 @@ import (
 	"sync/atomic"
 	"time"
 
-	"tokendancechat/backend/hub"
-
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
+
+// StoredMessage is the message model returned by the store.
+type StoredMessage struct {
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	Content   string `json:"content"`
+	Timestamp int64  `json:"timestamp"`
+	ReplyToID string `json:"reply_to_id,omitempty"`
+	RoomID    string `json:"room_id,omitempty"`
+	Deleted   bool   `json:"deleted"`
+	Edited    bool   `json:"edited"`
+}
+
+// StoredRoom is the room model returned by the store.
+type StoredRoom struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
 
 // Store handles SQLite message persistence.
 type Store struct {
@@ -98,7 +114,7 @@ func (s *Store) ensureDefaultRoom() {
 	}
 }
 
-func (s *Store) InsertMessage(username, content, replyToID, roomID string) (hub.StoredMessage, error) {
+func (s *Store) InsertMessage(username, content, replyToID, roomID string) (StoredMessage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -110,12 +126,12 @@ func (s *Store) InsertMessage(username, content, replyToID, roomID string) (hub.
 		id, username, content, ts, replyToID, roomID,
 	)
 	if err != nil {
-		return hub.StoredMessage{}, err
+		return StoredMessage{}, err
 	}
 
 	s.totalMessages.Add(1)
 
-	return hub.StoredMessage{
+	return StoredMessage{
 		ID:        id,
 		Username:  username,
 		Content:   content,
@@ -125,11 +141,11 @@ func (s *Store) InsertMessage(username, content, replyToID, roomID string) (hub.
 	}, nil
 }
 
-func (s *Store) GetMessages(limit int, before int64) []hub.StoredMessage {
+func (s *Store) GetMessages(limit int, before int64) []StoredMessage {
 	return s.GetRoomMessages("", limit, before)
 }
 
-func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []hub.StoredMessage {
+func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []StoredMessage {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -172,9 +188,9 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []hub.St
 	}
 	defer rows.Close()
 
-	messages := make([]hub.StoredMessage, 0, limit)
+	messages := make([]StoredMessage, 0, limit)
 	for rows.Next() {
-		var m hub.StoredMessage
+		var m StoredMessage
 		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited); err != nil {
 			log.Printf("store: scan error: %v", err)
 			continue
@@ -221,7 +237,7 @@ func (s *Store) CreateRoom(name string) (string, error) {
 	return id, nil
 }
 
-func (s *Store) ListRooms() []hub.StoredRoom {
+func (s *Store) ListRooms() []StoredRoom {
 	rows, err := s.db.Query("SELECT id, name FROM rooms ORDER BY name")
 	if err != nil {
 		log.Printf("store: list rooms error: %v", err)
@@ -229,9 +245,9 @@ func (s *Store) ListRooms() []hub.StoredRoom {
 	}
 	defer rows.Close()
 
-	var rooms []hub.StoredRoom
+	var rooms []StoredRoom
 	for rows.Next() {
-		var r hub.StoredRoom
+		var r StoredRoom
 		if err := rows.Scan(&r.ID, &r.Name); err != nil {
 			continue
 		}
@@ -315,7 +331,7 @@ func (s *Store) GetReactionsForMessages(messageIDs []string) map[string]map[stri
 	return result
 }
 
-func (s *Store) UpdateMessage(messageID, content string) (hub.StoredMessage, error) {
+func (s *Store) UpdateMessage(messageID, content string) (StoredMessage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -324,26 +340,26 @@ func (s *Store) UpdateMessage(messageID, content string) (hub.StoredMessage, err
 		content, messageID,
 	)
 	if err != nil {
-		return hub.StoredMessage{}, err
+		return StoredMessage{}, err
 	}
 
 	return s.getMessageByIDLocked(messageID)
 }
 
-func (s *Store) GetMessageByID(messageID string) (hub.StoredMessage, error) {
+func (s *Store) GetMessageByID(messageID string) (StoredMessage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.getMessageByIDLocked(messageID)
 }
 
-func (s *Store) getMessageByIDLocked(messageID string) (hub.StoredMessage, error) {
-	var m hub.StoredMessage
+func (s *Store) getMessageByIDLocked(messageID string) (StoredMessage, error) {
+	var m StoredMessage
 	err := s.db.QueryRow(
 		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited FROM messages WHERE id = ?",
 		messageID,
 	).Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited)
 	if err != nil {
-		return hub.StoredMessage{}, err
+		return StoredMessage{}, err
 	}
 	return m, nil
 }
