@@ -1,20 +1,110 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { ArrowDown } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
+import { useTranslation } from "@/i18n/context";
 import { MessageBubble } from "./MessageBubble";
 import { SystemMessage } from "./SystemMessage";
 import { cn } from "@/lib/utils";
+import type { ChatMessage } from "@/lib/api";
+
+/** Maximum messages to render by default before showing the "load earlier" button. */
+const MAX_VISIBLE_MESSAGES = 200;
+/** Messages from the same user within this window (ms) are grouped together. */
+const GROUP_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
 
 interface MessageTranscriptProps {
   className?: string;
 }
 
+interface UserMessageGroup {
+  type: "user";
+  username: string;
+  isOwn: boolean;
+  messages: ChatMessage[];
+}
+
+interface SystemMessageGroup {
+  type: "system";
+  message: ChatMessage;
+}
+
+type MessageGroup = UserMessageGroup | SystemMessageGroup;
+
+function buildMessageGroups(messages: ChatMessage[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+
+  for (const msg of messages) {
+    if (msg.username === "system") {
+      groups.push({ type: "system", message: msg });
+      continue;
+    }
+
+    const last = groups[groups.length - 1];
+
+    if (
+      last?.type === "user" &&
+      last.username === msg.username &&
+      msg.timestamp - last.messages[last.messages.length - 1].timestamp < GROUP_WINDOW_MS
+    ) {
+      last.messages.push(msg);
+    } else {
+      groups.push({
+        type: "user",
+        username: msg.username,
+        isOwn: false,
+        messages: [msg],
+      });
+    }
+  }
+
+  return groups;
+}
+
 export function MessageTranscript({ className }: MessageTranscriptProps) {
+  const { t } = useTranslation();
   const { messages, username, historyLoaded } = useChatStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [showAllMessages, setShowAllMessages] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const prevMessageCountRef = useRef(messages.length);
 
-  // Detect if user has scrolled up
+  // Truncate messages list to last MAX_VISIBLE_MESSAGES when not showing all.
+  const visibleMessages = useMemo(() => {
+    if (showAllMessages || messages.length <= MAX_VISIBLE_MESSAGES) {
+      return messages;
+    }
+    return messages.slice(-MAX_VISIBLE_MESSAGES);
+  }, [messages, showAllMessages]);
+
+  const hiddenCount = messages.length - visibleMessages.length;
+
+  // Build message groups with memoization.
+  const groups = useMemo(() => {
+    const raw = buildMessageGroups(visibleMessages);
+    return raw.map((g) => {
+      if (g.type === "user") {
+        return { ...g, isOwn: g.username === username };
+      }
+      return g;
+    });
+  }, [visibleMessages, username]);
+
+  // Track unread messages when scrolled up.
+  useEffect(() => {
+    const prev = prevMessageCountRef.current;
+    const curr = messages.length;
+    if (curr > prev && !shouldAutoScroll) {
+      setUnreadCount((c) => c + (curr - prev));
+    }
+    if (shouldAutoScroll) {
+      setUnreadCount(0);
+    }
+    prevMessageCountRef.current = curr;
+  }, [messages.length, shouldAutoScroll]);
+
+  // Detect if user has scrolled up.
   const handleScroll = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -23,12 +113,18 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
     setShouldAutoScroll(distanceFromBottom < 120);
   }, []);
 
-  // Auto-scroll to bottom when new messages arrive (if near bottom)
+  // Auto-scroll to bottom when new messages arrive (if near bottom).
   useEffect(() => {
     if (shouldAutoScroll && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, shouldAutoScroll]);
+  }, [groups, shouldAutoScroll]);
+
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    setShouldAutoScroll(true);
+    setUnreadCount(0);
+  }, []);
 
   return (
     <div
@@ -39,10 +135,11 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
         "scrollbar-thin",
         className,
       )}
+      style={{ willChange: "transform" }}
     >
       {!historyLoaded ? (
         /* Loading skeleton */
-        <div className="flex flex-col items-center justify-center h-full gap-3 py-12">
+        <div className="flex flex-col items-center justify-center h-full gap-3 py-12" role="status" aria-label={t("transcript.loading")}>
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
               <div
@@ -55,18 +152,18 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
               />
             ))}
           </div>
-          <p className="text-xs text-muted-foreground/60">加载消息中...</p>
+          <p className="text-xs text-muted-foreground/60">{t("transcript.loading")}</p>
         </div>
       ) : messages.length === 0 ? (
-        /* Empty state */
+        /* Empty state with animated chat bubble */
         <div className="flex flex-col items-center justify-center h-full py-12 px-4">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[hsl(231,4%,18%)] ring-1 ring-[hsl(220,2.5%,20%)]">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[hsl(231,4%,18%)] ring-1 ring-[hsl(220,2.5%,20%)] animate-chat-bubble">
             <svg
               width="28"
               height="28"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="hsl(240,2.5%,64.9%)"
+              stroke="oklch(71.2% 0.194 13.428 / 0.6)"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -75,30 +172,68 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
             </svg>
           </div>
           <h3 className="text-sm font-medium text-muted-foreground mb-1">
-            暂无消息
+            {t("transcript.emptyTitle")}
           </h3>
           <p className="text-xs text-muted-foreground/60 text-center max-w-xs">
-            成为第一个发送消息的人吧！
+            {t("transcript.emptyDescription")}
           </p>
         </div>
       ) : (
         /* Messages */
-        <div className="py-4">
-          {messages.map((msg) =>
-            msg.username === "system" ? (
-              <SystemMessage
-                key={msg.id}
-                content={msg.content}
-                timestamp={msg.timestamp}
-              />
-            ) : (
-              <MessageBubble
-                key={msg.id}
-                message={msg}
-                isOwn={msg.username === username}
-              />
-            ),
+        <div
+          role="log"
+          aria-live="polite"
+          aria-label={t("chat.roomName")}
+          className="py-4"
+        >
+          {/* "Load earlier messages" button when truncated */}
+          {hiddenCount > 0 && (
+            <div className="flex justify-center pb-3">
+              <button
+                onClick={() => setShowAllMessages(true)}
+                className="rounded-full border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-1.5 text-xs text-muted-foreground hover:bg-[hsl(231,4%,20%)] hover:text-foreground transition-all"
+              >
+                {t("transcript.newMessages", { count: hiddenCount })}
+              </button>
+            </div>
           )}
+
+          {groups.map((group) => {
+            if (group.type === "system") {
+              return (
+                <SystemMessage
+                  key={group.message.id}
+                  content={group.message.content}
+                  timestamp={group.message.timestamp}
+                />
+              );
+            }
+
+            // User message group
+            const { messages: groupMessages, isOwn } = group;
+            return (
+              <div key={groupMessages[0].id} className="message-group">
+                {groupMessages.map((msg, idx) => {
+                  const isFirst = idx === 0;
+                  const isLast = idx === groupMessages.length - 1;
+                  const isSolo = groupMessages.length === 1;
+
+                  return (
+                    <MessageBubble
+                      key={msg.id}
+                      message={msg}
+                      isOwn={isOwn}
+                      hideAvatar={!isFirst}
+                      hideUsername={!isFirst}
+                      forceShowTimestamp={isLast}
+                      isGrouped={!isSolo}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
+
           {/* Scroll anchor */}
           <div ref={bottomRef} className="h-1" />
         </div>
@@ -107,16 +242,14 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
       {/* Scroll-to-bottom button (when scrolled up) */}
       {!shouldAutoScroll && messages.length > 0 && (
         <button
-          onClick={() => {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-            setShouldAutoScroll(true);
-          }}
-          className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2 text-xs text-muted-foreground shadow-lg hover:bg-[hsl(231,4%,20%)] hover:text-foreground transition-all animate-fade-in backdrop-blur-sm"
+          onClick={scrollToBottom}
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2 text-xs text-muted-foreground shadow-lg hover:bg-[hsl(231,4%,20%)] hover:text-foreground transition-all animate-fade-in backdrop-blur-sm z-10"
+          aria-label={t("transcript.scrollToBottom")}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M19 12l-7 7-7-7" />
-          </svg>
-          回到底部
+          <ArrowDown className="h-3.5 w-3.5" />
+          {unreadCount > 0
+            ? t("transcript.newMessages", { count: unreadCount })
+            : t("transcript.scrollToBottom")}
         </button>
       )}
     </div>

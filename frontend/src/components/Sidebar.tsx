@@ -1,5 +1,7 @@
-import { Users, MessageCircle } from "lucide-react";
+import { memo, useMemo } from "react";
+import { Users, MessageCircle, X } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
+import { useTranslation } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -7,8 +9,67 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+}
+
+function avatarGradient(username: string): string {
+  const baseHue = hashString(username) % 360;
+  const hue1 = baseHue;
+  const hue2 = (baseHue + 45) % 360;
+  return `linear-gradient(135deg, oklch(65% 0.16 ${hue1}), oklch(58% 0.14 ${hue2}))`;
+}
+
+const UserListItem = memo(function UserListItem({
+  user,
+  isSelf,
+  youLabel,
+}: {
+  user: string;
+  isSelf: boolean;
+  youLabel: string;
+}) {
+  const gradient = useMemo(() => avatarGradient(user), [user]);
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+        isSelf
+          ? "bg-[hsl(220,2.5%,20%)] text-foreground"
+          : "text-foreground/80 hover:bg-[hsl(220,2.5%,18%)]",
+      )}
+    >
+      <div className="relative flex-shrink-0">
+        <div
+          className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white"
+          style={{ background: gradient }}
+        >
+          {user.charAt(0).toUpperCase()}
+        </div>
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-[hsl(231,4%,16%)] bg-online animate-pulse-dot" />
+      </div>
+      <span className="flex-1 truncate text-sm">{user}</span>
+      {isSelf && (
+        <span className="flex-shrink-0 rounded-md bg-online/10 px-1.5 py-0.5 text-[10px] font-medium text-online">
+          {youLabel}
+        </span>
+      )}
+    </div>
+  );
+});
+
 export function Sidebar({ collapsed, onClose }: SidebarProps) {
+  const { t } = useTranslation();
   const { onlineUsers, username } = useChatStore();
+
+  // Separate current user from others for visual grouping
+  const otherUsers = onlineUsers.filter((u) => u !== username);
+  const hasSelf = onlineUsers.includes(username);
 
   return (
     <aside
@@ -29,21 +90,20 @@ export function Sidebar({ collapsed, onClose }: SidebarProps) {
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold text-foreground truncate">
-            公共聊天
+            {t("sidebar.publicChat")}
           </h2>
           <p className="text-xs text-muted-foreground truncate">
-            Public Chat Room
+            {t("sidebar.publicChatSub")}
           </p>
         </div>
         {/* Mobile close button */}
         {onClose && (
           <button
             onClick={onClose}
+            aria-label="Close sidebar"
             className="rounded-md p-1.5 text-muted-foreground hover:bg-[hsl(220,2.5%,20%)] hover:text-foreground md:hidden"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <X className="h-4 w-4" />
           </button>
         )}
       </div>
@@ -54,7 +114,7 @@ export function Sidebar({ collapsed, onClose }: SidebarProps) {
           <div className="flex items-center gap-2">
             <Users className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              在线用户
+              {t("sidebar.onlineUsers")}
             </span>
           </div>
           <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(220,2.5%,20%)] px-1.5 text-[10px] font-medium text-muted-foreground">
@@ -67,35 +127,30 @@ export function Sidebar({ collapsed, onClose }: SidebarProps) {
           {onlineUsers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
               <Users className="mb-2 h-6 w-6 opacity-30" />
-              <p className="text-xs">暂无在线用户</p>
+              <p className="text-xs">{t("sidebar.emptyState")}</p>
             </div>
           ) : (
             <div className="space-y-0.5">
-              {onlineUsers.map((user) => (
-                <div
-                  key={user}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                    user === username
-                      ? "bg-[hsl(220,2.5%,20%)] text-foreground"
-                      : "text-foreground/80 hover:bg-[hsl(220,2.5%,18%)]",
-                  )}
-                >
-                  <div className="relative flex-shrink-0">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[hsl(231,4%,24%)] text-xs font-medium text-foreground/70">
-                      {user.charAt(0).toUpperCase()}
+              {/* Current user at top */}
+              {hasSelf && (
+                <>
+                  <UserListItem user={username} isSelf youLabel={t("sidebar.you")} />
+                  {/* Divider between you and others */}
+                  {otherUsers.length > 0 && (
+                    <div className="flex items-center gap-2 px-3 py-1.5">
+                      <div className="h-px flex-1 bg-[hsl(220,2.5%,18%)]" />
                     </div>
-                    <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-[hsl(231,4%,16%)] bg-online ring-1 ring-online-ring/30" />
-                  </div>
-                  <span className="flex-1 truncate text-sm">
-                    {user}
-                    {user === username && (
-                      <span className="ml-1.5 text-[10px] text-muted-foreground">
-                        (你)
-                      </span>
-                    )}
-                  </span>
-                </div>
+                  )}
+                </>
+              )}
+              {/* Other users */}
+              {otherUsers.map((user) => (
+                <UserListItem
+                  key={user}
+                  user={user}
+                  isSelf={false}
+                  youLabel={t("sidebar.you")}
+                />
               ))}
             </div>
           )}
@@ -105,12 +160,10 @@ export function Sidebar({ collapsed, onClose }: SidebarProps) {
       {/* Footer */}
       <div className="border-t border-[hsl(220,2.5%,23.5%)] px-5 py-3">
         <div className="flex items-center gap-2">
-          <span
-            className="flex h-1.5 w-1.5 rounded-full"
-            style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}
-          />
+          <span className="flex h-2 w-2 rounded-full bg-online animate-pulse-dot" />
           <span className="text-xs text-muted-foreground">
-            已连接为 <span className="font-medium text-foreground/70">{username}</span>
+            {t("sidebar.connectedAs")}{" "}
+            <span className="font-medium text-foreground/70">{username}</span>
           </span>
         </div>
       </div>

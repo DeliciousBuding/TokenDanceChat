@@ -1,7 +1,7 @@
 services:
   chat:
     build: .
-    container_name: chat-vectorcontrol
+    container_name: tokendancechat
     ports:
       - "8080:8080"
     volumes:

@@ -1,0 +1,20 @@
+[Unit]
+Description=TokenDanceChat - Real-time Public Chat
+After=network.target
+
+[Service]
+Type=simple
+User=tokendancechat
+ExecStart=/opt/tokendancechat/tokendancechat
+WorkingDirectory=/opt/tokendancechat
+Environment=CHAT_ADDR=:8080
+Environment=CHAT_DB_PATH=/var/lib/tokendancechat/chat.db
+Environment=CHAT_FRONTEND_DIR=/opt/tokendancechat/frontend/dist
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tokendancechat
+
+[Install]
+WantedBy=multi-user.target

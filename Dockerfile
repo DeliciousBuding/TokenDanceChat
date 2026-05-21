@@ -25,10 +25,17 @@ FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates tzdata
 
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 WORKDIR /app
 
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 COPY --from=backend-builder /app/server /app/server
+
+# Create data directory with correct ownership.
+RUN mkdir -p /app/data && chown -R appuser:appgroup /app/data /app/frontend
+
+USER appuser
 
 EXPOSE 8080
 

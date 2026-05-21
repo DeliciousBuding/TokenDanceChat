@@ -47,6 +47,22 @@ export interface WSSendMessage {
 
 export type WSEventHandler = (msg: WSMessage) => void;
 
+export const ErrorCode = {
+  TIMEOUT: "ERR_TIMEOUT",
+  CLOSED: "ERR_CLOSED",
+  CANNOT_CONNECT: "ERR_CANNOT_CONNECT",
+} as const;
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
+
+export class ChatError extends Error {
+  code: ErrorCode;
+  constructor(code: ErrorCode, message: string) {
+    super(message);
+    this.code = code;
+    this.name = "ChatError";
+  }
+}
+
 class ChatAPI {
   private ws: WebSocket | null = null;
   private url: string;
@@ -75,7 +91,9 @@ class ChatAPI {
 
       const timeout = setTimeout(() => {
         if (this.pendingJoin) {
-          this.pendingJoin.reject(new Error("连接超时，请检查服务器是否运行"));
+          this.pendingJoin.reject(
+            new ChatError(ErrorCode.TIMEOUT, "Connection timed out"),
+          );
           this.pendingJoin = null;
         }
       }, 8000);
@@ -115,7 +133,9 @@ class ChatAPI {
       this.ws.onclose = () => {
         if (this.pendingJoin) {
           clearTimeout(timeout);
-          this.pendingJoin.reject(new Error("连接已关闭"));
+          this.pendingJoin.reject(
+            new ChatError(ErrorCode.CLOSED, "Connection closed"),
+          );
           this.pendingJoin = null;
         }
         if (!this.intentionalClose) {
@@ -126,7 +146,9 @@ class ChatAPI {
       this.ws.onerror = () => {
         if (this.pendingJoin) {
           clearTimeout(timeout);
-          this.pendingJoin.reject(new Error("无法连接到聊天服务器"));
+          this.pendingJoin.reject(
+            new ChatError(ErrorCode.CANNOT_CONNECT, "Cannot connect to server"),
+          );
           this.pendingJoin = null;
         }
       };

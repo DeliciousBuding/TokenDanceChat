@@ -1,13 +1,16 @@
 import { useState, useCallback } from "react";
-import { Menu, LogOut } from "lucide-react";
+import { Menu, LogOut, Globe } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useTranslation } from "@/i18n/context";
 import { cn } from "@/lib/utils";
+import type { Language } from "@/i18n/translations";
 
 export function ChatLayout() {
+  const { t, lang, setLang } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { reset } = useChatStore();
   const { disconnect, sendMessage } = useWebSocket();
@@ -17,6 +20,11 @@ export function ChatLayout() {
     reset();
   }, [disconnect, reset]);
 
+  const toggleLang = useCallback(() => {
+    const next: Language = lang === "zh-CN" ? "en-US" : "zh-CN";
+    setLang(next);
+  }, [lang, setLang]);
+
   return (
     <div className="flex h-screen overflow-hidden bg-[hsl(223,4%,13%)]">
       {/* Mobile sidebar backdrop */}
@@ -24,6 +32,7 @@ export function ChatLayout() {
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden animate-fade-in"
           onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
         />
       )}
 
@@ -46,42 +55,60 @@ export function ChatLayout() {
         <div className="flex items-center gap-3 border-b border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2.5 md:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
+            aria-label="Open sidebar"
             className="rounded-lg p-2 text-muted-foreground hover:bg-[hsl(220,2.5%,20%)] hover:text-foreground"
           >
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-foreground truncate">
-              公共聊天
+              {t("chat.roomName")}
             </h1>
           </div>
           <button
+            onClick={toggleLang}
+            aria-label={t("lang.label")}
+            className="rounded-lg p-2 text-muted-foreground/60 hover:bg-[hsl(220,2.5%,20%)] hover:text-foreground transition-colors"
+          >
+            <Globe className="h-3.5 w-3.5" />
+          </button>
+          <button
             onClick={handleDisconnect}
+            aria-label={t("chat.disconnect")}
             className="rounded-lg p-2 text-muted-foreground hover:bg-[hsl(0,62%,25%)] hover:text-destructive transition-colors"
-            title="断开连接"
           >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
 
         {/* Desktop header */}
-        <div className="hidden md:flex items-center justify-between border-b border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-6 py-3">
+        <div className="hidden md:flex items-center justify-between border-b border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-6 py-3 transition-colors duration-300">
           <div>
             <h1 className="text-sm font-semibold text-foreground">
-              公共聊天
+              {t("chat.roomName")}
             </h1>
             <p className="text-xs text-muted-foreground">
-              在线聊天室
+              {t("chat.subtitle")}
             </p>
           </div>
-          <button
-            onClick={handleDisconnect}
-            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-[hsl(0,62%,20%)] hover:text-destructive/80 transition-colors"
-            title="断开连接"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            离开
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleLang}
+              aria-label={t("lang.label")}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] transition-all duration-200"
+            >
+              <Globe className="h-3 w-3" />
+              {t("lang.switchTo")}
+            </button>
+            <button
+              onClick={handleDisconnect}
+              aria-label={t("chat.disconnect")}
+              className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-[hsl(0,62%,20%)] hover:text-destructive/80 transition-colors"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              {t("chat.leave")}
+            </button>
+          </div>
         </div>
 
         {/* Message transcript */}

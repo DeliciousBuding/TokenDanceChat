@@ -8,6 +8,13 @@ import {
   type WSUserEvent,
 } from "@/lib/api";
 
+function i18nSys(key: string, params?: Record<string, string>): string {
+  if (params) {
+    return JSON.stringify({ key, params });
+  }
+  return JSON.stringify({ key });
+}
+
 export function useWebSocket() {
   const {
     setConnected,
@@ -68,7 +75,7 @@ export function useWebSocket() {
           setOnlineUsers(online);
         }
         addSystemMessage(
-          `${username} 加入了聊天室`,
+          i18nSys("system.userJoined", { username }),
           timestamp || Date.now(),
         );
       }),
@@ -81,7 +88,7 @@ export function useWebSocket() {
           setOnlineUsers(online);
         }
         addSystemMessage(
-          `${username} 离开了聊天室`,
+          i18nSys("system.userLeft", { username }),
           timestamp || Date.now(),
         );
       }),
@@ -98,7 +105,10 @@ export function useWebSocket() {
 
     unsubs.push(
       chatAPI.on("connection_lost", () => {
-        addSystemMessage("连接已断开，正在尝试重新连接...", Date.now());
+        addSystemMessage(
+          i18nSys("system.connectionLost"),
+          Date.now(),
+        );
       }),
     );
 
