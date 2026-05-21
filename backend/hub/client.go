@@ -1092,12 +1092,11 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	// Build conversation history from memory.
 	messages := c.hub.Memory().GetMessages()
 
-	// Set the system prompt with bot identity, rules, and memory context.
 	client := c.hub.LLMClient()
-	client.SetSystemPrompt(c.hub.BuildSystemPrompt())
+	systemPrompt := c.hub.BuildSystemPrompt()
 
 	var fullResponse strings.Builder
-	err := client.ChatStream(ctx, messages, func(chunk string) error {
+	err := client.ChatStream(ctx, systemPrompt, messages, func(chunk string) error {
 		fullResponse.WriteString(chunk)
 		c.hub.BroadcastStreamChunk(c.hub.BotName(), chunk, false)
 		return nil
