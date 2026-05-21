@@ -4,6 +4,7 @@ import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
 import { GroupCreateModal } from "./GroupCreateModal";
+import { ForwardModal } from "./ForwardModal";
 import { ThemeToggle } from "./ThemeToggle";
 import { SearchBar } from "./SearchBar";
 import { useChatStore } from "@/stores/chatStore";
@@ -18,6 +19,7 @@ export function ChatLayout() {
   const { t, lang, setLang } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [forwardTarget, setForwardTarget] = useState<import("@/lib/api").ChatMessage | null>(null);
   const {
     reset,
     currentChat,
@@ -28,7 +30,7 @@ export function ChatLayout() {
     currentRoomID,
     clearConversationUnread,
   } = useChatStore();
-  const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, uploadImage } =
+  const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, uploadImage, forwardMessage } =
     useWebSocket();
 
   // Mobile keyboard handling
@@ -85,6 +87,15 @@ export function ChatLayout() {
   const handleDelete = useCallback((messageId: string) => {
     chatAPI.deleteMessage(messageId);
   }, []);
+
+  const handleForward = useCallback((message: import("@/lib/api").ChatMessage) => {
+    setForwardTarget(message);
+  }, []);
+
+  const handleForwardSend = useCallback((messageID: string, toUsername: string) => {
+    forwardMessage(messageID, toUsername);
+    setForwardTarget(null);
+  }, [forwardMessage]);
 
   const handleStartDM = useCallback(
     (targetUsername: string) => {
@@ -312,7 +323,7 @@ export function ChatLayout() {
 
         {/* Message transcript */}
         <div className="relative flex-1 overflow-hidden flex flex-col">
-          <MessageTranscript onReply={handleReply} onDelete={handleDelete} />
+          <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} />
 
           {/* Chat input - fixed at bottom */}
           <ChatInput onSend={sendHandler} onUpload={uploadImage} disabled={false} />
@@ -325,6 +336,14 @@ export function ChatLayout() {
         onClose={() => setGroupModalOpen(false)}
         onCreate={handleCreateGroup}
       />
+
+      {forwardTarget && (
+        <ForwardModal
+          message={forwardTarget}
+          onClose={() => setForwardTarget(null)}
+          onForward={handleForwardSend}
+        />
+      )}
 
       {/* Search dialog (Ctrl+K) */}
       <SearchBar currentRoomID={currentRoomID} />

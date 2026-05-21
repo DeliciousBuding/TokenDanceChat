@@ -61,6 +61,7 @@ export function useWebSocket() {
     setFriends,
     setGroupMembers,
     addFriendRequest,
+    clearAllConversationUnreads,
   } = useChatStore();
 
   const connect = useCallback(
@@ -113,9 +114,10 @@ export function useWebSocket() {
   const markRead = useCallback(() => {
     chatAPI.sendMarkRead();
     setUnreadCount(0);
+    clearAllConversationUnreads();
     unreadTitleCount = 0;
     updatePageTitle();
-  }, [setUnreadCount]);
+  }, [setUnreadCount, clearAllConversationUnreads]);
 
   const joinRoom = useCallback((roomID: string) => {
     chatAPI.sendRoomJoin(roomID);
@@ -324,18 +326,18 @@ export function useWebSocket() {
       chatAPI.on("user_status", (msg: WSMessage) => {
         const { users } = msg as WSUserStatus;
         if (users && users.length > 0) {
-          // Detect online/offline transitions and show system messages.
-          for (const user of users) {
-            const prevOnline = prevStatusRef.current[user.username];
-            if (prevOnline === false && user.online === true) {
-              // User came online.
-              addSystemMessage(
-                i18nSys("system.userOnline", { username: user.username }),
-                Date.now(),
-              );
+          const isFirstEvent = Object.keys(prevStatusRef.current).length === 0;
+          if (!isFirstEvent) {
+            for (const user of users) {
+              const prevOnline = prevStatusRef.current[user.username];
+              if (prevOnline === false && user.online === true) {
+                addSystemMessage(
+                  i18nSys("system.userOnline", { username: user.username }),
+                  Date.now(),
+                );
+              }
             }
           }
-          // Update tracking ref.
           const newMap: Record<string, boolean> = {};
           for (const user of users) {
             newMap[user.username] = user.online;

@@ -96,6 +96,7 @@ interface ChatState {
   setUnreadCount: (count: number) => void;
   incrementConversationUnread: (key: string) => void;
   clearConversationUnread: (key: string) => void;
+  clearAllConversationUnreads: () => void;
   updateMessageReactions: (messageId: string, reactions: Record<string, string[]>) => void;
   editMessageInPlace: (messageId: string, content: string) => void;
   reset: () => void;
@@ -204,6 +205,7 @@ export const useChatStore = create<ChatState>((set) => ({
       delete next[key];
       return { unreadByConversation: next };
     }),
+  clearAllConversationUnreads: () => set({ unreadByConversation: {} }),
   updateMessageReactions: (messageId, reactions) =>
     set((state) => ({
       messages: state.messages.map((m) =>
