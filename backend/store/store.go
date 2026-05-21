@@ -128,6 +128,9 @@ func (s *Store) migrate() error {
 	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN group_name TEXT DEFAULT ''"); err != nil {
 		log.Printf("store: migrate add column group_name: %v", err)
 	}
+	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN delivered INTEGER NOT NULL DEFAULT 0"); err != nil {
+		log.Printf("store: migrate add column delivered: %v", err)
+	}
 
 	// Seed default room if not present.
 	s.ensureDefaultRoom()
@@ -603,4 +606,43 @@ func (s *Store) GetAllGroups() map[string][]string {
 		}
 	}
 	return groups
+}
+
+// GetUndeliveredDMs returns recent DMs addressed to a user that haven't been delivered yet.
+func (s *Store) GetUndeliveredDMs(username string, limit int) []StoredMessage {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.db.Query(
+		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE to_user = ? AND deleted = 0 AND delivered = 0 ORDER BY timestamp ASC LIMIT ?",
+		username, limit,
+	)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var msgs []StoredMessage
+	for rows.Next() {
+		var m StoredMessage
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName); err != nil {
+			continue
+		}
+		msgs = append(msgs, m)
+	}
+	if msgs == nil {
+		msgs = []StoredMessage{}
+	}
+	return msgs
+}
+
+// MarkMessagesDelivered marks a set of message IDs as delivered.
+func (s *Store) MarkMessagesDelivered(ids []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, id := range ids {
+		s.db.Exec("UPDATE messages SET delivered = 1 WHERE id = ?", id)
+	}
+	return nil
 }
