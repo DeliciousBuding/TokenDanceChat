@@ -540,7 +540,8 @@ func (h *Hub) IsOnline(username string) bool {
 }
 
 // SendToUser sends a marshaled message to a specific user by username.
-func (h *Hub) SendToUser(username string, data []byte) {
+// Returns true if the user was online and the message was queued.
+func (h *Hub) SendToUser(username string, data []byte) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for c := range h.clients {
@@ -549,9 +550,10 @@ func (h *Hub) SendToUser(username string, data []byte) {
 			case c.send <- data:
 			default:
 			}
-			return
+			return true
 		}
 	}
+	return false
 }
 
 // SendToGroup sends a marshaled message to all group members who are online.
