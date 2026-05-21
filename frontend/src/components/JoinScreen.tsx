@@ -1,7 +1,9 @@
-import { useState, useCallback, type FormEvent, type KeyboardEvent } from "react";
+import { useState, useCallback, useEffect, type FormEvent, type KeyboardEvent } from "react";
 import { MessageCircle, ArrowRight, Loader2 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
+
+const USERNAME_STORAGE_KEY = "tokendance:username";
 
 export function JoinScreen() {
   const [username, setUsername] = useState("");
@@ -9,6 +11,14 @@ export function JoinScreen() {
   const [connecting, setConnecting] = useState(false);
   const { setView, setUsername: setStoreUsername } = useChatStore();
   const { connect } = useWebSocket();
+
+  // Load saved username from localStorage on mount.
+  useEffect(() => {
+    const saved = localStorage.getItem(USERNAME_STORAGE_KEY);
+    if (saved) {
+      setUsername(saved);
+    }
+  }, []);
 
   const handleJoin = useCallback(
     async (e?: FormEvent) => {
@@ -30,8 +40,8 @@ export function JoinScreen() {
         return;
       }
 
-      if (!/^[一-龥a-zA-Z0-9_\-\s]+$/.test(trimmed)) {
-        setError("用户名只能包含中文、英文、数字、下划线和连字符");
+      if (!/^[一-龥a-zA-Z0-9_]+$/.test(trimmed)) {
+        setError("用户名只能包含中文、英文、数字和下划线");
         return;
       }
 
@@ -40,10 +50,13 @@ export function JoinScreen() {
 
       try {
         await connect(trimmed);
+        // Save username to localStorage on success.
+        localStorage.setItem(USERNAME_STORAGE_KEY, trimmed);
         setStoreUsername(trimmed);
         setView("chat");
-      } catch {
-        setError("连接服务器失败，请确保服务器正在运行");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "连接服务器失败，请确保服务器正在运行";
+        setError(message);
         setConnecting(false);
       }
     },
@@ -76,10 +89,10 @@ export function JoinScreen() {
 
           {/* Title */}
           <h1 className="mb-1 text-center text-2xl font-semibold text-foreground tracking-tight">
-            公共聊天
+            TokenDance Chat
           </h1>
           <p className="mb-8 text-center text-sm text-muted-foreground">
-            输入用户名加入聊天室
+            输入用户名加入公共聊天室
           </p>
 
           {/* Form */}
@@ -137,8 +150,8 @@ export function JoinScreen() {
         </div>
 
         {/* Footer hint */}
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          加入即表示你同意遵守聊天室规范
+        <p className="mt-6 text-center text-xs text-muted-foreground/50">
+          公共聊天室 · 文明交流
         </p>
       </div>
     </div>

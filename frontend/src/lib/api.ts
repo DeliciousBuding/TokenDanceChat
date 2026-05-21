@@ -30,6 +30,11 @@ export interface WSUserEvent extends WSMessage {
   timestamp: number;
 }
 
+export interface WSErrorMessage extends WSMessage {
+  type: "error";
+  content: string;
+}
+
 export interface WSJoinRequest {
   type: "join";
   username: string;
@@ -51,6 +56,12 @@ class ChatAPI {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 2000;
   private intentionalClose = false;
+  private pendingJoin:
+    | {
+        resolve: () => void;
+        reject: (err: Error) => void;
+      }
+    | null = null;
 
   constructor(url: string = "ws://localhost:8080/ws") {
     this.url = url;
@@ -59,20 +70,42 @@ class ChatAPI {
   connect(username: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.intentionalClose = false;
+      this.pendingJoin = { resolve, reject };
       this.ws = new WebSocket(this.url);
+
+      const timeout = setTimeout(() => {
+        if (this.pendingJoin) {
+          this.pendingJoin.reject(new Error("连接超时，请检查服务器是否运行"));
+          this.pendingJoin = null;
+        }
+      }, 8000);
 
       this.ws.onopen = () => {
         this.reconnectAttempts = 0;
-        // Send join message
         this.send({ type: "join", username });
-        resolve();
       };
 
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data) as WSMessage;
+
+          // Handle error during join phase.
+          if (data.type === "error" && this.pendingJoin) {
+            clearTimeout(timeout);
+            this.pendingJoin.reject(new Error(data.content as string));
+            this.pendingJoin = null;
+            this.ws?.close();
+            return;
+          }
+
+          // Confirm join when we receive history.
+          if (data.type === "history" && this.pendingJoin) {
+            clearTimeout(timeout);
+            this.pendingJoin.resolve();
+            this.pendingJoin = null;
+          }
+
           this.dispatch(data.type, data);
-          // Also dispatch to the catch-all "*" handler
           this.dispatch("*", data);
         } catch {
           console.warn("Failed to parse WebSocket message:", event.data);
@@ -80,15 +113,21 @@ class ChatAPI {
       };
 
       this.ws.onclose = () => {
+        if (this.pendingJoin) {
+          clearTimeout(timeout);
+          this.pendingJoin.reject(new Error("连接已关闭"));
+          this.pendingJoin = null;
+        }
         if (!this.intentionalClose) {
           this.attemptReconnect(username);
         }
       };
 
-      this.ws.onerror = (err) => {
-        console.error("WebSocket error:", err);
-        if (this.ws?.readyState !== WebSocket.OPEN) {
-          reject(new Error("Failed to connect to chat server"));
+      this.ws.onerror = () => {
+        if (this.pendingJoin) {
+          clearTimeout(timeout);
+          this.pendingJoin.reject(new Error("无法连接到聊天服务器"));
+          this.pendingJoin = null;
         }
       };
     });
@@ -102,12 +141,13 @@ class ChatAPI {
     }
 
     this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1);
+    const delay =
+      this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1);
 
     this.reconnectTimer = setTimeout(() => {
       console.log(`Reconnecting... attempt ${this.reconnectAttempts}`);
       this.connect(username).catch(() => {
-        // Error already logged in connect
+        // Error already logged in connect.
       });
     }, delay);
   }
@@ -130,7 +170,6 @@ class ChatAPI {
     }
     this.handlers.get(event)!.add(handler);
 
-    // Return unsubscribe function
     return () => {
       this.handlers.get(event)?.delete(handler);
     };

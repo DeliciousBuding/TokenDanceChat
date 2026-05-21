@@ -1,4 +1,4 @@
-import { cn, formatTime } from "@/lib/utils";
+import { formatTime } from "@/lib/utils";
 
 interface SystemMessageProps {
   content: string;

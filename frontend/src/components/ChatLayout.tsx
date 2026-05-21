@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 export function ChatLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { username, reset } = useChatStore();
+  const { reset } = useChatStore();
   const { disconnect, sendMessage } = useWebSocket();
 
   const handleDisconnect = useCallback(() => {

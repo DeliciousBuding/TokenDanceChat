@@ -144,6 +144,18 @@ func (h *Hub) OnlineUsers() []string {
 	return h.onlineUsers()
 }
 
+// IsUsernameTaken checks if a username is already in use by an active client.
+func (h *Hub) IsUsernameTaken(username string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.clients {
+		if c.username == username {
+			return true
+		}
+	}
+	return false
+}
+
 // usernameRegex validates: 1-20 chars, alphanumeric, underscore, or Chinese chars.
 var usernameRegex = regexp.MustCompile(`^[\p{Han}a-zA-Z0-9_]{1,20}$`)
 
