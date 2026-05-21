@@ -33,7 +33,7 @@ func (m *mockStore) GetMessages(limit int, before int64) []hub.StoredMessage {
 	return m.messages
 }
 
-func (m *mockStore) MarkDeleted(msgID string) (hub.StoredMessage, error) { return hub.StoredMessage{}, nil }
+func (m *mockStore) MarkDeleted(msgID string) error { return nil }
 func (m *mockStore) TotalMessages() int64 {
 	return int64(len(m.messages))
 }

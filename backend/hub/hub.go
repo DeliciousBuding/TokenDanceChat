@@ -2,8 +2,10 @@ package hub
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -300,6 +302,43 @@ func (h *Hub) LLMClient() *llm.Client {
 // Memory returns the LLM context memory, or nil if not configured.
 func (h *Hub) Memory() *llm.Memory {
 	return h.memory
+}
+
+// SetMemoryPath sets the MEMORY.md path for the bot's memory if configured.
+func (h *Hub) SetMemoryPath(path string) {
+	if h.memory != nil {
+		h.memory.SetMemoryPath(path)
+	}
+}
+
+// GetMemoryContent returns the current MEMORY.md content, or empty string.
+func (h *Hub) GetMemoryContent() string {
+	if h.memory == nil {
+		return ""
+	}
+	return h.memory.GetMemoryContent()
+}
+
+// BuildSystemPrompt builds the full system prompt for the LLM,
+// including bot identity, rules, and memory context.
+func (h *Hub) BuildSystemPrompt() string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "You are a helpful chatbot named %s. Speak Chinese by default. Be concise and friendly.\n\n", h.botName)
+	sb.WriteString("Rules:\n")
+	sb.WriteString("- No offensive content\n")
+	sb.WriteString("- No roleplaying\n")
+	fmt.Fprintf(&sb, "- Identify yourself as a bot named %s\n", h.botName)
+	sb.WriteString("- When mentioning users, use @username format\n\n")
+
+	if h.memory != nil {
+		if content := h.memory.GetMemoryContent(); content != "" {
+			sb.WriteString("## Conversation Context (from memory)\n")
+			sb.WriteString(content)
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String()
 }
 
 // LastSeen returns the last seen timestamp for a username.
