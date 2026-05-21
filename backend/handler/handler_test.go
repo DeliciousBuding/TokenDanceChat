@@ -18,7 +18,7 @@ type mockStore struct {
 	messages []hub.StoredMessage
 }
 
-func (m *mockStore) InsertMessage(username, content string) (hub.StoredMessage, error) {
+func (m *mockStore) InsertMessage(username, content, replyToID string) (hub.StoredMessage, error) {
 	msg := hub.StoredMessage{
 		ID:        "mock-id-" + username,
 		Username:  username,
@@ -33,6 +33,7 @@ func (m *mockStore) GetMessages(limit int, before int64) []hub.StoredMessage {
 	return m.messages
 }
 
+func (m *mockStore) MarkDeleted(msgID string) (hub.StoredMessage, error) { return hub.StoredMessage{}, nil }
 func (m *mockStore) TotalMessages() int64 {
 	return int64(len(m.messages))
 }
@@ -109,7 +110,7 @@ func TestGetMessagesAfterInsert(t *testing.T) {
 	h := newTestHandler()
 
 	// Insert a message via the store.
-	h.store.InsertMessage("alice", "hello")
+	h.store.InsertMessage("alice", "hello", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/messages", nil)
 	w := httptest.NewRecorder()

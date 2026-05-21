@@ -40,17 +40,46 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 				memorySize = parsed
 			}
 		}
+		maxTokens := 8192
+		if mt := os.Getenv("CHAT_LLM_MAX_TOKENS"); mt != "" {
+			if parsed, err := strconv.Atoi(mt); err == nil && parsed > 0 {
+				maxTokens = parsed
+			}
+		}
 
 		llmCfg = &llm.Config{
 			Provider:   strings.ToLower(provider),
 			APIKey:     os.Getenv("CHAT_LLM_API_KEY"),
 			Model:      os.Getenv("CHAT_LLM_MODEL"),
 			BaseURL:    os.Getenv("CHAT_LLM_BASE_URL"),
+			MaxTokens:  maxTokens,
 			MemorySize: memorySize,
 		}
 	}
 
 	h := hub.New(st, llmCfg, botName)
+
+	// Set up bot memory persistence if LLM is configured and path is set.
+	if llmCfg != nil {
+		memPath := os.Getenv("CHAT_LLM_MEMORY_PATH")
+		if memPath != "" {
+			if h.Memory() != nil {
+				if err := h.Memory().SetPersistPath(memPath); err != nil {
+					log.Printf("warn: failed to load bot memory from %s: %v", memPath, err)
+				} else {
+					log.Printf("bot memory loaded from %s", memPath)
+				}
+			}
+		}
+	}
+
+	// Server restart announcement: if there are existing messages, broadcast restart.
+	existingCount := len(st.GetMessages(1, 0))
+	if existingCount > 0 {
+		st.InsertMessage("system", "服务器已重启 Server restarted", "")
+		log.Printf("server restart announced (existing messages: %d)", existingCount)
+	}
+
 	go h.Run()
 
 	hdlr := handler.New(h, st)

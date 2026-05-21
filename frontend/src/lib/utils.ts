@@ -7,23 +7,38 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatTime(timestamp: number): string {
   const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const oneDay = 86400000;
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
 
-  const hours = date.getHours().toString().padStart(2, "0");
-  const minutes = date.getMinutes().toString().padStart(2, "0");
+  // Less than 1 minute: "刚刚"
+  if (diffSec < 60) return "刚刚";
 
-  if (diff < oneDay && now.getDate() === date.getDate()) {
-    return `${hours}:${minutes}`;
+  // Less than 1 hour: "N分钟前"
+  if (diffMin < 60) return `${diffMin}分钟前`;
+
+  // Less than 24h and same day: "HH:mm"
+  const today = new Date();
+  if (
+    diffHour < 24 &&
+    date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
+  ) {
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
-  const month = (date.getMonth() + 1).toString().padStart(2, "0");
-  const day = date.getDate().toString().padStart(2, "0");
-
-  if (now.getFullYear() === date.getFullYear()) {
-    return `${month}-${day} ${hours}:${minutes}`;
+  // This year: "MM-DD HH:mm"
+  if (date.getFullYear() === today.getFullYear()) {
+    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
-  return `${date.getFullYear()}-${month}-${day} ${hours}:${minutes}`;
+  // Other years: "YYYY-MM-DD HH:mm"
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function pad(n: number): string {
+  return n.toString().padStart(2, "0");
 }
