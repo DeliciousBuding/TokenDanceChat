@@ -318,3 +318,83 @@
     opacity: 1;
   }
 }
+
+/* ---------- PWA / Mobile optimization ---------- */
+
+/* Bottom safe area for iPhone notch */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pb-safe-extra {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+}
+
+/* Top safe area */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Minimum touch target size (WCAG 2.5.5) */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* FAB (Floating Action Button) */
+.fab {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
+  right: 16px;
+  z-index: 30;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.fab:active {
+  transform: scale(0.9);
+}
+
+/* Context menu overlay */
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 180px;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  animation: scaleIn 0.15s ease-out;
+}
+
+.context-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background: transparent;
+}
+
+/* Pull-down indicator */
+@keyframes pullDownSpinner {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.pull-down-spinner {
+  animation: pullDownSpinner 0.8s linear infinite;
+}
+
+/* Prevent overscroll bounce on mobile PWA */
+html {
+  overscroll-behavior: none;
+}
+
+/* Viewport height fix for mobile browsers (address bar) */
+.h-screen-mobile {
+  height: 100vh;
+  height: 100dvh;
+}

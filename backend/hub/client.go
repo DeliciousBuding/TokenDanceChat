@@ -222,7 +222,7 @@ func (c *Client) handleChatMessage(msg Message) {
 	}
 
 	// Save to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "")
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
 		return
@@ -554,7 +554,7 @@ func (c *Client) handleGroupMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "")
 	if err != nil {
 		log.Printf("failed to insert group message: %v", err)
 		return
@@ -616,11 +616,6 @@ func (c *Client) handleMessageDelete(msg Message) {
 	messageID := msg.ID
 	if messageID == "" {
 		return
-	}
-
-	// MarkDeleted not yet implemented in store; broadcasting deletion event only.
-	// log.Printf("failed to mark message deleted: %v", err)
-	// return
 	}
 
 	// Broadcast deletion.
