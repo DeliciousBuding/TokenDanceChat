@@ -12,7 +12,7 @@ interface UserProfileCardProps {
 
 export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
   const { t } = useTranslation();
-  const { userStatusList, setSelectedProfileUser } = useChatStore();
+  const { userStatusList, setSelectedProfileUser, setCurrentChat } = useChatStore();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
   const startYRef = useRef(0);
@@ -62,8 +62,8 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
 
   const handleSendMessage = useCallback(() => {
     setSelectedProfileUser(null);
-    // Focus the message input - the ChatInput already auto-focuses.
-  }, [setSelectedProfileUser]);
+    setCurrentChat({ type: "dm", username });
+  }, [setSelectedProfileUser, setCurrentChat, username]);
 
   // Touch handlers for swipe-to-dismiss (mobile bottom sheet).
   const handleTouchStart = useCallback((e: React.TouchEvent) => {

@@ -556,6 +556,31 @@ func (h *Hub) BroadcastJSON(msg Message) {
 	}
 }
 
+// BroadcastToRoom sends marshaled data only to clients in the given room.
+func (h *Hub) BroadcastToRoom(data []byte, roomID string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if roomID == "" {
+		// If no room specified, broadcast to all.
+		for c := range h.clients {
+			select {
+			case c.send <- data:
+			default:
+			}
+		}
+		return
+	}
+	for c := range h.clients {
+		if c.currentRoomID != roomID {
+			continue
+		}
+		select {
+		case c.send <- data:
+		default:
+		}
+	}
+}
+
 // SendBotMessage persists a bot message to the store and broadcasts it.
 func (h *Hub) SendBotMessage(content, roomID string) {
 	h.SendAssistantMessage(h.botName, content, roomID)

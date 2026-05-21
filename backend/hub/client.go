@@ -407,7 +407,7 @@ func (c *Client) handleMessageEdit(msg Message) {
 		Timestamp: updated.Timestamp,
 		Edited:    true,
 	})
-	c.hub.broadcast <- editMsg
+	c.hub.BroadcastToRoom(editMsg, updated.RoomID)
 }
 
 // checkRateLimit returns true if the message is allowed (within rate limit).
@@ -1098,7 +1098,7 @@ func (c *Client) handleForward(msg Message) {
 		Timestamp: storedMsg.Timestamp,
 		RoomID:    c.currentRoomID,
 	})
-	c.hub.broadcast <- fwdMsg
+	c.hub.BroadcastToRoom(fwdMsg, c.currentRoomID)
 
 	// Also send to target user if online.
 	forwardPayload, _ := json.Marshal(Message{
