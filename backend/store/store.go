@@ -413,6 +413,9 @@ func (s *Store) getMessageByIDLocked(messageID string) (StoredMessage, error) {
 	if err != nil {
 		return StoredMessage{}, err
 	}
+	if m.Deleted {
+		m.Content = ""
+	}
 	return m, nil
 }
 

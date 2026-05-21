@@ -143,10 +143,14 @@ export const useChatStore = create<ChatState>((set) => ({
         },
       ],
     })),
-  setHistory: (messages) =>
-    set({
-      messages,
-      historyLoaded: true,
+  setHistory: (incoming) =>
+    set((state) => {
+      const existingIDs = new Set(state.messages.map((m) => m.id));
+      const newMessages = incoming.filter((m) => !existingIDs.has(m.id));
+      return {
+        messages: [...state.messages, ...newMessages],
+        historyLoaded: true,
+      };
     }),
   setOnlineUsers: (onlineUsers) => set({ onlineUsers }),
   setUserStatusList: (userStatusList) => set({ userStatusList }),

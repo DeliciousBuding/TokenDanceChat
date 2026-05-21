@@ -1112,6 +1112,20 @@ func (c *Client) handleForward(msg Message) {
 		return
 	}
 
+	// Block forwarding of deleted messages.
+	if stored.Deleted {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "cannot forward deleted messages",
+			ErrorCode: "FORWARD_BLOCKED",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
 	forwardContent := "Forwarded from " + stored.Username + ":\n" + stored.Content
 
 	// Persist as a new message.
