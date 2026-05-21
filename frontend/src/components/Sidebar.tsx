@@ -80,7 +80,7 @@ const UserListItem = memo(function UserListItem({
 
 export function Sidebar({ collapsed, onClose }: SidebarProps) {
   const { t } = useTranslation();
-  const { userStatusList, username, setSelectedProfileUser } = useChatStore();
+  const { userStatusList, username, setSelectedProfileUser, unreadCount = 0 } = useChatStore();
 
   // Split users into online and offline groups.
   const onlineUsers = useMemo(

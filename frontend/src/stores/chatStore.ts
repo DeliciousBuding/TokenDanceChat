@@ -30,6 +30,7 @@ interface ChatState {
   setUsername: (username: string) => void;
   setConnected: (connected: boolean) => void;
   addMessage: (message: ChatMessage) => void;
+  deleteMessage: (id: string) => void;
   addSystemMessage: (content: string, timestamp: number) => void;
   setHistory: (messages: ChatMessage[]) => void;
   setOnlineUsers: (users: string[]) => void;
@@ -38,6 +39,13 @@ interface ChatState {
   setTypingUsers: (users: string[]) => void;
   addTypingUser: (username: string) => void;
   removeTypingUser: (username: string) => void;
+
+  // Stubs for pending features (streaming, notifications).
+  unreadCount: number;
+  setUnreadCount: (count: number) => void;
+  appendStreamChunk: (chunk: string) => void;
+  streamingContent: string;
+
   reset: () => void;
 }
 
@@ -58,6 +66,10 @@ export const useChatStore = create<ChatState>((set) => ({
   addMessage: (message) =>
     set((state) => ({
       messages: [...state.messages, message],
+    })),
+  deleteMessage: (id) =>
+    set((state) => ({
+      messages: state.messages.filter((m) => m.id !== id),
     })),
   addSystemMessage: (content, timestamp) =>
     set((state) => ({
