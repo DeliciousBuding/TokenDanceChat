@@ -18,6 +18,7 @@ export interface ChatMessage {
   to?: string;
   from?: string;
   group?: string;
+  read_by?: string[];
 }
 
 export interface WSChatMessage extends WSMessage {
@@ -431,8 +432,8 @@ class ChatAPI {
     this.send({ type: "message_delete", id });
   }
 
-  sendMarkRead(): void {
-    this.send({ type: "mark_read" });
+  sendMarkRead(context?: string, to?: string): void {
+    this.send({ type: "mark_read", context, to });
   }
 
   sendRoomJoin(roomID: string): void {
@@ -465,6 +466,18 @@ class ChatAPI {
 
   sendMessageEdit(messageId: string, content: string): void {
     this.send({ type: "message_edit", id: messageId, content });
+  }
+
+  sendBlock(username: string): void {
+    this.send({ type: "block", username });
+  }
+
+  sendUnblock(username: string): void {
+    this.send({ type: "unblock", username });
+  }
+
+  sendBlockList(): void {
+    this.send({ type: "block_list" });
   }
 
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {

@@ -487,7 +487,12 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         {isOwn && (
-          <div className="mt-1 flex justify-end">
+          <div className="mt-1 flex justify-end items-center gap-1">
+            {message.read_by && message.read_by.length > 0 && (
+              <span className="text-[10px] text-muted-foreground/40">
+                Read
+              </span>
+            )}
             <span
               className={cn(
                 "text-[10px] text-muted-foreground/50 transition-opacity",

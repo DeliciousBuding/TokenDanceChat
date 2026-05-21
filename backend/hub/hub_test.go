@@ -86,6 +86,10 @@ func (m *mockStore) GetGroupMembers(groupName string) []string           { retur
 func (m *mockStore) GetAllGroups() map[string][]string                    { return nil }
 func (m *mockStore) GetUndeliveredDMs(username string, limit int) []StoredMessage { return nil }
 func (m *mockStore) MarkMessagesDelivered(ids []string) error                       { return nil }
+func (m *mockStore) BlockUser(username, blocked string) error                      { return nil }
+func (m *mockStore) UnblockUser(username, blocked string) error                    { return nil }
+func (m *mockStore) IsBlocked(username, blocked string) bool                        { return false }
+func (m *mockStore) GetBlockedUsers(username string) []string                       { return nil }
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}

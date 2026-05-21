@@ -119,8 +119,9 @@ func (c *Client) ReadPump() {
 		case "friend_list":
 			c.handleFriendList()
 		case "mark_read":
-			// Client acknowledges they've read messages up to this point.
-			// Future: track per-user read cursor for unread count sync.
+			// Broadcast read receipt to message senders so they know their
+			// messages were seen. Context indicates which conversation was read.
+			c.handleMarkRead(msg)
 		case "group_create":
 			c.handleGroupCreate(msg)
 		case "group_invite":
@@ -363,6 +364,22 @@ func (c *Client) handleChatMessage(msg Message) {
 	select {
 	case c.hub.broadcast <- broadcastMsg:
 	default:
+	}
+
+	// Notify @mentioned users (skip self and assistants).
+	for _, mention := range parseMentions(content) {
+		if mention == c.username || mention == c.hub.BotName() || mention == c.hub.AgentName() {
+			continue
+		}
+		notifyMsg, _ := json.Marshal(Message{
+			Type:      "mention_notify",
+			From:      c.username,
+			Content:   content,
+			MessageID: storedMsg.ID,
+			RoomID:    c.currentRoomID,
+			Timestamp: storedMsg.Timestamp,
+		})
+		c.hub.SendToUser(mention, notifyMsg)
 	}
 
 	// Store the user message in LLM memory.
@@ -811,6 +828,22 @@ func (c *Client) handleGroupMessage(msg Message) {
 		ReplyToUser:    msg.ReplyToUser,
 	})
 	c.hub.SendToGroup(groupName, gm)
+
+	// Notify @mentioned users (skip self and assistants).
+	for _, mention := range parseMentions(content) {
+		if mention == c.username || mention == c.hub.BotName() || mention == c.hub.AgentName() {
+			continue
+		}
+		notifyMsg, _ := json.Marshal(Message{
+			Type:      "mention_notify",
+			From:      c.username,
+			Content:   content,
+			MessageID: storedMsg.ID,
+			Group:     groupName,
+			Timestamp: storedMsg.Timestamp,
+		})
+		c.hub.SendToUser(mention, notifyMsg)
+	}
 }
 
 func (c *Client) handleGroupJoin(msg Message) {
@@ -851,6 +884,10 @@ func (c *Client) handleDMMessage(msg Message) {
 	}
 	to := msg.To
 	if to == "" || to == c.username {
+		return
+	}
+	// Block check: if recipient has blocked sender, reject.
+	if c.hub.IsBlocked(to, c.username) {
 		return
 	}
 	content := sanitizeContent(msg.Content)
@@ -1189,7 +1226,33 @@ func (c *Client) handleForward(msg Message) {
 	c.hub.SendToUser(to, forwardPayload)
 }
 
-// handleBotResponse handles the LLM bot response when the bot is @mentioned.
+// handleMarkRead broadcasts a read receipt so message senders know their messages were seen.
+func (c *Client) handleMarkRead(msg Message) {
+	if c.username == "" {
+		return
+	}
+	// Notify users who sent messages to this reader based on context.
+	receipt := Message{
+		Type:    "read_receipt",
+		From:    c.username,
+		Context: msg.Context,
+		To:      msg.To,
+	}
+	data, err := json.Marshal(receipt)
+	if err != nil {
+		return
+	}
+	// If reading a DM, tell the DM partner their messages were read.
+	if msg.Context == "dm" && msg.To != "" {
+		c.hub.SendToUser(msg.To, data)
+		return
+	}
+	// For public/group, broadcast to all so senders can see their messages were read.
+	select {
+	case c.hub.broadcast <- data:
+	default:
+	}
+}
 // This runs in its own goroutine and streams the response.
 func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	// Send typing indicator.

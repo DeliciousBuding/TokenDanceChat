@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useEffect, useRef, useState } from "react";
-import { X, Send, UserPlus } from "lucide-react";
+import { X, Send, UserPlus, ShieldOff, Shield } from "lucide-react";
 import { cn, avatarGradient, usernameHue, formatLastSeen } from "@/lib/utils";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -12,7 +12,7 @@ interface UserProfileCardProps {
 
 export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
   const { t } = useTranslation();
-  const { userStatusList, setSelectedProfileUser, setCurrentChat } = useChatStore();
+  const { userStatusList, setSelectedProfileUser, setCurrentChat, blockedUsers } = useChatStore();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
   const startYRef = useRef(0);
@@ -183,6 +183,29 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
           <UserPlus className="h-4 w-4 text-muted-foreground" />
           Add Friend
         </button>
+        {blockedUsers.includes(username) ? (
+          <button
+            onClick={() => {
+              chatAPI.sendUnblock(username);
+              onClose();
+            }}
+            className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <ShieldOff className="h-4 w-4 text-muted-foreground" />
+            Unblock User
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              chatAPI.sendBlock(username);
+              onClose();
+            }}
+            className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <Shield className="h-4 w-4 text-muted-foreground" />
+            Block User
+          </button>
+        )}
       </div>
     </div>
   );

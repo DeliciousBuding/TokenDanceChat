@@ -104,6 +104,12 @@ func (s *Store) migrate() error {
 		username TEXT NOT NULL,
 		PRIMARY KEY (group_name, username)
 	);
+
+		CREATE TABLE IF NOT EXISTS blocked_users (
+			username TEXT NOT NULL,
+			blocked TEXT NOT NULL,
+			PRIMARY KEY (username, blocked)
+		);
 	`
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -693,4 +699,50 @@ func (s *Store) MarkMessagesDelivered(ids []string) error {
 		s.db.Exec("UPDATE messages SET delivered = 1 WHERE id = ?", id)
 	}
 	return nil
+}
+
+
+// --- User blocking ---
+
+func (s *Store) BlockUser(username, blocked string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("INSERT OR IGNORE INTO blocked_users (username, blocked) VALUES (?, ?)", username, blocked)
+	return err
+}
+
+func (s *Store) UnblockUser(username, blocked string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM blocked_users WHERE username = ? AND blocked = ?", username, blocked)
+	return err
+}
+
+func (s *Store) IsBlocked(username, blocked string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var count int
+	s.db.QueryRow("SELECT COUNT(*) FROM blocked_users WHERE username = ? AND blocked = ?", username, blocked).Scan(&count)
+	return count > 0
+}
+
+func (s *Store) GetBlockedUsers(username string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query("SELECT blocked FROM blocked_users WHERE username = ?", username)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var blocked []string
+	for rows.Next() {
+		var b string
+		if err := rows.Scan(&b); err == nil {
+			blocked = append(blocked, b)
+		}
+	}
+	if blocked == nil {
+		blocked = []string{}
+	}
+	return blocked
 }

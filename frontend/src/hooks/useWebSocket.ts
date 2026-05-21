@@ -15,6 +15,7 @@ import {
   type WSReactionUpdate,
   type WSMessageEditBroadcast,
 } from "@/lib/api";
+import { playMessageSound, playMentionSound } from "@/lib/sound";
 
 // --- Page title utilities ---
 
@@ -62,6 +63,9 @@ export function useWebSocket() {
     setGroupMembers,
     addFriendRequest,
     clearAllConversationUnreads,
+    markMessagesReadBy,
+    setLatestMention,
+    setBlockedUsers,
   } = useChatStore();
 
   const connect = useCallback(
@@ -112,7 +116,15 @@ export function useWebSocket() {
   );
 
   const markRead = useCallback(() => {
-    chatAPI.sendMarkRead();
+    const state = useChatStore.getState();
+    const chat = state.currentChat;
+    if (chat.type === "dm") {
+      chatAPI.sendMarkRead("dm", chat.username);
+    } else if (chat.type === "group") {
+      chatAPI.sendMarkRead("group", chat.name);
+    } else {
+      chatAPI.sendMarkRead("public");
+    }
     setUnreadCount(0);
     clearAllConversationUnreads();
     unreadTitleCount = 0;
@@ -147,13 +159,14 @@ export function useWebSocket() {
     const url = await chatAPI.uploadImage(file);
     if (url) {
       const state = useChatStore.getState();
-      const imageMarkdown = `![image](${url})`;
+      const isImage = file.type.startsWith("image/");
+      const fileMarkdown = isImage ? `![image](${url})` : `[${file.name}](${url})`;
       if (state.currentChat.type === "dm") {
-        chatAPI.sendDMMessage(state.currentChat.username, imageMarkdown, state.replyTo || undefined);
+        chatAPI.sendDMMessage(state.currentChat.username, fileMarkdown, state.replyTo || undefined);
       } else if (state.currentChat.type === "group") {
-        chatAPI.sendGroupMessage(state.currentChat.name, imageMarkdown, state.replyTo || undefined);
+        chatAPI.sendGroupMessage(state.currentChat.name, fileMarkdown, state.replyTo || undefined);
       } else {
-        chatAPI.sendMessage(imageMarkdown, state.replyTo || undefined);
+        chatAPI.sendMessage(fileMarkdown, state.replyTo || undefined);
       }
       state.setReplyTo(null);
     }
@@ -191,6 +204,7 @@ export function useWebSocket() {
         const state = useChatStore.getState();
         if (state.currentChat.type !== "public") {
           useChatStore.getState().incrementConversationUnread("public");
+          if (!isTabActive) playMessageSound();
         }
       }),
     );
@@ -215,6 +229,7 @@ export function useWebSocket() {
         const partner = m.from || m.username;
         if (!(state.currentChat.type === "dm" && state.currentChat.username === partner)) {
           useChatStore.getState().incrementConversationUnread(`dm:${partner}`);
+          playMessageSound();
         }
       }),
     );
@@ -238,6 +253,7 @@ export function useWebSocket() {
         const groupName = m.group || m.to;
         if (groupName && !(state.currentChat.type === "group" && state.currentChat.name === groupName)) {
           useChatStore.getState().incrementConversationUnread(`group:${groupName}`);
+          playMessageSound();
         }
       }),
     );
@@ -390,6 +406,36 @@ export function useWebSocket() {
         const { friends } = msg as { type: string; friends: string[] };
         if (friends) {
           setFriends(friends);
+        }
+      }),
+    );
+
+    // Block list
+    unsubs.push(
+      chatAPI.on("block_list", (msg: WSMessage) => {
+        const { blocked } = msg as { type: string; blocked: string[] };
+        if (blocked) {
+          setBlockedUsers(blocked);
+        }
+      }),
+    );
+
+    // Block confirmation
+    unsubs.push(
+      chatAPI.on("block", (msg: WSMessage) => {
+        const { username: blockedUser } = msg as { type: string; username: string };
+        if (blockedUser) {
+          useChatStore.getState().addBlockedUser(blockedUser);
+        }
+      }),
+    );
+
+    // Unblock confirmation
+    unsubs.push(
+      chatAPI.on("unblock", (msg: WSMessage) => {
+        const { username: unblockedUser } = msg as { type: string; username: string };
+        if (unblockedUser) {
+          useChatStore.getState().removeBlockedUser(unblockedUser);
         }
       }),
     );
@@ -554,13 +600,53 @@ export function useWebSocket() {
       }),
     );
 
+    // Read receipt — someone read our messages.
+    unsubs.push(
+      chatAPI.on("read_receipt", (msg: WSMessage) => {
+        const { from } = msg as { type: string; from: string };
+        if (from) {
+          markMessagesReadBy(from);
+        }
+      }),
+    );
+
+    // Mention notification — someone @mentioned us.
+    unsubs.push(
+      chatAPI.on("mention_notify", (msg: WSMessage) => {
+        const { from, content, message_id, room_id, group: grp } = msg as {
+          type: string;
+          from: string;
+          content: string;
+          message_id: string;
+          room_id?: string;
+          group?: string;
+        };
+        if (from) {
+          setLatestMention({
+            from,
+            content: (content || "").slice(0, 100),
+            messageId: message_id || "",
+            roomId: room_id,
+            group: grp,
+            timestamp: Date.now(),
+          });
+          playMentionSound();
+          // Flash title if tab not active.
+          if (!isTabActive) {
+            unreadTitleCount++;
+            updatePageTitle();
+          }
+        }
+      }),
+    );
+
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       unsubs.forEach((unsub) => unsub());
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

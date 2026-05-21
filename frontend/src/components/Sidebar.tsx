@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
-import { cn, avatarGradient } from "@/lib/utils";
+import { cn, avatarGradient, formatLastSeen } from "@/lib/utils";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -145,6 +145,7 @@ export function Sidebar({
     currentChat,
     setCurrentChat,
     unreadByConversation,
+    userStatusList,
   } = useChatStore();
 
   // Separate current user from others for visual grouping
@@ -383,7 +384,10 @@ export function Sidebar({
               </button>
             ))
           : friends.length > 0
-            ? friends.map((friend) => (
+            ? friends.map((friend) => {
+                const friendStatus = userStatusList.find((u) => u.username === friend);
+                const lsText = friendStatus && !friendStatus.online ? formatLastSeen(friendStatus.last_seen) : "";
+                return (
                 <div
                   key={friend}
                   className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-foreground/50"
@@ -394,10 +398,17 @@ export function Sidebar({
                   >
                     {friend.charAt(0).toUpperCase()}
                   </div>
-                  <span className="truncate">{friend}</span>
-                  <span className="ml-auto h-2 w-2 rounded-full bg-muted-foreground/30" />
+                  <div className="min-w-0 flex-1">
+                    <span className="truncate block">{friend}</span>
+                    {lsText && (
+                      <span className="text-[10px] text-muted-foreground/40 block truncate">
+                        {lsText}
+                      </span>
+                    )}
+                  </div>
+                  <span className="ml-auto h-2 w-2 flex-shrink-0 rounded-full bg-muted-foreground/30" />
                 </div>
-              ))
+              )})
             : (
               <div className="px-2 py-1">
                 <span className="text-[10px] text-muted-foreground/40">
