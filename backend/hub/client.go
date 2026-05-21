@@ -222,6 +222,32 @@ func (c *Client) handleJoin(msg Message) {
 	default:
 	}
 
+	// Deliver pending DMs that arrived while offline.
+	pendingDMs := c.hub.store.GetUndeliveredDMs(c.username, 50)
+	if len(pendingDMs) > 0 {
+		var deliveredIDs []string
+		for _, dm := range pendingDMs {
+			dmPayload, _ := json.Marshal(Message{
+				Type:           "dm_message",
+				ID:             dm.ID,
+				Username:       dm.Username,
+				Content:        dm.Content,
+				Timestamp:      dm.Timestamp,
+				To:             dm.ToUser,
+				From:           dm.Username,
+				ReplyToID:      dm.ReplyToID,
+			})
+			select {
+			case c.send <- dmPayload:
+				deliveredIDs = append(deliveredIDs, dm.ID)
+			default:
+			}
+		}
+		if len(deliveredIDs) > 0 {
+			c.hub.store.MarkMessagesDelivered(deliveredIDs)
+		}
+	}
+
 	// Send user status list to the joining client.
 	allUsers := c.hub.AllUserStatus()
 	userStatusPayload, _ := json.Marshal(Message{
@@ -830,6 +856,9 @@ func (c *Client) handleDMMessage(msg Message) {
 		ReplyToUser:    msg.ReplyToUser,
 	})
 	c.hub.SendToUser(to, dmMsgTo)
+
+	// Mark as delivered so it will not be re-sent on reconnect.
+	c.hub.store.MarkMessagesDelivered([]string{storedMsg.ID})
 
 	// Send echo back to sender.
 	dmMsgFrom, _ := json.Marshal(Message{

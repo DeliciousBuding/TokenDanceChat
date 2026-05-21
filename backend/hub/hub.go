@@ -52,6 +52,10 @@ type Store interface {
 	RemoveGroupMember(groupName, username string) error
 	GetGroupMembers(groupName string) []string
 	GetAllGroups() map[string][]string
+
+	// DM delivery tracking
+	GetUndeliveredDMs(username string, limit int) []StoredMessage
+	MarkMessagesDelivered(ids []string) error
 }
 
 // Group represents a chat group.

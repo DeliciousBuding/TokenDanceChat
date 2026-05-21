@@ -83,6 +83,8 @@ func (m *mockStore) AddGroupMember(groupName, username string) error     { retur
 func (m *mockStore) RemoveGroupMember(groupName, username string) error  { return nil }
 func (m *mockStore) GetGroupMembers(groupName string) []string           { return nil }
 func (m *mockStore) GetAllGroups() map[string][]string                    { return nil }
+func (m *mockStore) GetUndeliveredDMs(username string, limit int) []StoredMessage { return nil }
+func (m *mockStore) MarkMessagesDelivered(ids []string) error                       { return nil }
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}
