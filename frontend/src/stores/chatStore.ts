@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage } from "@/lib/api";
+import type { ChatMessage, UserStatus } from "@/lib/api";
 
 export type ViewState = "join" | "chat";
 
@@ -16,6 +16,12 @@ interface ChatState {
   // Online users
   onlineUsers: string[];
 
+  // User status list (all known users with online/offline status)
+  userStatusList: UserStatus[];
+
+  // Profile card
+  selectedProfileUser: string | null;
+
   // Typing users
   typingUsers: string[];
 
@@ -27,6 +33,8 @@ interface ChatState {
   addSystemMessage: (content: string, timestamp: number) => void;
   setHistory: (messages: ChatMessage[]) => void;
   setOnlineUsers: (users: string[]) => void;
+  setUserStatusList: (users: UserStatus[]) => void;
+  setSelectedProfileUser: (username: string | null) => void;
   setTypingUsers: (users: string[]) => void;
   addTypingUser: (username: string) => void;
   removeTypingUser: (username: string) => void;
@@ -40,6 +48,8 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   historyLoaded: false,
   onlineUsers: [],
+  userStatusList: [],
+  selectedProfileUser: null,
   typingUsers: [],
 
   setView: (view) => set({ view }),
@@ -67,6 +77,8 @@ export const useChatStore = create<ChatState>((set) => ({
       historyLoaded: true,
     }),
   setOnlineUsers: (onlineUsers) => set({ onlineUsers }),
+  setUserStatusList: (userStatusList) => set({ userStatusList }),
+  setSelectedProfileUser: (selectedProfileUser) => set({ selectedProfileUser }),
   setTypingUsers: (typingUsers) => set({ typingUsers }),
   addTypingUser: (username) =>
     set((state) => ({
@@ -86,6 +98,8 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: [],
       historyLoaded: false,
       onlineUsers: [],
+      userStatusList: [],
+      selectedProfileUser: null,
       typingUsers: [],
     }),
 }));

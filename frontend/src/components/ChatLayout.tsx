@@ -3,6 +3,7 @@ import { Menu, LogOut, Globe } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
+import { UserProfileCard } from "./UserProfileCard";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
@@ -12,7 +13,7 @@ import type { Language } from "@/i18n/translations";
 export function ChatLayout() {
   const { t, lang, setLang } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { reset } = useChatStore();
+  const { reset, selectedProfileUser, setSelectedProfileUser } = useChatStore();
   const { disconnect, sendMessage } = useWebSocket();
 
   const handleDisconnect = useCallback(() => {
@@ -122,6 +123,14 @@ export function ChatLayout() {
           />
         </div>
       </div>
+
+      {/* User profile card overlay */}
+      {selectedProfileUser && (
+        <UserProfileCard
+          username={selectedProfileUser}
+          onClose={() => setSelectedProfileUser(null)}
+        />
+      )}
     </div>
   );
 }

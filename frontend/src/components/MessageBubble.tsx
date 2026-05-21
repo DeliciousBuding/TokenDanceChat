@@ -1,7 +1,8 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { cn, formatTime } from "@/lib/utils";
+import { cn, formatTime, avatarGradient, usernameHue } from "@/lib/utils";
+import { useChatStore } from "@/stores/chatStore";
 import type { ChatMessage } from "@/lib/api";
 
 interface MessageBubbleProps {
@@ -19,25 +20,6 @@ interface MessageBubbleProps {
   isGrouped?: boolean;
 }
 
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return Math.abs(hash);
-}
-
-function avatarGradient(username: string): string {
-  const baseHue = hashString(username) % 360;
-  const hue1 = baseHue;
-  const hue2 = (baseHue + 45) % 360;
-  return `linear-gradient(135deg, oklch(65% 0.16 ${hue1}), oklch(58% 0.14 ${hue2}))`;
-}
-
-function usernameHue(username: string): number {
-  return hashString(username) % 360;
-}
-
 export const MessageBubble = memo(function MessageBubble({
   message,
   isOwn,
@@ -47,11 +29,20 @@ export const MessageBubble = memo(function MessageBubble({
   forceShowTimestamp = false,
   isGrouped = false,
 }: MessageBubbleProps) {
+  const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
   const gradient = useMemo(() => avatarGradient(message.username), [message.username]);
   const hue = useMemo(() => usernameHue(message.username), [message.username]);
   const nameColor = `oklch(72% 0.16 ${hue})`;
   const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
   const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
+
+  const handleAvatarClick = useCallback(() => {
+    setSelectedProfileUser(message.username);
+  }, [message.username, setSelectedProfileUser]);
+
+  const handleNameClick = useCallback(() => {
+    setSelectedProfileUser(message.username);
+  }, [message.username, setSelectedProfileUser]);
 
   // Parse @mentions and render with highlighting.
   const mentionContent = useMemo(() => {
@@ -128,13 +119,14 @@ export const MessageBubble = memo(function MessageBubble({
       {/* Avatar for others */}
       {!isOwn && !hideAvatar && (
         <div className="mt-0.5 flex-shrink-0">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ring-1 ring-white/10"
+          <button
+            onClick={handleAvatarClick}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ring-1 ring-white/10 hover:ring-white/30 hover:scale-110 transition-all cursor-pointer"
             style={{ background: gradient }}
-            aria-hidden="true"
+            aria-label={`View ${message.username}'s profile`}
           >
             {message.username.charAt(0).toUpperCase()}
-          </div>
+          </button>
         </div>
       )}
 
@@ -151,12 +143,13 @@ export const MessageBubble = memo(function MessageBubble({
             )}
           >
             {!isOwn && (
-              <span
-                className="text-xs font-medium"
+              <button
+                onClick={handleNameClick}
+                className="text-xs font-medium hover:underline cursor-pointer"
                 style={{ color: nameColor }}
               >
                 {message.username}
-              </span>
+              </button>
             )}
             {/* Timestamp in header: only for solo messages (not first in group) */}
             {isOwn && !isGrouped && (
@@ -225,13 +218,14 @@ export const MessageBubble = memo(function MessageBubble({
       {/* Avatar for own messages */}
       {isOwn && !hideAvatar && (
         <div className="mt-0.5 flex-shrink-0">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ring-1 ring-white/10"
+          <button
+            onClick={handleAvatarClick}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ring-1 ring-white/10 hover:ring-white/30 hover:scale-110 transition-all cursor-pointer"
             style={{ background: gradient }}
-            aria-hidden="true"
+            aria-label={`View ${message.username}'s profile`}
           >
             {message.username.charAt(0).toUpperCase()}
-          </div>
+          </button>
         </div>
       )}
 
