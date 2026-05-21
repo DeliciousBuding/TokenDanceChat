@@ -8,13 +8,7 @@ export interface ChatMessage {
   username: string;
   content: string;
   timestamp: number;
-  reply_to_id?: string;
-  reply_to_content?: string;
-  reply_to_user?: string;
-  deleted?: boolean;
-  to?: string;
-  from?: string;
-  group?: string;
+  room_id?: string;
 }
 
 export interface WSChatMessage extends WSMessage {
@@ -23,14 +17,13 @@ export interface WSChatMessage extends WSMessage {
   username: string;
   content: string;
   timestamp: number;
-  reply_to_id?: string;
-  reply_to_content?: string;
-  reply_to_user?: string;
+  room_id?: string;
 }
 
 export interface WSHistoryMessage extends WSMessage {
   type: "history";
   messages: ChatMessage[];
+  room_id?: string;
 }
 
 export interface WSUserEvent extends WSMessage {
@@ -133,6 +126,39 @@ export interface WSMessageDelete {
 
 export interface WSMarkRead {
   type: "mark_read";
+}
+
+// Room types
+export interface RoomInfo {
+  id: string;
+  name: string;
+}
+
+export interface WSRoomList extends WSMessage {
+  type: "room_list";
+  rooms: RoomInfo[];
+}
+
+export interface WSRoomJoin extends WSMessage {
+  type: "room_join";
+  room_id: string;
+}
+
+// Link preview types
+export interface LinkPreviewData {
+  title: string;
+  description: string;
+  image: string;
+  url: string;
+}
+
+// Forward types
+export interface WSForwardEvent extends WSMessage {
+  type: "forward";
+  from: string;
+  content: string;
+  id: string;
+  timestamp: number;
 }
 
 export type WSEventHandler = (msg: WSMessage) => void;
@@ -350,6 +376,45 @@ class ChatAPI {
 
   sendMarkRead(): void {
     this.send({ type: "mark_read" });
+  }
+
+  sendRoomJoin(roomID: string): void {
+    this.send({ type: "room_join", room_id: roomID } as WSJoinRequest & { room_id: string });
+  }
+
+  sendRoomCreate(name: string): void {
+    this.send({ type: "room_create", group: name } as WSJoinRequest & { group: string });
+  }
+
+  sendRoomLeave(): void {
+    this.send({ type: "room_leave" } as WSJoinRequest);
+  }
+
+  sendForward(messageID: string, toUsername: string): void {
+    this.send({ type: "forward", id: messageID, to: toUsername } as WSJoinRequest & { id: string; to: string });
+  }
+
+  async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
+    try {
+      const resp = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
+      if (!resp.ok) return null;
+      return await resp.json() as LinkPreviewData;
+    } catch {
+      return null;
+    }
+  }
+
+  async uploadImage(file: File): Promise<string | null> {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const resp = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!resp.ok) return null;
+      const data = await resp.json() as { url: string };
+      return data.url;
+    } catch {
+      return null;
+    }
   }
 
   on(event: string, handler: WSEventHandler): () => void {
