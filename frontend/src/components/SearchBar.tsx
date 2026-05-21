@@ -3,6 +3,10 @@ import { Search, X, Loader2 } from "lucide-react";
 import { chatAPI, type SearchResult } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+function escapeHTML(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 interface SearchBarProps {
   currentRoomID: string;
 }
@@ -97,7 +101,7 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
                 className={cn("w-full text-left px-4 py-3 border-b border-border last:border-b-0 transition-colors",
                   i === selectedIndex ? "bg-accent" : "hover:bg-accent")}>
                 <div className="flex items-center gap-2 mb-1"><span className="text-xs font-medium text-muted-foreground/70">{r.username}</span></div>
-                <p className="text-xs text-muted-foreground/80 line-clamp-2" dangerouslySetInnerHTML={{ __html: r.snippet || r.content.substring(0, 120) }} />
+                <p className="text-xs text-muted-foreground/80 line-clamp-2" dangerouslySetInnerHTML={{ __html: r.snippet || escapeHTML(r.content.substring(0, 120)) }} />
               </button>
             ))}
           </div>
