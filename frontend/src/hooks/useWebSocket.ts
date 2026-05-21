@@ -3,6 +3,7 @@ import { useChatStore } from "@/stores/chatStore";
 import {
   chatAPI,
   type WSMessage,
+  type ChatMessage,
   type WSChatMessage,
   type WSHistoryMessage,
   type WSUserEvent,
@@ -88,8 +89,9 @@ function i18nSys(key: string, params?: Record<string, string>): string {
 }
 
 export function useWebSocket() {
-  const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const prevStatusRef = useRef<Record<string, boolean>>({});
+  const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
   const {
     username,
     setConnected,
@@ -100,8 +102,13 @@ export function useWebSocket() {
     addSystemMessage,
     addTypingUser,
     removeTypingUser,
-    appendStreamChunk,
-    setUnreadCount,
+    setFriends,
+    addFriendRequest,
+    removeFriendRequest,
+    setGroupMembers,
+    addDMMessage,
+    addGroupMessage,
+    deleteMessage,
   } = useChatStore();
 
   const connect = useCallback(
@@ -123,9 +130,33 @@ export function useWebSocket() {
     setConnected(false);
   }, [setConnected]);
 
-  const sendMessage = useCallback((content: string) => {
-    chatAPI.sendMessage(content);
-  }, []);
+  const sendMessage = useCallback(
+    (content: string) => {
+      const state = useChatStore.getState();
+      chatAPI.sendMessage(content, state.replyTo || undefined);
+      // Clear reply after sending.
+      useChatStore.getState().setReplyTo(null);
+    },
+    [],
+  );
+
+  const sendDMMessage = useCallback(
+    (to: string, content: string) => {
+      const state = useChatStore.getState();
+      chatAPI.sendDMMessage(to, content, state.replyTo || undefined);
+      useChatStore.getState().setReplyTo(null);
+    },
+    [],
+  );
+
+  const sendGroupMessage = useCallback(
+    (group: string, content: string) => {
+      const state = useChatStore.getState();
+      chatAPI.sendGroupMessage(group, content, state.replyTo || undefined);
+      useChatStore.getState().setReplyTo(null);
+    },
+    [],
+  );
 
   const markRead = useCallback(() => {
     chatAPI.sendMarkRead();
@@ -146,32 +177,60 @@ export function useWebSocket() {
     document.addEventListener("visibilitychange", handleVisibility);
     const unsubs: (() => void)[] = [];
 
+    // Public chat message
     unsubs.push(
       chatAPI.on("message", (msg: WSMessage) => {
-        const { id, username: sender, content, timestamp } = msg as WSChatMessage;
+        const { id, username, content, timestamp, reply_to_id, reply_to_content, reply_to_user } =
+          msg as WSChatMessage;
         addMessage({
           id,
           username: sender,
           content,
           timestamp: timestamp || Date.now(),
-        });
-        // Remove typing indicator when a message from this user arrives.
-        removeTypingUser(sender);
-
-        // @mention detection.
-        if (sender !== username && username && hasMention(content, username)) {
-          flashMentionTitle(sender);
-          showNotification("TokenDanceChat", `${sender} mentioned you in chat`);
-        }
-
-        // Page title: increment unread count when tab is inactive.
-        if (!isTabActive && sender !== username && sender !== "system") {
-          unreadTitleCount++;
-          updatePageTitle();
-        }
+          reply_to_id,
+          reply_to_content,
+          reply_to_user,
+        } as ChatMessage);
+        removeTypingUser(username);
       }),
     );
 
+    // DM message
+    unsubs.push(
+      chatAPI.on("dm_message", (msg: WSMessage) => {
+        const m = msg as unknown as ChatMessage;
+        addDMMessage({
+          id: m.id,
+          username: m.username,
+          content: m.content,
+          timestamp: m.timestamp || Date.now(),
+          to: m.to,
+          from: m.from || m.username,
+          reply_to_id: m.reply_to_id,
+          reply_to_content: m.reply_to_content,
+          reply_to_user: m.reply_to_user,
+        });
+      }),
+    );
+
+    // Group message
+    unsubs.push(
+      chatAPI.on("group_message", (msg: WSMessage) => {
+        const m = msg as unknown as ChatMessage & { group?: string };
+        addGroupMessage({
+          id: m.id,
+          username: m.username,
+          content: m.content,
+          timestamp: m.timestamp || Date.now(),
+          group: m.group || "",
+          reply_to_id: m.reply_to_id,
+          reply_to_content: m.reply_to_content,
+          reply_to_user: m.reply_to_user,
+        });
+      }),
+    );
+
+    // History
     unsubs.push(
       chatAPI.on("history", (msg: WSMessage) => {
         const { messages } = msg as WSHistoryMessage;
@@ -179,6 +238,7 @@ export function useWebSocket() {
       }),
     );
 
+    // User joined
     unsubs.push(
       chatAPI.on("user_joined", (msg: WSMessage) => {
         const { username, online, timestamp } = msg as WSUserEvent;
@@ -192,6 +252,7 @@ export function useWebSocket() {
       }),
     );
 
+    // User left
     unsubs.push(
       chatAPI.on("user_left", (msg: WSMessage) => {
         const { username, online, timestamp } = msg as WSUserEvent;
@@ -205,15 +266,17 @@ export function useWebSocket() {
       }),
     );
 
+    // Online users sync
     unsubs.push(
       chatAPI.on("online_users", (msg: WSMessage) => {
-        const { users } = msg as { type: string; users: string[] };
-        if (users) {
-          setOnlineUsers(users);
+        const { online } = msg as { type: string; online: string[] };
+        if (online) {
+          setOnlineUsers(online);
         }
       }),
     );
 
+    // Connection lost
     unsubs.push(
       chatAPI.on("user_status", (msg: WSMessage) => {
         const { users } = msg as WSUserStatus;
@@ -243,79 +306,116 @@ export function useWebSocket() {
 
     unsubs.push(
       chatAPI.on("connection_lost", () => {
+        addSystemMessage(i18nSys("system.connectionLost"), Date.now());
+      }),
+    );
+
+    // Friend request
+    unsubs.push(
+      chatAPI.on("friend_request", (msg: WSMessage) => {
+        const { from } = msg as { type: string; from: string };
+        addFriendRequest(from);
+      }),
+    );
+
+    // Friend accept
+    unsubs.push(
+      chatAPI.on("friend_accept", (msg: WSMessage) => {
+        const { friends } = msg as { type: string; friends: string[] };
+        if (friends) {
+          setFriends(friends);
+        }
+      }),
+    );
+
+    // Friend reject
+    unsubs.push(
+      chatAPI.on("friend_reject", (msg: WSMessage) => {
+        const { from } = msg as { type: string; from: string };
         addSystemMessage(
-          i18nSys("system.connectionLost"),
+          i18nSys("system.friendRejected", { username: from }),
           Date.now(),
         );
       }),
     );
 
-    // Unread count from server.
+    // Friend list
     unsubs.push(
-      chatAPI.on("unread_count", (msg: WSMessage) => {
-        const count = parseInt(msg.content as string, 10) || 0;
-        setUnreadCount(count);
-      }),
-    );
-
-    // Streaming bot response event.
-    unsubs.push(
-      chatAPI.on("stream", (msg: WSMessage) => {
-        const { username: streamUser, content, done } = msg as WSStreamEvent;
-        if (done) {
-          return;
-        }
-        appendStreamChunk(content);
-        addTypingUser(streamUser);
-        const existing = typingTimers.current.get(streamUser);
-        if (existing) clearTimeout(existing);
-        const timer = setTimeout(() => {
-          removeTypingUser(streamUser);
-          typingTimers.current.delete(streamUser);
-        }, 30000);
-        typingTimers.current.set(streamUser, timer);
-      }),
-    );
-
-    // Typing stop event.
-    unsubs.push(
-      chatAPI.on("typing_stop", (msg: WSMessage) => {
-        const { username: typingUser } = msg as WSTypingEvent;
-        removeTypingUser(typingUser);
-        const timer = typingTimers.current.get(typingUser);
-        if (timer) {
-          clearTimeout(timer);
-          typingTimers.current.delete(typingUser);
+      chatAPI.on("friend_list", (msg: WSMessage) => {
+        const { friends } = msg as { type: string; friends: string[] };
+        if (friends) {
+          setFriends(friends);
         }
       }),
     );
 
-    // Typing indicator event
+    // Group create
+    unsubs.push(
+      chatAPI.on("group_create", (msg: WSMessage) => {
+        const { group, members } = msg as {
+          type: string;
+          group: string;
+          members: string[];
+        };
+        if (group && members) {
+          setGroupMembers(group, members);
+        }
+      }),
+    );
+
+    // Group invite
+    unsubs.push(
+      chatAPI.on("group_invite", (msg: WSMessage) => {
+        const { group, from } = msg as {
+          type: string;
+          group: string;
+          from: string;
+        };
+        addSystemMessage(
+          i18nSys("system.groupInvited", { group, username: from }),
+          Date.now(),
+        );
+      }),
+    );
+
+    // Group join (membership update)
+    unsubs.push(
+      chatAPI.on("group_join", (msg: WSMessage) => {
+        const { group, members } = msg as {
+          type: string;
+          group: string;
+          members: string[];
+        };
+        if (group && members) {
+          setGroupMembers(group, members);
+        }
+      }),
+    );
+
+    // Message delete
+    unsubs.push(
+      chatAPI.on("message_delete", (msg: WSMessage) => {
+        const { id } = msg as { type: string; id: string };
+        if (id) {
+          deleteMessage(id);
+        }
+      }),
+    );
+
+    // Typing indicator
     unsubs.push(
       chatAPI.on("typing", (msg: WSMessage) => {
         const { username: typingUser } = msg as WSTypingEvent;
         addTypingUser(typingUser);
 
-        // Clear any existing timer for this user.
         const existing = typingTimers.current.get(typingUser);
         if (existing) clearTimeout(existing);
 
-        // Auto-remove after 10 seconds.
         const timer = setTimeout(() => {
           removeTypingUser(typingUser);
           typingTimers.current.delete(typingUser);
         }, 10000);
         typingTimers.current.set(typingUser, timer);
-      }),
-    );
-
-    // Friend request notification.
-    unsubs.push(
-      chatAPI.on("friend_request", (msg: WSMessage) => {
-        const { from } = msg as { type: string; from: string };
-        if (from) {
-          showNotification("TokenDanceChat", `${from} sent you a friend request`);
-        }
       }),
     );
 
@@ -326,11 +426,24 @@ export function useWebSocket() {
         flashTitleTimer = null;
       }
       unsubs.forEach((unsub) => unsub());
-      // Clear all typing timers on unmount.
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, setUserStatusList, addSystemMessage, addTypingUser, removeTypingUser]);
+  }, [
+    addMessage,
+    setHistory,
+    setOnlineUsers,
+    addSystemMessage,
+    addTypingUser,
+    removeTypingUser,
+    setFriends,
+    addFriendRequest,
+    removeFriendRequest,
+    setGroupMembers,
+    addDMMessage,
+    addGroupMessage,
+    deleteMessage,
+  ]);
 
-  return { connect, disconnect, sendMessage, markRead, requestNotificationPermission };
+  return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage };
 }

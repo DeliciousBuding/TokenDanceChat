@@ -13,9 +13,8 @@ const GROUP_WINDOW_MS = 2 * 60 * 1000;
 
 interface MessageTranscriptProps {
   className?: string;
-  onReplyToMessage?: (message: ChatMessage) => void;
-  onDeleteMessage?: (messageId: string) => void;
-  onForwardMessage?: (content: string) => void;
+  onReply?: (message: ChatMessage) => void;
+  onDelete?: (messageId: string) => void;
 }
 
 interface UserMessageGroup {
@@ -43,7 +42,9 @@ function buildMessageGroups(messages: ChatMessage[]): MessageGroup[] {
     if (
       last?.type === "user" &&
       last.username === msg.username &&
-      msg.timestamp - last.messages[last.messages.length - 1].timestamp < GROUP_WINDOW_MS
+      !msg.deleted &&
+      msg.timestamp - last.messages[last.messages.length - 1].timestamp <
+        GROUP_WINDOW_MS
     ) {
       last.messages.push(msg);
     } else {
@@ -53,40 +54,51 @@ function buildMessageGroups(messages: ChatMessage[]): MessageGroup[] {
   return groups;
 }
 
-interface ContextMenuState {
-  visible: boolean;
-  x: number;
-  y: number;
-  message: ChatMessage | null;
-  isOwn: boolean;
-}
-
 export function MessageTranscript({
   className,
-  onReplyToMessage,
-  onDeleteMessage,
-  onForwardMessage,
+  onReply,
+  onDelete,
 }: MessageTranscriptProps) {
   const { t } = useTranslation();
-  const { messages, username, historyLoaded, typingUsers } = useChatStore();
+  const {
+    messages,
+    dmMessages,
+    groupMessages,
+    username,
+    historyLoaded,
+    typingUsers,
+    currentChat,
+  } = useChatStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showAllMessages, setShowAllMessages] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const prevMessageCountRef = useRef(messages.length);
+  const prevMessageCountRef = useRef(0);
+
+  // Determine which messages to display based on currentChat mode.
+  const effectiveMessages = useMemo(() => {
+    if (currentChat.type === "dm") {
+      return dmMessages[currentChat.username] || [];
+    }
+    if (currentChat.type === "group") {
+      return groupMessages[currentChat.name] || [];
+    }
+    return messages;
+  }, [currentChat, messages, dmMessages, groupMessages]);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false, x: 0, y: 0, message: null, isOwn: false,
   });
 
   const visibleMessages = useMemo(() => {
-    if (showAllMessages || messages.length <= MAX_VISIBLE_MESSAGES) return messages;
-    return messages.slice(-MAX_VISIBLE_MESSAGES);
-  }, [messages, showAllMessages]);
+    if (showAllMessages || effectiveMessages.length <= MAX_VISIBLE_MESSAGES) {
+      return effectiveMessages;
+    }
+    return effectiveMessages.slice(-MAX_VISIBLE_MESSAGES);
+  }, [effectiveMessages, showAllMessages]);
 
-  const hiddenCount = messages.length - visibleMessages.length;
+  const hiddenCount = effectiveMessages.length - visibleMessages.length;
 
   const groups = useMemo(() => {
     const raw = buildMessageGroups(visibleMessages);
@@ -98,11 +110,15 @@ export function MessageTranscript({
 
   useEffect(() => {
     const prev = prevMessageCountRef.current;
-    const curr = messages.length;
-    if (curr > prev && !shouldAutoScroll) setUnreadCount((c) => c + (curr - prev));
-    if (shouldAutoScroll) setUnreadCount(0);
+    const curr = effectiveMessages.length;
+    if (curr > prev && !shouldAutoScroll) {
+      setUnreadCount((c) => c + (curr - prev));
+    }
+    if (shouldAutoScroll) {
+      setUnreadCount(0);
+    }
     prevMessageCountRef.current = curr;
-  }, [messages.length, shouldAutoScroll]);
+  }, [effectiveMessages.length, shouldAutoScroll]);
 
   const handleScroll = useCallback(() => {
     const container = containerRef.current;
@@ -197,15 +213,23 @@ export function MessageTranscript({
       )}
 
       {!historyLoaded ? (
-        <div className="flex flex-col items-center justify-center h-full gap-3 py-12" role="status" aria-label={t("transcript.loading")}>
+        /* Loading skeleton */
+        <div
+          className="flex flex-col items-center justify-center h-full gap-3 py-12"
+          role="status"
+          aria-label={t("transcript.loading")}
+        >
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
               <div key={i} className="h-2 w-2 rounded-full animate-pulse" style={{ backgroundColor: "oklch(71.2% 0.194 13.428 / 0.6)", animationDelay: `${i * 150}ms` }} />
             ))}
           </div>
-          <p className="text-xs text-muted-foreground/60">{t("transcript.loading")}</p>
+          <p className="text-xs text-muted-foreground/60">
+            {t("transcript.loading")}
+          </p>
         </div>
-      ) : messages.length === 0 ? (
+      ) : effectiveMessages.length === 0 ? (
+        /* Empty state with animated chat bubble */
         <div className="flex flex-col items-center justify-center h-full py-12 px-4">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[hsl(231,4%,18%)] ring-1 ring-[hsl(220,2.5%,20%)] animate-chat-bubble">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2% 0.194 13.428 / 0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -257,9 +281,8 @@ export function MessageTranscript({
                       hideUsername={!isFirst}
                       forceShowTimestamp={isLast}
                       isGrouped={!isSolo}
-                      onSwipeRight={isOwn ? undefined : (() => onReplyToMessage?.(msg))}
-                      onSwipeLeft={isOwn ? (() => onDeleteMessage?.(msg.id)) : undefined}
-                      onLongPress={createLongPressHandler(msg, isOwn)}
+                      onReply={onReply}
+                      onDelete={onDelete}
                     />
                   );
                 })}
@@ -284,8 +307,8 @@ export function MessageTranscript({
         </div>
       )}
 
-      {/* FAB scroll-to-bottom (mobile) */}
-      {!shouldAutoScroll && messages.length > 0 && (
+      {/* Scroll-to-bottom button (when scrolled up) */}
+      {!shouldAutoScroll && effectiveMessages.length > 0 && (
         <button
           onClick={scrollToBottom}
           className="fab animate-fade-in md:hidden"

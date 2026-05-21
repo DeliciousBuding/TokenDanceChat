@@ -1,25 +1,33 @@
-import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent } from "react";
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  type KeyboardEvent,
+} from "react";
 import { Send, Loader2, X } from "lucide-react";
 import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
-import type { ChatMessage } from "@/lib/api";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
   disabled?: boolean;
-  replyTo?: ChatMessage | null;
-  onCancelReply?: () => void;
 }
 
-export function ChatInput({
-  onSend,
-  disabled,
-  replyTo,
-  onCancelReply,
-}: ChatInputProps) {
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+}
+
+export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const { t } = useTranslation();
-  const { onlineUsers, username } = useChatStore();
+  const { onlineUsers, username, replyTo, setReplyTo, currentChat } =
+    useChatStore();
   const [content, setContent] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isComposing, setIsComposing] = useState(false);
@@ -48,7 +56,6 @@ export function ChatInput({
   }, [content]);
 
   // Derive filtered user list and whether dropdown should be open.
-  // Always include "bot" as a mentionable entity.
   const BOT_NAME = "bot";
   const mentionFiltered = useMemo(() => {
     const { query, startPos } = mentionQuery;
@@ -57,7 +64,6 @@ export function ChatInput({
     const users = onlineUsers
       .filter((u) => u.toLowerCase().includes(lower))
       .slice(0, 9);
-    // Prepend bot if query matches.
     if (BOT_NAME.includes(lower) || lower === "") {
       return [BOT_NAME, ...users].slice(0, 10);
     }
@@ -189,10 +195,30 @@ export function ChatInput({
         handleSend();
       }
     },
-    [handleSend, isComposing, mentionActive, mentionFiltered, mentionIndex, insertMention],
+    [
+      handleSend,
+      isComposing,
+      mentionActive,
+      mentionFiltered,
+      mentionIndex,
+      insertMention,
+    ],
   );
 
   const hasContent = content.trim().length > 0;
+
+  // Determine placeholder based on chat context.
+  const placeholder = useMemo(() => {
+    if (currentChat.type === "dm") {
+      return t("input.dmPlaceholder", {
+        username: currentChat.username,
+      });
+    }
+    if (currentChat.type === "group") {
+      return t("input.groupPlaceholder", { name: currentChat.name });
+    }
+    return t("input.placeholder");
+  }, [currentChat, t]);
 
   return (
     <div className="relative border-t border-[hsl(220,2.5%,23.5%)] bg-[hsl(223,4%,13%)]">
@@ -205,7 +231,9 @@ export function ChatInput({
           <div className="flex-1 flex items-center gap-2 rounded-lg bg-[hsl(231,4%,16%)] border border-[hsl(220,2.5%,23.5%)] px-3 py-1.5">
             <span className="text-xs text-muted-foreground">
               {t("input.replyTo")}{" "}
-              <span className="font-medium text-foreground/70">{replyTo.username}</span>
+              <span className="font-medium text-foreground/70">
+                {replyTo.username}
+              </span>
             </span>
             <span className="text-xs text-muted-foreground truncate flex-1">
               {replyTo.content.slice(0, 60)}
@@ -213,7 +241,7 @@ export function ChatInput({
             </span>
           </div>
           <button
-            onClick={onCancelReply}
+            onClick={() => setReplyTo(null)}
             aria-label={t("input.replyTo")}
             className="flex-shrink-0 rounded-md p-1 text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] hover:text-foreground transition-colors"
           >
@@ -270,13 +298,13 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             onCompositionStart={() => setIsComposing(true)}
             onCompositionEnd={() => setIsComposing(false)}
-            placeholder={t("input.placeholder")}
+            placeholder={placeholder}
             rows={1}
             maxLength={2000}
             disabled={disabled}
-            aria-label={t("input.placeholder")}
-            className="w-full rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-all duration-200 focus:border-[hsl(220,2.5%,35%)] disabled:opacity-50 max-h-[200px] overflow-y-auto"
-            style={{ resize: "none", scrollbarWidth: "thin", scrollbarColor: "hsl(220,2.5%,28%) transparent" }}
+            aria-label={placeholder}
+            className="w-full resize-none rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-all duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50 max-h-[160px]"
+            style={{ scrollbarWidth: "thin" }}
           />
         </div>
 
@@ -285,14 +313,18 @@ export function ChatInput({
           ref={sendBtnRef}
           onClick={handleSend}
           disabled={disabled || !hasContent}
-          aria-label={disabled ? t("join.buttonConnecting") : t("input.placeholder")}
+          aria-label={
+            disabled ? t("join.buttonConnecting") : t("input.placeholder")
+          }
           className={cn(
             "flex h-[42px] w-[42px] flex-shrink-0 items-center justify-center rounded-xl transition-all duration-200",
             "disabled:opacity-30 disabled:cursor-not-allowed",
             pulseButton && "animate-pulse-once",
           )}
           style={{
-            backgroundColor: hasContent ? "oklch(71.2% 0.194 13.428)" : "hsl(220,2.5%,20%)",
+            backgroundColor: hasContent
+              ? "oklch(71.2% 0.194 13.428)"
+              : "hsl(220,2.5%,20%)",
           }}
           onMouseEnter={(e) => {
             if (hasContent) {
@@ -310,7 +342,9 @@ export function ChatInput({
           ) : (
             <Send
               className="h-4 w-4"
-              style={{ color: hasContent ? "#fff" : "hsl(240,2.5%,50%)" }}
+              style={{
+                color: hasContent ? "#fff" : "hsl(240,2.5%,50%)",
+              }}
             />
           )}
         </button>
