@@ -633,7 +633,7 @@ func (h *Hub) BroadcastToRoom(data []byte, roomID string) {
 		return
 	}
 	for c := range h.clients {
-		if c.currentRoomID != roomID {
+		if c.getCurrentRoomID() != roomID {
 			continue
 		}
 		select {
@@ -706,7 +706,7 @@ func (h *Hub) SendAssistantMessageToRoom(username, content, roomID string) {
 
 	h.mu.RLock()
 	for c := range h.clients {
-		if c.currentRoomID != roomID {
+		if c.getCurrentRoomID() != roomID {
 			continue
 		}
 		select {
@@ -878,7 +878,7 @@ func (h *Hub) BroadcastStreamChunkToRoom(username, content string, done bool, ro
 	}
 	h.mu.RLock()
 	for c := range h.clients {
-		if c.currentRoomID != roomID {
+		if c.getCurrentRoomID() != roomID {
 			continue
 		}
 		select {

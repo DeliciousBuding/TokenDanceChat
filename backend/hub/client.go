@@ -57,7 +57,7 @@ func (c *Client) getCurrentRoomID() string {
 // setCurrentRoomID sets the client's current room ID with write locking.
 func (c *Client) setCurrentRoomID(roomID string) {
 	c.roomMu.Lock()
-	c.setCurrentRoomID(roomID)
+	c.currentRoomID = roomID
 	c.roomMu.Unlock()
 }
 
