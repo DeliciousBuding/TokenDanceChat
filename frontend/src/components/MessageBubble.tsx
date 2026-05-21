@@ -2,7 +2,7 @@ import { memo, useMemo, useCallback, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Copy, Check, Forward } from "lucide-react";
-import { cn, formatTime } from "@/lib/utils";
+import { cn, formatTime, hashString, avatarGradient, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI } from "@/lib/api";
@@ -23,25 +23,6 @@ interface MessageBubbleProps {
   onDelete?: (messageId: string) => void;
   /** Callback for forward action */
   onForward?: (message: ChatMessage) => void;
-}
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return Math.abs(hash);
-}
-
-function avatarGradient(username: string): string {
-  const baseHue = hashString(username) % 360;
-  const hue1 = baseHue;
-  const hue2 = (baseHue + 45) % 360;
-  return `linear-gradient(135deg, oklch(65% 0.16 ${hue1}), oklch(58% 0.14 ${hue2}))`;
-}
-
-function usernameHue(username: string): number {
-  return hashString(username) % 360;
 }
 
 /** Simple code block renderer with syntax highlighting and copy button */

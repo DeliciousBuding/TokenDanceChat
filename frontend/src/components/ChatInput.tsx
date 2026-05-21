@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent, type ClipboardEvent } from "react";
 import { Send, Loader2, X, ImagePlus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
-import type { ChatMessage } from "@/lib/api";
+import { chatAPI, type ChatMessage } from "@/lib/api";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
@@ -11,14 +11,6 @@ interface ChatInputProps {
   replyTo?: ChatMessage | null;
   onCancelReply?: () => void;
   onUpload?: (file: File) => void;
-}
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return Math.abs(hash);
 }
 
 const INPUT_MIN_HEIGHT = 48;
@@ -113,10 +105,10 @@ export function ChatInput({
   useEffect(() => {
     const hasContent = content.trim().length > 0;
     if (hasContent && !isComposing && !disabled && !typingSentRef.current) {
-      // chatAPI.sendTypingStart();
+      chatAPI.sendTypingStart();
       typingSentRef.current = true;
     } else if (!hasContent && typingSentRef.current) {
-      // chatAPI.sendTypingStop();
+      chatAPI.sendTypingStop();
       typingSentRef.current = false;
     }
   }, [content, isComposing, disabled]);
@@ -238,7 +230,7 @@ export function ChatInput({
     setContent("");
     // Clear typing state.
     if (typingSentRef.current) {
-      // chatAPI.sendTypingStop();
+      chatAPI.sendTypingStop();
       typingSentRef.current = false;
     }
     if (textareaRef.current) {

@@ -3,6 +3,8 @@ package hub
 import (
 	"testing"
 	"time"
+
+	"tokendancechat/backend/store"
 )
 
 // mockStore is a test implementation of the Store interface.
@@ -68,6 +70,10 @@ func (m *mockStore) UpdateMessage(messageID, content string) (StoredMessage, err
 }
 func (m *mockStore) GetMessageByID(messageID string) (StoredMessage, error) {
 	return StoredMessage{}, nil
+}
+
+func (m *mockStore) SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error) {
+	return nil, nil
 }
 
 func TestNew(t *testing.T) {

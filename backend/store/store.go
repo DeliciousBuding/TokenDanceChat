@@ -103,6 +103,11 @@ func (s *Store) migrate() error {
 	// Seed default room if not present.
 	s.ensureDefaultRoom()
 
+	// FTS5 full-text search
+	if err := s.createFTS5(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -362,4 +367,97 @@ func (s *Store) getMessageByIDLocked(messageID string) (StoredMessage, error) {
 		return StoredMessage{}, err
 	}
 	return m, nil
+}
+
+// --- FTS5 full-text search ---
+
+func (s *Store) createFTS5() error {
+	query := `
+	CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+		content, username, room_id UNINDEXED,
+		content='messages', content_rowid='rowid',
+		tokenize='unicode61'
+	);
+
+	CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+		INSERT INTO messages_fts(rowid, content, username, room_id)
+		VALUES (new.rowid, new.content, new.username, new.room_id);
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+		INSERT INTO messages_fts(messages_fts, rowid, content, username, room_id)
+		VALUES ('delete', old.rowid, old.content, old.username, old.room_id);
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
+		INSERT INTO messages_fts(messages_fts, rowid, content, username, room_id)
+		VALUES ('delete', old.rowid, old.content, old.username, old.room_id);
+		INSERT INTO messages_fts(rowid, content, username, room_id)
+		VALUES (new.rowid, new.content, new.username, new.room_id);
+	END;
+	`
+	_, err := s.db.Exec(query)
+	return err
+}
+
+// SearchResult holds a single full-text search result with snippet and rank.
+type SearchResult struct {
+	ID        string  `json:"id"`
+	Username  string  `json:"username"`
+	Content   string  `json:"content"`
+	Timestamp int64   `json:"timestamp"`
+	Snippet   string  `json:"snippet"`
+	Rank      float64 `json:"rank"`
+}
+
+// SearchMessages performs a full-text search over messages using FTS5.
+func (s *Store) SearchMessages(query string, roomID string, limit int) ([]SearchResult, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 20
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	if roomID != "" {
+		rows, err = s.db.Query(`
+			SELECT m.id, m.username, m.content, m.timestamp,
+				snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
+				bm25(messages_fts) AS rank
+			FROM messages_fts
+			JOIN messages m ON m.rowid = messages_fts.rowid
+			WHERE messages_fts MATCH ? AND messages_fts.room_id = ?
+			ORDER BY rank LIMIT ?`, query, roomID, limit)
+	} else {
+		rows, err = s.db.Query(`
+			SELECT m.id, m.username, m.content, m.timestamp,
+				snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
+				bm25(messages_fts) AS rank
+			FROM messages_fts
+			JOIN messages m ON m.rowid = messages_fts.rowid
+			WHERE messages_fts MATCH ?
+			ORDER BY rank LIMIT ?`, query, limit)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]SearchResult, 0, limit)
+	for rows.Next() {
+		var r SearchResult
+		if err := rows.Scan(&r.ID, &r.Username, &r.Content, &r.Timestamp, &r.Snippet, &r.Rank); err != nil {
+			log.Printf("store: search scan error: %v", err)
+			continue
+		}
+		results = append(results, r)
+	}
+	if results == nil {
+		results = []SearchResult{}
+	}
+	return results, nil
 }

@@ -39,6 +39,7 @@ type Store interface {
 	GetReactionsForMessages(messageIDs []string) map[string]map[string][]string
 	UpdateMessage(messageID, content string) (StoredMessage, error)
 	GetMessageByID(messageID string) (StoredMessage, error)
+	SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error)
 }
 
 // Group represents a chat group.

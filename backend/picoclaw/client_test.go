@@ -48,12 +48,12 @@ func TestClientUsesPicoPayloadProtocol(t *testing.T) {
 	defer client.Close()
 
 	replies := make(chan Message, 1)
-	client.OnMessage(func(msg Message) {
-		replies <- msg
-	})
-
-	if _, err := client.SendMessage("run workflow"); err != nil {
+	handler, err := client.SendMessage("run workflow")
+	if err != nil {
 		t.Fatalf("SendMessage failed: %v", err)
+	}
+	handler.OnMessage = func(msg Message) {
+		replies <- msg
 	}
 
 	select {

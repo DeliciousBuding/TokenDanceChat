@@ -162,6 +162,16 @@ export interface LinkPreviewData {
   url: string;
 }
 
+// Search types
+export interface SearchResult {
+  id: string;
+  username: string;
+  content: string;
+  timestamp: number;
+  snippet: string;
+  rank: number;
+}
+
 // Forward types
 export interface WSForwardEvent extends WSMessage {
   type: "forward";
@@ -433,6 +443,14 @@ class ChatAPI {
     this.send({ type: "forward", id: messageID, to: toUsername });
   }
 
+  sendTypingStart(): void {
+    this.send({ type: "typing_start" });
+  }
+
+  sendTypingStop(): void {
+    this.send({ type: "typing_stop" });
+  }
+
   sendReaction(messageId: string, emoji: string): void {
     this.send({ type: "reaction", message_id: messageId, emoji });
   }
@@ -461,6 +479,18 @@ class ChatAPI {
       return data.url;
     } catch {
       return null;
+    }
+  }
+
+  async searchMessages(query: string, roomID?: string): Promise<SearchResult[]> {
+    try {
+      const params = new URLSearchParams({ q: query });
+      if (roomID) params.set("room", roomID);
+      const resp = await fetch(`/api/search?${params}`);
+      if (!resp.ok) return [];
+      return await resp.json() as SearchResult[];
+    } catch {
+      return [];
     }
   }
 
