@@ -12,13 +12,19 @@ import (
 
 	"tokendancechat/backend/llm"
 	"tokendancechat/backend/picoclaw"
+	"tokendancechat/backend/store"
 )
 
 // MaxConnections is the hard limit on concurrent WebSocket connections.
 const MaxConnections = 100
 
+// StoredMessage is an alias for store.StoredMessage.
+type StoredMessage = store.StoredMessage
+
+// StoredRoom is an alias for store.StoredRoom.
+type StoredRoom = store.StoredRoom
+
 // Store defines the interface for message persistence.
-// This avoids circular imports between hub and store packages.
 type Store interface {
 	InsertMessage(username, content, replyToID, roomID string) (StoredMessage, error)
 	GetMessages(limit int, before int64) []StoredMessage
@@ -33,24 +39,6 @@ type Store interface {
 	GetReactionsForMessages(messageIDs []string) map[string]map[string][]string
 	UpdateMessage(messageID, content string) (StoredMessage, error)
 	GetMessageByID(messageID string) (StoredMessage, error)
-}
-
-// StoredMessage is the message model returned by the store.
-type StoredMessage struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	Content   string `json:"content"`
-	Timestamp int64  `json:"timestamp"`
-	ReplyToID string `json:"reply_to_id,omitempty"`
-	RoomID    string `json:"room_id,omitempty"`
-	Deleted   bool   `json:"deleted"`
-	Edited    bool   `json:"edited"`
-}
-
-// StoredRoom is the room model returned by the store.
-type StoredRoom struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
 }
 
 // Group represents a chat group.
@@ -109,6 +97,7 @@ type Message struct {
 	// Reaction system
 	Reactions map[string][]string `json:"reactions,omitempty"`
 	Emoji     string              `json:"emoji,omitempty"`
+	MessageID string              `json:"message_id,omitempty"`
 
 	// Edit system
 	Edited bool `json:"edited,omitempty"`
@@ -833,4 +822,16 @@ func (h *Hub) InRoom(roomID, username string) bool {
 		return false
 	}
 	return h.rooms[roomID][username]
+}
+
+// Shutdown gracefully stops the hub and closes all client connections.
+func (h *Hub) Shutdown() {
+	h.mu.Lock()
+	for c := range h.clients {
+		close(c.send)
+		c.conn.Close()
+	}
+	h.clients = make(map[*Client]bool)
+	h.mu.Unlock()
+	log.Printf("hub: shutdown complete, %d clients disconnected", len(h.clients))
 }

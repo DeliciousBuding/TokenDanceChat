@@ -321,6 +321,9 @@ func (c *Client) handleReaction(msg Message) {
 		return
 	}
 	messageID := msg.ID
+	if messageID == "" {
+		messageID = msg.MessageID
+	}
 	emoji := msg.Emoji
 	if messageID == "" || emoji == "" {
 		return
@@ -836,9 +839,29 @@ func (c *Client) handleMessageDelete(msg Message) {
 		return
 	}
 
-	// MarkDeleted not yet implemented in store; broadcasting deletion event only.
-	// log.Printf("failed to mark message deleted: %v", err)
-	// return
+	// Verify ownership: only the message author can delete.
+	stored, err := c.hub.store.GetMessageByID(messageID)
+	if err != nil {
+		log.Printf("message_delete: message not found: %v", err)
+		return
+	}
+	if stored.Username != c.username {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "you can only delete your own messages",
+			ErrorCode: "NOT_OWNER",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	if err := c.hub.store.MarkDeleted(messageID); err != nil {
+		log.Printf("failed to mark message deleted: %v", err)
+		return
+	}
 
 	// Broadcast deletion.
 	delMsg, _ := json.Marshal(Message{
@@ -1020,36 +1043,13 @@ func (c *Client) handleForward(msg Message) {
 		return
 	}
 
-	// Find the original message from store history (simple lookup).
-	allMessages := c.hub.store.GetRoomMessages(c.currentRoomID, 1000, 0)
-	var originalContent string
-	var originalUser string
-	for _, m := range allMessages {
-		if m.ID == messageID {
-			originalContent = m.Content
-			originalUser = m.Username
-			break
-		}
-	}
-
-	if originalContent == "" {
-		// Try unfiltered search.
-		allMessages = c.hub.store.GetMessages(1000, 0)
-		for _, m := range allMessages {
-			if m.ID == messageID {
-				originalContent = m.Content
-				originalUser = m.Username
-				break
-			}
-		}
-	}
-
-	if originalContent == "" {
+	stored, err := c.hub.store.GetMessageByID(messageID)
+	if err != nil {
+		log.Printf("forward: message not found %s: %v", messageID, err)
 		return
 	}
 
-	// Construct forwarded content.
-	forwardContent := "Forwarded from " + originalUser + ":\n" + originalContent
+	forwardContent := "Forwarded from " + stored.Username + ":\n" + stored.Content
 
 	// Persist as a new message.
 	storedMsg, err := c.hub.store.InsertMessage(c.username, forwardContent, messageID, c.currentRoomID)
