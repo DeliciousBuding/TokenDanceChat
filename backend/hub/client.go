@@ -91,7 +91,20 @@ func (c *Client) handleJoin(msg Message) {
 	if !ValidateUsername(username) {
 		errMsg, _ := json.Marshal(Message{
 			Type:    "error",
-			Content: "invalid username: must be 1-20 chars, alphanumeric, underscore, or Chinese",
+			Content: "invalid username: 1-20 chars, letters, digits, underscore, or Chinese",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	// Check for duplicate username.
+	if c.hub.IsUsernameTaken(username) {
+		errMsg, _ := json.Marshal(Message{
+			Type:    "error",
+			Content: "username already taken, please choose another",
 		})
 		select {
 		case c.send <- errMsg:
