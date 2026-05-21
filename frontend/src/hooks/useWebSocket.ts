@@ -477,10 +477,21 @@ export function useWebSocket() {
       }),
     );
 
-    // Typing indicator
+    // Typing indicator — scoped to current chat context.
     unsubs.push(
       chatAPI.on("typing", (msg: WSMessage) => {
-        const { username: typingUser } = msg as WSTypingEvent;
+        const { username: typingUser, context: typingCtx, to: typingTarget } = msg as WSTypingEvent;
+        // Filter by chat context: only show typing for matching scope.
+        const state = useChatStore.getState();
+        if (typingCtx) {
+          if (typingCtx === "dm") {
+            if (state.currentChat.type !== "dm" || state.currentChat.username !== typingTarget) return;
+          } else if (typingCtx === "group") {
+            if (state.currentChat.type !== "group" || state.currentChat.name !== typingTarget) return;
+          } else if (typingCtx === "public") {
+            if (state.currentChat.type !== "public") return;
+          }
+        }
         addTypingUser(typingUser);
 
         const existing = typingTimers.current.get(typingUser);

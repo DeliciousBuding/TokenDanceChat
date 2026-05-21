@@ -52,6 +52,13 @@ export interface WSErrorMessage extends WSMessage {
 export interface WSTypingEvent extends WSMessage {
   type: "typing";
   username: string;
+  context?: string;
+  to?: string;
+}
+
+export interface TypingContext {
+  channel: "public" | "dm" | "group";
+  target?: string;
 }
 
 export interface UserStatus {
@@ -444,12 +451,12 @@ class ChatAPI {
     this.send({ type: "forward", id: messageID, to: toUsername });
   }
 
-  sendTypingStart(): void {
-    this.send({ type: "typing_start" });
+  sendTypingStart(ctx?: TypingContext): void {
+    this.send({ type: "typing_start", context: ctx?.channel, to: ctx?.target });
   }
 
-  sendTypingStop(): void {
-    this.send({ type: "typing_stop" });
+  sendTypingStop(ctx?: TypingContext): void {
+    this.send({ type: "typing_stop", context: ctx?.channel, to: ctx?.target });
   }
 
   sendReaction(messageId: string, emoji: string): void {
