@@ -51,6 +51,13 @@ export interface WSUserStatus extends WSMessage {
   users: UserStatus[];
 }
 
+export interface WSStreamEvent extends WSMessage {
+  type: "stream";
+  username: string;
+  content: string;
+  done?: boolean;
+}
+
 export interface WSJoinRequest {
   type: "join";
   username: string;

@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn, formatTime, avatarGradient, usernameHue } from "@/lib/utils";
 import { useChatStore } from "@/stores/chatStore";
+import { useTouchGestures } from "@/hooks/useTouchGestures";
 import type { ChatMessage } from "@/lib/api";
 
 interface MessageBubbleProps {
@@ -36,6 +37,12 @@ export const MessageBubble = memo(function MessageBubble({
   const nameColor = `oklch(72% 0.16 ${hue})`;
   const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
   const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
+
+  const touchHandlers = useTouchGestures({
+    onSwipeLeft,
+    onSwipeRight,
+    onLongPress,
+  });
 
   const handleAvatarClick = useCallback(() => {
     setSelectedProfileUser(message.username);
