@@ -58,6 +58,11 @@ type Store interface {
 	GetUndeliveredDMs(username string, limit int) []StoredMessage
 	MarkMessagesDelivered(ids []string) error
 
+	// Message pinning
+	PinMessage(roomID, messageID, pinnedBy string) error
+	UnpinMessage(roomID, messageID string) error
+	GetPinnedMessages(roomID string) []StoredMessage
+
 	// User blocking
 	BlockUser(username, blocked string) error
 	UnblockUser(username, blocked string) error
@@ -126,6 +131,11 @@ type Message struct {
 
 	// Edit system
 	Edited bool `json:"edited,omitempty"`
+
+	// Pinned
+	Pinned   bool            `json:"pinned,omitempty"`
+	PinnedBy string           `json:"pinned_by,omitempty"`
+	PinnedAt int64            `json:"pinned_at,omitempty"`
 }
 
 // Hub maintains the set of active clients and broadcasts messages to them.
@@ -165,6 +175,10 @@ type Hub struct {
 	// Group system: group name -> Group.
 	groups   map[string]*Group
 	groupsMu sync.RWMutex
+
+	// Pending group invites: username -> groupName -> inviter.
+	pendingInvites   map[string]map[string]string
+	pendingInvitesMu sync.RWMutex
 
 	// Last seen tracking: username -> last seen timestamp (UnixMilli).
 	lastSeen   map[string]int64
@@ -217,6 +231,7 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 		typingRateLimit: make(map[string]time.Time),
 		friends:         make(map[string]map[string]bool),
 		groups:          make(map[string]*Group),
+		pendingInvites:  make(map[string]map[string]string),
 		lastSeen:        make(map[string]int64),
 		rooms:           make(map[string]map[string]bool),
 	}
@@ -871,6 +886,21 @@ func (h *Hub) IsBlocked(username, blocked string) bool {
 	return h.store.IsBlocked(username, blocked)
 }
 
+// PinMessage pins a message in a room.
+func (h *Hub) PinMessage(roomID, messageID, pinnedBy string) error {
+	return h.store.PinMessage(roomID, messageID, pinnedBy)
+}
+
+// UnpinMessage unpins a message in a room.
+func (h *Hub) UnpinMessage(roomID, messageID string) error {
+	return h.store.UnpinMessage(roomID, messageID)
+}
+
+// GetPinnedMessages returns pinned messages for a room.
+func (h *Hub) GetPinnedMessages(roomID string) []StoredMessage {
+	return h.store.GetPinnedMessages(roomID)
+}
+
 // BroadcastStreamChunk sends a streaming chunk to all connected clients.
 // Deprecated: use BroadcastStreamChunkToRoom for room-scoped delivery.
 func (h *Hub) BroadcastStreamChunk(username, content string, done bool) {
@@ -952,6 +982,40 @@ func (h *Hub) ShouldBroadcastTyping(username string) bool {
 	}
 	h.typingRateLimit[username] = now
 	return true
+}
+
+// --- Pending group invites ---
+
+// AddPendingInvite records a pending group invitation.
+func (h *Hub) AddPendingInvite(username, groupName, inviter string) {
+	h.pendingInvitesMu.Lock()
+	defer h.pendingInvitesMu.Unlock()
+	if h.pendingInvites[username] == nil {
+		h.pendingInvites[username] = make(map[string]string)
+	}
+	h.pendingInvites[username][groupName] = inviter
+}
+
+// ConsumePendingInvite checks and removes a pending invite, returning true if it existed.
+func (h *Hub) ConsumePendingInvite(username, groupName string) bool {
+	h.pendingInvitesMu.Lock()
+	defer h.pendingInvitesMu.Unlock()
+	m, ok := h.pendingInvites[username]
+	if !ok {
+		return false
+	}
+	_, exists := m[groupName]
+	delete(m, groupName)
+	return exists
+}
+
+// RemovePendingInvite removes a pending invite without joining.
+func (h *Hub) RemovePendingInvite(username, groupName string) {
+	h.pendingInvitesMu.Lock()
+	defer h.pendingInvitesMu.Unlock()
+	if m := h.pendingInvites[username]; m != nil {
+		delete(m, groupName)
+	}
 }
 
 // --- Room system methods ---

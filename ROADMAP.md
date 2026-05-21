@@ -35,11 +35,11 @@
 - [x] File sharing beyond images (documents, archives)
 
 ## Phase 5: Advanced IM
-- [ ] Message pinning/bookmarks
-- [ ] Group invite accept/decline handshake
-- [ ] Message reply threading (already have reply_to, needs UI)
+- [x] Message pinning/bookmarks
+- [x] Group invite accept/decline handshake
+- [x] Message reply threading (already have reply_to, needs UI)
 - [ ] Message search within conversation scope
-- [ ] Infinite scroll / pagination for history
+- [x] Infinite scroll / pagination for history
 - [ ] Typing indicator with message preview (like Telegram)
 - [ ] Online/offline transition sounds
 - [ ] Custom emoji / sticker support

@@ -6,6 +6,7 @@ import { usePullDownGesture } from "@/hooks/useTouchGestures";
 import { MessageBubble } from "./MessageBubble";
 import { SystemMessage } from "./SystemMessage";
 import { cn } from "@/lib/utils";
+import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 
 const MAX_VISIBLE_MESSAGES = 200;
@@ -115,11 +116,27 @@ export function MessageTranscript({
   const [showAllMessages, setShowAllMessages] = useState(false);
   const [unreadLocalCount, setUnreadLocalCount] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const hasMoreRef = useRef(true);
+  const prevConversationRef = useRef("");
   const prevMessageCountRef = useRef(0);
   const scrollPositions = useRef<Map<string, number>>(new Map());
   const conversationKey = currentChat.type === "dm" ? `dm:${currentChat.username}` : currentChat.type === "group" ? `group:${currentChat.name}` : "public";
 
-  // Restore scroll position when switching conversations.
+  // Reset infinite scroll state when switching conversations.
+  useEffect(() => {
+    if (prevConversationRef.current !== conversationKey) {
+      hasMoreRef.current = true;
+      prevConversationRef.current = conversationKey;
+    }
+  }, [conversationKey]);
+
+  // Listen for "no more history" events.
+  useEffect(() => {
+    const handler = () => { hasMoreRef.current = false; };
+    window.addEventListener("tdchat:no-more-history", handler);
+    return () => window.removeEventListener("tdchat:no-more-history", handler);
+  }, []);
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -127,16 +144,6 @@ export function MessageTranscript({
     if (saved !== undefined) {
       container.scrollTop = saved;
     }
-  }, [conversationKey]);
-
-  // Save scroll position on scroll.
-  const handleScroll = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    scrollPositions.current.set(conversationKey, container.scrollTop);
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    setShouldAutoScroll(distanceFromBottom < 120);
   }, [conversationKey]);
 
   // Filter messages based on current chat context.
@@ -162,6 +169,34 @@ export function MessageTranscript({
     visible: false, x: 0, y: 0, message: null, isOwn: false,
   });
 
+
+  // Save scroll position on scroll + detect scroll-to-top for pagination.
+  const handleScroll = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    scrollPositions.current.set(conversationKey, container.scrollTop);
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    setShouldAutoScroll(distanceFromBottom < 120);
+    // Infinite scroll: load older messages when near top.
+    if (scrollTop < 80 && hasMoreRef.current && !loadingOlder && effectiveMessages.length > 0) {
+      const oldest = effectiveMessages[0];
+      if (oldest) {
+        setLoadingOlder(true);
+        const beforeScroll = container.scrollHeight;
+        chatAPI.sendLoadHistory(oldest.timestamp);
+        // After a short delay, restore relative scroll position.
+        setTimeout(() => {
+          if (containerRef.current) {
+            const afterScroll = containerRef.current.scrollHeight;
+            containerRef.current.scrollTop += afterScroll - beforeScroll;
+          }
+          setLoadingOlder(false);
+        }, 300);
+      }
+    }
+  }, [conversationKey, loadingOlder, effectiveMessages]);
+
   const visibleMessages = useMemo(() => {
     if (showAllMessages || effectiveMessages.length <= MAX_VISIBLE_MESSAGES) {
       return effectiveMessages;
@@ -172,6 +207,17 @@ export function MessageTranscript({
   const hiddenCount = effectiveMessages.length - visibleMessages.length;
 
   const groups = useMemo(() => buildMessageGroups(visibleMessages, username), [visibleMessages, username]);
+
+  // Count replies for each message.
+  const replyCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const m of effectiveMessages) {
+      if (m.reply_to_id) {
+        counts[m.reply_to_id] = (counts[m.reply_to_id] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [effectiveMessages]);
 
   // Suppress TS6133: decodeSystemMessage is available as a fallback decoder for system messages.
   void (decodeSystemMessage as unknown);
@@ -277,6 +323,17 @@ export function MessageTranscript({
         </div>
       )}
 
+      {loadingOlder && (
+        <div className="flex justify-center py-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground/50">
+            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 11-6.219-8.56" />
+            </svg>
+            Loading older messages...
+          </div>
+        </div>
+      )}
+
       {!historyLoaded ? (
         /* Loading skeleton */
         <div
@@ -354,6 +411,7 @@ export function MessageTranscript({
                       onReply={onReply}
                       onDelete={onDelete}
                       onForward={onForward}
+                      replyCount={replyCounts[msg.id] || 0}
                     />
                   );
                 })}

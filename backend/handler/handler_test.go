@@ -101,6 +101,9 @@ func (m *mockStore) BlockUser(username, blocked string) error                   
 func (m *mockStore) UnblockUser(username, blocked string) error                    { return nil }
 func (m *mockStore) IsBlocked(username, blocked string) bool                        { return false }
 func (m *mockStore) GetBlockedUsers(username string) []string                       { return nil }
+func (m *mockStore) PinMessage(roomID, messageID, pinnedBy string) error           { return nil }
+func (m *mockStore) UnpinMessage(roomID, messageID string) error                   { return nil }
+func (m *mockStore) GetPinnedMessages(roomID string) []hub.StoredMessage               { return nil }
 
 func newTestHandler() *Handler {
 	ms := &mockStore{}

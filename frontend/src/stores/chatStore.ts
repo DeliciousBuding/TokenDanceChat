@@ -25,6 +25,12 @@ export interface PendingFriendRequest {
   timestamp: number;
 }
 
+export interface PendingGroupInvite {
+  group: string;
+  from: string;
+  timestamp: number;
+}
+
 export interface MentionNotification {
   from: string;
   content: string;
@@ -70,6 +76,9 @@ interface ChatState {
   // Pending friend requests
   pendingFriendRequests: PendingFriendRequest[];
 
+  // Pending group invites
+  pendingGroupInvites: PendingGroupInvite[];
+
   // Groups
   groups: Record<string, GroupInfo>;
 
@@ -86,6 +95,9 @@ interface ChatState {
   // Blocked users
   blockedUsers: string[];
 
+  // Pinned messages
+  pinnedMessages: ChatMessage[];
+
   // Actions
   setView: (view: ViewState) => void;
   setUsername: (username: string) => void;
@@ -94,6 +106,7 @@ interface ChatState {
   deleteMessage: (id: string) => void;
   addSystemMessage: (content: string, timestamp: number) => void;
   setHistory: (messages: ChatMessage[]) => void;
+  prependHistory: (messages: ChatMessage[]) => void;
   setOnlineUsers: (users: string[]) => void;
   setUserStatusList: (users: UserStatus[]) => void;
   setSelectedProfileUser: (username: string | null) => void;
@@ -106,6 +119,8 @@ interface ChatState {
   setReplyTo: (message: ChatMessage | null) => void;
   setFriends: (friends: string[]) => void;
   addFriendRequest: (from: string) => void;
+  addGroupInvite: (group: string, from: string) => void;
+  removeGroupInvite: (group: string) => void;
   setGroupMembers: (group: string, members: string[]) => void;
   setPendingImage: (imageDataUrl: string | null) => void;
   setUnreadCount: (count: number) => void;
@@ -119,6 +134,7 @@ interface ChatState {
   setBlockedUsers: (users: string[]) => void;
   addBlockedUser: (username: string) => void;
   removeBlockedUser: (username: string) => void;
+  setPinnedMessages: (messages: ChatMessage[]) => void;
   reset: () => void;
 }
 
@@ -138,12 +154,14 @@ export const useChatStore = create<ChatState>((set) => ({
   replyTo: null,
   friends: [],
   pendingFriendRequests: [],
+  pendingGroupInvites: [],
   groups: {},
   pendingImage: null,
   unreadCount: 0,
   unreadByConversation: {},
   latestMention: null,
   blockedUsers: [],
+  pinnedMessages: [],
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
@@ -183,6 +201,15 @@ export const useChatStore = create<ChatState>((set) => ({
         historyLoaded: true,
       };
     }),
+  prependHistory: (incoming) =>
+    set((state) => {
+      const existingIDs = new Set(state.messages.map((m) => m.id));
+      const newMessages = incoming.filter((m) => !existingIDs.has(m.id));
+      if (newMessages.length === 0) return state;
+      return {
+        messages: [...newMessages, ...state.messages],
+      };
+    }),
   setOnlineUsers: (onlineUsers) => set({ onlineUsers }),
   setUserStatusList: (userStatusList) => set({ userStatusList }),
   setSelectedProfileUser: (selectedProfileUser) => set({ selectedProfileUser }),
@@ -208,6 +235,17 @@ export const useChatStore = create<ChatState>((set) => ({
         ...state.pendingFriendRequests,
         { from, timestamp: Date.now() },
       ],
+    })),
+  addGroupInvite: (group, from) =>
+    set((state) => ({
+      pendingGroupInvites: [
+        ...state.pendingGroupInvites,
+        { group, from, timestamp: Date.now() },
+      ],
+    })),
+  removeGroupInvite: (group) =>
+    set((state) => ({
+      pendingGroupInvites: state.pendingGroupInvites.filter((i) => i.group !== group),
     })),
   setGroupMembers: (group, members) =>
     set((state) => ({
@@ -263,6 +301,7 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => ({
       blockedUsers: state.blockedUsers.filter((u) => u !== username),
     })),
+  setPinnedMessages: (pinnedMessages) => set({ pinnedMessages }),
   reset: () =>
     set({
       view: "join",
@@ -280,6 +319,7 @@ export const useChatStore = create<ChatState>((set) => ({
       replyTo: null,
       friends: [],
       pendingFriendRequests: [],
+      pendingGroupInvites: [],
       groups: {},
       pendingImage: null,
       unreadCount: 0,
