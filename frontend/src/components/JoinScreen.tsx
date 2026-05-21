@@ -1,11 +1,32 @@
 import { useState, useCallback, useEffect, type FormEvent, type KeyboardEvent } from "react";
-import { MessageCircle, ArrowRight, Loader2 } from "lucide-react";
+import { MessageCircle, ArrowRight, Loader2, Globe } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useTranslation } from "@/i18n/context";
+import { ChatError, ErrorCode } from "@/lib/api";
+import type { Language } from "@/i18n/translations";
 
 const USERNAME_STORAGE_KEY = "tokendance:username";
 
+function getErrorMessage(err: unknown, t: (key: string) => string): string {
+  if (err instanceof ChatError) {
+    switch (err.code) {
+      case ErrorCode.TIMEOUT:
+        return t("error.timeout");
+      case ErrorCode.CLOSED:
+        return t("error.closed");
+      case ErrorCode.CANNOT_CONNECT:
+        return t("error.cannotConnect");
+    }
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return t("error.unknown");
+}
+
 export function JoinScreen() {
+  const { t, lang, setLang } = useTranslation();
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(false);
@@ -26,22 +47,22 @@ export function JoinScreen() {
 
       const trimmed = username.trim();
       if (!trimmed) {
-        setError("请输入用户名");
+        setError(t("join.errorEmpty"));
         return;
       }
 
       if (trimmed.length < 2) {
-        setError("用户名至少需要2个字符");
+        setError(t("join.errorTooShort"));
         return;
       }
 
       if (trimmed.length > 20) {
-        setError("用户名不能超过20个字符");
+        setError(t("join.errorTooLong"));
         return;
       }
 
       if (!/^[一-龥a-zA-Z0-9_]+$/.test(trimmed)) {
-        setError("用户名只能包含中文、英文、数字和下划线");
+        setError(t("join.errorInvalidChars"));
         return;
       }
 
@@ -50,17 +71,15 @@ export function JoinScreen() {
 
       try {
         await connect(trimmed);
-        // Save username to localStorage on success.
         localStorage.setItem(USERNAME_STORAGE_KEY, trimmed);
         setStoreUsername(trimmed);
         setView("chat");
       } catch (err) {
-        const message = err instanceof Error ? err.message : "连接服务器失败，请确保服务器正在运行";
-        setError(message);
+        setError(getErrorMessage(err, t));
         setConnecting(false);
       }
     },
-    [username, connect, setStoreUsername, setView],
+    [username, connect, setStoreUsername, setView, t],
   );
 
   const handleKeyDown = useCallback(
@@ -72,11 +91,16 @@ export function JoinScreen() {
     [handleJoin],
   );
 
+  const toggleLang = useCallback(() => {
+    const next: Language = lang === "zh-CN" ? "en-US" : "zh-CN";
+    setLang(next);
+  }, [lang, setLang]);
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-[hsl(223,4%,13%)] p-4">
       <div className="animate-blur-in w-full max-w-md">
         {/* Card */}
-        <div className="rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] p-8 shadow-2xl">
+        <div className="rounded-xl border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,16%)] p-8 shadow-2xl transition-colors duration-300">
           {/* Logo / Icon */}
           <div className="mb-6 flex justify-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[hsl(231,4%,20%)] ring-1 ring-[hsl(220,2.5%,28.5%)]">
@@ -89,10 +113,10 @@ export function JoinScreen() {
 
           {/* Title */}
           <h1 className="mb-1 text-center text-2xl font-semibold text-foreground tracking-tight">
-            TokenDance Chat
+            {t("join.title")}
           </h1>
           <p className="mb-8 text-center text-sm text-muted-foreground">
-            输入用户名加入公共聊天室
+            {t("join.subtitle")}
           </p>
 
           {/* Form */}
@@ -106,14 +130,15 @@ export function JoinScreen() {
                   setError("");
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder="你的用户名..."
+                placeholder={t("join.placeholder")}
                 autoFocus
                 maxLength={20}
                 disabled={connecting}
-                className="w-full rounded-lg border border-[hsl(220,2.5%,23.5%)] bg-[hsl(223,4%,13%)] px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
+                aria-label={t("join.placeholder")}
+                className="w-full rounded-lg border border-[hsl(220,2.5%,23.5%)] bg-[hsl(223,4%,13%)] px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
               />
               {error && (
-                <p className="mt-2 text-xs text-destructive animate-fade-in">
+                <p className="mt-2 text-xs text-destructive animate-fade-in" role="alert">
                   {error}
                 </p>
               )}
@@ -137,21 +162,33 @@ export function JoinScreen() {
               {connecting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  连接中...
+                  {t("join.buttonConnecting")}
                 </>
               ) : (
                 <>
-                  加入聊天
+                  {t("join.buttonJoin")}
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </button>
           </form>
+
+          {/* Language toggle */}
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={toggleLang}
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-[hsl(220,2.5%,18%)] transition-all duration-200"
+              aria-label={t("lang.label")}
+            >
+              <Globe className="h-3 w-3" />
+              {t("lang.switchTo")}
+            </button>
+          </div>
         </div>
 
         {/* Footer hint */}
-        <p className="mt-6 text-center text-xs text-muted-foreground/50">
-          公共聊天室 · 文明交流
+        <p className="mt-6 text-center text-xs text-muted-foreground/50 transition-colors duration-300">
+          {t("join.footer")}
         </p>
       </div>
     </div>

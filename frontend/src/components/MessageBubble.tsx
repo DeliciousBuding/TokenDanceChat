@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn, formatTime } from "@/lib/utils";
@@ -7,83 +7,108 @@ import type { ChatMessage } from "@/lib/api";
 interface MessageBubbleProps {
   message: ChatMessage;
   isOwn: boolean;
+  /** Hide avatar (for grouped messages after the first) */
+  hideAvatar?: boolean;
+  /** Hide username header (for grouped messages after the first) */
+  hideUsername?: boolean;
+  /** Show timestamp on the bubble (only for last in group or solo) */
+  forceShowTimestamp?: boolean;
+  /** Whether this message is part of a group (adjusts spacing) */
+  isGrouped?: boolean;
 }
 
-// Deterministic color from username
-function usernameColor(username: string): string {
-  const colors = [
-    "oklch(71.2% 0.194 13.428)",   // coral/orange (accent)
-    "oklch(68% 0.18 250)",          // blue
-    "oklch(65% 0.16 160)",          // green
-    "oklch(70% 0.17 310)",          // purple
-    "oklch(72% 0.15 60)",           // yellow
-    "oklch(67% 0.18 190)",          // teal
-    "oklch(70% 0.16 350)",          // pink
-    "oklch(66% 0.15 30)",           // orange-red
-  ];
-
+function hashString(str: string): number {
   let hash = 0;
-  for (let i = 0; i < username.length; i++) {
-    hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return colors[Math.abs(hash) % colors.length];
+  return Math.abs(hash);
 }
 
-export function MessageBubble({ message, isOwn }: MessageBubbleProps) {
-  const color = useMemo(() => usernameColor(message.username), [message.username]);
+function avatarGradient(username: string): string {
+  const baseHue = hashString(username) % 360;
+  const hue1 = baseHue;
+  const hue2 = (baseHue + 45) % 360;
+  return `linear-gradient(135deg, oklch(65% 0.16 ${hue1}), oklch(58% 0.14 ${hue2}))`;
+}
+
+function usernameHue(username: string): number {
+  return hashString(username) % 360;
+}
+
+export const MessageBubble = memo(function MessageBubble({
+  message,
+  isOwn,
+  hideAvatar = false,
+  hideUsername = false,
+  forceShowTimestamp = false,
+  isGrouped = false,
+}: MessageBubbleProps) {
+  const gradient = useMemo(() => avatarGradient(message.username), [message.username]);
+  const hue = useMemo(() => usernameHue(message.username), [message.username]);
+  const nameColor = `oklch(72% 0.16 ${hue})`;
+  const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
+  const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
+
+  // In a group, non-first messages get tighter top padding
+  const paddingY = isGrouped && hideAvatar ? "py-0.5" : "py-1.5";
 
   return (
     <div
       className={cn(
-        "group flex gap-3 px-4 py-1.5 animate-slide-up",
+        "group flex gap-3 px-4 animate-slide-up",
         isOwn ? "justify-end" : "justify-start",
+        paddingY,
       )}
     >
       {/* Avatar for others */}
-      {!isOwn && (
+      {!isOwn && !hideAvatar && (
         <div className="mt-0.5 flex-shrink-0">
           <div
-            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ring-1 ring-white/5"
-            style={{
-              backgroundColor: `${color}20`,
-              color: color,
-              borderColor: `${color}30`,
-            }}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ring-1 ring-white/10"
+            style={{ background: gradient }}
+            aria-hidden="true"
           >
             {message.username.charAt(0).toUpperCase()}
           </div>
         </div>
       )}
 
-      <div className={cn("max-w-[75%]", isOwn ? "items-end" : "items-start")}>
-        {/* Username + timestamp */}
-        <div
-          className={cn(
-            "mb-1 flex items-baseline gap-2",
-            isOwn ? "justify-end" : "justify-start",
-          )}
-        >
-          {!isOwn && (
-            <span
-              className="text-xs font-medium"
-              style={{ color }}
-            >
-              {message.username}
-            </span>
-          )}
-          {isOwn && (
-            <span className="text-xs text-muted-foreground/60">
-              {formatTime(message.timestamp)}
-            </span>
-          )}
-          {!isOwn && (
-            <span className="text-[10px] text-muted-foreground/50">
-              {formatTime(message.timestamp)}
-            </span>
-          )}
-        </div>
+      {/* Spacer (replaces hidden avatar to keep alignment) */}
+      {!isOwn && hideAvatar && <div className="w-8 flex-shrink-0" aria-hidden="true" />}
 
-        {/* Message content */}
+      <div className={cn("max-w-[75%]", isOwn ? "items-end" : "items-start")}>
+        {/* Username + timestamp header */}
+        {!hideUsername && (
+          <div
+            className={cn(
+              "mb-1 flex items-baseline gap-2",
+              isOwn ? "justify-end" : "justify-start",
+            )}
+          >
+            {!isOwn && (
+              <span
+                className="text-xs font-medium"
+                style={{ color: nameColor }}
+              >
+                {message.username}
+              </span>
+            )}
+            {/* Timestamp in header: only for solo messages (not first in group) */}
+            {isOwn && !isGrouped && (
+              <span className="text-xs text-muted-foreground/60">
+                {formatTime(message.timestamp)}
+              </span>
+            )}
+            {!isOwn && !isGrouped && (
+              <span className="text-[10px] text-muted-foreground/50">
+                {formatTime(message.timestamp)}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Message content bubble */}
         <div
           className={cn(
             "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
@@ -94,8 +119,8 @@ export function MessageBubble({ message, isOwn }: MessageBubbleProps) {
           style={
             isOwn
               ? {
-                  backgroundColor: `${color}18`,
-                  border: `1px solid ${color}25`,
+                  backgroundColor: bubbleBg,
+                  border: `1px solid ${bubbleBorder}`,
                 }
               : {
                   border: "1px solid hsl(220,2.5%,22%)",
@@ -109,10 +134,26 @@ export function MessageBubble({ message, isOwn }: MessageBubbleProps) {
           </div>
         </div>
 
-        {/* Timestamp for own messages at bottom */}
+        {/* Timestamp shown below bubble for own messages (hover) or last in group */}
         {isOwn && (
           <div className="mt-1 flex justify-end">
-            <span className="text-[10px] text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span
+              className={cn(
+                "text-[10px] text-muted-foreground/50 transition-opacity",
+                forceShowTimestamp
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100",
+              )}
+            >
+              {formatTime(message.timestamp)}
+            </span>
+          </div>
+        )}
+
+        {/* Timestamp for others: show below bubble when forced (last in group) */}
+        {!isOwn && forceShowTimestamp && (
+          <div className="mt-1 flex justify-start">
+            <span className="text-[10px] text-muted-foreground/50">
               {formatTime(message.timestamp)}
             </span>
           </div>
@@ -120,20 +161,19 @@ export function MessageBubble({ message, isOwn }: MessageBubbleProps) {
       </div>
 
       {/* Avatar for own messages */}
-      {isOwn && (
+      {isOwn && !hideAvatar && (
         <div className="mt-0.5 flex-shrink-0">
           <div
-            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ring-1 ring-white/5"
-            style={{
-              backgroundColor: `${color}25`,
-              color: color,
-              borderColor: `${color}35`,
-            }}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ring-1 ring-white/10"
+            style={{ background: gradient }}
+            aria-hidden="true"
           >
             {message.username.charAt(0).toUpperCase()}
           </div>
         </div>
       )}
+
+      {isOwn && hideAvatar && <div className="w-8 flex-shrink-0" aria-hidden="true" />}
     </div>
   );
-}
+});

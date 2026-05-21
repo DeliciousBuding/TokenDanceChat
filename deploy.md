@@ -1,96 +1,83 @@
-# Deployment Guide for TokenDanceChat (chat.vectorcontrol.tech)
+# Deployment Guide for TokenDanceChat
+
+Public deployment target: [chat.vectorcontrol.tech](https://chat.vectorcontrol.tech)
 
 ## Prerequisites
 
-- Docker and Docker Compose installed on the target server (hk2)
+- Linux server with systemd
 - Nginx installed
-- Domain `chat.vectorcontrol.tech` DNS pointing to the server
+- Domain DNS pointing to the server
+- Build machine with Go 1.24+ and Node.js 22+
 
-## Build
+## 1. Build
 
 From the project root:
 
 ```bash
-docker compose build
+bash scripts/build.sh
 ```
 
-## Run
+This cross-compiles the Go binary for `linux/amd64` and bundles the frontend into `frontend/dist/`.
 
-Start the container in detached mode:
+## 2. Deploy
+
+Copy the binary and frontend to the target server:
 
 ```bash
-docker compose up -d
+bash scripts/deploy.sh <user@server-host>
 ```
 
-The application will listen on port 8080 inside the container, mapped to host port 8080.
-SQLite database will be persisted in `./data/` on the host.
-
-To view logs:
+Example:
 
 ```bash
-docker compose logs -f
+bash scripts/deploy.sh deploy@my-server
 ```
 
-To stop:
+## 3. Verify
 
 ```bash
-docker compose down
+curl http://localhost:8080/api/health
+# → {"status":"ok"}
 ```
 
-## Nginx Setup (hk2 server)
-
-1. Copy the nginx configuration to the server:
+## 4. Nginx
 
 ```bash
 sudo cp nginx/tokendance.conf /etc/nginx/sites-available/tokendance
-```
-
-2. Enable the site:
-
-```bash
 sudo ln -s /etc/nginx/sites-available/tokendance /etc/nginx/sites-enabled/
-```
-
-3. Test the configuration:
-
-```bash
 sudo nginx -t
-```
-
-4. Reload nginx:
-
-```bash
 sudo systemctl reload nginx
 ```
 
-## TLS Certificate (Certbot)
-
-Once HTTP is confirmed working, obtain a Let's Encrypt certificate:
+## 5. TLS (Certbot)
 
 ```bash
 sudo certbot --nginx -d chat.vectorcontrol.tech
 ```
 
-Certbot will automatically modify the nginx configuration to enable HTTPS and set up auto-renewal. Alternatively, if your TLS is handled by an external reverse proxy (e.g., Cloudflare or a fronting load balancer), you can keep the nginx config as HTTP-only and terminate TLS at that layer.
+Certbot will automatically configure HTTPS and auto-renewal. If TLS is handled by an external proxy (e.g., Cloudflare), skip this step.
+
+## 6. View Logs
+
+```bash
+journalctl -u tokendancechat -f
+```
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and adjust values before building if needed:
+| Variable | Default | Description |
+|---|---|---|
+| `CHAT_ADDR` | `:8080` | Listen address and port |
+| `CHAT_DB_PATH` | `data/chat.db` | SQLite database file path |
+| `CHAT_FRONTEND_DIR` | `frontend/dist` | Directory containing built SPA assets |
+| `MAX_MSG_PER_SEC` | `5` | Rate limit per WebSocket connection |
 
-```bash
-cp .env.example .env
-```
-
-Available variables:
-
-- `PORT` — server listen port (default: 8080)
-- `DB_PATH` — SQLite database file path (default: ./data/chat.db)
-- `MAX_MSG_PER_SEC` — rate limit per connection (default: 5)
+Copy `.env.example` to `.env` and adjust as needed.
 
 ## Updates
 
 ```bash
 git pull
-docker compose build
-docker compose up -d --force-recreate
+bash scripts/build.sh
+bash scripts/deploy.sh <user@server-host>
 ```

@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
 
 	"tokendancechat/backend/hub"
+
+	"github.com/google/uuid"
 )
 
 // Handler holds dependencies for HTTP handlers.
@@ -15,9 +18,25 @@ type Handler struct {
 	store hub.Store
 }
 
+// contextKey is a private type to avoid collisions in context.WithValue.
+type contextKey string
+
+const requestIDKey contextKey = "request_id"
+
 // New creates a new Handler.
 func New(h *hub.Hub, s hub.Store) *Handler {
 	return &Handler{hub: h, store: s}
+}
+
+// writeJSONError writes a consistent JSON error response.
+func writeJSONError(w http.ResponseWriter, status int, msg, code, requestID string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":      msg,
+		"code":       code,
+		"request_id": requestID,
+	})
 }
 
 // CORSMiddleware wraps an http.Handler with CORS headers allowing all origins.
@@ -37,6 +56,20 @@ func CORSMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// SecurityHeadersMiddleware adds security-related HTTP headers to every response.
+func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("X-XSS-Protection", "0")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		// CSP: allow self-origin resources, ws/wss for WebSocket, inline styles for Tailwind
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; font-src 'self'; base-uri 'self'; form-action 'self'")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // HealthCheck handles GET /api/health.
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -49,8 +82,9 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 // GetMessages handles GET /api/messages?limit=100&before=timestamp.
 func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
 		return
 	}
 
@@ -81,8 +115,9 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
 // GetOnlineUsers handles GET /api/users/online.
 func (h *Handler) GetOnlineUsers(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
 		return
 	}
 
@@ -98,10 +133,39 @@ func (h *Handler) GetOnlineUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// LoggingMiddleware logs incoming HTTP requests.
+// Stats handles GET /api/stats.
+func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	connections := h.hub.ConnectionCount()
+	messagesTotal := h.store.TotalMessages()
+	uptime := h.hub.Uptime()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"connections":     connections,
+		"messages_total":  messagesTotal,
+		"uptime_seconds":  int64(uptime.Seconds()),
+		"started_at":      h.hub.StartTime.UTC().Format("2006-01-02T15:04:05Z"),
+	})
+}
+
+// requestIDFromContext retrieves the request ID from the context, or returns "".
+func requestIDFromContext(ctx context.Context) string {
+	id, _ := ctx.Value(requestIDKey).(string)
+	return id
+}
+
+// LoggingMiddleware logs incoming HTTP requests with a generated request ID.
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s %s", r.Method, r.URL.Path, r.RemoteAddr)
-		next.ServeHTTP(w, r)
+		reqID := uuid.New().String()[:8]
+		ctx := context.WithValue(r.Context(), requestIDKey, reqID)
+		log.Printf("[%s] %s %s %s", reqID, r.Method, r.URL.Path, r.RemoteAddr)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

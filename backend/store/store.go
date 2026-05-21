@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"tokendancechat/backend/hub"
@@ -14,8 +15,9 @@ import (
 
 // Store handles SQLite message persistence.
 type Store struct {
-	db *sql.DB
-	mu sync.RWMutex
+	db             *sql.DB
+	mu             sync.RWMutex
+	totalMessages  atomic.Int64
 }
 
 // New creates a new Store and initializes the database.
@@ -78,6 +80,8 @@ func (s *Store) InsertMessage(username, content string) (hub.StoredMessage, erro
 		return hub.StoredMessage{}, err
 	}
 
+	s.totalMessages.Add(1)
+
 	return hub.StoredMessage{
 		ID:        id,
 		Username:  username,
@@ -133,6 +137,11 @@ func (s *Store) GetMessages(limit int, before int64) []hub.StoredMessage {
 	}
 
 	return messages
+}
+
+// TotalMessages returns the total number of messages inserted since startup.
+func (s *Store) TotalMessages() int64 {
+	return s.totalMessages.Load()
 }
 
 // Close closes the database connection.

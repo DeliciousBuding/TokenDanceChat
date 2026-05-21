@@ -3,6 +3,7 @@ package hub
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -90,8 +91,9 @@ func (c *Client) handleJoin(msg Message) {
 	username := msg.Username
 	if !ValidateUsername(username) {
 		errMsg, _ := json.Marshal(Message{
-			Type:    "error",
-			Content: "invalid username: 1-20 chars, letters, digits, underscore, or Chinese",
+			Type:      "error",
+			Content:   "invalid username: 1-20 chars, letters, digits, underscore, or Chinese",
+			ErrorCode: "INVALID_USERNAME",
 		})
 		select {
 		case c.send <- errMsg:
@@ -103,8 +105,9 @@ func (c *Client) handleJoin(msg Message) {
 	// Check for duplicate username.
 	if c.hub.IsUsernameTaken(username) {
 		errMsg, _ := json.Marshal(Message{
-			Type:    "error",
-			Content: "username already taken, please choose another",
+			Type:      "error",
+			Content:   "username already taken, please choose another",
+			ErrorCode: "USERNAME_TAKEN",
 		})
 		select {
 		case c.send <- errMsg:
@@ -141,8 +144,9 @@ func (c *Client) handleJoin(msg Message) {
 func (c *Client) handleChatMessage(msg Message) {
 	if c.username == "" {
 		errMsg, _ := json.Marshal(Message{
-			Type:    "error",
-			Content: "you must join before sending messages",
+			Type:      "error",
+			Content:   "you must join before sending messages",
+			ErrorCode: "NOT_JOINED",
 		})
 		select {
 		case c.send <- errMsg:
@@ -151,15 +155,27 @@ func (c *Client) handleChatMessage(msg Message) {
 		return
 	}
 
-	if msg.Content == "" {
+	// Sanitize content.
+	content := sanitizeContent(msg.Content)
+	if content == "" {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "message content cannot be empty",
+			ErrorCode: "EMPTY_MESSAGE",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
 		return
 	}
 
 	// Rate limiting: max 5 messages per second.
 	if !c.checkRateLimit() {
 		errMsg, _ := json.Marshal(Message{
-			Type:    "error",
-			Content: "rate limit exceeded: max 5 messages per second",
+			Type:      "error",
+			Content:   "rate limit exceeded: max 5 messages per second",
+			ErrorCode: "RATE_LIMITED",
 		})
 		select {
 		case c.send <- errMsg:
@@ -169,7 +185,7 @@ func (c *Client) handleChatMessage(msg Message) {
 	}
 
 	// Save to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, msg.Content)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content)
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
 		return
@@ -242,4 +258,20 @@ func (c *Client) WritePump() {
 			}
 		}
 	}
+}
+
+const maxContentLength = 2000
+
+// sanitizeContent trims whitespace, strips null bytes, and enforces max length.
+// Returns empty string if the result is whitespace-only.
+func sanitizeContent(content string) string {
+	// Strip null bytes.
+	content = strings.ReplaceAll(content, "\x00", "")
+	// Trim whitespace.
+	content = strings.TrimSpace(content)
+	// Enforce max length.
+	if len([]rune(content)) > maxContentLength {
+		content = string([]rune(content)[:maxContentLength])
+	}
+	return content
 }

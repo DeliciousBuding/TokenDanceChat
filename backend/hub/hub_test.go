@@ -1,0 +1,195 @@
+package hub
+
+import (
+	"testing"
+	"time"
+)
+
+// mockStore is a test implementation of the Store interface.
+type mockStore struct {
+	messages []StoredMessage
+}
+
+func (m *mockStore) InsertMessage(username, content string) (StoredMessage, error) {
+	msg := StoredMessage{
+		ID:        "mock-id-" + username,
+		Username:  username,
+		Content:   content,
+		Timestamp: time.Now().UnixMilli(),
+	}
+	m.messages = append(m.messages, msg)
+	return msg, nil
+}
+
+func (m *mockStore) GetMessages(limit int, before int64) []StoredMessage {
+	return m.messages
+}
+
+func (m *mockStore) TotalMessages() int64 {
+	return int64(len(m.messages))
+}
+
+func TestNew(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms)
+
+	if h == nil {
+		t.Fatal("New() returned nil")
+	}
+	if h.clients == nil {
+		t.Error("expected non-nil clients map")
+	}
+	if cap(h.broadcast) != 256 {
+		t.Errorf("expected broadcast channel capacity 256, got %d", cap(h.broadcast))
+	}
+	if h.register == nil {
+		t.Error("expected non-nil register channel")
+	}
+	if h.unregister == nil {
+		t.Error("expected non-nil unregister channel")
+	}
+	if h.store == nil {
+		t.Error("expected non-nil store")
+	}
+	if h.StartTime.IsZero() {
+		t.Error("expected non-zero StartTime")
+	}
+}
+
+func TestValidateUsername(t *testing.T) {
+	tests := []struct {
+		username string
+		valid    bool
+	}{
+		// Valid cases.
+		{"alice", true},
+		{"Bob", true},
+		{"user_123", true},
+		{"张三", true},
+		{"test", true},
+		// Invalid cases.
+		{"", false},
+		{"verylongusernameover20chars", false},
+		{"hello world", false},
+		{"x@y", false},
+		{"test<script>", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.username, func(t *testing.T) {
+			result := ValidateUsername(tc.username)
+			if result != tc.valid {
+				t.Errorf("ValidateUsername(%q) = %v, want %v", tc.username, result, tc.valid)
+			}
+		})
+	}
+}
+
+func TestIsUsernameTaken(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms)
+	go h.Run()
+
+	// Initially, no username should be taken.
+	if h.IsUsernameTaken("alice") {
+		t.Error("expected 'alice' to NOT be taken in empty hub")
+	}
+
+	// Register a client with username "alice".
+	client := &Client{username: "alice", send: make(chan []byte, 1)}
+	h.register <- client
+
+	// Give the hub a moment to process the registration.
+	time.Sleep(10 * time.Millisecond)
+
+	if !h.IsUsernameTaken("alice") {
+		t.Error("expected 'alice' to be taken after registration")
+	}
+
+	// "bob" should still not be taken.
+	if h.IsUsernameTaken("bob") {
+		t.Error("expected 'bob' to NOT be taken")
+	}
+
+	// Clean up: unregister the client.
+	h.unregister <- client
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestOnlineUsers(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms)
+	go h.Run()
+
+	// Initially, no users.
+	users := h.OnlineUsers()
+	if len(users) != 0 {
+		t.Fatalf("expected 0 online users initially, got %d", len(users))
+	}
+
+	// Register multiple clients.
+	alice := &Client{username: "alice", send: make(chan []byte, 1)}
+	bob := &Client{username: "bob", send: make(chan []byte, 1)}
+	charlie := &Client{username: "charlie", send: make(chan []byte, 1)}
+
+	h.register <- alice
+	h.register <- bob
+	h.register <- charlie
+	time.Sleep(10 * time.Millisecond)
+
+	users = h.OnlineUsers()
+	if len(users) != 3 {
+		t.Fatalf("expected 3 online users, got %d", len(users))
+	}
+
+	// Map iteration order is non-deterministic; check presence of each expected user.
+	userSet := make(map[string]bool)
+	for _, u := range users {
+		userSet[u] = true
+	}
+	for _, expected := range []string{"alice", "bob", "charlie"} {
+		if !userSet[expected] {
+			t.Errorf("expected user %q to be online, got %v", expected, users)
+		}
+	}
+
+	// Unregister bob.
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	users = h.OnlineUsers()
+	if len(users) != 2 {
+		t.Fatalf("expected 2 online users after unregister, got %d", len(users))
+	}
+
+	// Clean up remaining clients.
+	h.unregister <- alice
+	h.unregister <- charlie
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestHubRunStartStop(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms)
+
+	// Start the hub.
+	go h.Run()
+
+	// Verify the hub is running by registering and querying.
+	client := &Client{username: "testuser", send: make(chan []byte, 1)}
+	h.register <- client
+	time.Sleep(10 * time.Millisecond)
+
+	if !h.IsUsernameTaken("testuser") {
+		t.Error("hub not processing registrations")
+	}
+
+	users := h.OnlineUsers()
+	if len(users) != 1 {
+		t.Errorf("expected 1 online user, got %d", len(users))
+	}
+
+	// Unregister to clean up.
+	h.unregister <- client
+	time.Sleep(10 * time.Millisecond)
+}

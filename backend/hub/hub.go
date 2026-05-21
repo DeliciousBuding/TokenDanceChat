@@ -5,13 +5,18 @@ import (
 	"log"
 	"regexp"
 	"sync"
+	"time"
 )
+
+// MaxConnections is the hard limit on concurrent WebSocket connections.
+const MaxConnections = 100
 
 // Store defines the interface for message persistence.
 // This avoids circular imports between hub and store packages.
 type Store interface {
 	InsertMessage(username, content string) (StoredMessage, error)
 	GetMessages(limit int, before int64) []StoredMessage
+	TotalMessages() int64
 }
 
 // StoredMessage is the message model returned by the store.
@@ -31,6 +36,8 @@ type Message struct {
 	Timestamp int64           `json:"timestamp,omitempty"`
 	Online    []string        `json:"online,omitempty"`
 	Messages  []StoredMessage `json:"messages,omitempty"`
+	ErrorCode string          `json:"code,omitempty"`
+	RequestID string          `json:"request_id,omitempty"`
 }
 
 // Hub maintains the set of active clients and broadcasts messages to them.
@@ -50,6 +57,9 @@ type Hub struct {
 	// Store for message persistence.
 	store Store
 
+	// StartTime is the time the hub was created.
+	StartTime time.Time
+
 	mu sync.RWMutex
 }
 
@@ -61,11 +71,15 @@ func New(store Store) *Hub {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		store:      store,
+		StartTime:  time.Now(),
 	}
 }
 
 // Run starts the hub's event loop. It should be run in a goroutine.
 func (h *Hub) Run() {
+	syncTicker := time.NewTicker(30 * time.Second)
+	defer syncTicker.Stop()
+
 	for {
 		select {
 		case client := <-h.register:
@@ -119,6 +133,25 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mu.RUnlock()
+
+		case <-syncTicker.C:
+			online := h.onlineUsers()
+			syncMsg, err := json.Marshal(Message{
+				Type:   "online_users",
+				Online: online,
+			})
+			if err != nil {
+				log.Printf("marshal online_users error: %v", err)
+				continue
+			}
+			h.mu.RLock()
+			for c := range h.clients {
+				select {
+				case c.send <- syncMsg:
+				default:
+				}
+			}
+			h.mu.RUnlock()
 		}
 	}
 }
@@ -154,6 +187,23 @@ func (h *Hub) IsUsernameTaken(username string) bool {
 		}
 	}
 	return false
+}
+
+// ConnectionCount returns the number of currently connected clients.
+func (h *Hub) ConnectionCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.clients)
+}
+
+// IsFull returns true when the hub has reached MaxConnections.
+func (h *Hub) IsFull() bool {
+	return h.ConnectionCount() >= MaxConnections
+}
+
+// Uptime returns the duration since the hub was created.
+func (h *Hub) Uptime() time.Duration {
+	return time.Since(h.StartTime)
 }
 
 // usernameRegex validates: 1-20 chars, alphanumeric, underscore, or Chinese chars.

@@ -82,6 +82,18 @@
   animation: scaleIn 0.25s ease-out;
 }
 
+@utility animate-pulse-once {
+  animation: pulseOnce 0.4s ease-out;
+}
+
+@utility animate-pulse-dot {
+  animation: pulseDot 2s ease-in-out infinite;
+}
+
+@utility animate-chat-bubble {
+  animation: chatBubblePulse 2.5s ease-in-out infinite;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -122,6 +134,56 @@
     opacity: 1;
     filter: blur(0);
   }
+}
+
+@keyframes pulseOnce {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 hsl(145deg 63% 42%);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 3px hsl(145deg 63% 42% / 0);
+  }
+}
+
+@keyframes chatBubblePulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.8;
+  }
+}
+
+@keyframes inputGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(71.2% 0.194 13.428 / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 3px oklch(71.2% 0.194 13.428 / 0.12);
+  }
+}
+
+.input-glow:focus-within {
+  animation: inputGlow 2s ease-in-out infinite;
 }
 
 .animate-blur-in {
@@ -214,3 +276,16 @@
 .markdown-body th {
   background: hsl(220, 2.5%, 16%);
 }
+
+/*
+ * Use content-visibility: auto on message groups so the browser
+ * can skip rendering work for off-screen messages entirely.
+ * This is a lightweight precursor to full virtual scrolling with
+ * @legendapp/list or react-virtuoso.
+ */
+.message-group {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
+}
+
+/* ---------- Responsive fixes ---------- */
