@@ -57,10 +57,22 @@ func (m *mockStore) ListRooms() []StoredRoom {
 func (m *mockStore) DeleteRoom(roomID string) error {
 	return nil
 }
+func (m *mockStore) ToggleReaction(messageID, emoji, username string) (map[string][]string, error) {
+	return nil, nil
+}
+func (m *mockStore) GetReactionsForMessages(messageIDs []string) map[string]map[string][]string {
+	return nil
+}
+func (m *mockStore) UpdateMessage(messageID, content string) (StoredMessage, error) {
+	return StoredMessage{}, nil
+}
+func (m *mockStore) GetMessageByID(messageID string) (StoredMessage, error) {
+	return StoredMessage{}, nil
+}
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, "")
+	h := New(ms, nil, nil, "")
 
 	if h == nil {
 		t.Fatal("New() returned nil")
@@ -116,7 +128,7 @@ func TestValidateUsername(t *testing.T) {
 
 func TestIsUsernameTaken(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, "")
+	h := New(ms, nil, nil, "")
 	go h.Run()
 
 	// Initially, no username should be taken.
@@ -147,7 +159,7 @@ func TestIsUsernameTaken(t *testing.T) {
 
 func TestOnlineUsers(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, "")
+	h := New(ms, nil, nil, "")
 	go h.Run()
 
 	// Initially, no users.
@@ -199,7 +211,7 @@ func TestOnlineUsers(t *testing.T) {
 
 func TestHubRunStartStop(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, "")
+	h := New(ms, nil, nil, "")
 	// Start the hub.
 	go h.Run()
 

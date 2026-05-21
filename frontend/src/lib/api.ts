@@ -9,6 +9,14 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   room_id?: string;
+  edited?: boolean;
+  reactions?: Record<string, string[]>;
+  reply_to_id?: string;
+  reply_to_content?: string;
+  reply_to_user?: string;
+  deleted?: boolean;
+  to?: string;
+  from?: string;
 }
 
 export interface WSChatMessage extends WSMessage {
@@ -18,6 +26,8 @@ export interface WSChatMessage extends WSMessage {
   content: string;
   timestamp: number;
   room_id?: string;
+  edited?: boolean;
+  reactions?: Record<string, string[]>;
 }
 
 export interface WSHistoryMessage extends WSMessage {
@@ -159,6 +169,35 @@ export interface WSForwardEvent extends WSMessage {
   content: string;
   id: string;
   timestamp: number;
+}
+
+// Reaction types
+export interface WSReactionRequest {
+  type: "reaction";
+  message_id: string;
+  emoji: string;
+}
+
+export interface WSReactionUpdate extends WSMessage {
+  type: "reaction_update";
+  id: string;
+  reactions: Record<string, string[]>;
+}
+
+// Message edit types
+export interface WSMessageEditRequest {
+  type: "message_edit";
+  id: string;
+  content: string;
+}
+
+export interface WSMessageEditBroadcast extends WSMessage {
+  type: "message_edit";
+  id: string;
+  username: string;
+  content: string;
+  timestamp: number;
+  edited: boolean;
 }
 
 export type WSEventHandler = (msg: WSMessage) => void;
@@ -379,19 +418,27 @@ class ChatAPI {
   }
 
   sendRoomJoin(roomID: string): void {
-    this.send({ type: "room_join", room_id: roomID } as WSJoinRequest & { room_id: string });
+    this.send({ type: "room_join", room_id: roomID });
   }
 
   sendRoomCreate(name: string): void {
-    this.send({ type: "room_create", group: name } as WSJoinRequest & { group: string });
+    this.send({ type: "room_create", group: name });
   }
 
   sendRoomLeave(): void {
-    this.send({ type: "room_leave" } as WSJoinRequest);
+    this.send({ type: "room_leave" });
   }
 
   sendForward(messageID: string, toUsername: string): void {
-    this.send({ type: "forward", id: messageID, to: toUsername } as WSJoinRequest & { id: string; to: string });
+    this.send({ type: "forward", id: messageID, to: toUsername });
+  }
+
+  sendReaction(messageId: string, emoji: string): void {
+    this.send({ type: "reaction", message_id: messageId, emoji });
+  }
+
+  sendMessageEdit(messageId: string, content: string): void {
+    this.send({ type: "message_edit", id: messageId, content });
   }
 
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {

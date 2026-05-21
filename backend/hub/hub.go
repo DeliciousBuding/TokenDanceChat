@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tokendancechat/backend/llm"
+	"tokendancechat/backend/picoclaw"
 )
 
 // MaxConnections is the hard limit on concurrent WebSocket connections.
@@ -133,10 +134,11 @@ type Hub struct {
 	// StartTime is the time the hub was created.
 	StartTime time.Time
 
-	// LLM bot support.
-	llmClient *llm.Client
-	memory    *llm.Memory
-	botName   string
+	// LLM bot support (deprecated: llmClient is legacy; picoclawClient is preferred).
+	llmClient       *llm.Client
+	picoclawClient  *picoclaw.Client
+	memory          *llm.Memory
+	botName         string
 
 	// typingRateLimit tracks the last time a typing broadcast was sent per username.
 	typingRateLimit map[string]time.Time
@@ -161,18 +163,26 @@ type Hub struct {
 }
 
 // New creates a new Hub with the given store. llmCfg and botName are optional;
-// pass nil for llmCfg to disable LLM bot support.
-func New(store Store, llmCfg *llm.Config, botName string) *Hub {
-	var client *llm.Client
+// pass nil for llmCfg to disable legacy LLM bot support. picoclawCfg enables the
+// PicoClaw adapter (preferred). If both are set, PicoClaw takes precedence.
+func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName string) *Hub {
+	var llmClient *llm.Client
+	var pcClient *picoclaw.Client
 	var mem *llm.Memory
+
+	if picoclawCfg != nil {
+		pcClient = picoclaw.New(*picoclawCfg)
+	}
+
 	if llmCfg != nil {
-		client = llm.New(*llmCfg)
+		llmClient = llm.New(*llmCfg)
 		memSize := llmCfg.MemorySize
 		if memSize <= 0 {
 			memSize = 20
 		}
 		mem = llm.NewMemory(memSize)
 	}
+
 	return &Hub{
 		clients:         make(map[*Client]bool),
 		broadcast:       make(chan []byte, 256),
@@ -180,7 +190,8 @@ func New(store Store, llmCfg *llm.Config, botName string) *Hub {
 		unregister:      make(chan *Client),
 		store:           store,
 		StartTime:       time.Now(),
-		llmClient:       client,
+		llmClient:       llmClient,
+		picoclawClient:  pcClient,
 		memory:          mem,
 		botName:         botName,
 		typingRateLimit: make(map[string]time.Time),
@@ -354,9 +365,14 @@ func (h *Hub) BotName() string {
 	return h.botName
 }
 
-// LLMClient returns the LLM client, or nil if not configured.
+// LLMClient returns the legacy LLM client, or nil if not configured.
 func (h *Hub) LLMClient() *llm.Client {
 	return h.llmClient
+}
+
+// PicoclawClient returns the PicoClaw client, or nil if not configured.
+func (h *Hub) PicoclawClient() *picoclaw.Client {
+	return h.picoclawClient
 }
 
 // Memory returns the LLM context memory, or nil if not configured.

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, RoomInfo } from "@/lib/api";
+import type { ChatMessage, RoomInfo, UserStatus } from "@/lib/api";
 
 export type ViewState = "join" | "chat";
 
@@ -49,8 +49,24 @@ interface ChatState {
   rooms: RoomInfo[];
   currentRoomID: string;
 
+  // Chat context
+  currentChat: CurrentChat;
+  replyTo: ChatMessage | null;
+
+  // Friends
+  friends: string[];
+
+  // Pending friend requests
+  pendingFriendRequests: PendingFriendRequest[];
+
+  // Groups
+  groups: Record<string, GroupInfo>;
+
   // Image preview (before sending)
   pendingImage: string | null;
+
+  // Unread count
+  unreadCount: number;
 
   // Actions
   setView: (view: ViewState) => void;
@@ -68,7 +84,15 @@ interface ChatState {
   removeTypingUser: (username: string) => void;
   setRooms: (rooms: RoomInfo[]) => void;
   setCurrentRoomID: (roomID: string) => void;
+  setCurrentChat: (chat: CurrentChat) => void;
+  setReplyTo: (message: ChatMessage | null) => void;
+  setFriends: (friends: string[]) => void;
+  addFriendRequest: (from: string) => void;
+  setGroupMembers: (group: string, members: string[]) => void;
   setPendingImage: (imageDataUrl: string | null) => void;
+  setUnreadCount: (count: number) => void;
+  updateMessageReactions: (messageId: string, reactions: Record<string, string[]>) => void;
+  editMessageInPlace: (messageId: string, content: string) => void;
   reset: () => void;
 }
 
@@ -84,7 +108,13 @@ export const useChatStore = create<ChatState>((set) => ({
   typingUsers: [],
   rooms: [],
   currentRoomID: "",
+  currentChat: { type: "public" },
+  replyTo: null,
+  friends: [],
+  pendingFriendRequests: [],
+  groups: {},
   pendingImage: null,
+  unreadCount: 0,
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
@@ -130,7 +160,34 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
   setRooms: (rooms) => set({ rooms }),
   setCurrentRoomID: (currentRoomID) => set({ currentRoomID }),
+  setCurrentChat: (currentChat) => set({ currentChat }),
+  setReplyTo: (replyTo) => set({ replyTo }),
+  setFriends: (friends) => set({ friends }),
+  addFriendRequest: (from) =>
+    set((state) => ({
+      pendingFriendRequests: [
+        ...state.pendingFriendRequests,
+        { from, timestamp: Date.now() },
+      ],
+    })),
+  setGroupMembers: (group, members) =>
+    set((state) => ({
+      groups: { ...state.groups, [group]: { name: group, members } },
+    })),
   setPendingImage: (pendingImage) => set({ pendingImage }),
+  setUnreadCount: (unreadCount) => set({ unreadCount }),
+  updateMessageReactions: (messageId, reactions) =>
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, reactions } : m,
+      ),
+    })),
+  editMessageInPlace: (messageId, content) =>
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, content, edited: true } : m,
+      ),
+    })),
   reset: () =>
     set({
       view: "join",
@@ -144,6 +201,12 @@ export const useChatStore = create<ChatState>((set) => ({
       typingUsers: [],
       rooms: [],
       currentRoomID: "",
+      currentChat: { type: "public" },
+      replyTo: null,
+      friends: [],
+      pendingFriendRequests: [],
+      groups: {},
       pendingImage: null,
+      unreadCount: 0,
     }),
 }));

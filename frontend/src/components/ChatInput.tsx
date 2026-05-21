@@ -3,6 +3,7 @@ import { Send, Loader2, X, ImagePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
+import type { ChatMessage } from "@/lib/api";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
@@ -24,11 +25,11 @@ export function ChatInput({
   onSend,
   disabled,
   replyTo,
-  onCancelReply,
+  onCancelReply: _onCancelReply,
   onUpload,
 }: ChatInputProps) {
   const { t } = useTranslation();
-  const { onlineUsers, username, pendingImage, setPendingImage } = useChatStore();
+  const { onlineUsers, username, currentChat, pendingImage, setPendingImage, setReplyTo } = useChatStore();
   const [content, setContent] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

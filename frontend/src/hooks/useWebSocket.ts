@@ -8,9 +8,12 @@ import {
   type WSHistoryMessage,
   type WSUserEvent,
   type WSTypingEvent,
+  type WSUserStatus,
   type WSRoomList,
   type WSRoomJoin,
   type WSForwardEvent,
+  type WSReactionUpdate,
+  type WSMessageEditBroadcast,
 } from "@/lib/api";
 
 // --- Notification utilities ---
@@ -94,8 +97,8 @@ export function useWebSocket() {
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
+  const prevStatusRef = useRef<Record<string, boolean>>({});
   const {
-    username,
     setConnected,
     addMessage,
     setHistory,
@@ -107,6 +110,13 @@ export function useWebSocket() {
     setRooms,
     setCurrentRoomID,
     setPendingImage,
+    updateMessageReactions,
+    editMessageInPlace,
+    setUnreadCount,
+    deleteMessage,
+    setFriends,
+    setGroupMembers,
+    addFriendRequest,
   } = useChatStore();
 
   const connect = useCallback(
@@ -179,6 +189,14 @@ export function useWebSocket() {
     chatAPI.sendForward(messageID, toUsername);
   }, []);
 
+  const sendReaction = useCallback((messageId: string, emoji: string) => {
+    chatAPI.sendReaction(messageId, emoji);
+  }, []);
+
+  const sendMessageEdit = useCallback((messageId: string, content: string) => {
+    chatAPI.sendMessageEdit(messageId, content);
+  }, []);
+
   const uploadImage = useCallback(async (file: File) => {
     const url = await chatAPI.uploadImage(file);
     if (url) {
@@ -208,7 +226,7 @@ export function useWebSocket() {
           msg as WSChatMessage;
         addMessage({
           id,
-          username: sender,
+          username,
           content,
           timestamp: timestamp || Date.now(),
           reply_to_id,
@@ -223,7 +241,7 @@ export function useWebSocket() {
     unsubs.push(
       chatAPI.on("dm_message", (msg: WSMessage) => {
         const m = msg as unknown as ChatMessage;
-        addDMMessage({
+        addMessage({
           id: m.id,
           username: m.username,
           content: m.content,
@@ -241,12 +259,12 @@ export function useWebSocket() {
     unsubs.push(
       chatAPI.on("group_message", (msg: WSMessage) => {
         const m = msg as unknown as ChatMessage & { group?: string };
-        addGroupMessage({
+        addMessage({
           id: m.id,
           username: m.username,
           content: m.content,
           timestamp: m.timestamp || Date.now(),
-          group: m.group || "",
+          to: m.group || "",
           reply_to_id: m.reply_to_id,
           reply_to_content: m.reply_to_content,
           reply_to_user: m.reply_to_user,
@@ -459,6 +477,26 @@ export function useWebSocket() {
       }),
     );
 
+    // Reaction update
+    unsubs.push(
+      chatAPI.on("reaction_update", (msg: WSMessage) => {
+        const { id, reactions } = msg as WSReactionUpdate;
+        if (id && reactions) {
+          updateMessageReactions(id, reactions);
+        }
+      }),
+    );
+
+    // Message edit
+    unsubs.push(
+      chatAPI.on("message_edit", (msg: WSMessage) => {
+        const { id, content, edited } = msg as WSMessageEditBroadcast;
+        if (id && content && edited) {
+          editMessageInPlace(id, content);
+        }
+      }),
+    );
+
     // Typing indicator
     unsubs.push(
       chatAPI.on("typing", (msg: WSMessage) => {
@@ -486,7 +524,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest]);
 
-  return { connect, disconnect, sendMessage, joinRoom, createRoom, leaveRoom, forwardMessage, uploadImage };
+  return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

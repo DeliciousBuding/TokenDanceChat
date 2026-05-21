@@ -341,3 +341,17 @@
     max-height: 50px;
   }
 }
+
+/* Emoji picker custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(220, 2.5%, 22%);
+  border-radius: 2px;
+}
