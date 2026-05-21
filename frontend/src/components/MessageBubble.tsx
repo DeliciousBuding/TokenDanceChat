@@ -48,7 +48,7 @@ const CodeBlock = memo(function CodeBlock({
   return (
     <div className="relative group/code my-2 rounded-lg overflow-hidden border border-border">
       {/* Header bar */}
-      <div className="flex items-center justify-between bg-[hsl(220,2.5%,12%)] px-3 py-1.5 border-b border-[hsl(220,2.5%,18%)]">
+      <div className="flex items-center justify-between bg-muted px-3 py-1.5 border-b border-border">
         <span className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">
           {language || "code"}
         </span>
@@ -62,7 +62,7 @@ const CodeBlock = memo(function CodeBlock({
         </button>
       </div>
       {/* Code content */}
-      <pre className="!bg-[hsl(220,2.5%,10%)] !p-3 !m-0 overflow-x-auto text-[0.8125rem] leading-relaxed">
+      <pre className="!bg-muted !p-3 !m-0 overflow-x-auto text-[0.8125rem] leading-relaxed">
         <code className={`language-${language || ""}`}>{code}</code>
       </pre>
     </div>
@@ -424,7 +424,7 @@ export const MessageBubble = memo(function MessageBubble({
                   e.stopPropagation();
                   onForward(message);
                 }}
-                className="flex items-center gap-1 rounded-lg bg-[hsl(231,4%,22%)] border border-[hsl(220,2.5%,28%)] px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-[hsl(231,4%,26%)] transition-colors shadow-md"
+                className="flex items-center gap-1 rounded-lg bg-accent border border-[hsl(220,2.5%,28%)] px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-[hsl(231,4%,26%)] transition-colors shadow-md"
                 aria-label="Forward message"
               >
                 <Forward className="h-3 w-3" />

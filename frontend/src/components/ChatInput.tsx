@@ -427,7 +427,7 @@ export function ChatInput({
                     "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
                     idx === mentionIndex
                       ? "bg-accent text-foreground"
-                      : "text-muted-foreground hover:bg-[hsl(220,2.5%,16%)] hover:text-foreground",
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   )}
                 >
                   <span

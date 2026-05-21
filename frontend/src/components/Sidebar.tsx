@@ -87,7 +87,7 @@ const UserListItem = memo(function UserListItem({
       {/* Context menu for non-self users */}
       {!isSelf && showMenu && (
         <div
-          className="absolute right-3 z-30 mt-12 rounded-lg border border-border bg-[hsl(231,4%,12%)] shadow-xl py-1 animate-scale-in"
+          className="absolute right-3 z-30 mt-12 rounded-lg border border-border bg-card shadow-xl py-1 animate-scale-in"
           onClick={(e) => e.stopPropagation()}
           style={{ minWidth: "140px" }}
         >
@@ -181,7 +181,7 @@ export function Sidebar({
     >
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[hsl(231,4%,22%)]">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
           <MessageCircle
             className="h-5 w-5"
             style={{ color: "oklch(71.2% 0.194 13.428)" }}

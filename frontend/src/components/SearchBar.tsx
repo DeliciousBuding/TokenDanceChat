@@ -95,7 +95,7 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
             {results.length > 0 && results.map((r, i) => (
               <button key={r.id} onClick={() => handleClickResult(r)}
                 className={cn("w-full text-left px-4 py-3 border-b border-border last:border-b-0 transition-colors",
-                  i === selectedIndex ? "bg-accent" : "hover:bg-[hsl(220,2.5%,16%)]")}>
+                  i === selectedIndex ? "bg-accent" : "hover:bg-accent")}>
                 <div className="flex items-center gap-2 mb-1"><span className="text-xs font-medium text-muted-foreground/70">{r.username}</span></div>
                 <p className="text-xs text-muted-foreground/80 line-clamp-2" dangerouslySetInnerHTML={{ __html: r.snippet || r.content.substring(0, 120) }} />
               </button>
