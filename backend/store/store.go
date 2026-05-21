@@ -110,12 +110,24 @@ func (s *Store) migrate() error {
 	}
 
 	// Add columns if they don't exist (migration for existing DBs).
-	s.db.Exec("ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")
-	s.db.Exec("ALTER TABLE messages ADD COLUMN reply_to_id TEXT DEFAULT ''")
-	s.db.Exec("ALTER TABLE messages ADD COLUMN room_id TEXT DEFAULT ''")
-	s.db.Exec("ALTER TABLE messages ADD COLUMN edited INTEGER NOT NULL DEFAULT 0")
-	s.db.Exec("ALTER TABLE messages ADD COLUMN to_user TEXT DEFAULT ''")
-	s.db.Exec("ALTER TABLE messages ADD COLUMN group_name TEXT DEFAULT ''")
+	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0"); err != nil {
+		log.Printf("store: migrate add column deleted: %v", err)
+	}
+	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN reply_to_id TEXT DEFAULT ''"); err != nil {
+		log.Printf("store: migrate add column reply_to_id: %v", err)
+	}
+	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN room_id TEXT DEFAULT ''"); err != nil {
+		log.Printf("store: migrate add column room_id: %v", err)
+	}
+	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN edited INTEGER NOT NULL DEFAULT 0"); err != nil {
+		log.Printf("store: migrate add column edited: %v", err)
+	}
+	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN to_user TEXT DEFAULT ''"); err != nil {
+		log.Printf("store: migrate add column to_user: %v", err)
+	}
+	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN group_name TEXT DEFAULT ''"); err != nil {
+		log.Printf("store: migrate add column group_name: %v", err)
+	}
 
 	// Seed default room if not present.
 	s.ensureDefaultRoom()
