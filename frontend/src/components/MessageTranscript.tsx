@@ -116,6 +116,28 @@ export function MessageTranscript({
   const [unreadLocalCount, setUnreadLocalCount] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const prevMessageCountRef = useRef(0);
+  const scrollPositions = useRef<Map<string, number>>(new Map());
+  const conversationKey = currentChat.type === "dm" ? `dm:${currentChat.username}` : currentChat.type === "group" ? `group:${currentChat.name}` : "public";
+
+  // Restore scroll position when switching conversations.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const saved = scrollPositions.current.get(conversationKey);
+    if (saved !== undefined) {
+      container.scrollTop = saved;
+    }
+  }, [conversationKey]);
+
+  // Save scroll position on scroll.
+  const handleScroll = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    scrollPositions.current.set(conversationKey, container.scrollTop);
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    setShouldAutoScroll(distanceFromBottom < 120);
+  }, [conversationKey]);
 
   // Filter messages based on current chat context.
   const effectiveMessages = useMemo(() => {
@@ -166,19 +188,27 @@ export function MessageTranscript({
     prevMessageCountRef.current = curr;
   }, [effectiveMessages.length, shouldAutoScroll]);
 
-  const handleScroll = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    setShouldAutoScroll(distanceFromBottom < 120);
-  }, []);
-
   useEffect(() => {
     if (shouldAutoScroll && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [groups, shouldAutoScroll]);
+
+  // Listen for search result "jump to message" events.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { id } = (e as CustomEvent<{ id: string }>).detail;
+      if (!id) return;
+      const el = document.getElementById(`msg-${id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("highlight-flash");
+        setTimeout(() => el.classList.remove("highlight-flash"), 2000);
+      }
+    };
+    window.addEventListener("tdchat:scroll-to-message", handler);
+    return () => window.removeEventListener("tdchat:scroll-to-message", handler);
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

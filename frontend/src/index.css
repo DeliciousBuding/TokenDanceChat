@@ -421,3 +421,12 @@
   background: var(--border);
   border-radius: 2px;
 }
+
+/* Search jump-to-message highlight flash */
+@keyframes highlight-flash {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: oklch(0.65 0.18 20 / 0.15); }
+}
+.highlight-flash {
+  animation: highlight-flash 2s ease-in-out;
+}
