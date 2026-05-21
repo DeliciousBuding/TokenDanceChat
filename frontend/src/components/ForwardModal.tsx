@@ -79,7 +79,7 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
                       : "text-foreground/70 hover:bg-accent"
                   }`}
                 >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[hsl(231,4%,22%)] text-[10px] font-semibold text-foreground/80">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-foreground/80">
                     {user.charAt(0).toUpperCase()}
                   </span>
                   <span className="truncate">{user}</span>

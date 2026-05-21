@@ -397,7 +397,7 @@ export function MessageTranscript({
               <span>Copy</span>
             </button>
             {contextMenu.isOwn && (
-              <button onClick={handleContextDelete} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-destructive/80 hover:bg-[hsl(0,62%,20%)] hover:text-destructive touch-target">
+              <button onClick={handleContextDelete} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-destructive/80 hover:bg-destructive/20 hover:text-destructive touch-target">
                 <Trash2 className="h-4 w-4" />
                 <span>Delete</span>
               </button>
