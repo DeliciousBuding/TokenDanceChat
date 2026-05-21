@@ -5,6 +5,7 @@ import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
 import { GroupCreateModal } from "./GroupCreateModal";
 import { ThemeToggle } from "./ThemeToggle";
+import { SearchBar } from "./SearchBar";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
@@ -22,9 +23,9 @@ export function ChatLayout() {
     currentChat,
     setCurrentChat,
     setReplyTo,
-    currentRoomID,
     pendingFriendRequests,
     addSystemMessage,
+    currentRoomID,
   } = useChatStore();
   const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, uploadImage } =
     useWebSocket();
