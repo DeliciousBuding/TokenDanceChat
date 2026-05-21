@@ -255,6 +255,20 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.register:
 			h.mu.Lock()
+			// Reject duplicate usernames atomically.
+			usernameTaken := false
+			for c := range h.clients {
+				if c.username == client.username {
+					usernameTaken = true
+					break
+				}
+			}
+			if usernameTaken {
+				h.mu.Unlock()
+				close(client.send)
+				log.Printf("client rejected (duplicate username): %s", client.username)
+				continue
+			}
 			h.clients[client] = true
 			h.mu.Unlock()
 
