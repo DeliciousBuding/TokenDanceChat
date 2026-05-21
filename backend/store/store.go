@@ -5,6 +5,7 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -377,8 +378,33 @@ func (s *Store) GetReactionsForMessages(messageIDs []string) map[string]map[stri
 	defer s.mu.RUnlock()
 
 	result := make(map[string]map[string][]string)
-	for _, mid := range messageIDs {
-		result[mid] = s.getReactionsForMessageLocked(mid)
+	if len(messageIDs) == 0 {
+		return result
+	}
+
+	// Build IN clause with one placeholder per ID.
+	placeholders := make([]string, len(messageIDs))
+	args := make([]interface{}, len(messageIDs))
+	for i, mid := range messageIDs {
+		placeholders[i] = "?"
+		args[i] = mid
+		result[mid] = make(map[string][]string)
+	}
+
+	query := "SELECT message_id, emoji, username FROM reactions WHERE message_id IN (" + strings.Join(placeholders, ",") + ") ORDER BY rowid"
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		log.Printf("store: batch reaction query error: %v", err)
+		return result
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var messageID, emoji, username string
+		if err := rows.Scan(&messageID, &emoji, &username); err != nil {
+			continue
+		}
+		result[messageID][emoji] = append(result[messageID][emoji], username)
 	}
 	return result
 }
