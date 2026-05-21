@@ -465,7 +465,8 @@ export function useWebSocket() {
       }),
     );
 
-    // Streaming bot response — accumulate chunks into a streaming message.
+    // Streaming bot response — accumulate and throttle chunks.
+    const streamAcc = useRef<Map<string, { content: string; lastFlush: number }>>(new Map());
     unsubs.push(
       chatAPI.on("stream", (msg: WSMessage) => {
         const { username: streamUser, content, done } = msg as import("@/lib/api").WSStreamEvent;
@@ -473,23 +474,35 @@ export function useWebSocket() {
         const streamId = `stream-${streamUser}`;
         const state = useChatStore.getState();
         const existing = state.messages.find((m) => m.id === streamId);
-        if (existing) {
-          // Append chunk to existing streaming message.
-          const updated = { ...existing, content: existing.content + (content || "") };
-          useChatStore.setState({
-            messages: state.messages.map((m) => (m.id === streamId ? updated : m)),
-          });
+
+        let acc = streamAcc.current.get(streamId);
+        if (!acc) {
+          acc = { content: existing?.content || "", lastFlush: 0 };
+          streamAcc.current.set(streamId, acc);
+        }
+        acc.content += content || "";
+        const now = Date.now();
+
+        // Flush to store every 80ms or when done (avoids O(n^2) string concat and excessive re-renders).
+        if (done || now - acc.lastFlush > 80) {
+          acc.lastFlush = now;
+          if (existing) {
+            const updated = { ...existing, content: acc.content };
+            useChatStore.setState({
+              messages: state.messages.map((m) => (m.id === streamId ? updated : m)),
+            });
+          } else if (acc.content) {
+            addMessage({
+              id: streamId,
+              username: streamUser,
+              content: acc.content,
+              timestamp: Date.now(),
+            });
+          }
           if (done) {
             removeTypingUser(streamUser);
+            streamAcc.current.delete(streamId);
           }
-        } else if (content) {
-          // Create new streaming placeholder.
-          addMessage({
-            id: streamId,
-            username: streamUser,
-            content,
-            timestamp: Date.now(),
-          });
         }
       }),
     );
