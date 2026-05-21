@@ -10,7 +10,7 @@ type mockStore struct {
 	messages []StoredMessage
 }
 
-func (m *mockStore) InsertMessage(username, content string) (StoredMessage, error) {
+func (m *mockStore) InsertMessage(username, content, replyToID string) (StoredMessage, error) {
 	msg := StoredMessage{
 		ID:        "mock-id-" + username,
 		Username:  username,
@@ -25,6 +25,7 @@ func (m *mockStore) GetMessages(limit int, before int64) []StoredMessage {
 	return m.messages
 }
 
+func (m *mockStore) MarkDeleted(msgID string) error { return nil }
 func (m *mockStore) TotalMessages() int64 {
 	return int64(len(m.messages))
 }

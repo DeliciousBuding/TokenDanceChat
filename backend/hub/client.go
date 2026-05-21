@@ -85,6 +85,28 @@ func (c *Client) ReadPump() {
 			c.handleJoin(msg)
 		case "message":
 			c.handleChatMessage(msg)
+		case "friend_request":
+			c.handleFriendRequest(msg)
+		case "friend_accept":
+			c.handleFriendAccept(msg)
+		case "friend_reject":
+			c.handleFriendReject(msg)
+		case "friend_list":
+			c.handleFriendList()
+		case "group_create":
+			c.handleGroupCreate(msg)
+		case "group_invite":
+			c.handleGroupInvite(msg)
+		case "group_message":
+			c.handleGroupMessage(msg)
+		case "group_join":
+			c.handleGroupJoin(msg)
+		case "message_delete":
+			c.handleMessageDelete(msg)
+		case "typing_start":
+			c.handleTypingStart()
+		case "typing_stop":
+			c.handleTypingStop()
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -131,6 +153,17 @@ func (c *Client) handleJoin(msg Message) {
 	})
 	select {
 	case c.send <- historyPayload:
+	default:
+	}
+
+	// Send friend list to the joining client.
+	friends := c.hub.GetFriends(c.username)
+	friendPayload, _ := json.Marshal(Message{
+		Type:    "friend_list",
+		Friends: friends,
+	})
+	select {
+	case c.send <- friendPayload:
 	default:
 	}
 
@@ -197,11 +230,14 @@ func (c *Client) handleChatMessage(msg Message) {
 
 	// Broadcast to all clients.
 	broadcastMsg, _ := json.Marshal(Message{
-		Type:      "message",
-		ID:        storedMsg.ID,
-		Username:  storedMsg.Username,
-		Content:   storedMsg.Content,
-		Timestamp: storedMsg.Timestamp,
+		Type:           "message",
+		ID:             storedMsg.ID,
+		Username:       storedMsg.Username,
+		Content:        storedMsg.Content,
+		Timestamp:      storedMsg.Timestamp,
+		ReplyToID:      storedMsg.ReplyToID,
+		ReplyToContent: msg.ReplyToContent,
+		ReplyToUser:    msg.ReplyToUser,
 	})
 	c.hub.broadcast <- broadcastMsg
 
@@ -302,8 +338,320 @@ func parseMentions(content string) []string {
 	return mentions
 }
 
+// --- Friend system handlers ---
+
+func (c *Client) handleFriendRequest(msg Message) {
+	if c.username == "" {
+		return
+	}
+	to := msg.To
+	if to == "" || to == c.username {
+		return
+	}
+	if !ValidateUsername(to) {
+		return
+	}
+	if c.hub.IsFriend(c.username, to) {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "already friends with " + to,
+			ErrorCode: "ALREADY_FRIENDS",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	// Send friend_request to the target user.
+	reqMsg, _ := json.Marshal(Message{
+		Type:     "friend_request",
+		From:     c.username,
+		To:       to,
+	})
+	c.hub.SendToUser(to, reqMsg)
+}
+
+func (c *Client) handleFriendAccept(msg Message) {
+	if c.username == "" {
+		return
+	}
+	from := msg.From
+	if from == "" || from == c.username {
+		return
+	}
+
+	c.hub.AddFriend(c.username, from)
+
+	// Notify the requester.
+	acceptMsgToRequester, _ := json.Marshal(Message{
+		Type:    "friend_accept",
+		From:    c.username,
+		To:      from,
+		Friends: c.hub.GetFriends(from),
+	})
+	c.hub.SendToUser(from, acceptMsgToRequester)
+
+	// Update the accepter's friend list.
+	acceptMsgToSelf, _ := json.Marshal(Message{
+		Type:    "friend_list",
+		Friends: c.hub.GetFriends(c.username),
+	})
+	select {
+	case c.send <- acceptMsgToSelf:
+	default:
+	}
+}
+
+func (c *Client) handleFriendReject(msg Message) {
+	if c.username == "" {
+		return
+	}
+	from := msg.From
+	if from == "" {
+		return
+	}
+
+	// Notify the requester that their request was rejected.
+	rejectMsg, _ := json.Marshal(Message{
+		Type: "friend_reject",
+		From: c.username,
+		To:   from,
+	})
+	c.hub.SendToUser(from, rejectMsg)
+}
+
+func (c *Client) handleFriendList() {
+	if c.username == "" {
+		return
+	}
+	friends := c.hub.GetFriends(c.username)
+	fl, _ := json.Marshal(Message{
+		Type:    "friend_list",
+		Friends: friends,
+	})
+	select {
+	case c.send <- fl:
+	default:
+	}
+}
+
+// --- Group system handlers ---
+
+func (c *Client) handleGroupCreate(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := sanitizeContent(msg.Group)
+	if groupName == "" || !ValidateGroupName(groupName) {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "invalid group name: 1-30 chars, letters, digits, underscores, hyphens or Chinese",
+			ErrorCode: "INVALID_GROUP_NAME",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	if !c.hub.CreateGroup(groupName, c.username) {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "group name already exists",
+			ErrorCode: "GROUP_EXISTS",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	// Notify creator with group info.
+	createMsg, _ := json.Marshal(Message{
+		Type:    "group_create",
+		Group:   groupName,
+		Members: c.hub.GroupMembers(groupName),
+	})
+	select {
+	case c.send <- createMsg:
+	default:
+	}
+}
+
+func (c *Client) handleGroupInvite(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	username := msg.Username
+	if groupName == "" || username == "" {
+		return
+	}
+
+	if !c.hub.InGroup(c.username, groupName) {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "you are not a member of this group",
+			ErrorCode: "NOT_IN_GROUP",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	c.hub.AddGroupMember(groupName, username)
+
+	// Notify invited user.
+	inviteMsg, _ := json.Marshal(Message{
+		Type:  "group_invite",
+		Group: groupName,
+		From:  c.username,
+	})
+	c.hub.SendToUser(username, inviteMsg)
+
+	// Notify all group members about membership update.
+	members := c.hub.GroupMembers(groupName)
+	updateMsg, _ := json.Marshal(Message{
+		Type:    "group_join",
+		Group:   groupName,
+		Members: members,
+	})
+	c.hub.SendToGroup(groupName, updateMsg)
+}
+
+func (c *Client) handleGroupMessage(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	content := sanitizeContent(msg.Content)
+	if groupName == "" || content == "" {
+		return
+	}
+
+	if !c.hub.InGroup(c.username, groupName) {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "you are not a member of this group",
+			ErrorCode: "NOT_IN_GROUP",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	// Rate limit.
+	if !c.checkRateLimit() {
+		return
+	}
+
+	// Persist to store.
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content)
+	if err != nil {
+		log.Printf("failed to insert group message: %v", err)
+		return
+	}
+
+	// Send to all group members.
+	gm, _ := json.Marshal(Message{
+		Type:           "group_message",
+		ID:             storedMsg.ID,
+		Group:          groupName,
+		Username:       c.username,
+		Content:        content,
+		Timestamp:      storedMsg.Timestamp,
+		ReplyToID:      msg.ReplyToID,
+		ReplyToContent: msg.ReplyToContent,
+		ReplyToUser:    msg.ReplyToUser,
+	})
+	c.hub.SendToGroup(groupName, gm)
+}
+
+func (c *Client) handleGroupJoin(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	if groupName == "" {
+		return
+	}
+
+	if c.hub.AddGroupMember(groupName, c.username) {
+		// Notify group members.
+		members := c.hub.GroupMembers(groupName)
+		updateMsg, _ := json.Marshal(Message{
+			Type:    "group_join",
+			Group:   groupName,
+			Members: members,
+		})
+		c.hub.SendToGroup(groupName, updateMsg)
+
+		// Send confirmation to joiner.
+		joinMsg, _ := json.Marshal(Message{
+			Type:    "group_join",
+			Group:   groupName,
+			Members: members,
+		})
+		select {
+		case c.send <- joinMsg:
+		default:
+		}
+	}
+}
+
+// --- Message delete handler ---
+
+func (c *Client) handleMessageDelete(msg Message) {
+	if c.username == "" {
+		return
+	}
+	messageID := msg.ID
+	if messageID == "" {
+		return
+	}
+
+	// MarkDeleted not yet implemented in store; broadcasting deletion event only.
+	// log.Printf("failed to mark message deleted: %v", err)
+	// return
+	}
+
+	// Broadcast deletion.
+	delMsg, _ := json.Marshal(Message{
+		Type:    "message_delete",
+		ID:      messageID,
+		Deleted: true,
+	})
+	c.hub.broadcast <- delMsg
+}
+// Rate limited to once per 3 seconds per user.
+func (c *Client) handleTypingStart() {
+	if c.username == "" {
+		return
+	}
+	if !c.hub.ShouldBroadcastTyping(c.username) {
+		return
+	}
+	c.hub.BroadcastTyping(c.username, "typing")
+}
+
+// handleTypingStop broadcasts that the user stopped typing.
+func (c *Client) handleTypingStop() {
+	if c.username == "" {
+		return
+	}
+	c.hub.BroadcastTyping(c.username, "typing_stop")
+}
+
 // handleBotResponse handles the LLM bot response when the bot is @mentioned.
-// This runs in its own goroutine.
+// This runs in its own goroutine and streams the response.
 func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	// Send typing indicator.
 	c.hub.BroadcastJSON(Message{
@@ -314,15 +662,32 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	// Build conversation history from memory.
 	messages := c.hub.Memory().GetMessages()
 
-	// Call the LLM.
+	// Call the LLM with streaming.
+	var fullResponse strings.Builder
 	client := c.hub.LLMClient()
-	response, err := client.Chat(ctx, messages)
+	err := client.ChatStream(ctx, messages, func(chunk string) error {
+		fullResponse.WriteString(chunk)
+		c.hub.BroadcastStreamChunk(c.hub.BotName(), chunk, false)
+		return nil
+	})
+
 	if err != nil {
-		log.Printf("LLM error: %v", err)
+		log.Printf("LLM stream error: %v", err)
+		errorContent := "Sorry, I encountered an error while generating a response."
+		fullResponse.Reset()
+		fullResponse.WriteString(errorContent)
+		// Send the error as a final stream chunk.
+		c.hub.BroadcastStreamChunk(c.hub.BotName(), errorContent, true)
 	}
 
-	// Broadcast the bot response (goes through store + broadcast, no rate limiting).
-	c.hub.SendBotMessage(response)
+	response := fullResponse.String()
+	if response != "" {
+		// Broadcast the final done signal for the stream.
+		c.hub.BroadcastStreamChunk(c.hub.BotName(), "", true)
+
+		// Persist the complete message to the store and broadcast as a normal message.
+		c.hub.SendBotMessage(response)
+	}
 
 	// Update memory with the bot response.
 	if mem := c.hub.Memory(); mem != nil {

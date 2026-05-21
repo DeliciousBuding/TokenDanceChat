@@ -55,13 +55,20 @@ export function ChatInput({
   }, [content]);
 
   // Derive filtered user list and whether dropdown should be open.
+  // Always include "bot" as a mentionable entity.
+  const BOT_NAME = "bot";
   const mentionFiltered = useMemo(() => {
     const { query, startPos } = mentionQuery;
     if (startPos < 0) return [];
     const lower = query.toLowerCase();
-    return onlineUsers
+    const users = onlineUsers
       .filter((u) => u.toLowerCase().includes(lower))
-      .slice(0, 10);
+      .slice(0, 9);
+    // Prepend bot if query matches.
+    if (BOT_NAME.includes(lower) || lower === "") {
+      return [BOT_NAME, ...users].slice(0, 10);
+    }
+    return users;
   }, [mentionQuery, onlineUsers]);
 
   // Sync mentionActive with whether we have matches.
