@@ -7,12 +7,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"tokendancechat/backend/handler"
 	"tokendancechat/backend/hub"
+	"tokendancechat/backend/llm"
 	"tokendancechat/backend/store"
 )
 
@@ -23,7 +25,32 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 		return nil, nil, nil, err
 	}
 
-	h := hub.New(st)
+	// Read bot config from environment.
+	botName := os.Getenv("CHAT_BOT_NAME")
+	if botName == "" {
+		botName = "bot"
+	}
+
+	var llmCfg *llm.Config
+	provider := os.Getenv("CHAT_LLM_PROVIDER")
+	if provider != "" {
+		memorySize := 20
+		if ms := os.Getenv("CHAT_LLM_MEMORY_SIZE"); ms != "" {
+			if parsed, err := strconv.Atoi(ms); err == nil && parsed > 0 {
+				memorySize = parsed
+			}
+		}
+
+		llmCfg = &llm.Config{
+			Provider:   strings.ToLower(provider),
+			APIKey:     os.Getenv("CHAT_LLM_API_KEY"),
+			Model:      os.Getenv("CHAT_LLM_MODEL"),
+			BaseURL:    os.Getenv("CHAT_LLM_BASE_URL"),
+			MemorySize: memorySize,
+		}
+	}
+
+	h := hub.New(st, llmCfg, botName)
 	go h.Run()
 
 	hdlr := handler.New(h, st)

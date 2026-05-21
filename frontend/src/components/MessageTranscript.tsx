@@ -62,7 +62,7 @@ function buildMessageGroups(messages: ChatMessage[]): MessageGroup[] {
 
 export function MessageTranscript({ className }: MessageTranscriptProps) {
   const { t } = useTranslation();
-  const { messages, username, historyLoaded } = useChatStore();
+  const { messages, username, historyLoaded, typingUsers } = useChatStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -223,6 +223,7 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
                       key={msg.id}
                       message={msg}
                       isOwn={isOwn}
+                      currentUsername={username}
                       hideAvatar={!isFirst}
                       hideUsername={!isFirst}
                       forceShowTimestamp={isLast}
@@ -233,6 +234,22 @@ export function MessageTranscript({ className }: MessageTranscriptProps) {
               </div>
             );
           })}
+
+          {/* Typing indicator */}
+          {typingUsers.length > 0 && (
+            <div className="flex items-center gap-2 px-4 py-1 animate-fade-in">
+              <div className="flex items-center gap-1">
+                <span className="typing-dot" />
+                <span className="typing-dot animation-delay-150" />
+                <span className="typing-dot animation-delay-300" />
+              </div>
+              <span className="text-xs text-muted-foreground/60">
+                {typingUsers
+                  .map((u) => t("system.typing", { username: u }))
+                  .join(", ")}
+              </span>
+            </div>
+          )}
 
           {/* Scroll anchor */}
           <div ref={bottomRef} className="h-1" />

@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback, useEffect, type KeyboardEvent } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent } from "react";
 import { Send, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
+import { useChatStore } from "@/stores/chatStore";
 import type { ChatMessage } from "@/lib/api";
 
 interface ChatInputProps {
@@ -11,6 +12,14 @@ interface ChatInputProps {
   onCancelReply?: () => void;
 }
 
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+}
+
 export function ChatInput({
   onSend,
   disabled,
@@ -18,12 +27,48 @@ export function ChatInput({
   onCancelReply,
 }: ChatInputProps) {
   const { t } = useTranslation();
+  const { onlineUsers, username } = useChatStore();
   const [content, setContent] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [pulseButton, setPulseButton] = useState(false);
   const hadContentRef = useRef(false);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
+
+  // @mention autocomplete state
+  const [mentionActive, setMentionActive] = useState(false);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionRef = useRef<HTMLDivElement>(null);
+
+  // Compute the current @mention query from cursor position.
+  const mentionQuery = useMemo(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return { query: "", startPos: -1 };
+    const cursorPos = textarea.selectionStart;
+    const textBeforeCursor = content.slice(0, cursorPos);
+    const match = textBeforeCursor.match(/@(\w*)$/);
+    if (!match) return { query: "", startPos: -1 };
+    return {
+      query: match[1] || "",
+      startPos: match.index!,
+    };
+  }, [content]);
+
+  // Derive filtered user list and whether dropdown should be open.
+  const mentionFiltered = useMemo(() => {
+    const { query, startPos } = mentionQuery;
+    if (startPos < 0) return [];
+    const lower = query.toLowerCase();
+    return onlineUsers
+      .filter((u) => u.toLowerCase().includes(lower))
+      .slice(0, 10);
+  }, [mentionQuery, onlineUsers]);
+
+  // Sync mentionActive with whether we have matches.
+  useEffect(() => {
+    setMentionActive(mentionFiltered.length > 0);
+    setMentionIndex(0);
+  }, [mentionFiltered.length]);
 
   // Auto-resize textarea
   const adjustHeight = useCallback(() => {
@@ -67,14 +112,67 @@ export function ChatInput({
     }
   }, [content, disabled, onSend]);
 
+  // Insert @username at cursor position.
+  const insertMention = useCallback(
+    (selectedUser: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const { startPos } = mentionQuery;
+      if (startPos < 0) return;
+
+      const cursorPos = textarea.selectionStart;
+      const before = content.slice(0, startPos);
+      const after = content.slice(cursorPos);
+      const newContent = `${before}@${selectedUser} ${after}`;
+      setContent(newContent);
+      setMentionActive(false);
+
+      // Restore cursor after the inserted mention.
+      const newCursor = startPos + selectedUser.length + 2;
+      requestAnimationFrame(() => {
+        textarea.focus();
+        textarea.setSelectionRange(newCursor, newCursor);
+      });
+    },
+    [content, mentionQuery],
+  );
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      // @mention autocomplete keyboard handling
+      if (mentionActive) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setMentionIndex((prev) =>
+            Math.min(prev + 1, mentionFiltered.length - 1),
+          );
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setMentionIndex((prev) => Math.max(prev - 1, 0));
+          return;
+        }
+        if (e.key === "Enter" && !e.shiftKey && !isComposing) {
+          e.preventDefault();
+          if (mentionFiltered[mentionIndex]) {
+            insertMention(mentionFiltered[mentionIndex]);
+          }
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setMentionActive(false);
+          return;
+        }
+      }
+
       if (e.key === "Enter" && !e.shiftKey && !isComposing) {
         e.preventDefault();
         handleSend();
       }
     },
-    [handleSend, isComposing],
+    [handleSend, isComposing, mentionActive, mentionFiltered, mentionIndex, insertMention],
   );
 
   const hasContent = content.trim().length > 0;
@@ -110,6 +208,44 @@ export function ChatInput({
       {/* Input area */}
       <div className="flex items-end gap-2 px-4 py-3">
         <div className="flex-1 relative input-glow">
+          {/* @mention autocomplete dropdown */}
+          {mentionActive && (
+            <div
+              ref={mentionRef}
+              className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-[hsl(220,2.5%,23.5%)] bg-[hsl(231,4%,14%)] shadow-lg animate-scale-in z-20"
+              style={{ maxHeight: "200px", overflowY: "auto" }}
+            >
+              {mentionFiltered.map((user, idx) => (
+                <button
+                  key={user}
+                  onClick={() => insertMention(user)}
+                  onMouseEnter={() => setMentionIndex(idx)}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
+                    idx === mentionIndex
+                      ? "bg-[hsl(220,2.5%,18%)] text-foreground"
+                      : "text-muted-foreground hover:bg-[hsl(220,2.5%,16%)] hover:text-foreground",
+                  )}
+                >
+                  <span
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                    style={{
+                      background: `linear-gradient(135deg, oklch(65% 0.16 ${hashString(user) % 360}), oklch(58% 0.14 ${(hashString(user) + 45) % 360}))`,
+                    }}
+                  >
+                    {user.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="truncate">{user}</span>
+                  {user === username && (
+                    <span className="ml-auto text-[10px] text-muted-foreground/50">
+                      {t("sidebar.you")}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           <textarea
             ref={textareaRef}
             value={content}

@@ -35,6 +35,11 @@ export interface WSErrorMessage extends WSMessage {
   content: string;
 }
 
+export interface WSTypingEvent extends WSMessage {
+  type: "typing";
+  username: string;
+}
+
 export interface WSJoinRequest {
   type: "join";
   username: string;
@@ -224,4 +229,11 @@ class ChatAPI {
   }
 }
 
-export const chatAPI = new ChatAPI("ws://localhost:8080/ws");
+function getDefaultWSURL(): string {
+  // Use current page host in production, localhost in dev.
+  const host = window.location.host || "localhost:8080";
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${host}/ws`;
+}
+
+export const chatAPI = new ChatAPI(getDefaultWSURL());

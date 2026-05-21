@@ -16,6 +16,9 @@ interface ChatState {
   // Online users
   onlineUsers: string[];
 
+  // Typing users
+  typingUsers: string[];
+
   // Actions
   setView: (view: ViewState) => void;
   setUsername: (username: string) => void;
@@ -24,6 +27,9 @@ interface ChatState {
   addSystemMessage: (content: string, timestamp: number) => void;
   setHistory: (messages: ChatMessage[]) => void;
   setOnlineUsers: (users: string[]) => void;
+  setTypingUsers: (users: string[]) => void;
+  addTypingUser: (username: string) => void;
+  removeTypingUser: (username: string) => void;
   reset: () => void;
 }
 
@@ -34,6 +40,7 @@ export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   historyLoaded: false,
   onlineUsers: [],
+  typingUsers: [],
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
@@ -60,6 +67,17 @@ export const useChatStore = create<ChatState>((set) => ({
       historyLoaded: true,
     }),
   setOnlineUsers: (onlineUsers) => set({ onlineUsers }),
+  setTypingUsers: (typingUsers) => set({ typingUsers }),
+  addTypingUser: (username) =>
+    set((state) => ({
+      typingUsers: state.typingUsers.includes(username)
+        ? state.typingUsers
+        : [...state.typingUsers, username],
+    })),
+  removeTypingUser: (username) =>
+    set((state) => ({
+      typingUsers: state.typingUsers.filter((u) => u !== username),
+    })),
   reset: () =>
     set({
       view: "join",
@@ -68,5 +86,6 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: [],
       historyLoaded: false,
       onlineUsers: [],
+      typingUsers: [],
     }),
 }));

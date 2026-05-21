@@ -39,7 +39,7 @@ func (m *mockStore) TotalMessages() int64 {
 
 func newTestHandler() *Handler {
 	ms := &mockStore{}
-	h := hub.New(ms)
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms)
 }

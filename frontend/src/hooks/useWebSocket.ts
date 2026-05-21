@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useChatStore } from "@/stores/chatStore";
 import {
   chatAPI,
@@ -6,6 +6,7 @@ import {
   type WSChatMessage,
   type WSHistoryMessage,
   type WSUserEvent,
+  type WSTypingEvent,
 } from "@/lib/api";
 
 function i18nSys(key: string, params?: Record<string, string>): string {
@@ -16,12 +17,15 @@ function i18nSys(key: string, params?: Record<string, string>): string {
 }
 
 export function useWebSocket() {
+  const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const {
     setConnected,
     addMessage,
     setHistory,
     setOnlineUsers,
     addSystemMessage,
+    addTypingUser,
+    removeTypingUser,
   } = useChatStore();
 
   const connect = useCallback(
@@ -58,6 +62,8 @@ export function useWebSocket() {
           content,
           timestamp: timestamp || Date.now(),
         });
+        // Remove typing indicator when a message from this user arrives.
+        removeTypingUser(username);
       }),
     );
 
@@ -112,10 +118,32 @@ export function useWebSocket() {
       }),
     );
 
+    // Typing indicator event
+    unsubs.push(
+      chatAPI.on("typing", (msg: WSMessage) => {
+        const { username } = msg as WSTypingEvent;
+        addTypingUser(username);
+
+        // Clear any existing timer for this user.
+        const existing = typingTimers.current.get(username);
+        if (existing) clearTimeout(existing);
+
+        // Auto-remove after 10 seconds.
+        const timer = setTimeout(() => {
+          removeTypingUser(username);
+          typingTimers.current.delete(username);
+        }, 10000);
+        typingTimers.current.set(username, timer);
+      }),
+    );
+
     return () => {
       unsubs.forEach((unsub) => unsub());
+      // Clear all typing timers on unmount.
+      typingTimers.current.forEach((timer) => clearTimeout(timer));
+      typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser]);
 
   return { connect, disconnect, sendMessage };
 }
