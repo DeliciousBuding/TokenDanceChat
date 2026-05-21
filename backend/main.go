@@ -20,7 +20,7 @@ func main() {
 	log.Println("starting TokenDanceChat backend...")
 
 	// Initialize SQLite store.
-	dbPath := "chat.db"
+	dbPath := filepath.Join("..", "data", "chat.db")
 	if envPath := os.Getenv("CHAT_DB_PATH"); envPath != "" {
 		dbPath = envPath
 	}
