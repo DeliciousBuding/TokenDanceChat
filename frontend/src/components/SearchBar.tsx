@@ -8,6 +8,13 @@ function escapeHTML(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/** Strips <mark> tags from server snippet, escaping everything else. */
+function stripMarkTags(s: string): string {
+  return escapeHTML(s).replace(/&lt;\/?mark&gt;/g, (m) =>
+    m === "&lt;mark&gt;" ? "<mark>" : "</mark>"
+  );
+}
+
 interface SearchBarProps {
   currentRoomID: string;
 }
@@ -136,7 +143,7 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
                 className={cn("w-full text-left px-4 py-3 border-b border-border last:border-b-0 transition-colors",
                   i === selectedIndex ? "bg-accent" : "hover:bg-accent")}>
                 <div className="flex items-center gap-2 mb-1"><span className="text-xs font-medium text-muted-foreground/70">{r.username}</span></div>
-                <p className="text-xs text-muted-foreground/80 line-clamp-2" dangerouslySetInnerHTML={{ __html: r.snippet ? r.snippet.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/on\w+="[^"]*"/gi, "") : escapeHTML(r.content.substring(0, 120)) }} />
+                <p className="text-xs text-muted-foreground/80 line-clamp-2" dangerouslySetInnerHTML={{ __html: r.snippet ? stripMarkTags(r.snippet) : escapeHTML(r.content.substring(0, 120)) }} />
               </button>
             ))}
           </div>

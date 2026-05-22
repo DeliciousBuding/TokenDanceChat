@@ -207,7 +207,7 @@ export const MessageBubble = memo(function MessageBubble({
               );
             }
             return (
-              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>
                 {part.value}
               </ReactMarkdown>
             );
@@ -258,7 +258,7 @@ export const MessageBubble = memo(function MessageBubble({
                   );
                 }
                 return (
-                  <ReactMarkdown key={j} remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown key={j} remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>
                     {sp.value}
                   </ReactMarkdown>
                 );
