@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -40,13 +41,12 @@ type ResponseHandler struct {
 	OnMessage Callback
 	OnTyping  TypingCallback
 	done      chan struct{}
+	closed    atomic.Bool
 }
 
 func (h *ResponseHandler) Wait() { <-h.done }
 func (h *ResponseHandler) done_() {
-	select {
-	case <-h.done:
-	default:
+	if h.closed.CompareAndSwap(false, true) {
 		close(h.done)
 	}
 }
@@ -184,28 +184,34 @@ func (c *Client) readLoop(conn *websocket.Conn) {
 		handler := c.pending
 		c.mu.Unlock()
 
-		switch msg.Type {
-		case "message.create":
-			if handler != nil && handler.OnMessage != nil {
-				handler.OnMessage(msg)
-			}
-		case "message.update":
-			msg.IsPartial = true
-			if handler != nil && handler.OnMessage != nil {
-				handler.OnMessage(msg)
-			}
-		case "typing.start":
-			if handler != nil && handler.OnTyping != nil {
-				handler.OnTyping(true)
-			}
-		case "typing.stop":
-			if handler != nil && handler.OnTyping != nil {
-				handler.OnTyping(false)
-			}
-		case "thought":
-			msg.IsThought = true
-			if handler != nil && handler.OnMessage != nil {
-				handler.OnMessage(msg)
+		// Only invoke callbacks if the handler hasn't been replaced/closed.
+		// Checking closed under handler's own atomic avoids the race where
+		// send() replaces c.pending and closes the old handler while readLoop
+		// is holding a pointer to it.
+		if handler != nil && !handler.closed.Load() {
+			switch msg.Type {
+			case "message.create":
+				if handler.OnMessage != nil {
+					handler.OnMessage(msg)
+				}
+			case "message.update":
+				msg.IsPartial = true
+				if handler.OnMessage != nil {
+					handler.OnMessage(msg)
+				}
+			case "typing.start":
+				if handler.OnTyping != nil {
+					handler.OnTyping(true)
+				}
+			case "typing.stop":
+				if handler.OnTyping != nil {
+					handler.OnTyping(false)
+				}
+			case "thought":
+				msg.IsThought = true
+				if handler.OnMessage != nil {
+					handler.OnMessage(msg)
+				}
 			}
 		}
 	}
