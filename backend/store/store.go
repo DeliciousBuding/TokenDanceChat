@@ -593,6 +593,14 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 		return messages
 }
 
+func (s *Store) TotalUsers() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var count int64
+	s.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+	return count
+}
+
 func (s *Store) TotalMessages() int64 {
 	return s.totalMessages.Load()
 }

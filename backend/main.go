@@ -238,6 +238,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	mux.HandleFunc("/api/invite/generate", hdlr.InviteGenerate)
 	mux.HandleFunc("/api/invite/list", hdlr.InviteList)
 	mux.HandleFunc("/api/webhook/", hdlr.WebhookHandler)
+	mux.HandleFunc("/api/admin/stats", hdlr.AdminStats)
 	mux.HandleFunc("/uploads/emojis/", hdlr.ServeEmoji)
 	mux.HandleFunc("/uploads/", hdlr.ServeUpload)
 	mux.HandleFunc("/ws", hdlr.HandleWebSocket)

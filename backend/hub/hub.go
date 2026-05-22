@@ -54,7 +54,8 @@ type ChatFolderItem = store.ChatFolderItem
 type Store interface {
 	InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error)
 	GetMessages(limit int, before int64) []StoredMessage
-	TotalMessages() int64
+	TotalUsers() int64
+		TotalMessages() int64
 	MarkDeleted(messageID string) error
 	GetRoomMessages(roomID string, limit int, before int64) []StoredMessage
 	CreateRoom(name string) (string, error)

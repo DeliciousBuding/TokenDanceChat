@@ -1123,6 +1123,24 @@ func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
+// AdminStats handles GET /api/admin/stats — returns server statistics.
+func (h *Handler) AdminStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	stats := map[string]interface{}{
+		"total_messages":    h.store.TotalMessages(),
+		"active_connections": h.hub.ConnectionCount(),
+		"rooms":              len(h.store.ListRooms()),
+		"groups":             len(h.store.GetAllGroups()),
+		"friends":            len(h.store.GetAllFriends()),
+		"registered_users":   h.store.TotalUsers(),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+}
+
 // InviteList handles GET /api/invite/list?username=xxx.
 func (h *Handler) InviteList(w http.ResponseWriter, r *http.Request) {
 	requestID := requestIDFromContext(r.Context())
