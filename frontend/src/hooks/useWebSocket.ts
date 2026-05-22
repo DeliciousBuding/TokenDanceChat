@@ -122,13 +122,15 @@ export function useWebSocket() {
     const chat = state.currentChat;
     if (chat.type === "dm") {
       chatAPI.sendMarkRead("dm", chat.username);
+      useChatStore.getState().clearConversationUnread(`dm:${chat.username}`);
     } else if (chat.type === "group") {
       chatAPI.sendMarkRead("group", chat.name);
+      useChatStore.getState().clearConversationUnread(`group:${chat.name}`);
     } else {
       chatAPI.sendMarkRead("public");
+      useChatStore.getState().clearConversationUnread("public");
     }
     setUnreadCount(0);
-    clearAllConversationUnreads();
     unreadTitleCount = 0;
     updatePageTitle();
   }, [setUnreadCount, clearAllConversationUnreads]);

@@ -120,6 +120,7 @@ export function MessageTranscript({
   const hasMoreRef = useRef(true);
   const prevConversationRef = useRef("");
   const prevMessageCountRef = useRef(0);
+  const pendingScrollRestore = useRef(0);
   const scrollPositions = useRef<Map<string, number>>(new Map());
   const conversationKey = currentChat.type === "dm" ? `dm:${currentChat.username}` : currentChat.type === "group" ? `group:${currentChat.name}` : "public";
 
@@ -183,19 +184,21 @@ export function MessageTranscript({
       const oldest = effectiveMessages[0];
       if (oldest) {
         setLoadingOlder(true);
-        const beforeScroll = container.scrollHeight;
+        pendingScrollRestore.current = container.scrollHeight;
         chatAPI.sendLoadHistory(oldest.timestamp);
-        // After a short delay, restore relative scroll position.
-        setTimeout(() => {
-          if (containerRef.current) {
-            const afterScroll = containerRef.current.scrollHeight;
-            containerRef.current.scrollTop += afterScroll - beforeScroll;
-          }
-          setLoadingOlder(false);
-        }, 300);
       }
     }
   }, [conversationKey, loadingOlder, effectiveMessages]);
+
+  // Restore scroll position after older messages load and DOM updates.
+  useEffect(() => {
+    if (pendingScrollRestore.current && containerRef.current) {
+      const afterScroll = containerRef.current.scrollHeight;
+      containerRef.current.scrollTop += afterScroll - pendingScrollRestore.current;
+      pendingScrollRestore.current = 0;
+      setLoadingOlder(false);
+    }
+  }, [effectiveMessages.length]);
 
   const visibleMessages = useMemo(() => {
     if (showAllMessages || effectiveMessages.length <= MAX_VISIBLE_MESSAGES) {

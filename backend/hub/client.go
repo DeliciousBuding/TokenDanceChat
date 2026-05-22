@@ -531,6 +531,11 @@ func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
+		// Notify hub to unregister on write failure.
+		select {
+		case c.hub.unregister <- c:
+		default:
+		}
 		c.conn.Close()
 	}()
 
@@ -540,7 +545,7 @@ func (c *Client) WritePump() {
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// Hub closed the channel.
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 				return
 			}
 

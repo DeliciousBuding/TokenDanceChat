@@ -2,7 +2,9 @@ package handler
 
 import (
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"tokendancechat/backend/hub"
@@ -18,12 +20,22 @@ var upgrader = websocket.Upgrader{
 		if origin == "" {
 			return true // same-origin requests don't send Origin
 		}
+		originURL, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+		originHost := originURL.Hostname()
 		host := r.Host
-		// Allow same-origin and vectorcontrol.tech subdomains.
-		if strings.HasSuffix(origin, "://"+host) || strings.HasSuffix(origin, "://"+strings.TrimPrefix(host, "www.")) {
+		// Strip port from Host header for comparison.
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		// Allow same-origin.
+		if strings.EqualFold(originHost, host) || strings.EqualFold(originHost, strings.TrimPrefix(host, "www.")) {
 			return true
 		}
-		if strings.HasSuffix(origin, ".vectorcontrol.tech") || strings.HasSuffix(origin, "://vectorcontrol.tech") {
+		// Allow vectorcontrol.tech and subdomains.
+		if strings.HasSuffix(originHost, ".vectorcontrol.tech") || originHost == "vectorcontrol.tech" {
 			return true
 		}
 		log.Printf("ws: rejected origin %q for host %q", origin, host)
