@@ -869,6 +869,11 @@ func (c *Client) handleGroupJoin(msg Message) {
 		return
 	}
 
+	// Require a pending invite or existing membership.
+	if !c.hub.InGroup(c.username, groupName) && !c.hub.ConsumePendingInvite(c.username, groupName) {
+		return
+	}
+
 	if c.hub.AddGroupMember(groupName, c.username) {
 		// Notify group members.
 		members := c.hub.GroupMembers(groupName)

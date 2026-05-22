@@ -402,7 +402,7 @@ export function ChatLayout() {
         )}
 
         {/* Pinned messages banner */}
-        {pinnedMessages.length > 0 && (
+        {pinnedMessages.length > 0 && currentChat.type === "public" && (
           <div className="border-b border-[hsl(220,2.5%,25%)] bg-[hsl(220,40%,45%/0.04)] px-6 py-1.5 flex items-center gap-2 overflow-x-auto scrollbar-thin">
             <Pin className="h-3 w-3 text-muted-foreground/50 flex-shrink-0" />
             {pinnedMessages.map((pm) => (
