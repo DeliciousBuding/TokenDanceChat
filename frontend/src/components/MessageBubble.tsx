@@ -73,7 +73,7 @@ const safeMarkdownComponents = {
         </div>
       );
     }
-    return <img src={src} alt={alt} {...props} />;
+    return <img src={src} alt={alt} loading="lazy" {...props} />;
   },
 };
 
@@ -730,7 +730,8 @@ export const MessageBubble = memo(function MessageBubble({
               {linkPreview.image && (
                 <img
                   src={linkPreview.image}
-                  alt=""
+                  alt={linkPreview.title || "Link preview"}
+                  loading="lazy"
                   className="w-full h-32 object-cover"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
