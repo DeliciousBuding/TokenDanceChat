@@ -7,9 +7,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      // Ensure single React instance — prevents error #321
-      'react': path.resolve(__dirname, './node_modules/react'),
-      'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
     },
   },
   server: {
@@ -24,13 +21,6 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-markdown', 'remark-gfm'],
-        },
-      },
-    },
   },
   test: {
     environment: 'jsdom',
