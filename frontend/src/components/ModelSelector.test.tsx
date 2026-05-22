@@ -127,7 +127,7 @@ describe("ModelSelector", () => {
     });
 
     it("选择模型后 dropdown 自动关闭", () => {
-      const { onSelect } = renderModelSelector();
+      renderModelSelector();
       fireEvent.click(screen.getByText("选择模型"));
       fireEvent.click(screen.getAllByRole("option")[0]);
       // Listbox should be gone

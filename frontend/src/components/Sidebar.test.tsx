@@ -11,6 +11,7 @@ vi.mock("@/lib/sound", () => ({
   playOnlineSound: vi.fn(),
   playOfflineSound: vi.fn(),
   playReactionSound: vi.fn(),
+  isSoundEnabled: vi.fn(() => true),
 }));
 
 // Mock localStorage

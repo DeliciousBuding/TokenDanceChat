@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { I18nProvider } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 
@@ -104,7 +104,7 @@ function renderChatInput(props?: {
   return { ...result, onSend };
 }
 
-function typeInTextarea(textarea: HTMLTextAreaElement, text: string) {
+function typeInTextarea(textarea: HTMLElement, text: string) {
   fireEvent.change(textarea, { target: { value: text } });
 }
 
@@ -318,12 +318,6 @@ describe("ChatInput", () => {
       // Navigate down once - first item (TokenBot) should lose accent, second (PicoClaw) gets it
       fireEvent.keyDown(textarea, { key: "ArrowDown" });
 
-      // Now PicoClaw should have accent styling (at index 1)
-      const buttons = screen.getAllByRole("button");
-      const mentionButtons = buttons.filter((b) =>
-        ["TokenBot", "PicoClaw", "Bot", "Agent"].includes(b.textContent ?? ""),
-      );
-      // PicoClaw's button should be highlighted
       const picoClawBtn = screen.getByText("PicoClaw").closest("button");
       expect(picoClawBtn?.className).toContain("bg-accent");
 

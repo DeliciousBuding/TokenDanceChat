@@ -5,7 +5,7 @@ import { useTranslation } from "@/i18n/context";
 import { usePullDownGesture } from "@/hooks/useTouchGestures";
 import { MessageBubble } from "./MessageBubble";
 import { SystemMessage } from "./SystemMessage";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 
@@ -524,46 +524,76 @@ export function MessageTranscript({
             </div>
           )}
 
-          {groups.map((group) => {
+          {groups.map((group, gi) => {
+            const groupTs =
+              group.type === "system"
+                ? group.message.timestamp
+                : group.messages[0].timestamp;
+            const prevGroup = gi > 0 ? groups[gi - 1] : null;
+            const prevTs = prevGroup
+              ? prevGroup.type === "system"
+                ? prevGroup.message.timestamp
+                : prevGroup.messages[0].timestamp
+              : null;
+            const showDateSep =
+              !prevTs ||
+              new Date(prevTs).toDateString() !==
+                new Date(groupTs).toDateString();
+
+            const dateSep = showDateSep ? (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="h-px flex-1 bg-border/50" />
+                <span className="text-[11px] font-medium text-muted-foreground/40 whitespace-nowrap select-none">
+                  {formatDate(groupTs)}
+                </span>
+                <div className="h-px flex-1 bg-border/50" />
+              </div>
+            ) : null;
+
             if (group.type === "system") {
               return (
-                <SystemMessage
-                  key={group.message.id}
-                  content={group.message.content}
-                  timestamp={group.message.timestamp}
-                />
+                <div key={group.message.id}>
+                  {dateSep}
+                  <SystemMessage
+                    content={group.message.content}
+                    timestamp={group.message.timestamp}
+                  />
+                </div>
               );
             }
 
             const { messages: groupMessages, isOwn } = group;
             return (
-              <div key={groupMessages[0].id} className="message-group">
-                {groupMessages.map((msg, idx) => {
-                  const isFirst = idx === 0;
-                  const isLast = idx === groupMessages.length - 1;
-                  const isSolo = groupMessages.length === 1;
+              <div key={groupMessages[0].id}>
+                {dateSep}
+                <div className="message-group">
+                  {groupMessages.map((msg, idx) => {
+                    const isFirst = idx === 0;
+                    const isLast = idx === groupMessages.length - 1;
+                    const isSolo = groupMessages.length === 1;
 
-                  return (
-                    <MessageBubble
-                      key={msg.id}
-                      message={msg}
-                      isOwn={isOwn}
-                      currentUsername={username}
-                      hideAvatar={!isFirst}
-                      hideUsername={!isFirst}
-                      forceShowTimestamp={isLast}
-                      isGrouped={!isSolo}
-                      onReply={onReply}
-                      onDelete={onDelete}
-                      onForward={onForward}
-                      replyCount={replyCounts[msg.id] || 0}
-                      selectMode={selectMode}
-                      isSelected={selectedIds.has(msg.id)}
-                      onToggleSelect={toggleSelect}
-                      onLongPress={enterSelectMode}
-                    />
-                  );
-                })}
+                    return (
+                      <MessageBubble
+                        key={msg.id}
+                        message={msg}
+                        isOwn={isOwn}
+                        currentUsername={username}
+                        hideAvatar={!isFirst}
+                        hideUsername={!isFirst}
+                        forceShowTimestamp={isLast}
+                        isGrouped={!isSolo}
+                        onReply={onReply}
+                        onDelete={onDelete}
+                        onForward={onForward}
+                        replyCount={replyCounts[msg.id] || 0}
+                        selectMode={selectMode}
+                        isSelected={selectedIds.has(msg.id)}
+                        onToggleSelect={toggleSelect}
+                        onLongPress={enterSelectMode}
+                      />
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
