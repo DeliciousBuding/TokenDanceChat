@@ -1,15 +1,68 @@
 # Changelog
 
-## v0.1.0 (2026-05-21)
+## v0.4.0 (2026-05-22)
+
+### Added
+- Assistant registry（集中化模型/助手配置）
+- LobeHub 厂商图标（DeepSeek、Qwen、Kimi、GLM、MiniMax）
+- ModelSelector 组件
+- 消息复制到剪贴板（长按/右键菜单）
+- Agent DM 入口（可私聊 Bot/Agent）
+- 机器人流式响应卡片去重
+
+### Fixed
+- React error #321（useRef 在 useEffect 内调用，违反 Hooks 规则）
+- 机器人回复出现两个卡片
+- 快速双击导致消息重复发送
+- 构建配置移除不必要的 React alias
+
+### Changed
+- Sidebar 增加 Assistants 和 Models 分区
+- ChatInput @mention 补全从 registry 读取
+- 前端部署文档整理，移除敏感信息
+
+## v0.3.0 (2026-05-21)
+
+### Added
+- 前端 90 个测试（7 文件）：App、ErrorBoundary、JoinScreen、ConfirmDialog、I18nContext、utils、chatStore
+- 后端测试扩展：Ping、IsBlocked、SearchMessages、ratelimit、DroppedMessages、Shutdown
+- SHA-256 资源完整性 hash 生成脚本
+
+### Fixed
+- ErrorBoundary class 组件与 React 19 StrictMode 兼容
+- ConfirmDialog 死代码（在 return 后定义）
+- LinkPreview useEffect 缺少清理
+- 长按计时器清理
+- WebSocket 重连竞态
+- FTS5 注入防护（sanitizeFTS5Query）
+- PicoClaw 竞态（ResponseHandler closed atomic）
+- LLM SSE 流 buffer 扩容至 1MB
+
+## v0.2.0 (2026-05-20)
+
+### Added
+- Phase 2-6 功能完整实现
+- 私信 (DM) · 群组 · 多房间
+- Bot Agent（TokenBot + PicoClaw）
+- 消息编辑 · 删除 · 转发 · 引用
+- 表情反应 · 消息搜索 (FTS5)
+- 图片上传/粘贴（WebDAV 存储）
+- PWA Service Worker
+- 中英文 i18n（50+ 翻译键）
+- 桌面通知 · 音效
+- 暗色/亮色/系统主题
+- 移动端触屏适配
+
+### Fixed
+- 6 个 P0 安全修复（XSS、SSRF、路径穿越、FTS5 注入）
+- 14 个 P1 可靠性修复（竞态、goroutine 泄漏、连接限制）
+
+## v0.1.0 (2026-05-19)
 
 ### Initial Release
-
-- Public chat with WebSocket real-time messaging
-- Kanna-inspired dark theme UI
-- SQLite persistence for message history
-- i18n support: Chinese / English
-- Markdown rendering in chat messages
-- Online user list with join/leave notifications
-- Rate limiting per connection
-- Single-binary deployment with embedded frontend
-- Docker + Nginx deployment support
+- 公共聊天室 + WebSocket 实时消息
+- 昵称加入（无需注册）
+- 在线用户列表 · 消息历史分页
+- Markdown 渲染 · 暗色主题
+- SQLite 持久化 · 频率限制
+- Docker + Nginx 部署

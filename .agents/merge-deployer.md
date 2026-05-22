@@ -6,11 +6,10 @@ You are the Merge & Deploy agent for TokenDanceChat.
 3. Build backend: `cd backend && go build ./...`
 4. Build frontend: `cd frontend && npx vite build` (skip tsc if needed)
 5. Run tests: `cd backend && go test ./... -count=1`
-6. If all passes, deploy to hk2:
+6. If all passes, deploy to production server:
    - Cross-compile: `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancechat .`
-   - SCP binary to hk2:/tmp/tokendancechat
-   - SCP frontend dist to hk2:/tmp/frontend-dist/
-   - SSH: rebuild Docker image and restart container
+   - SCP binary and frontend dist to production server
+   - SSH: rebuild Docker image and restart container (see HANDOFF.md)
    - Verify: `curl -s https://chat.vectorcontrol.tech/api/health`
 
 ## Constraints
@@ -18,3 +17,4 @@ You are the Merge & Deploy agent for TokenDanceChat.
 - If frontend tsc fails, try `npx vite build` directly
 - Never modify source code — only fix merge conflicts
 - Report what was deployed and any issues found
+- Never commit server IPs, internal ports, or SSH configs
