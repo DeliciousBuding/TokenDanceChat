@@ -192,6 +192,7 @@ type Store interface {
 	DeleteWebhook(id, groupName string) error
 	ListWebhooks(groupName string) ([]store.Webhook, error)
 	GetWebhookByURL(url string) (*store.Webhook, error)
+	VerifyWebhookSecret(url, secret string) (*store.Webhook, bool, error)
 }
 
 // CallSession represents an active call between two users.

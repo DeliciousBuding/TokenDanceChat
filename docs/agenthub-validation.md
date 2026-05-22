@@ -30,7 +30,8 @@ In practice, this means TokenDanceChat is both:
 | Is SQLite + FTS5 enough for early Hub persistence? | `backend/store` persists users, messages, groups, DMs, reactions, reads, folders, custom emoji, call history, and search. |
 | Does the React client model scale beyond a toy chat? | `frontend/src` uses React 19, Vite, Tailwind, Zustand, lazy-loaded panels, PWA assets, mobile gestures, and typed API helpers across a dense chat surface. |
 | Can Agents feel like IM participants? | TokenBot and PicoClaw are exposed through @mentions, DM-like entry points, streaming replies, and model/provider UI. |
-| Can Hub media be externalized without changing the chat surface? | `backend/handler` keeps same-origin `/uploads/...` URLs while switching storage between local disk, WebDAV, and S3-compatible object storage for production-server-style deployment. |
+| Can external systems safely enter Hub conversations? | Group webhooks validate owner/admin control events, one-time high-entropy secrets, redacted lists, salted HMAC secret hashes, and constant-time HTTP ingress verification. |
+| Can Hub media be externalized without changing the chat surface? | `backend/handler` keeps same-origin `/uploads/...` URLs while switching storage between local disk, WebDAV, and S3-compatible object storage for production-server-style deployment; the frontend never receives bucket URLs or storage credentials. |
 | Which features are product polish versus platform primitives? | Chat folders, call rooms, message translation, GIFs, custom emoji, settings, and PWA behavior separate reusable platform patterns from demo-only polish. |
 
 ## Relationship To AgentHub
@@ -51,6 +52,7 @@ Useful mapping:
 | `frontend/src/components`, `frontend/src/stores`, `frontend/src/lib/api.ts` | `app/web/` and `app/shared/` IM client patterns |
 | WebSocket message handlers | `api/events.md` style typed-event thinking |
 | Agent mention and DM surfaces | AgentHub P1 IM Collaboration experiments |
+| Webhook create/list/delete and hashed ingress verification | Hub external-ingress and group-admin security contract |
 | `MediaStore` local/WebDAV/S3 abstraction | Hub deployment and tenant media storage spike |
 | Docker/single-binary deployment | Hub deployment spike, not the full Desktop P0 flow |
 

@@ -1057,8 +1057,8 @@ func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing secret", http.StatusUnauthorized)
 		return
 	}
-	webhook, err := h.store.GetWebhookByURL(url)
-	if err != nil || webhook.Secret != secret {
+	webhook, ok, err := h.store.VerifyWebhookSecret(url, secret)
+	if err != nil || !ok {
 		http.Error(w, "invalid webhook URL or secret", http.StatusNotFound)
 		return
 	}

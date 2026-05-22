@@ -232,6 +232,14 @@ func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error) {
 	return result, nil
 }
 func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error) { return nil, nil }
+func (m *mockStore) VerifyWebhookSecret(url, secret string) (*store.Webhook, bool, error) {
+	for _, w := range m.webhooks {
+		if w.URL == url {
+			return &w, w.Secret == secret, nil
+		}
+	}
+	return nil, false, nil
+}
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}
@@ -294,6 +302,9 @@ func TestWebhookCreateReturnsSecretToCreator(t *testing.T) {
 	}
 	if got.Secret == "" {
 		t.Fatal("expected one-time webhook secret in response")
+	}
+	if len(got.Secret) < 32 {
+		t.Fatalf("webhook secret length = %d, want at least 32 characters", len(got.Secret))
 	}
 }
 

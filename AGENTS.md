@@ -36,8 +36,11 @@ Do not create a separate project transfer file. If takeover context is needed, f
 
 ## Current Increment
 
-Media storage and screenshot-driven UI acceptance are the active slice in this worktree:
+Webhook at-rest security, media storage, and screenshot-driven UI acceptance are the active completed slices in this worktree:
 
+- Webhook secrets are generated as high-entropy one-time values, stored as versioned salted HMAC hashes in SQLite, and verified through constant-time comparison.
+- Legacy plaintext webhook rows are migrated to hashes at store startup.
+- HTTP webhook ingress verifies secrets through `store.VerifyWebhookSecret`; list responses remain owner/admin-only and redacted.
 - `MediaStore` supports local disk, WebDAV, and S3-compatible storage.
 - S3-compatible media config is env-driven and preferred for production-server deployment shape.
 - Ordinary uploads and custom emoji both use safe media keys and same-origin `/uploads/...` routes.
@@ -46,13 +49,14 @@ Media storage and screenshot-driven UI acceptance are the active slice in this w
 - Mobile secondary chat actions are behind the more menu so `公共聊天` remains readable.
 - Message transcript density has been tightened for mobile/tablet, including removal of duplicated non-own bottom timestamps.
 - Visual acceptance is backed by `npm run visual:acceptance`, real browser screenshots, metrics, and aesthetic review.
+- Generated `gpt-image-2` references may guide art direction, but cannot replace real browser screenshots for acceptance.
 - Current accepted screenshot pass: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T19-36-55-386Z`.
 - Tablet and mobile use the compact top bar until `lg`; 768px must not be forced into the desktop sidebar/header layout.
 
 Remaining follow-ups:
 
-- Hash webhook secrets in SQLite instead of storing plaintext.
 - Add browser/e2e coverage for webhook create -> HTTP POST -> group message.
+- Add webhook secret rotation and audit logging design before production use.
 - Add group video call multi-browser smoke/e2e.
 - Continue screenshot-driven UI density work: header overflow, sidebar density, message padding, and remaining tiny metadata.
 
@@ -82,6 +86,8 @@ Run focused checks first, then broad checks before claiming completion.
 # Backend focused webhook regression
 cd D:\Code\Projects\TokenDanceChat\backend
 go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"
+go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPlaintextSecretMigrationHashesExistingRows)"
+go test ./handler -run TestWebhookHandlerVerifiesHashedSecret
 
 # Backend focused media regression
 go test ./handler -run "Test(UploadEmojiStoresViaMediaStore|ServeEmojiReadsViaMediaStore|S3MediaStoreSaveAndOpen|MediaStoreRejectsTraversalKeys)"
@@ -124,7 +130,7 @@ git diff --check
 - Use `lucide-react` icons for controls where possible.
 - Do not use marketing-style landing pages or decorative cards for core app surfaces.
 - Keep text within controls and panels; test dense UI on narrow widths when practical.
-- Use screenshot metrics from `docs/visual-acceptance.md` before claiming meaningful UI polish is complete.
+- Use screenshot metrics from `docs/visual-acceptance.md` before claiming meaningful UI polish is complete; real screenshots are mandatory for UI polish acceptance.
 - For security-sensitive UI such as webhook secrets, keep one-time secrets separate from normal persistent state.
 
 ## Backend Rules
@@ -134,7 +140,7 @@ git diff --check
 - Do not expose secrets in list responses or broad DTOs.
 - Do not expose object-storage credentials or direct bucket URLs to the frontend; keep same-origin `/uploads/...` routes.
 - Prefer role checks at the handler boundary for group/admin actions.
-- For production hardening, hash webhook secrets and use constant-time comparison.
+- Webhook secrets must be stored as versioned salted HMAC hashes and verified with constant-time comparison.
 
 ## Security And Ops Boundaries
 

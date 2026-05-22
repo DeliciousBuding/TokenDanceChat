@@ -78,6 +78,7 @@ CHAT_MEDIA_S3_REGION=auto
 CHAT_MEDIA_S3_BUCKET=tokendancechat-media
 CHAT_MEDIA_S3_ACCESS_KEY_ID=...
 CHAT_MEDIA_S3_SECRET_ACCESS_KEY=...
+CHAT_MEDIA_S3_SESSION_TOKEN=...
 CHAT_MEDIA_S3_PREFIX=uploads
 CHAT_MEDIA_S3_FORCE_PATH_STYLE=false
 ```
@@ -88,6 +89,27 @@ CHAT_MEDIA_S3_FORCE_PATH_STYLE=false
 - `CHAT_MEDIA_S3_PREFIX` 下同时承载普通上传和 `emojis/` 自定义表情子路径。
 - 对象 key 会拒绝 `..`、空段和路径穿越；同源 URL 仍保持 `/uploads/{file}` 与 `/uploads/emojis/{file}`。
 - 如对象存储要求 path-style URL，将 `CHAT_MEDIA_S3_FORCE_PATH_STYLE=true`。
+- `CHAT_MEDIA_S3_SESSION_TOKEN` 只在使用临时凭证时设置；长期凭证不要写入仓库或前端构建环境。
+- S3 初始化失败会阻止后端启动；未配置 S3 时才会回退到 WebDAV 或本地存储。生产不要依赖静默降级。
+
+production-server/S3 验证清单：
+
+```bash
+# 1. 健康检查必须正常。
+curl https://chat.example.com/api/health
+
+# 2. 上传普通媒体，响应 URL 必须是同源 /uploads/...，不能出现 bucket 域名。
+curl -F "file=@sample.png" https://chat.example.com/api/upload
+
+# 3. 访问上一步返回的 /uploads/...，应能取回原始媒体。
+curl -I https://chat.example.com/uploads/<returned-file>
+
+# 4. 上传自定义表情也必须走同源 /uploads/emojis/...。
+curl -F "file=@emoji.png" https://chat.example.com/api/emoji/upload
+curl -I https://chat.example.com/uploads/emojis/<returned-file>
+
+# 5. 检查前端响应、日志、浏览器网络面板和文档输出，不应泄露真实 endpoint、bucket、access key、secret key、session token。
+```
 
 ## 5. Nginx 参考
 

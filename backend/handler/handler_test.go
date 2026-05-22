@@ -207,6 +207,46 @@ func (m *mockStore) CreateWebhook(id, groupName, url, secret, createdBy string) 
 func (m *mockStore) DeleteWebhook(id, groupName string) error                         { return nil }
 func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error)           { return nil, nil }
 func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error)               { return nil, nil }
+func (m *mockStore) VerifyWebhookSecret(url, secret string) (*store.Webhook, bool, error) {
+	return nil, false, nil
+}
+
+func TestWebhookHandlerVerifiesHashedSecret(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("store.New returned error: %v", err)
+	}
+	defer s.Close()
+
+	const (
+		webhookURL = "team-hook"
+		secret     = "one-time-webhook-secret"
+	)
+	if err := s.CreateWebhook("wh-1", "team", webhookURL, secret, "alice"); err != nil {
+		t.Fatalf("CreateWebhook returned error: %v", err)
+	}
+
+	h := hub.New(s, nil, nil, "")
+	handler := New(h, s, t.TempDir())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL+"?secret="+secret, strings.NewReader(`{"content":"deploy finished","username":"ci"}`))
+	w := httptest.NewRecorder()
+
+	handler.WebhookHandler(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected correct webhook secret to return 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	badReq := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL+"?secret=wrong", strings.NewReader(`{"content":"deploy finished"}`))
+	badW := httptest.NewRecorder()
+
+	handler.WebhookHandler(badW, badReq)
+
+	if badW.Code != http.StatusNotFound {
+		t.Fatalf("expected wrong webhook secret to return 404, got %d", badW.Code)
+	}
+}
 
 func TestHealthCheck(t *testing.T) {
 	h := newTestHandler()

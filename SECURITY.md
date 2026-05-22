@@ -11,12 +11,12 @@
 | Severity | Count | Description |
 |----------|-------|-------------|
 | **HIGH** | 5 | Path traversal, missing security headers, root container, no connection limits, missing backend content validation |
-| **MEDIUM** | 5 | CSWSH via open origin check, CORS wildcard, DB files in Docker image, unused rehype-raw dependency, plaintext webhook secret storage |
+| **MEDIUM** | 5 | CSWSH via open origin check, CORS wildcard, DB files in Docker image, unused rehype-raw dependency, webhook secret at-rest hardening |
 | **LOW** | 5 | Hardcoded WS URL, username in localStorage, error log verbosity, no DB pool limits, no Docker HEALTHCHECK |
 
 **HIGH severity issues have been fixed in code.** See sections below for details.
 
-**2026-05-23 update**: Incoming webhook list responses now require group owner/admin role and redact secrets. `webhook_create` returns the secret only once to the creator, and frontend state keeps that one-time secret separate from normal redacted webhook lists. SQLite still stores webhook secrets in plaintext; hash them before treating webhooks as production-grade.
+**2026-05-23 webhook update**: Incoming webhook list responses require group owner/admin role and redact secrets. `webhook_create` returns a high-entropy secret only once to the creator, frontend state keeps that one-time secret separate from normal redacted webhook lists, and SQLite stores only versioned salted HMAC hashes. Legacy plaintext webhook rows are migrated to hashes when the store starts.
 
 **2026-05-23 media update**: Uploads now share a `MediaStore` abstraction across local disk, WebDAV, and S3-compatible storage. Ordinary uploads and custom emoji both use safe relative object keys, reject traversal segments, and are served back through same-origin `/uploads/...` routes. production-server/S3 credentials must stay in private environment files.
 
@@ -119,13 +119,13 @@ The middleware is applied in the chain: Logging -> SecurityHeaders -> CORS.
 
 ---
 
-### M-05: Webhook Secrets Stored in Plaintext
+### M-05: Webhook Secrets Stored in Plaintext [FIXED]
 
 **Location**: `backend\store\store.go` (`webhooks.secret`)
-**Description**: Incoming webhook secrets are persisted in SQLite as plaintext. The current WebSocket control-plane contract avoids returning secrets from `webhook_list`, and `store.Webhook.Secret` is tagged `json:"-"`, but a database leak would still expose active webhook credentials.
-**Fix so far**: `webhook_create` returns the secret only once to the creator, `webhook_list` is restricted to group owner/admin role, and list responses are redacted.
-**Recommendation for production**: Store only a keyed hash of webhook secrets and compare submitted secrets using constant-time comparison. Consider secret rotation and audit logging for create/delete events.
-**Status**: PARTIALLY FIXED; HASHING REQUIRED FOR PRODUCTION.
+**Description**: Incoming webhook secrets were previously persisted in SQLite as plaintext. The WebSocket control-plane contract avoided returning secrets from `webhook_list`, and `store.Webhook.Secret` was tagged `json:"-"`, but a database leak could still expose active webhook credentials.
+**Fix**: `webhook_create` now returns a high-entropy secret only once to the creator. `CreateWebhook` stores a versioned salted HMAC hash, `VerifyWebhookSecret` compares submitted secrets in constant time, and store startup migrates legacy plaintext rows to hashes. `webhook_list` remains restricted to group owner/admin role and returns redacted DTOs.
+**Remaining production follow-up**: Add webhook secret rotation and audit logging for create/delete events.
+**Status**: FIXED.
 
 ---
 
@@ -215,7 +215,7 @@ The following areas were reviewed and found to be correctly implemented:
 7. **Add nginx security headers** as defense-in-depth (`nginx\tokendance.conf`)
 8. **Add authentication** if user identity matters (JWT, session cookies with HttpOnly/SameSite)
 9. **Set explicit DB connection pool limits** (`store.go:25`)
-10. **Hash webhook secrets** (`store.go` webhooks table) -- do not persist plaintext credentials
+10. **Add webhook rotation/audit logs** -- support secret rotation and record create/delete events
 11. **Keep object storage private** -- S3-compatible endpoint, bucket, access key, and secret key belong in deploy env, not public docs or frontend state
 
 ---
@@ -238,4 +238,4 @@ The following areas were reviewed and found to be correctly implemented:
 | No Docker HEALTHCHECK | Yes | Recommended |
 | No DB pool limits | Yes | Recommended |
 | nginx missing security headers | Yes | Recommended |
-| Webhook secrets stored plaintext | No | Yes -- store hashes only |
+| Webhook secrets stored plaintext | No (FIXED) | FIXED; rotation and audit logging still recommended |
