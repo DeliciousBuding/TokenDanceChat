@@ -97,6 +97,13 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 		// 设置主动消息回调：PicoClaw 可向房间发送未经请求的消息
 		// （摘要、告警、定时更新等）。
 		pc.ProactiveCallback = func(msg picoclaw.Message) {
+			// Enforce max content length on all PicoClaw inbound messages
+			// to prevent storage/bandwidth abuse from oversized payloads.
+			const maxPicoClawContent = 10000
+			if len([]rune(msg.Content)) > maxPicoClawContent {
+				msg.Content = string([]rune(msg.Content)[:maxPicoClawContent])
+			}
+
 			// 根据消息类型决定广播范围。
 			roomID := msg.RoomID
 			switch msg.Type {
