@@ -70,6 +70,11 @@ export interface ActiveCall {
   peer: string;
   callType: "video" | "voice";
   startTime: number;
+  // Group call fields
+  roomId?: string;
+  participants?: string[];
+  isGroupCall?: boolean;
+  groupName?: string;
 }
 
 interface ChatState {
@@ -156,6 +161,7 @@ interface ChatState {
   scheduledMessages: ScheduledMessage[];
   customEmojis: CustomEmoji[];
   folders: ChatFolder[];
+  translations: Record<string, string>; // messageId -> translated text
 
   // Call state
   incomingCall: IncomingCall | null;
@@ -228,6 +234,7 @@ interface ChatState {
   updateFolder: (id: string, data: Partial<ChatFolder>) => void;
   addConversationToFolder: (folderId: string, key: string) => void;
   removeConversationFromFolder: (folderId: string, key: string) => void;
+  setTranslation: (messageId: string, text: string) => void;
   setIncomingCall: (call: IncomingCall | null) => void;
   setActiveCall: (call: ActiveCall | null) => void;
   reset: () => void;
@@ -268,6 +275,7 @@ export const useChatStore = create<ChatState>((set) => ({
   scheduledMessages: [],
   customEmojis: [],
   folders: [],
+  translations: {},
   incomingCall: null,
   activeCall: null,
 
@@ -568,6 +576,8 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
   setIncomingCall: (incomingCall) => set({ incomingCall }),
   setActiveCall: (activeCall) => set({ activeCall }),
+  setTranslation: (messageId, text) =>
+    set((state) => ({ translations: { ...state.translations, [messageId]: text } })),
   reset: () =>
     set({
       view: "join",
@@ -604,6 +614,7 @@ export const useChatStore = create<ChatState>((set) => ({
       scheduledMessages: [],
       customEmojis: [],
       folders: [],
+      translations: {},
       incomingCall: null,
       activeCall: null,
     }),

@@ -2,7 +2,7 @@ import { memo, useMemo, useCallback, useState, useRef, useEffect, lazy, Suspense
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, Check, Forward, Reply, Trash2, Mic, Play, Pause } from "lucide-react";
+import { Copy, Check, Forward, Reply, Trash2, Mic, Play, Pause, Languages } from "lucide-react";
 import { cn, formatTime, formatFullTime, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
@@ -459,10 +459,13 @@ export const MessageBubble = memo(function MessageBubble({
   onToggleSelect,
   onLongPress,
   staggerDelay,
+  highlight,
 }: MessageBubbleProps) {
   const { t } = useTranslation();
   const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
   const customEmojis = useChatStore((s) => s.customEmojis);
+  const translations = useChatStore((s) => s.translations);
+  const translatedText = translations[message.id];
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
@@ -619,23 +622,21 @@ export const MessageBubble = memo(function MessageBubble({
 
   // Parse @mentions and render with highlighting.
   const mentionContent = useMemo(() => {
-    const content = isDeleted
+    const rawContent = isDeleted
       ? t("chat.deletedMessage")
       : message.content;
     if (isDeleted) {
       return (
         <span className="italic text-muted-foreground/50 line-through">
-          {content}
+          {rawContent}
         </span>
       );
     }
 
     // Pre-process custom emoji :name: patterns, replacing them with img tags.
-    let processedContent = content;
+    let processedContent = rawContent;
     if (customEmojis.length > 0) {
-      // Build a map of name -> url for quick lookup.
       const emojiMap = new Map(customEmojis.map((e) => [e.name, e.url]));
-      // Sort by name length descending to match longer names first (avoid partial matches).
       const names = [...emojiMap.keys()].sort((a, b) => b.length - a.length);
       const escapedNames = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
       const pattern = new RegExp(`:(${escapedNames.join('|')}):`, 'g');
@@ -646,156 +647,144 @@ export const MessageBubble = memo(function MessageBubble({
       });
     }
 
-    // Detect GIF/sticker markdown: ![gif](url) and ![sticker](url)
-    const gifMatch = processedContent.match(/^\s*!\[gif\]\(([^)]+)\)\s*$/);
-    const stickerMatch = processedContent.match(/^\s*!\[sticker\]\(([^)]+)\)\s*$/);
-
-    if (gifMatch) {
-      const gifUrl = gifMatch[1];
-      return (
-        <GifRenderer url={gifUrl} alt="GIF" />
-      );
-    }
-
-    if (stickerMatch) {
-      const stickerUrl = stickerMatch[1];
-      return (
-        <StickerRenderer url={stickerUrl} alt="Sticker" />
-      );
-    }
-
-    // Detect audio URLs for voice messages
-    // Match patterns: ![voice](url), ![audio](url), [filename.webm](url)
-    const audioMatch = content.match(
-      /!?\[([^\]]*)\]\(([^)]+)\)/,
-    );
-    const audioUrl = audioMatch?.[2] || null;
-    const isAudioOnly =
-      audioUrl &&
-      AUDIO_EXT_RE.test(audioUrl) &&
-      content.trim() === audioMatch?.[0];
-
-    if (isAudioOnly && audioUrl) {
-      return (
-        <div className="flex items-center gap-2">
-          <Mic className="voice-mic-icon h-4 w-4" />
-          <VoiceMessagePlayer audioUrl={audioUrl} primaryColor={isOwn ? bubbleBg : "var(--primary)"} />
-        </div>
-      );
-    }
-
-    // Legacy: bare ![voice] or ![audio] markdown (non-link-only)
-    if (audioUrl && AUDIO_EXT_RE.test(audioUrl) && content.trim() !== audioMatch?.[0]) {
-      return (
-        <div className="flex items-center gap-2 my-1">
-          <Mic className="voice-mic-icon h-4 w-4" />
-          <VoiceMessagePlayer audioUrl={audioUrl} primaryColor="var(--primary)" />
-        </div>
-      );
-    }
-
-    const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
-    const parts: (
-      | { type: "text"; value: string }
-      | { type: "mention"; username: string }
-    )[] = [];
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-
-    while ((match = mentionRegex.exec(processedContent)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push({
-          type: "text",
-          value: processedContent.slice(lastIndex, match.index),
-        });
+    // Helper: render a plain text segment with mentions, code blocks, and markdown.
+    const renderSegment = (text: string, key: number): React.ReactNode => {
+      const mentionRegex = /@([\p{L}\p{N}_]+)/gu;
+      const segParts: (
+        | { type: "text"; value: string }
+        | { type: "mention"; username: string }
+      )[] = [];
+      let lastIdx = 0;
+      let m: RegExpExecArray | null;
+      while ((m = mentionRegex.exec(text)) !== null) {
+        if (m.index > lastIdx) {
+          segParts.push({ type: "text", value: text.slice(lastIdx, m.index) });
+        }
+        segParts.push({ type: "mention", username: m[1] });
+        lastIdx = m.index + m[0].length;
       }
-      parts.push({ type: "mention", username: match[1] });
-      lastIndex = match.index + match[0].length;
-    }
-    if (lastIndex < processedContent.length) {
-      parts.push({ type: "text", value: processedContent.slice(lastIndex) });
-    }
+      if (lastIdx < text.length) {
+        segParts.push({ type: "text", value: text.slice(lastIdx) });
+      }
 
-    if (parts.length === 0) {
-      // No mentions, check for code blocks.
-      const codeParts = parseContentForCodeBlocks(processedContent);
-      if (codeParts.length === 1 && codeParts[0].type === "text") {
-        // No code blocks: render with ReactMarkdown.
+      if (segParts.length === 0) {
+        // No mentions, check for code blocks.
+        const codeParts = parseContentForCodeBlocks(text);
+        if (codeParts.length === 1 && codeParts[0].type === "text") {
+          return (
+            <ReactMarkdown key={key} remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>
+              {text}
+            </ReactMarkdown>
+          );
+        }
         return (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>{processedContent}</ReactMarkdown>
+          <span key={key}>
+            {codeParts.map((part, j) => {
+              if (part.type === "code") {
+                return <CodeBlock key={j} language={part.language} code={part.code} />;
+              }
+              return (
+                <ReactMarkdown key={j} remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>
+                  {part.value}
+                </ReactMarkdown>
+              );
+            })}
+          </span>
         );
       }
 
-      // Has code blocks: render parts.
+      // Has mentions.
       return (
-        <>
-          {codeParts.map((part, i) => {
-            if (part.type === "code") {
+        <span key={key}>
+          {segParts.map((part, j) => {
+            if (part.type === "mention") {
+              const isSelfMention = currentUsername === part.username;
               return (
-                <CodeBlock
-                  key={i}
-                  language={part.language}
-                  code={part.code}
-                />
+                <button
+                  key={j}
+                  onClick={() => setSelectedProfileUser(part.username)}
+                  className={cn(
+                    "hover:underline cursor-pointer text-primary font-medium",
+                    isSelfMention ? "bg-primary/10 rounded-sm px-0.5" : "",
+                  )}
+                >
+                  @{part.username}
+                </button>
               );
             }
+            const subParts = parseContentForCodeBlocks(part.value);
             return (
-              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>
-                {part.value}
-              </ReactMarkdown>
+              <span key={j}>
+                {subParts.map((sp, k) => {
+                  if (sp.type === "code") {
+                    return <CodeBlock key={k} language={sp.language} code={sp.code} />;
+                  }
+                  return (
+                    <ReactMarkdown key={k} remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>
+                      {sp.value}
+                    </ReactMarkdown>
+                  );
+                })}
+              </span>
             );
+          })}
+        </span>
+      );
+    };
+
+    // Detect GIF/sticker markdown — skip for highlight mode.
+    if (!highlight) {
+      const gifMatch = processedContent.match(/^\s*!\[gif\]\(([^)]+)\)\s*$/);
+      const stickerMatch = processedContent.match(/^\s*!\[sticker\]\(([^)]+)\)\s*$/);
+      if (gifMatch) return <GifRenderer url={gifMatch[1]} alt="GIF" />;
+      if (stickerMatch) return <StickerRenderer url={stickerMatch[1]} alt="Sticker" />;
+
+      const audioMatch = rawContent.match(/!?\[([^\]]*)\]\(([^)]+)\)/);
+      const audioUrl = audioMatch?.[2] || null;
+      const isAudioOnly = audioUrl && AUDIO_EXT_RE.test(audioUrl) && rawContent.trim() === audioMatch?.[0];
+      if (isAudioOnly && audioUrl) {
+        return (
+          <div className="flex items-center gap-2">
+            <Mic className="voice-mic-icon h-4 w-4" />
+            <VoiceMessagePlayer audioUrl={audioUrl} primaryColor={isOwn ? bubbleBg : "var(--primary)"} />
+          </div>
+        );
+      }
+      if (audioUrl && AUDIO_EXT_RE.test(audioUrl) && rawContent.trim() !== audioMatch?.[0]) {
+        return (
+          <div className="flex items-center gap-2 my-1">
+            <Mic className="voice-mic-icon h-4 w-4" />
+            <VoiceMessagePlayer audioUrl={audioUrl} primaryColor="var(--primary)" />
+          </div>
+        );
+      }
+    }
+
+    // Highlight mode: split content by search term, wrap matches in <mark>.
+    if (highlight) {
+      const escaped = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const hlRegex = new RegExp(`(${escaped})`, 'gi');
+      const segments = processedContent.split(hlRegex);
+      const hlLower = highlight.toLowerCase();
+      return (
+        <>
+          {segments.map((seg, i) => {
+            if (seg.toLowerCase() === hlLower && seg.length > 0) {
+              return (
+                <mark key={i} className="bg-yellow-200 dark:bg-yellow-600 text-foreground/90 rounded-sm px-0.5">
+                  {seg}
+                </mark>
+              );
+            }
+            return renderSegment(seg, i);
           })}
         </>
       );
     }
 
-    // Has mentions: render parts with mentions and code blocks.
-    return (
-      <>
-        {parts.map((part, i) => {
-          if (part.type === "mention") {
-            const isSelfMention = currentUsername === part.username;
-            return (
-              <button
-                key={i}
-                onClick={() => setSelectedProfileUser(part.username)}
-                className={cn(
-                  "hover:underline cursor-pointer text-primary font-medium",
-                  isSelfMention
-                    ? "bg-primary/10 rounded-sm px-0.5"
-                    : "",
-                )}
-              >
-                @{part.username}
-              </button>
-            );
-          }
-          // Text parts: may contain code blocks.
-          const subParts = parseContentForCodeBlocks(part.value);
-          return (
-            <span key={i}>
-              {subParts.map((sp, j) => {
-                if (sp.type === "code") {
-                  return (
-                    <CodeBlock
-                      key={j}
-                      language={sp.language}
-                      code={sp.code}
-                    />
-                  );
-                }
-                return (
-                  <ReactMarkdown key={j} remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>
-                    {sp.value}
-                  </ReactMarkdown>
-                );
-              })}
-            </span>
-          );
-        })}
-      </>
-    );
-  }, [message.content, currentUsername, isDeleted, t, customEmojis]);
+    // Normal path (no highlight): render using existing logic.
+    return renderSegment(processedContent, 0);
+  }, [message.content, currentUsername, isDeleted, t, customEmojis, highlight, isOwn, bubbleBg]);
 
   const paddingY =
     isGrouped && hideAvatar ? "py-0.5" : "py-1.5";
@@ -918,7 +907,7 @@ export const MessageBubble = memo(function MessageBubble({
           <button
             onClick={() => onReply(message)}
             aria-label={t("input.replyTo")}
-            className="rounded-md p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+            className="btn-micro rounded-md p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
           >
             <svg
               width="14"
@@ -1011,7 +1000,7 @@ export const MessageBubble = memo(function MessageBubble({
                 <button
                   onClick={() => { setIsEditing(true); setEditContent(message.content); }}
                   aria-label="Edit message"
-                  className="opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted-foreground/30 hover:text-foreground hover:bg-accent transition-all"
+                  className="btn-micro opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted-foreground/30 hover:text-foreground hover:bg-accent transition-all"
                 >
                   <svg
                     width="12"
@@ -1030,7 +1019,7 @@ export const MessageBubble = memo(function MessageBubble({
                   <button
                     onClick={() => setConfirmDelete(true)}
                     aria-label="Delete message"
-                    className="opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all"
+                    className="btn-micro opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all"
                   >
                     <svg
                       width="12"
@@ -1172,7 +1161,7 @@ export const MessageBubble = memo(function MessageBubble({
                     setTimeout(() => setBubbleCopied(false), 1500);
                   } catch { /* Clipboard API may not be available */ }
                 }}
-                className="flex items-center gap-1 rounded-lg bg-accent border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
+                className="btn-micro flex items-center gap-1 rounded-lg bg-accent border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
                 aria-label={t("message.copy")}
               >
                 {bubbleCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
@@ -1183,16 +1172,37 @@ export const MessageBubble = memo(function MessageBubble({
                     e.stopPropagation();
                     onForward(message);
                   }}
-                  className="flex items-center gap-1 rounded-lg bg-accent border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
+                  className="btn-micro flex items-center gap-1 rounded-lg bg-accent border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
                   aria-label={t("message.forward")}
                 >
                   <Forward className="h-3 w-3" />
                   {t("message.forward")}
                 </button>
               )}
+              {!isOwn && message.content && message.content.length < 500 && (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    chatAPI.sendTranslateMessage(message.id, message.content, "");
+                  }}
+                  className="flex items-center gap-1 rounded-lg bg-accent border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
+                  aria-label="Translate"
+                >
+                  <Languages className="h-3 w-3" />
+                  {translatedText ? "Retranslate" : "Translate"}
+                </button>
+              )}
             </div>
           )}
         </div>
+
+        {/* Translation display */}
+        {translatedText && (
+          <div className="mt-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 text-sm text-foreground/80 italic">
+            <span className="text-[10px] text-muted-foreground/50 block mb-0.5">Translated</span>
+            {translatedText}
+          </div>
+        )}
 
         {/* Reaction bar */}
         {!isDeleted && (

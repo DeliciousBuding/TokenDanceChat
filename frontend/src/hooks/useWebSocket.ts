@@ -103,6 +103,7 @@ export function useWebSocket() {
     removeConversationFromFolder,
     setIncomingCall,
     setActiveCall,
+    setTranslation,
   } = useChatStore();
 
   // Check if a conversation is muted, considering both legacy mutedConversations
@@ -1043,6 +1044,16 @@ export function useWebSocket() {
         }
       }),
     );
+
+    // Translation result
+    chatAPI.on("translate_result", (msg: WSMessage) => {
+      const { message_id, content } = msg as {
+        type: string; message_id: string; content: string;
+      };
+      if (message_id && content) {
+        setTranslation(message_id, content);
+      }
+    }),
 
     // Scheduled message confirm
     unsubs.push(

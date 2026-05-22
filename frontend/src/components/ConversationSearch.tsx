@@ -19,12 +19,10 @@ function renderSnippet(content: string, query: string): React.ReactNode {
   const q = query.toLowerCase();
   const idx = lower.indexOf(q);
   if (idx === -1) return content.slice(0, 120);
-
   const start = Math.max(0, idx - 40);
   const end = Math.min(content.length, idx + query.length + 40);
   const prefix = start > 0 ? "..." : "";
   const suffix = end < content.length ? "..." : "";
-
   return (
     <>
       {prefix}
@@ -54,18 +52,13 @@ export function ConversationSearch({ open, onClose, onHighlightChange }: Convers
       return messages.filter((m) => {
         const sender = m.from || m.username;
         const recipient = m.to;
-        return (
-          (sender === partner && recipient === username) ||
-          (sender === username && recipient === partner)
-        );
+        return (sender === partner && recipient === username) ||
+          (sender === username && recipient === partner);
       });
     }
     if (currentChat.type === "group") {
-      return messages.filter(
-        (m) =>
-          m.to === currentChat.name ||
-          (m as ChatMessage & { group?: string }).group === currentChat.name,
-      );
+      return messages.filter((m) =>
+        m.to === currentChat.name || (m as ChatMessage & { group?: string }).group === currentChat.name);
     }
     return messages;
   }, [currentChat, messages, username]);
@@ -85,53 +78,36 @@ export function ConversationSearch({ open, onClose, onHighlightChange }: Convers
     return matched;
   }, [query, conversationMessages]);
 
-  // Reset selection when results change.
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [results.length]);
-
-  // Update parent's highlight term.
+  // Reset selection when results change; update parent highlight term.
+  useEffect(() => { setSelectedIndex(0); }, [results.length]);
   useEffect(() => {
     onHighlightChange(open && query.trim() ? query.trim() : "");
   }, [open, query, onHighlightChange]);
 
   // Focus input on open; reset on close.
   useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    } else {
-      setQuery("");
-      setSelectedIndex(0);
-    }
+    if (open) { setTimeout(() => inputRef.current?.focus(), 50); }
+    else { setQuery(""); setSelectedIndex(0); }
   }, [open]);
 
-  const scrollToMessage = useCallback(
-    (messageId: string) => {
-      window.dispatchEvent(
-        new CustomEvent("tdchat:scroll-to-message", { detail: { id: messageId } }),
-      );
-      onClose();
-    },
-    [onClose],
-  );
+  // Listen for external focus request (e.g., double CTRL+F when already open).
+  useEffect(() => {
+    const handler = () => { inputRef.current?.focus(); inputRef.current?.select(); };
+    window.addEventListener("tdchat:focus-conversation-search", handler);
+    return () => window.removeEventListener("tdchat:focus-conversation-search", handler);
+  }, []);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSelectedIndex((i) => Math.min(i + 1, results.length - 1));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSelectedIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === "Enter" && results.length > 0) {
-        const r = results[selectedIndex];
-        if (r) scrollToMessage(r.id);
-      } else if (e.key === "Escape") {
-        onClose();
-      }
-    },
-    [results, selectedIndex, scrollToMessage, onClose],
-  );
+  const scrollToMessage = useCallback((messageId: string) => {
+    window.dispatchEvent(new CustomEvent("tdchat:scroll-to-message", { detail: { id: messageId } }));
+    onClose();
+  }, [onClose]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIndex((i) => Math.min(i + 1, results.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setSelectedIndex((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter" && results.length > 0) { const r = results[selectedIndex]; if (r) scrollToMessage(r.id); }
+    else if (e.key === "Escape") { onClose(); }
+  }, [results, selectedIndex, scrollToMessage, onClose]);
 
   if (!open) return null;
 
@@ -183,7 +159,6 @@ export function ConversationSearch({ open, onClose, onHighlightChange }: Convers
         </button>
       </div>
 
-      {/* Results dropdown */}
       {trimmedQuery && results.length > 0 && (
         <div className="max-h-60 overflow-y-auto mt-2 border-t border-border/50">
           {results.map((r, i) => (

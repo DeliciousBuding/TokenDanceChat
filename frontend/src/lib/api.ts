@@ -804,28 +804,45 @@ class ChatAPI {
   }
 
   // Call signaling
-  sendCallStart(to: string, callType: "video" | "voice", sdp: string): void {
-    this.send({ type: "call_start", to, call_type: callType, sdp });
+  sendCallStart(to: string, callType: "video" | "voice", sdp: string, roomId?: string): void {
+    this.send({ type: "call_start", to, call_type: callType, sdp, ...(roomId ? { room_id: roomId } : {}) });
   }
 
-  sendCallAccept(callId: string, sdp: string): void {
-    this.send({ type: "call_accept", call_id: callId, sdp });
+  sendCallAccept(callId: string, sdp: string, roomId?: string): void {
+    this.send({ type: "call_accept", call_id: callId, sdp, ...(roomId ? { room_id: roomId } : {}) });
   }
 
   sendCallReject(callId: string): void {
     this.send({ type: "call_reject", call_id: callId });
   }
 
-  sendCallEnd(callId: string): void {
-    this.send({ type: "call_end", call_id: callId });
+  sendCallEnd(callId: string, roomId?: string): void {
+    this.send({ type: "call_end", call_id: callId, ...(roomId ? { room_id: roomId } : {}) });
   }
 
-  sendCallIceCandidate(callId: string, candidate: string): void {
-    this.send({ type: "call_ice_candidate", call_id: callId, candidate });
+  sendCallIceCandidate(callId: string, candidate: string, roomId?: string, to?: string): void {
+    this.send({ type: "call_ice_candidate", call_id: callId, candidate, ...(roomId ? { room_id: roomId } : {}), ...(to ? { to } : {}) });
   }
 
   sendCallList(): void {
     this.send({ type: "call_list" });
+  }
+
+  // Group call room
+  sendCallRoomCreate(participants: string[], callType: "video" | "voice"): void {
+    this.send({ type: "call_room_create", call_participants: participants, call_type: callType });
+  }
+
+  sendCallRoomJoin(roomId: string, sdp?: string): void {
+    this.send({ type: "call_room_join", room_id: roomId, sdp: sdp ?? "" });
+  }
+
+  sendCallRoomLeave(roomId: string): void {
+    this.send({ type: "call_room_leave", room_id: roomId });
+  }
+
+  sendCallRoomList(roomId: string): void {
+    this.send({ type: "call_room_list", room_id: roomId });
   }
 
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
@@ -946,6 +963,10 @@ class ChatAPI {
 
   sendFolderList(): void {
     this.send({ type: "folder_list" });
+  }
+
+  sendTranslateMessage(messageId: string, content: string, targetLang?: string): void {
+    this.send({ type: "translate_message", message_id: messageId, content, to: targetLang || "" });
   }
 
   disconnect(): void {

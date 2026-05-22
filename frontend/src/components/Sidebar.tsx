@@ -537,7 +537,7 @@ export function Sidebar({
                 const count = unreadByConversation[`dm:${partner}`];
                 if (count) {
                   return (
-                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                    <span key={`dm-${partner}-${count}`} className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge">
                       {count > 99 ? "99+" : count}
                     </span>
                   );
@@ -594,7 +594,7 @@ export function Sidebar({
               const count = unreadByConversation[`group:${g.name}`];
               if (count) {
                 return (
-                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                  <span key={`group-${g.name}-${count}`} className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge">
                     {count > 99 ? "99+" : count}
                   </span>
                 );

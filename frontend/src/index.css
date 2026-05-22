@@ -97,6 +97,8 @@
 
   html {
     font-family: var(--font-sans);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
 
   body {
@@ -106,18 +108,9 @@
   }
 
   /* Focus ring for keyboard navigation */
-  button:focus-visible,
-  a:focus-visible,
-  input:focus-visible,
-  textarea:focus-visible,
-  select:focus-visible,
-  [tabindex]:focus-visible,
-  [role="button"]:focus-visible,
-  [role="menuitem"]:focus-visible,
-  [role="option"]:focus-visible,
-  [role="listbox"]:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--ring-focus);
+  *:focus-visible {
+    outline: 2px solid oklch(71.2% 0.194 13.428 / 0.5);
+    outline-offset: 2px;
     border-radius: var(--radius);
   }
 
@@ -312,6 +305,54 @@
 
 /* ───────── Utility classes ───────── */
 
+/* Pulse badge when unread count changes */
+@keyframes pulseBadge {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+@utility animate-pulse-badge {
+  animation: pulseBadge 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Message entrance: slide up with fade */
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-message-in {
+  animation: messageIn 0.3s ease-out both;
+}
+
+/* Conversation switch crossfade */
+@keyframes convCrossfade {
+  0% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+@utility animate-conv-crossfade {
+  animation: convCrossfade 150ms ease-out;
+}
+
+/* Micro-interaction: subtle scale on hover/active */
+.btn-micro {
+  transition: transform 0.15s ease-out;
+}
+.btn-micro:hover {
+  transform: scale(1.02);
+}
+.btn-micro:active {
+  transform: scale(0.98);
+}
+
 @utility animate-fade-in {
   animation: fadeIn 0.3s ease-out;
 }
@@ -357,9 +398,11 @@
   background: linear-gradient(
     90deg,
     var(--muted) 0%,
-    var(--muted) 20%,
-    oklch(0.26 0.01 260) 50%,
-    var(--muted) 80%,
+    var(--muted) 25%,
+    oklch(0.255 0.01 260) 40%,
+    oklch(0.28 0.01 260) 50%,
+    oklch(0.255 0.01 260) 60%,
+    var(--muted) 75%,
     var(--muted) 100%
   );
   background-size: 800px 100%;
@@ -375,9 +418,11 @@
   background: linear-gradient(
     90deg,
     var(--muted) 0%,
-    var(--muted) 20%,
-    oklch(0.90 0.01 260) 50%,
-    var(--muted) 80%,
+    var(--muted) 25%,
+    oklch(0.92 0.01 260) 40%,
+    oklch(0.95 0.01 260) 50%,
+    oklch(0.92 0.01 260) 60%,
+    var(--muted) 75%,
     var(--muted) 100%
   );
   background-size: 800px 100%;
@@ -652,6 +697,10 @@
 }
 
 /* Emoji picker custom scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
