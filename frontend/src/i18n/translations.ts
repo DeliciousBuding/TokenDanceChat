@@ -102,6 +102,7 @@ export interface TranslationDict {
     emptyDmDescription: string;
     emptyGroupTitle: string;
     emptyGroupDescription: string;
+    emptyGroupMembers: string;
     selected: string;
     contextSelect: string;
     contextCopy: string;
@@ -507,8 +508,9 @@ const zhCN: TranslationDict = {
     newMessagesDivider: "新消息",
     emptyDmTitle: "暂无消息",
     emptyDmDescription: "向 {{username}} 发送第一条消息吧！",
-    emptyGroupTitle: "暂无消息",
-    emptyGroupDescription: "向 {{name}} 发送第一条消息吧！",
+    emptyGroupTitle: "群聊已就绪",
+    emptyGroupDescription: "向 {{name}} 发送第一条消息，开始同步上下文。",
+    emptyGroupMembers: "{{count}} 名成员",
     selected: "已选择 {{count}} 条",
     contextSelect: "选择",
     contextCopy: "复制",
@@ -916,8 +918,9 @@ const enUS: TranslationDict = {
     newMessagesDivider: "New messages",
     emptyDmTitle: "No messages yet",
     emptyDmDescription: "Send your first message to {{username}}!",
-    emptyGroupTitle: "No messages yet",
-    emptyGroupDescription: "Send the first message to {{name}}!",
+    emptyGroupTitle: "Group is ready",
+    emptyGroupDescription: "Send the first message to {{name}} and start syncing context.",
+    emptyGroupMembers: "{{count}} members",
     selected: "{{count}} selected",
     contextSelect: "Select",
     contextCopy: "Copy",

@@ -587,13 +587,13 @@ export function Sidebar({
             onClick={() => setCurrentChat({ type: "group", name: g.name })}
             onContextMenu={(e) => handleContextMenu(e, `group:${g.name}`)}
             className={cn(
-              "flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
+              "flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
               currentChat.type === "group" && currentChat.name === g.name
                 ? "bg-accent text-foreground border-l-primary"
                 : "text-foreground/70 hover:bg-accent hover:text-foreground",
             )}
           >
-            <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+            <Hash className="h-4 w-4 text-muted-foreground" />
             <span className="truncate">{g.name}</span>
             {(() => {
               const count = unreadByConversation[`group:${g.name}`];

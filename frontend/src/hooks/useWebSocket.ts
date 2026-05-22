@@ -20,6 +20,7 @@ import {
   type WSCallAccepted,
   type WSCallRejected,
 } from "@/lib/api";
+import { normalizeGroupInfoMembers } from "@/lib/groupInfo";
 
 // ─── Page title utilities ───
 
@@ -825,17 +826,17 @@ export function useWebSocket() {
     // Group info
     unsubs.push(
       chatAPI.on("group_info", (msg: WSMessage) => {
-        const { group, members, content, timestamp } = msg as {
+        const { group, content, timestamp } = msg as {
           type: string;
           group: string;
-          members?: { username: string; role: string }[];
           content?: string;
           timestamp?: number;
         };
-        if (!group || !members) return;
+        const groupMembers = normalizeGroupInfoMembers(msg);
+        if (!group || groupMembers.length === 0) return;
         const roles: Record<string, string> = {};
         const memberNames: string[] = [];
-        for (const m of members) {
+        for (const m of groupMembers) {
           memberNames.push(m.username);
           roles[m.username] = m.role;
         }

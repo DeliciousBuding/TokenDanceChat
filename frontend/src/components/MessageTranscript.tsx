@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
-import { Reply, Copy, Trash2, Forward } from "lucide-react";
+import { Reply, Copy, Trash2, Forward, UsersRound } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
 import { usePullDownGesture } from "@/hooks/useTouchGestures";
@@ -87,6 +87,7 @@ export function MessageTranscript({
     typingUsers,
     currentChat,
     onlineUsers,
+    groups: chatGroups,
   } = useChatStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -210,6 +211,9 @@ export function MessageTranscript({
   const hiddenCount = effectiveMessages.length - visibleMessages.length;
 
   const groups = useMemo(() => buildMessageGroups(visibleMessages, username), [visibleMessages, username]);
+  const currentGroupMemberCount = currentChat.type === "group"
+    ? chatGroups[currentChat.name]?.members.length ?? 1
+    : 0;
 
   // Count replies for each message.
   const replyCounts = useMemo(() => {
@@ -550,17 +554,19 @@ export function MessageTranscript({
           }
           if (currentChat.type === "group") {
             return (
-              <div className="flex flex-col items-center justify-center h-full py-12 px-4">
-                <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-secondary to-accent ring-1 ring-border shadow-sm">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/50">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
+              <div data-visual="group-empty-state" className="flex h-full items-center justify-center px-4 py-10">
+                <div className="w-full max-w-sm text-center">
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
+                    <UsersRound className="h-6 w-6" />
+                  </div>
+                  <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                    {t("transcript.emptyGroupMembers", { count: currentGroupMemberCount })}
+                  </p>
+                  <h3 className="mb-1.5 text-base font-semibold text-foreground/85">{t("transcript.emptyGroupTitle")}</h3>
+                  <p className="mx-auto max-w-xs text-sm leading-6 text-muted-foreground">
+                    {t("transcript.emptyGroupDescription", { name: currentChat.name })}
+                  </p>
                 </div>
-                <h3 className="text-sm font-semibold text-foreground/80 mb-1.5">{t("transcript.emptyGroupTitle")}</h3>
-                <p className="text-xs text-muted-foreground/50 text-center max-w-xs leading-relaxed">{t("transcript.emptyGroupDescription", { name: currentChat.name })}</p>
               </div>
             );
           }

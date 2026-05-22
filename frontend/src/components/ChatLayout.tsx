@@ -579,12 +579,12 @@ export function ChatLayout() {
 
         {/* Desktop header */}
         <div className="hidden lg:flex items-center justify-between gap-4 border-b border-border bg-card px-6 py-3.5 transition-colors duration-300">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-[13rem] max-w-[42%] flex-shrink-0 items-center gap-3">
             {/* Back to public chat button (when in DM or group) */}
             {currentChat.type !== "public" && (
               <button
                 onClick={() => setCurrentChat({ type: "public" })}
-                className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 aria-label={t("chat.publicChat")}
               >
                 <ArrowLeft className="h-[18px] w-[18px]" />
@@ -594,20 +594,24 @@ export function ChatLayout() {
             {currentChat.type === "group" && (
               <button
                 onClick={() => setGroupInfoPanel(currentChat.name)}
-                className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 aria-label={t("group.groupInfo")}
               >
                 <Info className="h-[18px] w-[18px]" />
               </button>
             )}
-            <div>
-              <h1 className="text-base font-semibold text-foreground">
+            <div className="min-w-0 flex-1">
+              <h1
+                data-visual="desktop-chat-title"
+                className="truncate text-base font-semibold text-foreground"
+                title={headerTitle}
+              >
                 {headerTitle}
               </h1>
-              <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
+              <p className="truncate text-xs text-muted-foreground">{headerSubtitle}</p>
             </div>
           </div>
-          <div className="flex min-w-0 items-center justify-end gap-2 overflow-x-auto scrollbar-thin">
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-x-auto scrollbar-thin">
             {/* Call buttons (desktop, DM only) */}
             {currentChat.type === "dm" && (
               <div className="flex items-center gap-1 mr-1">

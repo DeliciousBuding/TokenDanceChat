@@ -77,7 +77,10 @@ Status: implemented, documented, tested, and accepted with browser screenshots.
 - [x] Re-ran visual acceptance on a clean temporary SQLite DB so final screenshots contain only the seeded demo transcript.
 - [x] Tightened desktop sidebar above-the-fold density with four model preview cards, compact empty states, and a visual gate for online-user section position.
 - [x] Lightened the core chat surface after screenshot review: message bubbles use quieter borders, composer utility buttons no longer render as heavy bordered blocks, and clickable avatars have a 46px safety floor for stable 44px acceptance.
-- [ ] Continue density cleanup for remaining tiny passive metadata using real browser screenshots as acceptance evidence.
+- [x] Added a real group-info visual acceptance scenario that creates a group, opens the right-side admin panel, verifies the owner-only Webhook section, and gates panel controls at the 44px target.
+- [x] Raised group-info admin controls, Webhook actions, member rows, context menus, confirm actions, and visible group sidebar rows to stable 44px targets.
+- [x] Fixed frontend `group_info` handling to read the backend `group_members` role payload, so owner/admin state drives group info and Webhook management after a real WebSocket round trip.
+- [x] Added group-info visual gates for desktop title single-line stability and a visible first-run group empty state after screenshot review caught header squeeze and sparse group content.
 
 ## Next Product Tasks
 
@@ -148,6 +151,17 @@ Record commands here when they are run for the current increment.
 | 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8095 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T22-17-22-184Z`; all six scenarios `smallControls=0`, no horizontal overflow, no console errors. Mobile collapsed composer is 87px, mobile format composer is 144px, desktop sidebar model preview remains 4 cards, online-user section top remains 561px. |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 199 tests |
 | 2026-05-23 | `git diff --check` | PASS |
+| 2026-05-23 | `cd frontend; npm test -- --run src/lib/groupInfo.test.ts src/components/GroupInfoPanel.test.tsx src/components/Sidebar.test.tsx src/components/ChatLayout.test.tsx` | PASS, 4 files / 56 tests |
+| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-23 | `cd frontend; npm run build` | PASS |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8099 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-00-11-123Z`; all seven scenarios `smallControls=0`, no horizontal overflow, no console errors. New `desktop-light-group-info` scenario shows a 384px right panel, visible owner-only Webhook section, `groupSmallControls=0`, and verified `group_info.group_members` role handling. |
+| 2026-05-23 | Screenshot review of `desktop-light-group-info.png`, `desktop-light.png`, and `mobile-light.png` | PASS. Group admin panel controls are readable and no longer tiny; mobile and desktop core chat remain visually stable. Follow-up: newly created group empty state is sparse and should be enriched carefully. |
+| 2026-05-23 | `cd frontend; npm test` | PASS, 15 files / 202 tests |
+| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-23 | `cd frontend; npm run build` | PASS |
+| 2026-05-23 | `cd backend; go test ./...` | PASS |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8101 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-29-14-410Z`; all seven scenarios `smallControls=0`, no horizontal overflow, no console errors. `desktop-light-group-info` shows a 384px right panel, `groupSmallControls=0`, desktop title 174x24 and single-line, visible first-run group empty state, and owner-only Webhook controls. |
+| 2026-05-23 | Screenshot review of `desktop-light-group-info.png`, `desktop-light.png`, and `mobile-light.png` from `tdchat-visual-2026-05-22T23-29-14-410Z` | PASS. Group admin controls are readable, desktop title no longer wraps when the right panel is open, the group first-run state is present without decorative filler, and mobile/desktop core chat remain stable. |
 
 ## Review Gates
 
