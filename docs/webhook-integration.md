@@ -13,7 +13,9 @@ This is both a demo feature and an AgentHub validation slice: it exercises group
 - `webhook_list` never returns secrets.
 - `store.Webhook.Secret` is tagged `json:"-"` to prevent accidental JSON leakage.
 - Frontend state stores the one-time secret separately from the normal redacted webhook list.
-- Current limitation: webhook secrets are still stored in plaintext in SQLite. Production hardening should store only a hash.
+- Webhook secrets are persisted as versioned salted HMAC hashes in SQLite and verified with constant-time comparison.
+- Existing plaintext webhook rows are migrated to hashes when the store starts.
+- Production follow-ups: secret rotation and audit logging for create/delete events.
 
 ## WebSocket Control Events
 
@@ -135,6 +137,8 @@ Focused backend tests:
 ```powershell
 cd backend
 go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"
+go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPlaintextSecretMigrationHashesExistingRows)"
+go test ./handler -run TestWebhookHandlerVerifiesHashedSecret
 ```
 
 Focused frontend tests:

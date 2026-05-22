@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -18,6 +20,13 @@ import (
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
+
+const (
+	webhookSecretHashPrefix = "whsec_sha256:"
+	webhookSecretSaltBytes  = 16
+)
+
+var webhookSecretPepper = []byte("tokendancechat:webhook-secret:v1")
 
 // StoredMessage is the message model returned by the store.
 type StoredMessage struct {
@@ -113,7 +122,7 @@ type Webhook struct {
 	ID        string `json:"id"`
 	GroupName string `json:"group_name"`
 	URL       string `json:"url"`
-	Secret    string `json:"-"`
+	Secret    string `json:"-"` // Persisted versioned secret hash; never serialized.
 	CreatedBy string `json:"created_by"`
 	CreatedAt int64  `json:"created_at"`
 }
@@ -470,6 +479,10 @@ func (s *Store) migrate() error {
 
 	// Populate FTS5 index for pre-existing messages not yet indexed.
 	s.populateFTS5()
+
+	if err := s.migrateWebhookSecrets(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -2318,10 +2331,14 @@ func (s *Store) GetFolderItems(folderID string) ([]string, error) {
 func (s *Store) CreateWebhook(id, groupName, url, secret, createdBy string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	secretHash, err := hashWebhookSecret(secret)
+	if err != nil {
+		return err
+	}
 	now := time.Now().UnixMilli()
-	_, err := s.db.Exec(
+	_, err = s.db.Exec(
 		"INSERT INTO webhooks (id, group_name, url, secret, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		id, groupName, url, secret, createdBy, now,
+		id, groupName, url, secretHash, createdBy, now,
 	)
 	return err
 }
@@ -2373,6 +2390,105 @@ func (s *Store) GetWebhookByURL(url string) (*Webhook, error) {
 		return nil, err
 	}
 	return &w, nil
+}
+
+// VerifyWebhookSecret returns the matching webhook when the supplied secret is valid.
+func (s *Store) VerifyWebhookSecret(url, secret string) (*Webhook, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var w Webhook
+	err := s.db.QueryRow(
+		"SELECT id, group_name, url, secret, created_by, created_at FROM webhooks WHERE url = ?",
+		url,
+	).Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return &w, verifyWebhookSecretHash(w.Secret, secret), nil
+}
+
+func (s *Store) migrateWebhookSecrets() error {
+	rows, err := s.db.Query("SELECT id, secret FROM webhooks")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type legacyWebhookSecret struct {
+		id     string
+		secret string
+	}
+	var legacy []legacyWebhookSecret
+	for rows.Next() {
+		var item legacyWebhookSecret
+		if err := rows.Scan(&item.id, &item.secret); err != nil {
+			return err
+		}
+		if !isWebhookSecretHash(item.secret) {
+			legacy = append(legacy, item)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, item := range legacy {
+		secretHash, err := hashWebhookSecret(item.secret)
+		if err != nil {
+			return err
+		}
+		if _, err := s.db.Exec("UPDATE webhooks SET secret = ? WHERE id = ?", secretHash, item.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isWebhookSecretHash(value string) bool {
+	return strings.HasPrefix(value, webhookSecretHashPrefix)
+}
+
+func hashWebhookSecret(secret string) (string, error) {
+	if secret == "" {
+		return "", fmt.Errorf("webhook secret is required")
+	}
+	salt := make([]byte, webhookSecretSaltBytes)
+	if _, err := rand.Read(salt); err != nil {
+		return "", err
+	}
+	digest := webhookSecretDigest(salt, secret)
+	return webhookSecretHashPrefix + hex.EncodeToString(salt) + ":" + hex.EncodeToString(digest), nil
+}
+
+func verifyWebhookSecretHash(storedHash, secret string) bool {
+	if secret == "" || !isWebhookSecretHash(storedHash) {
+		return false
+	}
+	encoded := strings.TrimPrefix(storedHash, webhookSecretHashPrefix)
+	saltHex, digestHex, ok := strings.Cut(encoded, ":")
+	if !ok {
+		return false
+	}
+	salt, err := hex.DecodeString(saltHex)
+	if err != nil || len(salt) != webhookSecretSaltBytes {
+		return false
+	}
+	expected, err := hex.DecodeString(digestHex)
+	if err != nil || len(expected) != sha256.Size {
+		return false
+	}
+	actual := webhookSecretDigest(salt, secret)
+	return subtle.ConstantTimeCompare(actual, expected) == 1
+}
+
+func webhookSecretDigest(salt []byte, secret string) []byte {
+	key := make([]byte, 0, len(webhookSecretPepper)+len(salt))
+	key = append(key, webhookSecretPepper...)
+	key = append(key, salt...)
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(secret))
+	return mac.Sum(nil)
 }
 
 // --- User registration and authentication ---

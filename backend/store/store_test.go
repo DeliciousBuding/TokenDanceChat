@@ -2,6 +2,8 @@ package store
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -341,6 +343,88 @@ func TestSearchMessagesSpecialCharacters(t *testing.T) {
 		t.Errorf("SearchMessages with SQL keyword should not error: %v", err)
 	}
 	_ = results
+}
+
+func TestCreateWebhookDoesNotPersistPlaintextSecret(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	const plaintextSecret = "plain-webhook-secret"
+	if err := s.CreateWebhook("wh-1", "team", "wh-url", plaintextSecret, "alice"); err != nil {
+		t.Fatalf("CreateWebhook returned error: %v", err)
+	}
+
+	var storedSecret string
+	if err := s.db.QueryRow("SELECT secret FROM webhooks WHERE id = ?", "wh-1").Scan(&storedSecret); err != nil {
+		t.Fatalf("failed to read stored webhook secret: %v", err)
+	}
+	if storedSecret == plaintextSecret {
+		t.Fatal("webhook secret was persisted in plaintext")
+	}
+	if !strings.HasPrefix(storedSecret, "whsec_sha256:") {
+		t.Fatalf("expected versioned webhook secret hash, got %q", storedSecret)
+	}
+	webhook, ok, err := s.VerifyWebhookSecret("wh-url", plaintextSecret)
+	if err != nil {
+		t.Fatalf("VerifyWebhookSecret returned error for correct secret: %v", err)
+	}
+	if !ok {
+		t.Fatal("VerifyWebhookSecret rejected the original plaintext secret")
+	}
+	if webhook.GroupName != "team" {
+		t.Fatalf("verified webhook group = %q, want team", webhook.GroupName)
+	}
+	if _, ok, err := s.VerifyWebhookSecret("wh-url", "wrong-secret"); err != nil {
+		t.Fatalf("VerifyWebhookSecret returned error for wrong secret: %v", err)
+	} else if ok {
+		t.Fatal("VerifyWebhookSecret accepted the wrong secret")
+	}
+}
+
+func TestWebhookPlaintextSecretMigrationHashesExistingRows(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "chat.db")
+	s, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("New(temp db) returned error: %v", err)
+	}
+	const legacySecret = "legacy-webhook-secret"
+	if _, err := s.db.Exec(
+		"INSERT INTO webhooks (id, group_name, url, secret, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		"legacy-wh", "team", "legacy-url", legacySecret, "alice", time.Now().UnixMilli(),
+	); err != nil {
+		t.Fatalf("failed to insert legacy webhook row: %v", err)
+	}
+	s.Close()
+
+	reopened, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("New(existing db) returned error: %v", err)
+	}
+	defer reopened.Close()
+
+	var storedSecret string
+	if err := reopened.db.QueryRow("SELECT secret FROM webhooks WHERE id = ?", "legacy-wh").Scan(&storedSecret); err != nil {
+		t.Fatalf("failed to read migrated webhook secret: %v", err)
+	}
+	if storedSecret == legacySecret {
+		t.Fatal("legacy webhook secret remained plaintext after migration")
+	}
+	if !strings.HasPrefix(storedSecret, "whsec_sha256:") {
+		t.Fatalf("expected migrated versioned webhook secret hash, got %q", storedSecret)
+	}
+	webhook, ok, err := reopened.VerifyWebhookSecret("legacy-url", legacySecret)
+	if err != nil {
+		t.Fatalf("VerifyWebhookSecret returned error for migrated secret: %v", err)
+	}
+	if !ok {
+		t.Fatal("VerifyWebhookSecret rejected migrated legacy secret")
+	}
+	if webhook.ID != "legacy-wh" {
+		t.Fatalf("verified migrated webhook id = %q, want legacy-wh", webhook.ID)
+	}
 }
 
 func TestConcurrentInsert(t *testing.T) {

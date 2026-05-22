@@ -145,6 +145,7 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 | `CHAT_MEDIA_S3_BUCKET` | — | 媒体对象 bucket |
 | `CHAT_MEDIA_S3_ACCESS_KEY_ID` | — | 媒体对象存储 Access Key |
 | `CHAT_MEDIA_S3_SECRET_ACCESS_KEY` | — | 媒体对象存储 Secret Key |
+| `CHAT_MEDIA_S3_SESSION_TOKEN` | — | 可选临时凭证 token |
 | `CHAT_MEDIA_S3_PREFIX` | `uploads` | 媒体对象前缀 |
 | `CHAT_MEDIA_S3_FORCE_PATH_STYLE` | `false` | 是否使用 path-style bucket URL |
 | `CHAT_MEDIA_WEBDAV_ENDPOINT` | — | WebDAV 媒体存储端点；仅在未配置 S3 时启用 |

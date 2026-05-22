@@ -2,6 +2,8 @@ package hub
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 
 	"log"
@@ -34,6 +36,14 @@ const (
 	// Rate limit: max messages per second per connection.
 	maxMessagesPerSecond = 5
 )
+
+func generateWebhookSecret() string {
+	secretBytes := make([]byte, 32)
+	if _, err := rand.Read(secretBytes); err != nil {
+		return strings.ReplaceAll(uuid.NewString()+uuid.NewString(), "-", "")
+	}
+	return base64.RawURLEncoding.EncodeToString(secretBytes)
+}
 
 // Client represents a single WebSocket connection.
 type Client struct {
@@ -3633,7 +3643,7 @@ func (c *Client) handleWebhookCreate(msg Message) {
 	}
 
 	id := uuid.New().String()
-	secret := uuid.New().String()[:12]
+	secret := generateWebhookSecret()
 	url := id + "-" + uuid.New().String()[:8]
 
 	if err := c.hub.store.CreateWebhook(id, groupName, url, secret, c.username); err != nil {

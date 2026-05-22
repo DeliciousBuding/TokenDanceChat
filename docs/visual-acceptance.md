@@ -9,9 +9,16 @@ TokenDanceChat is the AgentHub technical validation project and a playable demo.
 - Avoid marketing-style hero layouts, decorative cards, and empty ornamental space.
 - Prefer lucide icons for controls; text labels are reserved for commands that need clarity.
 
-## Screenshot Acceptance
+## Multimodal Screenshot Acceptance
 
-Every meaningful UI polish increment should capture real browser screenshots before claiming completion:
+Every meaningful UI polish increment must capture real browser screenshots before claiming completion. Generated mockups can help set direction, but they are not acceptance evidence.
+
+Required workflow:
+
+1. Capture real browser screenshots with `npm run visual:acceptance` or an equivalent Playwright pass.
+2. Review screenshots directly for layout, typography, button size, icon balance, density, empty space, and visual hierarchy.
+3. Compare against a deliberate aesthetic reference when useful. A `gpt-image-2` mockup is acceptable as a reference target, but the implementation passes only when the real browser screenshots and metrics pass.
+4. Record the screenshot output directory in `ROADMAP.md` or the relevant PR/commit notes for meaningful frontend polish.
 
 | Viewport | Theme | Required checks |
 |---|---|---|
@@ -61,7 +68,7 @@ $env:VISUAL_BASE_URL = 'http://127.0.0.1:8091'
 npm run visual:acceptance
 ```
 
-The script writes screenshots and `metrics.json` to a temp directory such as `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-*`. It refuses non-local targets unless `VISUAL_ALLOW_NONLOCAL=1` is set, because it seeds demo messages.
+The script writes screenshots and `metrics.json` to a temp directory such as `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-*`. It refuses non-local targets unless `VISUAL_ALLOW_NONLOCAL=1` is set, because it seeds demo messages. Do not claim UI polish from a generated reference alone; use generated images only as aesthetic guidance for the real implementation.
 
 ## 2026-05-23 Acceptance
 
@@ -81,7 +88,7 @@ Earlier screenshot passes caught two real issues:
 
 ## Current Reference Prompt
 
-Use this with `gpt-image-2` when an image-generation tool and API key are available. Treat the output as visual direction, not as a source asset to copy blindly.
+Use this with `gpt-image-2` when an image-generation tool and API key are available. Treat the output as visual direction, not as a source asset to copy blindly, and never as a replacement for real browser screenshot acceptance.
 
 ```text
 Use case: ui-mockup

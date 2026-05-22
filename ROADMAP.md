@@ -44,10 +44,15 @@ The long-running product goal is to validate AgentHub's realtime Hub, SQLite per
 | P2 | Operations/performance | Health checks, deployment checklist, bundle/runtime profiling, virtualized list tuning, WebSocket fanout/load checks. |
 | P2 | UI/art direction | Restrained enterprise UI with smooth chat interactions; avoid decorative marketing layouts. |
 
-## Current Increment: Media Storage + Screenshot-Driven UI Acceptance
+## Current Increment: Webhook Security + Media Storage + Screenshot-Driven UI Acceptance
 
 Status: implemented, documented, tested, and accepted with browser screenshots.
 
+- [x] Replaced plaintext webhook secret persistence with versioned salted HMAC hashes in SQLite.
+- [x] Added store startup migration for legacy plaintext webhook secret rows.
+- [x] Added `store.VerifyWebhookSecret` and routed HTTP webhook ingress through constant-time hash verification.
+- [x] Strengthened generated one-time webhook secrets beyond short UUID fragments.
+- [x] Added focused store, hub, and handler tests for hashed webhook persistence, migration, redaction, permission checks, and HTTP ingress.
 - [x] Added S3-compatible `MediaStore` support with AWS SigV4 signing and env-driven configuration.
 - [x] Kept S3 behind same-origin `/uploads/...` routes so frontend state never sees bucket URLs or credentials.
 - [x] Moved custom emoji upload/serve paths onto the shared `MediaStore` abstraction.
@@ -65,13 +70,13 @@ Status: implemented, documented, tested, and accepted with browser screenshots.
 - [x] Tightened mobile message density: smaller mobile bubble text, narrower bubble padding, reduced transcript/date-separator padding, and no duplicated non-own bottom timestamp.
 - [x] Hardened `npm run visual:acceptance` so seeded messages wait past the input send guard and fail fast if fewer than 4 acceptance messages are present.
 - [x] Added visual hard gates for mobile title clipping, mobile message font size, and minimum visible message density.
-- [ ] Continue density cleanup for message action buttons, header overflow at narrower desktop widths, sidebar above-the-fold utility, and remaining tiny metadata.
+- [ ] Continue density cleanup for message action buttons, header overflow at narrower desktop widths, sidebar above-the-fold utility, and remaining tiny metadata using real browser screenshots as acceptance evidence.
 
 ## Next Product Tasks
 
 1. Group video call browser smoke/e2e with two sessions or a mocked WebRTC/media boundary.
-2. Replace plaintext webhook secrets in SQLite with hashed secrets.
-3. Add browser/e2e coverage for webhook create -> HTTP POST -> group message.
+2. Add browser/e2e coverage for webhook create -> HTTP POST -> group message.
+3. Add webhook secret rotation and audit logging design before production use.
 4. Message input parity: up-arrow edit last message, slash commands, emoji shortcode expansion.
 5. Message list polish: date separators, timestamp hover, smoother new-message and conversation-switching transitions.
 6. Admin/security surface: 2FA plan, admin dashboard, audit log design, invite-code management hardening.
@@ -84,6 +89,14 @@ Record commands here when they are run for the current increment.
 
 | Date | Command | Result |
 |---|---|---|
+| 2026-05-23 | `cd backend; go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPlaintextSecretMigrationHashesExistingRows)"` | PASS |
+| 2026-05-23 | `cd backend; go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"` | PASS |
+| 2026-05-23 | `cd backend; go test ./handler -run TestWebhookHandlerVerifiesHashedSecret` | PASS |
+| 2026-05-23 | Searched security/docs/roadmap for stale plaintext webhook hardening wording | PASS, no stale matches |
+| 2026-05-23 | `cd backend; go test ./...` | PASS |
+| 2026-05-23 | `cd frontend; npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx` | PASS, 2 files / 39 tests |
+| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-23 | `git diff --check` | PASS |
 | 2026-05-23 | `cd backend; go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"` | PASS |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
 | 2026-05-23 | `cd frontend; npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx` | PASS |
