@@ -698,6 +698,7 @@ export function ChatInput({
           </svg>
         </button>
       </div>
+      )}
 
       {/* Recording indicator (replaces toolbar and input area when recording) */}
       {isRecording ? (
