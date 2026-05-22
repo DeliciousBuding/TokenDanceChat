@@ -62,7 +62,7 @@ export function ImageLightbox({ imageUrl, onClose }: ImageLightboxProps) {
       <div className="relative max-w-[90vw] max-h-[90vh] overflow-hidden">
         <img
           src={imageUrl}
-          alt=""
+          alt="Full-size image"
           className="max-w-full max-h-full object-contain cursor-grab transition-transform duration-200"
           style={{ transform: `scale(${scale})` }}
           onClick={(e) => e.stopPropagation()}
