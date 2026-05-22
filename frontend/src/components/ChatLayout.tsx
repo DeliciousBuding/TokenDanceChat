@@ -20,6 +20,7 @@ export function ChatLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [forwardTarget, setForwardTarget] = useState<import("@/lib/api").ChatMessage | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const {
     reset,
     currentChat,
@@ -34,7 +35,7 @@ export function ChatLayout() {
     setLatestMention,
     pinnedMessages,
   } = useChatStore();
-  const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, uploadImage, forwardMessage, markRead } =
+  const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, forwardMessage, markRead } =
     useWebSocket();
 
   // Mobile keyboard handling
@@ -72,6 +73,14 @@ export function ChatLayout() {
     };
   }, []);
 
+  // Auto-dismiss upload error toast
+  useEffect(() => {
+    if (uploadError) {
+      const timer = setTimeout(() => setUploadError(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [uploadError]);
+
   const handleDisconnect = useCallback(() => {
     disconnect();
     reset();
@@ -88,6 +97,27 @@ export function ChatLayout() {
     },
     [setReplyTo],
   );
+
+  const handleUpload = useCallback(async (file: File) => {
+    const url = await chatAPI.uploadImage(file);
+    if (!url) {
+      setUploadError("Upload failed");
+      useChatStore.getState().setPendingImage(null);
+      return;
+    }
+    const state = useChatStore.getState();
+    const isImage = file.type.startsWith("image/");
+    const fileMarkdown = isImage ? `![image](${url})` : `[${file.name}](${url})`;
+    if (state.currentChat.type === "dm") {
+      chatAPI.sendDMMessage(state.currentChat.username, fileMarkdown, state.replyTo || undefined);
+    } else if (state.currentChat.type === "group") {
+      chatAPI.sendGroupMessage(state.currentChat.name, fileMarkdown, state.replyTo || undefined);
+    } else {
+      chatAPI.sendMessage(fileMarkdown, state.replyTo || undefined);
+    }
+    state.setReplyTo(null);
+    state.setPendingImage(null);
+  }, []);
 
   const handleDelete = useCallback((messageId: string) => {
     chatAPI.deleteMessage(messageId);
@@ -429,7 +459,7 @@ export function ChatLayout() {
           <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} />
 
           {/* Chat input - fixed at bottom */}
-          <ChatInput onSend={sendHandler} onUpload={uploadImage} disabled={false} />
+          <ChatInput onSend={sendHandler} onUpload={handleUpload} disabled={false} />
         </div>
       </div>
 
@@ -450,6 +480,13 @@ export function ChatLayout() {
 
       {/* Search dialog (Ctrl+K) */}
       <SearchBar currentRoomID={currentRoomID} />
+
+      {/* Upload error toast */}
+      {uploadError && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-destructive text-destructive-foreground text-sm font-medium shadow-lg animate-slide-up whitespace-nowrap">
+          {uploadError}
+        </div>
+      )}
     </div>
   );
 }

@@ -225,13 +225,16 @@ export const MessageBubble = memo(function MessageBubble({
           if (part.type === "mention") {
             const isSelfMention = currentUsername === part.username;
             return (
-              <span
+              <button
                 key={i}
-                className={isSelfMention ? "mention-self" : "mention-other"}
+                onClick={() => setSelectedProfileUser(part.username)}
+                className={cn(
+                  "hover:underline cursor-pointer",
+                  isSelfMention ? "mention-self" : "mention-other",
+                )}
                 style={{
                   color: "oklch(71.2% 0.194 13.428)",
                   fontWeight: 500,
-                  cursor: "pointer",
                   ...(isSelfMention
                     ? {
                         backgroundColor: "oklch(71.2% 0.194 13.428 / 0.12)",
@@ -242,7 +245,7 @@ export const MessageBubble = memo(function MessageBubble({
                 }}
               >
                 @{part.username}
-              </span>
+              </button>
             );
           }
           // Text parts: may contain code blocks.
