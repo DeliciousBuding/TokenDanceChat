@@ -1,7 +1,7 @@
 # TokenDanceChat
 
-> 实时多人聊天室 — Go + WebSocket + SQLite + React 19  
-> Real-time chat with DMs, groups, AI bots, and PicoClaw Agent
+> AgentHub 技术栈验证项目 + 可玩 Demo
+> A playable IM demo for validating AgentHub's Hub, realtime, persistence, Agent interaction, and React client stack
 
 [![Status](https://img.shields.io/badge/status-active-brightgreen)](#)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
@@ -10,6 +10,22 @@
 [![Vite](https://img.shields.io/badge/Vite-6.4-646CFF?logo=vite)](https://vite.dev/)
 
 **Live**: [chat.vectorcontrol.tech](https://chat.vectorcontrol.tech)
+
+---
+
+## 项目定位 Positioning
+
+TokenDanceChat 是 [AgentHub](D:/Code/AgentHub/README.md) 的技术验证项目，不是独立于 AgentHub 的长期产品线。
+
+AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/微信里拉群一样组织 Claude Code、Codex、OpenCode、Reviewer、Orchestrator 等 Agent 协作。TokenDanceChat 先把其中的 Hub/IM 侧做成一个真实可玩的聊天 Demo，用来验证：
+
+- Go Hub Server + WebSocket typed events 是否能承载丰富 IM 协议；
+- SQLite + FTS5 是否足够支撑早期 Hub 持久化和搜索；
+- React 19 + Zustand + Vite 的客户端状态模型能否跑通复杂聊天工作台；
+- Agent 是否能以联系人、群成员、@mention、DM 和流式回复的形态自然嵌入 IM；
+- 哪些能力是 AgentHub 可复用的平台原语，哪些只是为了 Demo 更好玩。
+
+更完整的验证边界见 [docs/agenthub-validation.md](./docs/agenthub-validation.md)。
 
 ---
 
@@ -77,8 +93,11 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 | 前端 Frontend | React 19 · Vite 6 · Tailwind CSS 4 · Zustand 5 |
 | 后端 Backend | Go 1.25 · gorilla/websocket · net/http |
 | 数据库 Database | SQLite (modernc.org/sqlite, pure Go) + FTS5 |
+| 实时协议 Realtime | WebSocket typed events |
 | LLM | Anthropic Messages API + OpenAI Chat Completions |
 | 部署 Deploy | Docker · Nginx |
+
+这些选择对应 AgentHub 主仓库的技术方向：React 19、Go、SQLite/FTS5、REST JSON API、WebSocket typed events，以及 Hub/IM/Agent 交互模型。TokenDanceChat 先在 Demo 中验证这些组合的工程可行性。
 
 ---
 
@@ -156,7 +175,7 @@ TokenDanceChat/
 
 ## 部署 Deploy
 
-生产部署文档见 [HANDOFF.md](./HANDOFF.md)（运维信息）和 [deploy.md](./deploy.md)（通用流程）。
+通用部署流程见 [deploy.md](./deploy.md)。项目级 Agent 接手规则见 [AGENTS.md](./AGENTS.md)，持续目标和当前增量见 [ROADMAP.md](./ROADMAP.md)。
 
 ---
 
@@ -164,8 +183,11 @@ TokenDanceChat/
 
 | 文档 | 内容 |
 |------|------|
-| [ROADMAP.md](./ROADMAP.md) | 路线图与版本规划 |
-| [HANDOFF.md](./HANDOFF.md) | 生产运维交接（服务器、部署、故障记录） |
+| [docs/agenthub-validation.md](./docs/agenthub-validation.md) | AgentHub 验证项目定位、技术栈映射、Demo 边界 |
+| [docs/engineering-goal.md](./docs/engineering-goal.md) | 长期工程目标、设计原则、验证要求 |
+| [docs/webhook-integration.md](./docs/webhook-integration.md) | 群组传入 Webhook 协议、安全契约、验证命令 |
+| [ROADMAP.md](./ROADMAP.md) | 持续目标账本、当前增量、验证记录 |
+| [AGENTS.md](./AGENTS.md) | 项目级 Agent 接手规则、架构地图、验证命令 |
 | [deploy.md](./deploy.md) | 通用部署流程 |
 | [SECURITY.md](./SECURITY.md) | 安全审计报告 |
 | [CHANGELOG.md](./CHANGELOG.md) | 变更日志 |

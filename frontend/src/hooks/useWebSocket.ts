@@ -101,6 +101,9 @@ export function useWebSocket() {
     updateFolder,
     addConversationToFolder,
     removeConversationFromFolder,
+    setGroupWebhooks,
+    addGroupWebhook,
+    removeGroupWebhook,
     setIncomingCall,
     setActiveCall,
     setGroupInfoPanel,
@@ -1047,35 +1050,71 @@ export function useWebSocket() {
     );
 
     // Translation result
-    chatAPI.on("translate_result", (msg: WSMessage) => {
-      const { message_id, content } = msg as {
-        type: string; message_id: string; content: string;
-      };
-      if (message_id && content) {
-        setTranslation(message_id, content);
-      }
-    }),
+    unsubs.push(
+      chatAPI.on("translate_result", (msg: WSMessage) => {
+        const { message_id, content } = msg as {
+          type: string; message_id: string; content: string;
+        };
+        if (message_id && content) {
+          setTranslation(message_id, content);
+        }
+      }),
+    );
 
-    // Webhook created
-    chatAPI.on("webhook_created", (msg: WSMessage) => {
-      const { group: grp } = msg as { type: string; group: string; id: string; content: string };
-      if (grp) {
-        setGroupInfoPanel(grp); // Refresh group info to show new webhook
-      }
-    }),
+    // Webhook management
+    unsubs.push(
+      chatAPI.on("webhook_created", (msg: WSMessage) => {
+        const { group: grp, id, content, secret } = msg as {
+          type: string;
+          group: string;
+          id: string;
+          content: string;
+          secret?: string;
+        };
+        if (grp && id && content && secret) {
+          addGroupWebhook(grp, {
+            id,
+            group_name: grp,
+            url: content,
+            secret,
+            created_by: useChatStore.getState().username,
+            created_at: Date.now(),
+          });
+          setGroupInfoPanel(grp);
+          chatAPI.sendWebhookList(grp);
+        }
+      }),
+    );
 
-    // Webhook deleted
-    chatAPI.on("webhook_deleted", (msg: WSMessage) => {
-      const { group: grp } = msg as { type: string; group: string; id: string };
-      if (grp) {
-        setGroupInfoPanel(grp);
-      }
-    }),
+    unsubs.push(
+      chatAPI.on("webhook_deleted", (msg: WSMessage) => {
+        const { group: grp, id } = msg as { type: string; group: string; id: string };
+        if (grp && id) {
+          removeGroupWebhook(grp, id);
+          setGroupInfoPanel(grp);
+          chatAPI.sendWebhookList(grp);
+        }
+      }),
+    );
 
-    // Webhook list
-    chatAPI.on("webhook_list", (_msg: WSMessage) => {
-      // Handled by GroupInfoPanel's local state via direct WS response
-    }),
+    unsubs.push(
+      chatAPI.on("webhook_list", (msg: WSMessage) => {
+        const { group: grp, webhooks } = msg as {
+          type: string;
+          group: string;
+          webhooks?: {
+            id: string;
+            group_name: string;
+            url: string;
+            created_by: string;
+            created_at: number;
+          }[];
+        };
+        if (grp && Array.isArray(webhooks)) {
+          setGroupWebhooks(grp, webhooks);
+        }
+      }),
+    );
 
     // Scheduled message confirm
     unsubs.push(
@@ -1255,7 +1294,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setIncomingCall, setActiveCall, setNotificationPrefs]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setGroupWebhooks, addGroupWebhook, removeGroupWebhook, setIncomingCall, setActiveCall, setNotificationPrefs, setTranslation, setGroupInfoPanel]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

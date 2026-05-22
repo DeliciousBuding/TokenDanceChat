@@ -32,7 +32,7 @@ ssh user@server "
   docker run -d --name tokendancechat \
     --network host \
     -v /path/to/data:/app/data \
-    -e CHAT_ADDR=:3221 \
+    -e CHAT_ADDR=:3000 \
     -e CHAT_DB_PATH=/app/data/chat.db \
     -e CHAT_FRONTEND_DIR=/app/frontend/dist \
     --env-file /path/to/secrets.env \
@@ -77,7 +77,7 @@ server {
     ssl_certificate_key /path/to/privkey.pem;
 
     location / {
-        proxy_pass http://127.0.0.1:3221;
+        proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

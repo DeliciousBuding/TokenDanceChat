@@ -1,5 +1,18 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { X, MoreVertical, Shield, User, Crown, LogOut, Pencil } from "lucide-react";
+import {
+  X,
+  MoreVertical,
+  Shield,
+  User,
+  Crown,
+  LogOut,
+  Pencil,
+  Plus,
+  Copy,
+  Trash2,
+  KeyRound,
+  Webhook,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
@@ -12,8 +25,15 @@ interface GroupInfoPanelProps {
 
 export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
   const { t } = useTranslation();
-  const { username, groups } = useChatStore();
+  const {
+    username,
+    groups,
+    groupWebhooks,
+    latestCreatedWebhook,
+    clearLatestCreatedWebhook,
+  } = useChatStore();
   const [isVisible, setIsVisible] = useState(false);
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     targetUser: string;
     x: number;
@@ -43,6 +63,24 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
     }
   }, [renameOpen]);
 
+  const group = groupName ? groups[groupName] : undefined;
+  const webhooks = groupName ? groupWebhooks[groupName] ?? [] : [];
+  const createdWebhook =
+    groupName && latestCreatedWebhook?.group_name === groupName
+      ? latestCreatedWebhook
+      : null;
+  const currentUserRole =
+    group && username ? group.roles[username] ?? "member" : "member";
+  const isOwner = currentUserRole === "owner";
+  const isAdmin = currentUserRole === "admin";
+  const canManageWebhooks = isOwner || isAdmin;
+
+  useEffect(() => {
+    if (groupName && canManageWebhooks) {
+      chatAPI.sendWebhookList(groupName);
+    }
+  }, [groupName, canManageWebhooks]);
+
   // Close context menu on scroll or click outside.
   useEffect(() => {
     const handler = () => setContextMenu(null);
@@ -59,14 +97,25 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
     setTimeout(onClose, 200);
   }, [onClose]);
 
-  if (!groupName) return null;
+  const handleWebhookCreate = useCallback(() => {
+    if (!groupName || !canManageWebhooks) return;
+    chatAPI.sendWebhookCreate(groupName);
+  }, [groupName, canManageWebhooks]);
 
-  const group = groups[groupName];
-  if (!group) return null;
+  const handleWebhookDelete = useCallback((webhookID: string) => {
+    if (!groupName || !canManageWebhooks) return;
+    chatAPI.sendWebhookDelete(groupName, webhookID);
+  }, [groupName, canManageWebhooks]);
 
-  const currentUserRole = group.roles[username] ?? "member";
-  const isOwner = currentUserRole === "owner";
-  const isAdmin = currentUserRole === "admin";
+  const handleCopy = useCallback(async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedValue(value);
+      window.setTimeout(() => setCopiedValue(null), 1500);
+    } catch {
+      setCopiedValue(null);
+    }
+  }, []);
 
   const handleKick = useCallback((targetUser: string) => {
     setContextMenu(null);
@@ -74,22 +123,25 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
   }, []);
 
   const confirmKick = useCallback(() => {
-    if (!confirmAction?.target) return;
+    if (!groupName || !confirmAction?.target) return;
     chatAPI.sendGroupKick(groupName, confirmAction.target);
     setConfirmAction(null);
   }, [groupName, confirmAction]);
 
   const handleSetRole = useCallback((targetUser: string, role: string) => {
+    if (!groupName) return;
     setContextMenu(null);
     chatAPI.sendGroupSetRole(groupName, targetUser, role);
   }, [groupName]);
 
   const handleTransfer = useCallback((newOwner: string) => {
+    if (!groupName) return;
     setContextMenu(null);
     chatAPI.sendGroupTransfer(groupName, newOwner);
   }, [groupName]);
 
   const handleRename = useCallback(() => {
+    if (!groupName) return;
     const trimmed = newName.trim();
     if (!trimmed || trimmed === groupName) {
       setRenameOpen(false);
@@ -105,6 +157,7 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
   }, []);
 
   const confirmLeave = useCallback(() => {
+    if (!groupName) return;
     chatAPI.sendGroupLeave(groupName);
     setConfirmAction(null);
     handleClose();
@@ -145,7 +198,8 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
   };
 
   // Sort members: owner first, then admins, then members alphabetically.
-  const sortedMembers = [...group.members].sort((a, b) => {
+  const sortedMembers = [...(group?.members ?? [])].sort((a, b) => {
+    if (!group) return 0;
     const roleA = group.roles[a] ?? "member";
     const roleB = group.roles[b] ?? "member";
     const order: Record<string, number> = { owner: 0, admin: 1, member: 2 };
@@ -159,6 +213,14 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
     if (isOwner) return true;
     if (isAdmin && targetRole === "member") return true;
     return false;
+  };
+
+  if (!groupName || !group) return null;
+
+  const buildWebhookURL = (url: string, secret?: string) => {
+    const path = `/api/webhook/${url}${secret ? `?secret=${secret}` : ""}`;
+    if (typeof window === "undefined") return path;
+    return `${window.location.origin}${path}`;
   };
 
   return (
@@ -250,6 +312,120 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
             {t("group.leaveGroup")}
           </button>
         </div>
+
+        {/* Webhook management */}
+        {canManageWebhooks && (
+          <div className="border-b border-border/50 px-4 py-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <Webhook className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-foreground">
+                    {t("group.webhooks")}
+                  </p>
+                  <p className="truncate text-[10px] text-muted-foreground">
+                    {t("group.webhookDescription")}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleWebhookCreate}
+                className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-primary px-2 py-1.5 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Plus className="h-3 w-3" />
+                {t("group.createWebhook")}
+              </button>
+            </div>
+
+            {createdWebhook && (
+              <div className="rounded-lg border border-primary/25 bg-primary/5 p-2.5">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
+                    <p className="text-[11px] font-medium text-foreground">
+                      {t("group.webhookSecretOnce")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearLatestCreatedWebhook}
+                    className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={t("thread.close")}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(buildWebhookURL(createdWebhook.url, createdWebhook.secret))}
+                    className="flex w-full items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-left hover:bg-muted/60"
+                    title={buildWebhookURL(createdWebhook.url, createdWebhook.secret)}
+                  >
+                    <Copy className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-[10px] font-mono text-foreground">
+                      {buildWebhookURL(createdWebhook.url, createdWebhook.secret)}
+                    </span>
+                  </button>
+                  <p className="text-[10px] text-muted-foreground">
+                    {copiedValue === buildWebhookURL(createdWebhook.url, createdWebhook.secret)
+                      ? t("group.webhookCopied")
+                      : t("group.webhookSecretHint")}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              {webhooks.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border px-2 py-2 text-[11px] text-muted-foreground">
+                  {t("group.noWebhooks")}
+                </p>
+              ) : (
+                webhooks.map((webhook) => {
+                  const displayURL = buildWebhookURL(webhook.url);
+                  return (
+                    <div
+                      key={webhook.id}
+                      className="rounded-lg border border-border bg-card/60 px-2 py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(displayURL)}
+                          className="min-w-0 flex-1 truncate rounded-md bg-muted/50 px-2 py-1 text-left font-mono text-[10px] text-foreground hover:bg-muted"
+                          title={displayURL}
+                        >
+                          {displayURL}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(displayURL)}
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          aria-label={t("group.copyWebhook")}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleWebhookDelete(webhook.id)}
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          aria-label={t("group.deleteWebhook")}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                        {t("group.webhookCreatedBy", { name: webhook.created_by || "-" })}
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Member list */}
         <div className="flex-1 overflow-y-auto px-2 py-2">

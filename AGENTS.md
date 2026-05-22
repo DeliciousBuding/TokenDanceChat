@@ -1,0 +1,134 @@
+# TokenDanceChat Agent Guide
+
+Last updated: 2026-05-23
+
+## Project Identity
+
+TokenDanceChat is the AgentHub technical validation project and a playable demo.
+
+It validates AgentHub's Hub/IM stack through a real chat product surface:
+
+- Go Hub Server with typed WebSocket events.
+- SQLite/FTS5 persistence for early Hub state.
+- React 19 + Zustand + Vite client state and UI.
+- Agent-as-contact UX through TokenBot, PicoClaw, mentions, DMs, group collaboration, and streaming replies.
+
+Do not treat this repository as a separate long-term product architecture. The reusable lessons should feed back into `D:\Code\AgentHub`.
+
+## Durable State
+
+- `ROADMAP.md` is the long-running goal ledger. Update it after every meaningful implementation, verification, or decision.
+- `AGENTS.md` is the project-level operating guide. Keep it useful enough that a new agent can continue without a separate transfer document.
+- `docs/agenthub-validation.md` explains the AgentHub mapping.
+- `docs/engineering-goal.md` explains the long-term engineering goal and verification expectations.
+- `docs/webhook-integration.md` documents the current webhook protocol.
+
+Do not create a separate project transfer file. If takeover context is needed, fold it into this file or `ROADMAP.md`.
+
+## Current Priorities
+
+1. Keep the AgentHub validation framing explicit in docs and implementation choices.
+2. Improve Feishu/Lark chat parity and Telegram-grade chat experience.
+3. Prefer typed WebSocket protocol changes with backend and frontend tests.
+4. Harden security-sensitive contracts before broad UI polish.
+5. Keep the demo runnable, testable, and deployable.
+
+## Current Increment
+
+Webhook security and usability are the active completed slice in this worktree:
+
+- `webhook_create` returns the generated secret once to the creator.
+- `webhook_list` is owner/admin-only and redacts secrets.
+- `store.Webhook.Secret` has `json:"-"`.
+- Group admins can create, list, copy, and delete webhooks in `GroupInfoPanel`.
+- Frontend state stores one-time webhook secrets separately from redacted webhook lists.
+
+Remaining follow-ups:
+
+- Hash webhook secrets in SQLite instead of storing plaintext.
+- Add browser/e2e coverage for webhook create -> HTTP POST -> group message.
+- Add group video call multi-browser smoke/e2e.
+
+## Architecture Map
+
+```text
+backend/main.go                 HTTP + WS entrypoint
+backend/handler/handler.go      REST handlers, auth, uploads, webhook HTTP ingress
+backend/hub/hub.go              Store interface, Message struct, Hub state
+backend/hub/client.go           WebSocket message handlers
+backend/store/store.go          SQLite schema and CRUD
+frontend/src/lib/api.ts         typed frontend API/WebSocket helper
+frontend/src/hooks/useWebSocket.ts
+frontend/src/stores/chatStore.ts
+frontend/src/components/ChatLayout.tsx
+frontend/src/components/GroupInfoPanel.tsx
+```
+
+## Verification Commands
+
+Run focused checks first, then broad checks before claiming completion.
+
+```powershell
+# Backend focused webhook regression
+cd D:\Code\Projects\TokenDanceChat\backend
+go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"
+
+# Backend full
+go test ./...
+
+# Frontend focused webhook/store regression
+cd D:\Code\Projects\TokenDanceChat\frontend
+npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx
+
+# Frontend type check
+npx tsc --noEmit
+
+# Repository diff hygiene
+cd D:\Code\Projects\TokenDanceChat
+git diff --check
+```
+
+## Engineering Rules
+
+- Use `rg` first for search; fall back to PowerShell only if needed.
+- Use `apply_patch` for manual edits.
+- Do not revert user or unrelated changes.
+- Do not stage or commit unrelated temporary files such as `tmp_*`.
+- Prefer small, verified increments over broad rewrites.
+- For behavior changes, add focused tests before or alongside implementation.
+- Keep docs synchronized when protocol, security, deployment, or AgentHub validation behavior changes.
+
+## Frontend Rules
+
+- Preserve the existing React 19 + Zustand + Tailwind patterns.
+- Chat UI should feel restrained and work-focused like Feishu/Lark, with smooth message flow like Telegram.
+- Use `lucide-react` icons for controls where possible.
+- Do not use marketing-style landing pages or decorative cards for core app surfaces.
+- Keep text within controls and panels; test dense UI on narrow widths when practical.
+- For security-sensitive UI such as webhook secrets, keep one-time secrets separate from normal persistent state.
+
+## Backend Rules
+
+- Treat WebSocket message types as API contracts.
+- Keep store behavior explicit and covered by tests when durable state changes.
+- Do not expose secrets in list responses or broad DTOs.
+- Prefer role checks at the handler boundary for group/admin actions.
+- For production hardening, hash webhook secrets and use constant-time comparison.
+
+## Security And Ops Boundaries
+
+- Do not commit production hostnames, IPs, SSH aliases, container names, internal ports, live data paths, credentials, API keys, or deployment logs.
+- Public docs may describe deployment shape and verification commands, not private infrastructure details.
+- `SECURITY.md` tracks security posture; keep it current when security-sensitive behavior changes.
+
+## AgentHub Mapping
+
+| TokenDanceChat area | AgentHub destination | Maturity |
+|---|---|---|
+| `backend/hub/` typed event handlers | Hub Server event contract | Demo-validated |
+| `backend/store/` SQLite persistence | Hub Server persistence patterns | Demo-validated |
+| `frontend/src/lib/api.ts` and `useWebSocket` | Shared realtime client helpers | Demo-validated |
+| Group roles, webhooks, calls | IM collaboration primitives | Under validation |
+| TokenBot/PicoClaw surfaces | Agent-as-contact UX | Under validation |
+
+When a feature proves a reusable primitive, document the lesson in `docs/agenthub-validation.md` or a focused `docs/` file.

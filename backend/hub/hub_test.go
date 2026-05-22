@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -11,8 +12,11 @@ import (
 
 // mockStore is a test implementation of the Store interface.
 type mockStore struct {
-	messages []StoredMessage
-	rooms    []StoredRoom
+	messages    []StoredMessage
+	rooms       []StoredRoom
+	groupRoles  map[string]string
+	webhooks    []store.Webhook
+	webhookByID map[string]store.Webhook
 }
 
 func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error) {
@@ -35,7 +39,7 @@ func (m *mockStore) GetRoomMessages(roomID string, limit int, before int64) []St
 }
 
 func (m *mockStore) MarkDeleted(msgID string) error { return nil }
-func (m *mockStore) TotalUsers() int64 { return 0 }
+func (m *mockStore) TotalUsers() int64              { return 0 }
 func (m *mockStore) TotalMessages() int64 {
 	return int64(len(m.messages))
 }
@@ -83,36 +87,36 @@ func (m *mockStore) GetMessageByID(messageID string) (StoredMessage, error) {
 func (m *mockStore) SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error) {
 	return nil, nil
 }
-func (m *mockStore) AddFriend(username, friend string) error            { return nil }
-func (m *mockStore) RemoveFriend(username, friend string) error          { return nil }
-func (m *mockStore) GetAllFriends() map[string][]string                   { return nil }
-func (m *mockStore) GetFriends(username string) []string                  { return nil }
-func (m *mockStore) CreateGroup(name, creator string) error               { return nil }
-func (m *mockStore) AddGroupMember(groupName, username string) error     { return nil }
-func (m *mockStore) RemoveGroupMember(groupName, username string) error  { return nil }
-func (m *mockStore) GetGroupMembers(groupName string) []string           { return nil }
-func (m *mockStore) GetAllGroups() map[string][]string                    { return nil }
+func (m *mockStore) AddFriend(username, friend string) error                      { return nil }
+func (m *mockStore) RemoveFriend(username, friend string) error                   { return nil }
+func (m *mockStore) GetAllFriends() map[string][]string                           { return nil }
+func (m *mockStore) GetFriends(username string) []string                          { return nil }
+func (m *mockStore) CreateGroup(name, creator string) error                       { return nil }
+func (m *mockStore) AddGroupMember(groupName, username string) error              { return nil }
+func (m *mockStore) RemoveGroupMember(groupName, username string) error           { return nil }
+func (m *mockStore) GetGroupMembers(groupName string) []string                    { return nil }
+func (m *mockStore) GetAllGroups() map[string][]string                            { return nil }
 func (m *mockStore) GetUndeliveredDMs(username string, limit int) []StoredMessage { return nil }
-func (m *mockStore) MarkMessagesDelivered(ids []string) error                       { return nil }
-func (m *mockStore) BlockUser(username, blocked string) error                      { return nil }
-func (m *mockStore) UnblockUser(username, blocked string) error                    { return nil }
-func (m *mockStore) IsBlocked(username, blocked string) bool                        { return false }
-func (m *mockStore) GetBlockedUsers(username string) []string                       { return nil }
-func (m *mockStore) PinMessage(roomID, messageID, pinnedBy string) error           { return nil }
-func (m *mockStore) UnpinMessage(roomID, messageID string) error                   { return nil }
-func (m *mockStore) GetPinnedMessages(roomID string) []StoredMessage               { return nil }
-func (m *mockStore) ArchiveConversation(username, key string) error { return nil }
-func (m *mockStore) UnarchiveConversation(username, key string) error { return nil }
-func (m *mockStore) ListArchivedConversations(username string) []string { return nil }
-func (m *mockStore) IsConversationArchived(username, key string) bool { return false }
-func (m *mockStore) Ping() error                                                   { return nil }
-func (m *mockStore) PinConversation(username, key string) error                       { return nil }
-func (m *mockStore) UnpinConversation(username, key string) error                     { return nil }
-func (m *mockStore) ListPinnedConversations(username string) []string                 { return nil }
-func (m *mockStore) MuteConversation(username, key string) error                      { return nil }
-func (m *mockStore) UnmuteConversation(username, key string) error                    { return nil }
-func (m *mockStore) ListMutedConversations(username string) []string                  { return nil }
-func (m *mockStore) IsConversationMuted(username, key string) bool                    { return false }
+func (m *mockStore) MarkMessagesDelivered(ids []string) error                     { return nil }
+func (m *mockStore) BlockUser(username, blocked string) error                     { return nil }
+func (m *mockStore) UnblockUser(username, blocked string) error                   { return nil }
+func (m *mockStore) IsBlocked(username, blocked string) bool                      { return false }
+func (m *mockStore) GetBlockedUsers(username string) []string                     { return nil }
+func (m *mockStore) PinMessage(roomID, messageID, pinnedBy string) error          { return nil }
+func (m *mockStore) UnpinMessage(roomID, messageID string) error                  { return nil }
+func (m *mockStore) GetPinnedMessages(roomID string) []StoredMessage              { return nil }
+func (m *mockStore) ArchiveConversation(username, key string) error               { return nil }
+func (m *mockStore) UnarchiveConversation(username, key string) error             { return nil }
+func (m *mockStore) ListArchivedConversations(username string) []string           { return nil }
+func (m *mockStore) IsConversationArchived(username, key string) bool             { return false }
+func (m *mockStore) Ping() error                                                  { return nil }
+func (m *mockStore) PinConversation(username, key string) error                   { return nil }
+func (m *mockStore) UnpinConversation(username, key string) error                 { return nil }
+func (m *mockStore) ListPinnedConversations(username string) []string             { return nil }
+func (m *mockStore) MuteConversation(username, key string) error                  { return nil }
+func (m *mockStore) UnmuteConversation(username, key string) error                { return nil }
+func (m *mockStore) ListMutedConversations(username string) []string              { return nil }
+func (m *mockStore) IsConversationMuted(username, key string) bool                { return false }
 
 func (m *mockStore) UpsertUserProfile(username, displayName, avatarURL, bio, status string, lastSeen int64) error {
 	return nil
@@ -120,57 +124,113 @@ func (m *mockStore) UpsertUserProfile(username, displayName, avatarURL, bio, sta
 func (m *mockStore) GetUserProfile(username string) (*store.UserProfile, error) {
 	return &store.UserProfile{Username: username}, nil
 }
-func (m *mockStore) UpdateUserStatus(username, status string) error { return nil }
-func (m *mockStore) UpdateUserLastSeen(username string) error { return nil }
-func (m *mockStore) GetAllUserProfiles() ([]store.UserProfile, error) { return nil, nil }
-func (m *mockStore) CreatePoll(poll *Poll) error { return nil }
-func (m *mockStore) GetPoll(pollID string) (*Poll, error) { return nil, nil }
+func (m *mockStore) UpdateUserStatus(username, status string) error                 { return nil }
+func (m *mockStore) UpdateUserLastSeen(username string) error                       { return nil }
+func (m *mockStore) GetAllUserProfiles() ([]store.UserProfile, error)               { return nil, nil }
+func (m *mockStore) CreatePoll(poll *Poll) error                                    { return nil }
+func (m *mockStore) GetPoll(pollID string) (*Poll, error)                           { return nil, nil }
 func (m *mockStore) VotePoll(pollID string, username string, optionIndex int) error { return nil }
-func (m *mockStore) ClosePoll(pollID string) error { return nil }
-func (m *mockStore) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error { return nil }
-func (m *mockStore) GetNotificationPrefs(username, key string) (int64, bool, error) { return 0, true, nil }
+func (m *mockStore) ClosePoll(pollID string) error                                  { return nil }
+func (m *mockStore) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error {
+	return nil
+}
+func (m *mockStore) GetNotificationPrefs(username, key string) (int64, bool, error) {
+	return 0, true, nil
+}
 func (m *mockStore) ListNotificationPrefs(username string) []store.NotificationPref { return nil }
-func (m *mockStore) GetThreadMessages(parentMessageID string) []StoredMessage { return nil }
-func (m *mockStore) GetThreadReplyCount(parentMessageID string) int { return 0 }
-func (m *mockStore) ScheduleMessage(msg store.ScheduledMessage) error { return nil }
-func (m *mockStore) GetPendingScheduledMessages(ctx context.Context) ([]store.ScheduledMessage, error) { return nil, nil }
-func (m *mockStore) MarkScheduledSent(id string) error { return nil }
+func (m *mockStore) GetThreadMessages(parentMessageID string) []StoredMessage       { return nil }
+func (m *mockStore) GetThreadReplyCount(parentMessageID string) int                 { return 0 }
+func (m *mockStore) ScheduleMessage(msg store.ScheduledMessage) error               { return nil }
+func (m *mockStore) GetPendingScheduledMessages(ctx context.Context) ([]store.ScheduledMessage, error) {
+	return nil, nil
+}
+func (m *mockStore) MarkScheduledSent(id string) error                { return nil }
 func (m *mockStore) CancelScheduledMessage(id, username string) error { return nil }
-func (m *mockStore) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) { return nil, nil }
-func (m *mockStore) ExportMessages(ctx context.Context, roomID, toUser, groupName, format string, limit int) ([]StoredMessage, error) { return nil, nil }
-func (m *mockStore) DeleteGroup(groupName string) error { return nil }
+func (m *mockStore) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) {
+	return nil, nil
+}
+func (m *mockStore) ExportMessages(ctx context.Context, roomID, toUser, groupName, format string, limit int) ([]StoredMessage, error) {
+	return nil, nil
+}
+func (m *mockStore) DeleteGroup(groupName string) error                                { return nil }
 func (m *mockStore) GetGroupMembersWithRoles(groupName string) []store.GroupMemberInfo { return nil }
-func (m *mockStore) UpdateGroupName(oldName, newName string) error { return nil }
-func (m *mockStore) SetGroupMemberRole(groupName, username, role string) error { return nil }
-func (m *mockStore) KickGroupMember(groupName, username string) error { return nil }
-func (m *mockStore) TransferGroupOwnership(groupName, newOwner string) error { return nil }
-func (m *mockStore) LeaveGroup(groupName, username string) error { return nil }
-func (m *mockStore) GetGroupInfo(groupName string) (*store.GroupInfo, error) { return &store.GroupInfo{Name: groupName}, nil }
-func (m *mockStore) GetGroupMemberRole(groupName, username string) (string, error) { return "member", nil }
-func (m *mockStore) GetGroupOwner(groupName string) (string, error) { return "", nil }
-func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error { return nil }
-func (m *mockStore) ListCustomEmojis(roomID string) ([]store.CustomEmoji, error) { return nil, nil }
-func (m *mockStore) DeleteCustomEmoji(name, username string) error { return nil }
-func (m *mockStore) SearchCustomEmojis(query string) ([]store.CustomEmoji, error) { return nil, nil }
-func (m *mockStore) LogCall(call store.CallRecord) error { return nil }
+func (m *mockStore) UpdateGroupName(oldName, newName string) error                     { return nil }
+func (m *mockStore) SetGroupMemberRole(groupName, username, role string) error         { return nil }
+func (m *mockStore) KickGroupMember(groupName, username string) error                  { return nil }
+func (m *mockStore) TransferGroupOwnership(groupName, newOwner string) error           { return nil }
+func (m *mockStore) LeaveGroup(groupName, username string) error                       { return nil }
+func (m *mockStore) GetGroupInfo(groupName string) (*store.GroupInfo, error) {
+	return &store.GroupInfo{Name: groupName}, nil
+}
+func (m *mockStore) GetGroupMemberRole(groupName, username string) (string, error) {
+	if m.groupRoles != nil {
+		if role := m.groupRoles[groupName+":"+username]; role != "" {
+			return role, nil
+		}
+		if role := m.groupRoles[username]; role != "" {
+			return role, nil
+		}
+	}
+	return "member", nil
+}
+func (m *mockStore) GetGroupOwner(groupName string) (string, error)                     { return "", nil }
+func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error            { return nil }
+func (m *mockStore) ListCustomEmojis(roomID string) ([]store.CustomEmoji, error)        { return nil, nil }
+func (m *mockStore) DeleteCustomEmoji(name, username string) error                      { return nil }
+func (m *mockStore) SearchCustomEmojis(query string) ([]store.CustomEmoji, error)       { return nil, nil }
+func (m *mockStore) LogCall(call store.CallRecord) error                                { return nil }
 func (m *mockStore) UpdateCallRecord(id, status string, startedAt, endedAt int64) error { return nil }
-func (m *mockStore) GetCallHistory(username string, limit int) ([]store.CallRecord, error) { return nil, nil }
+func (m *mockStore) GetCallHistory(username string, limit int) ([]store.CallRecord, error) {
+	return nil, nil
+}
 func (m *mockStore) RegisterUser(username, passwordHash, inviteCode string) error { return nil }
-func (m *mockStore) VerifyUser(username, password string) (bool, error) { return true, nil }
-func (m *mockStore) GenerateInviteCode(creator string, maxUses int) (string, error) { return "TESTCODE", nil }
-func (m *mockStore) ListInviteCodes(creator string) ([]store.InviteCodeRecord, error) { return nil, nil }
+func (m *mockStore) VerifyUser(username, password string) (bool, error)           { return true, nil }
+func (m *mockStore) GenerateInviteCode(creator string, maxUses int) (string, error) {
+	return "TESTCODE", nil
+}
+func (m *mockStore) ListInviteCodes(creator string) ([]store.InviteCodeRecord, error) {
+	return nil, nil
+}
 func (m *mockStore) ValidateInviteCode(code string) (bool, error) { return true, nil }
-func (m *mockStore) CreateChatFolder(username, name string) (*ChatFolder, error) { return &ChatFolder{ID: "f1", Name: name}, nil }
-func (m *mockStore) DeleteChatFolder(username, id string) error { return nil }
+func (m *mockStore) CreateChatFolder(username, name string) (*ChatFolder, error) {
+	return &ChatFolder{ID: "f1", Name: name}, nil
+}
+func (m *mockStore) DeleteChatFolder(username, id string) error          { return nil }
 func (m *mockStore) RenameChatFolder(username, id, newName string) error { return nil }
-func (m *mockStore) AddToFolder(folderID, key string) error { return nil }
-func (m *mockStore) RemoveFromFolder(folderID, key string) error { return nil }
-func (m *mockStore) ListFolders(username string) ([]ChatFolder, error) { return nil, nil }
-func (m *mockStore) GetFolderItems(folderID string) ([]string, error) { return nil, nil }
+func (m *mockStore) AddToFolder(folderID, key string) error              { return nil }
+func (m *mockStore) RemoveFromFolder(folderID, key string) error         { return nil }
+func (m *mockStore) ListFolders(username string) ([]ChatFolder, error)   { return nil, nil }
+func (m *mockStore) GetFolderItems(folderID string) ([]string, error)    { return nil, nil }
 
-func (m *mockStore) CreateWebhook(id, groupName, url, secret, createdBy string) error { return nil }
+func (m *mockStore) CreateWebhook(id, groupName, url, secret, createdBy string) error {
+	w := store.Webhook{
+		ID:        id,
+		GroupName: groupName,
+		URL:       url,
+		Secret:    secret,
+		CreatedBy: createdBy,
+		CreatedAt: time.Now().UnixMilli(),
+	}
+	m.webhooks = append(m.webhooks, w)
+	if m.webhookByID == nil {
+		m.webhookByID = make(map[string]store.Webhook)
+	}
+	m.webhookByID[id] = w
+	return nil
+}
 func (m *mockStore) DeleteWebhook(id, groupName string) error { return nil }
-func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error) { return nil, nil }
+func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error) {
+	if len(m.webhooks) == 0 {
+		return nil, nil
+	}
+	result := make([]store.Webhook, 0, len(m.webhooks))
+	for _, w := range m.webhooks {
+		if w.GroupName == groupName {
+			result = append(result, w)
+		}
+	}
+	return result, nil
+}
 func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error) { return nil, nil }
 
 func TestNew(t *testing.T) {
@@ -197,6 +257,120 @@ func TestNew(t *testing.T) {
 	}
 	if h.StartTime.IsZero() {
 		t.Error("expected non-zero StartTime")
+	}
+}
+
+func TestWebhookCreateReturnsSecretToCreator(t *testing.T) {
+	ms := &mockStore{groupRoles: map[string]string{"alice": "admin"}}
+	h := New(ms, nil, nil, "")
+	client := &Client{
+		hub:      h,
+		send:     make(chan []byte, 1),
+		username: "alice",
+	}
+
+	client.handleWebhookCreate(Message{Group: "team"})
+
+	var got Message
+	select {
+	case payload := <-client.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode webhook_create response: %v", err)
+		}
+	default:
+		t.Fatal("expected webhook_created response")
+	}
+	if got.Type != "webhook_created" {
+		t.Fatalf("response type = %q, want webhook_created", got.Type)
+	}
+	if got.Group != "team" {
+		t.Fatalf("group = %q, want team", got.Group)
+	}
+	if got.ID == "" {
+		t.Fatal("expected webhook id")
+	}
+	if got.Content == "" {
+		t.Fatal("expected webhook URL in content")
+	}
+	if got.Secret == "" {
+		t.Fatal("expected one-time webhook secret in response")
+	}
+}
+
+func TestWebhookListDoesNotExposeSecrets(t *testing.T) {
+	ms := &mockStore{
+		groupRoles: map[string]string{"alice": "admin"},
+		webhooks: []store.Webhook{
+			{
+				ID:        "wh-1",
+				GroupName: "team",
+				URL:       "wh-1-url",
+				Secret:    "secret-value",
+				CreatedBy: "alice",
+				CreatedAt: 12345,
+			},
+		},
+	}
+	h := New(ms, nil, nil, "")
+	client := &Client{
+		hub:      h,
+		send:     make(chan []byte, 1),
+		username: "alice",
+	}
+
+	client.handleWebhookList(Message{Group: "team"})
+
+	var raw map[string]interface{}
+	select {
+	case payload := <-client.send:
+		if err := json.Unmarshal(payload, &raw); err != nil {
+			t.Fatalf("failed to decode webhook_list response: %v", err)
+		}
+	default:
+		t.Fatal("expected webhook_list response")
+	}
+	if raw["type"] != "webhook_list" {
+		t.Fatalf("response type = %v, want webhook_list", raw["type"])
+	}
+	encoded, err := json.Marshal(raw["webhooks"])
+	if err != nil {
+		t.Fatalf("failed to encode webhooks payload: %v", err)
+	}
+	if strings.Contains(string(encoded), "secret-value") || strings.Contains(string(encoded), "Secret") || strings.Contains(string(encoded), "secret") {
+		t.Fatalf("webhook_list leaked secret data: %s", string(encoded))
+	}
+	if !strings.Contains(string(encoded), "wh-1-url") {
+		t.Fatalf("webhook_list omitted public URL: %s", string(encoded))
+	}
+}
+
+func TestWebhookListRequiresGroupAdmin(t *testing.T) {
+	ms := &mockStore{
+		groupRoles: map[string]string{"alice": "member"},
+		webhooks: []store.Webhook{
+			{
+				ID:        "wh-1",
+				GroupName: "team",
+				URL:       "wh-1-url",
+				Secret:    "secret-value",
+				CreatedBy: "owner",
+				CreatedAt: 12345,
+			},
+		},
+	}
+	h := New(ms, nil, nil, "")
+	client := &Client{
+		hub:      h,
+		send:     make(chan []byte, 1),
+		username: "alice",
+	}
+
+	client.handleWebhookList(Message{Group: "team"})
+
+	select {
+	case payload := <-client.send:
+		t.Fatalf("expected no webhook_list response for non-admin, got %s", string(payload))
+	default:
 	}
 }
 

@@ -131,21 +131,21 @@ describe("Sidebar", () => {
 
     it("点击用户打开上下文菜单（发送消息）", () => {
       renderSidebar();
-      const aliceBtn = screen.getByLabelText("alice");
+      const aliceBtn = screen.getByRole("button", { name: "alice" });
       fireEvent.click(aliceBtn);
       expect(screen.getByText("发送消息")).toBeTruthy();
     });
 
     it("上下文菜单包含添加好友选项", () => {
       renderSidebar();
-      const aliceBtn = screen.getByLabelText("alice");
+      const aliceBtn = screen.getByRole("button", { name: "alice" });
       fireEvent.click(aliceBtn);
       expect(screen.getByText("添加好友")).toBeTruthy();
     });
 
     it("点击发送消息触发 onStartDM", () => {
       const { onStartDM } = renderSidebar();
-      const aliceBtn = screen.getByLabelText("alice");
+      const aliceBtn = screen.getByRole("button", { name: "alice" });
       fireEvent.click(aliceBtn);
       fireEvent.click(screen.getByText("发送消息"));
 
@@ -317,10 +317,10 @@ describe("Sidebar", () => {
   });
 
   describe("Footer", () => {
-    it("显示连接信息 '已连接为'", () => {
+    it("在 footer 显示当前用户和设置入口", () => {
       renderSidebar();
-      const footer = screen.getByText(/已连接为/, { exact: false });
-      expect(footer).toBeTruthy();
+      expect(screen.getAllByText("testuser").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByLabelText("打开设置")).toBeTruthy();
     });
 
     it("显示在线指示点", () => {
