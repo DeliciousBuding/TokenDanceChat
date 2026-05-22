@@ -288,7 +288,7 @@ export function ChatInput({
       textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`;
       textareaRef.current.style.overflowY = "hidden";
     }
-  }, [content, disabled, connected, onSend]);
+  }, [content, disabled, connected, onSend, typingContext, draftStorageKey]);
 
   // Insert @username at cursor position.
   const insertMention = useCallback(
