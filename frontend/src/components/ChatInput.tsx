@@ -1,10 +1,13 @@
 import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent, type ClipboardEvent } from "react";
-import { Send, Loader2, X, ImagePlus, Paperclip, Mic, Square } from "lucide-react";
+import { Send, Loader2, X, ImagePlus, Paperclip, Mic, Square, Bold, Italic, Strikethrough, Code, Quote, Link, Eye, EyeOff } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI, type ChatMessage, type TypingContext } from "@/lib/api";
 import { mentionableAssistants } from "@/lib/assistantRegistry";
+import { ScheduleButton } from "./ScheduleButton";
 
 const EMOJI_MAP: Record<string, string> = {
   smile: "😄", laugh: "😆", heart: "❤️", thumbsup: "👍", thumbsdown: "👎",
@@ -77,6 +80,7 @@ export function ChatInput({
   const sendBtnRef = useRef<HTMLButtonElement>(null);
   const sendingRef = useRef(false);
   const typingSentRef = useRef(false);
+  const [hasScheduled, setHasScheduled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -84,6 +88,12 @@ export function ChatInput({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onUploadRef = useRef(onUpload);
   onUploadRef.current = onUpload;
+
+  // Formatting toolbar state
+  const [previewOn, setPreviewOn] = useState(false);
+  const [linkInputVisible, setLinkInputVisible] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const linkInputRef = useRef<HTMLInputElement>(null);
 
   // Slide-to-cancel gesture
   const [slideCancelOffset, setSlideCancelOffset] = useState(0);
@@ -121,6 +131,7 @@ export function ChatInput({
   const dragCounter = useRef(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number } | null>(null);
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
 
   // Estimate image file size from data URL
@@ -369,7 +380,7 @@ export function ChatInput({
           e.preventDefault();
           const file = item.getAsFile();
           if (file) {
-            if (file.size > 20 * 1024 * 1024) return;
+            if (file.size > 50 * 1024 * 1024) return;
             const reader = new FileReader();
             reader.onload = () => {
               setPendingImage(reader.result as string);
@@ -388,7 +399,7 @@ export function ChatInput({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (file.size > 20 * 1024 * 1024) return;
+      if (file.size > 50 * 1024 * 1024) return;
       const reader = new FileReader();
       reader.onload = () => {
         setPendingImage(reader.result as string);
@@ -404,8 +415,10 @@ export function ChatInput({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file || !onUpload) return;
-      if (file.size > 20 * 1024 * 1024) return;
+      if (file.size > 50 * 1024 * 1024) return;
+      setUploadProgress({ fileName: file.name, progress: 0 });
       onUpload(file);
+      setTimeout(() => setUploadProgress(null), 3000);
       if (fileInputRef.current) fileInputRef.current.value = "";
     },
     [onUpload],
@@ -428,38 +441,176 @@ export function ChatInput({
       });
   }, [pendingImage, onUpload]);
 
-  // Markdown formatting helpers
-  const insertMarkdown = useCallback((wrapper: string, placeholder: string) => {
+  // ── Markdown formatting helpers ──
+
+  /** Wrap the current selection with before/after text. If nothing selected, insert placeholder and place cursor inside. */
+  const wrapSelection = useCallback(
+    (before: string, after: string, placeholder: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selected = content.slice(start, end);
+      const replacement = selected
+        ? before + selected + after
+        : before + placeholder + after;
+      const newContent =
+        content.slice(0, start) + replacement + content.slice(end);
+      setContent(newContent);
+      requestAnimationFrame(() => {
+        textarea.focus();
+        if (selected) {
+          const cursor = start + replacement.length;
+          textarea.setSelectionRange(cursor, cursor);
+        } else {
+          const cursor = start + before.length;
+          const selEnd = cursor + placeholder.length;
+          textarea.setSelectionRange(cursor, selEnd);
+        }
+      });
+    },
+    [content],
+  );
+
+  const insertQuote = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const hasSelection = start !== end;
+    let newContent: string;
+    let newCursor: number;
+    if (hasSelection) {
+      const before = content.slice(0, start);
+      const selected = content.slice(start, end);
+      const after = content.slice(end);
+      const quoted = selected
+        .split("\n")
+        .map((line) => "> " + line)
+        .join("\n");
+      newContent = before + quoted + after;
+      newCursor = start + quoted.length;
+    } else {
+      const beforeCursor = content.slice(0, start);
+      const lastNewline = beforeCursor.lastIndexOf("\n");
+      const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
+      newContent =
+        content.slice(0, lineStart) + "> " + content.slice(lineStart);
+      newCursor = start + 2;
+    }
+    setContent(newContent);
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(newCursor, newCursor);
+    });
+  }, [content]);
+
+  const handleFormatBold = useCallback(
+    () => wrapSelection("**", "**", "bold"),
+    [wrapSelection],
+  );
+  const handleFormatItalic = useCallback(
+    () => wrapSelection("*", "*", "italic"),
+    [wrapSelection],
+  );
+  const handleFormatStrikethrough = useCallback(
+    () => wrapSelection("~~", "~~", "strike"),
+    [wrapSelection],
+  );
+  const handleFormatCode = useCallback(
+    () => wrapSelection("`", "`", "code"),
+    [wrapSelection],
+  );
+
+  const handleFormatLink = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const selected = content.slice(start, end);
-    const replacement = selected ? wrapper.replace('text', selected) : wrapper.replace('text', placeholder);
-    const newContent = content.slice(0, start) + replacement + content.slice(end);
-    setContent(newContent);
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const cursor = start + replacement.length;
-      textarea.setSelectionRange(cursor, cursor);
-    });
+    if (selected) {
+      // Selection exists: show inline URL input
+      setLinkInputVisible(true);
+      setLinkUrl("");
+      requestAnimationFrame(() => {
+        linkInputRef.current?.focus();
+      });
+    } else {
+      // No selection: show inline URL input for manual entry
+      setLinkInputVisible(true);
+      setLinkUrl("");
+      requestAnimationFrame(() => {
+        linkInputRef.current?.focus();
+      });
+    }
   }, [content]);
 
-  const insertQuote = useCallback(() => {
+  const commitLink = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const cursorPos = textarea.selectionStart;
-    const beforeCursor = content.slice(0, cursorPos);
-    const lastNewline = beforeCursor.lastIndexOf('\n');
-    const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
-    const newContent = content.slice(0, lineStart) + '> ' + content.slice(lineStart);
+    const url = linkUrl.trim();
+    if (!url) {
+      setLinkInputVisible(false);
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = content.slice(start, end);
+    const replacement = selected
+      ? `[${selected}](${url})`
+      : `[link](${url})`;
+    const newContent =
+      content.slice(0, start) + replacement + content.slice(end);
     setContent(newContent);
+    setLinkInputVisible(false);
+    setLinkUrl("");
     requestAnimationFrame(() => {
       textarea.focus();
-      const newCursor = cursorPos + 2;
-      textarea.setSelectionRange(newCursor, newCursor);
+      const cursor = selected
+        ? start + replacement.length
+        : start + replacement.indexOf("](") + 1;
+      const selEnd = selected ? cursor : start + replacement.indexOf("](");
+      textarea.setSelectionRange(
+        selected ? cursor : selEnd,
+        selected ? cursor : cursor,
+      );
     });
-  }, [content]);
+  }, [content, linkUrl]);
+
+  const cancelLink = useCallback(() => {
+    setLinkInputVisible(false);
+    setLinkUrl("");
+    textareaRef.current?.focus();
+  }, []);
+
+  // Keyboard shortcuts for formatting
+  useEffect(() => {
+    const handleGlobalShortcut = (e: globalThis.KeyboardEvent) => {
+      const textarea = textareaRef.current;
+      if (!textarea || document.activeElement !== textarea) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+
+      if (e.key === "b" || e.key === "B") {
+        e.preventDefault();
+        handleFormatBold();
+      } else if (e.key === "i" || e.key === "I") {
+        e.preventDefault();
+        handleFormatItalic();
+      } else if (e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        handleFormatLink();
+      } else if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        handleFormatCode();
+      } else if (mod && e.shiftKey && (e.key === "x" || e.key === "X")) {
+        e.preventDefault();
+        handleFormatStrikethrough();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalShortcut);
+    return () => window.removeEventListener("keydown", handleGlobalShortcut);
+  }, [handleFormatBold, handleFormatItalic, handleFormatStrikethrough, handleFormatCode, handleFormatLink]);
 
   const startRecording = useCallback(async () => {
     if (isRecording) return;
@@ -571,6 +722,40 @@ export function ChatInput({
     // Allow sending again after a short delay.
     setTimeout(() => { sendingRef.current = false; }, 500);
   }, [content, disabled, connected, onSend, typingContext, draftStorageKey, editingMessageId]);
+
+  // Schedule a message for future delivery.
+  const handleSchedule = useCallback(
+    (sendAt: number) => {
+      if (!content.trim() || !connected) return;
+      const trimmed = content.trim();
+      const state = useChatStore.getState();
+      const currentRoomId = state.currentRoomID;
+
+      if (currentChat.type === "dm") {
+        chatAPI.sendScheduleMessage(trimmed, sendAt, currentRoomId, currentChat.username, "", state.replyTo?.id);
+      } else if (currentChat.type === "group") {
+        chatAPI.sendScheduleMessage(trimmed, sendAt, currentRoomId, "", currentChat.name, state.replyTo?.id);
+      } else {
+        chatAPI.sendScheduleMessage(trimmed, sendAt, currentRoomId, "", "", state.replyTo?.id);
+      }
+
+      setContent("");
+      setReplyTo(null);
+      setHasScheduled(true);
+      try { localStorage.removeItem(draftStorageKey); } catch { /* ignore */ }
+      if (typingSentRef.current) {
+        chatAPI.sendTypingStop(typingContext);
+        typingSentRef.current = false;
+      }
+      if (textareaRef.current) {
+        textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`;
+        textareaRef.current.style.overflowY = "hidden";
+      }
+      // Reset scheduled indicator after 2 sec
+      setTimeout(() => setHasScheduled(false), 2500);
+    },
+    [content, connected, currentChat, setReplyTo, draftStorageKey, typingContext],
+  );
 
   // Insert @username at cursor position.
   const insertMention = useCallback(
@@ -852,7 +1037,7 @@ export function ChatInput({
         const files = e.dataTransfer?.files;
         if (!files || files.length === 0) return;
         const file = files[0];
-        if (file.size > 20 * 1024 * 1024) {
+        if (file.size > 50 * 1024 * 1024) {
           setDragError(t("input.fileTooLarge"));
           return;
         }
@@ -861,7 +1046,10 @@ export function ChatInput({
           reader.onload = () => setPendingImage(reader.result as string);
           reader.readAsDataURL(file);
         } else if (onUpload) {
+          setUploadProgress({ fileName: file.name, progress: 0 });
           onUpload(file);
+          // Clear progress after a short delay (upload completes async in parent)
+          setTimeout(() => setUploadProgress(null), 3000);
         }
       }}
     >
@@ -979,74 +1167,138 @@ export function ChatInput({
 
       {/* Markdown formatting toolbar */}
       {!isRecording && (
-      <div className="flex items-center gap-0.5 px-4 pt-2 pb-1">
-        {/* Bold */}
-        <button
-          type="button"
-          onClick={() => insertMarkdown('**text**', 'bold')}
-          disabled={disabled}
-          aria-label="Bold"
-          className="rounded-md p-1.5 min-h-[44px] min-w-[44px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 2h3.5a2 2 0 0 1 0 4H4V2Zm0 4h4a2 2 0 0 1 0 4H4V6Z"/>
-          </svg>
-        </button>
-        {/* Italic */}
-        <button
-          type="button"
-          onClick={() => insertMarkdown('*text*', 'italic')}
-          disabled={disabled}
-          aria-label="Italic"
-          className="rounded-md p-1.5 min-h-[44px] min-w-[44px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="5.5" y1="2" x2="9.5" y2="2"/>
-            <line x1="7" y1="2" x2="4.5" y2="12"/>
-            <line x1="4" y1="12" x2="8" y2="12"/>
-          </svg>
-        </button>
-        {/* Strikethrough */}
-        <button
-          type="button"
-          onClick={() => insertMarkdown('~~text~~', 'strike')}
-          disabled={disabled}
-          aria-label="Strikethrough"
-          className="rounded-md p-1.5 min-h-[44px] min-w-[44px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="2" y1="7" x2="12" y2="7"/>
-            <path d="M4 4a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v.5a1.5 1.5 0 0 1-1.5 1.5H4"/>
-            <path d="M5 10a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-.5"/>
-          </svg>
-        </button>
-        {/* Code */}
-        <button
-          type="button"
-          onClick={() => insertMarkdown('`text`', 'code')}
-          disabled={disabled}
-          aria-label="Code"
-          className="rounded-md p-1.5 min-h-[44px] min-w-[44px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="5,4 2,7 5,10"/>
-            <polyline points="9,4 12,7 9,10"/>
-            <line x1="8" y1="3" x2="6" y2="11"/>
-          </svg>
-        </button>
-        {/* Quote */}
-        <button
-          type="button"
-          onClick={insertQuote}
-          disabled={disabled}
-          aria-label="Quote"
-          className="rounded-md p-1.5 min-h-[44px] min-w-[44px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-            <path d="M3 3.5h2V7H4.5v.75H6v2H3V3.5Zm6 0h2V7h-.5v.75H12v2H9V3.5Z"/>
-          </svg>
-        </button>
-      </div>
+        <div className="flex items-center gap-0.5 border-b border-border bg-muted/50 px-2 py-1">
+          <button
+            type="button"
+            onClick={handleFormatBold}
+            disabled={disabled}
+            aria-label={t("editor.bold")}
+            title={t("editor.bold") + " (Ctrl+B)"}
+            className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Bold className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleFormatItalic}
+            disabled={disabled}
+            aria-label={t("editor.italic")}
+            title={t("editor.italic") + " (Ctrl+I)"}
+            className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Italic className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleFormatStrikethrough}
+            disabled={disabled}
+            aria-label={t("editor.strikethrough")}
+            title={t("editor.strikethrough")}
+            className="h-8 w-8 hidden sm:flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Strikethrough className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleFormatCode}
+            disabled={disabled}
+            aria-label={t("editor.code")}
+            title={t("editor.code") + " (Ctrl+E)"}
+            className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Code className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={insertQuote}
+            disabled={disabled}
+            aria-label={t("editor.quote")}
+            title={t("editor.quote")}
+            className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Quote className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Link button with inline URL input */}
+          <div className="relative flex items-center">
+            <button
+              type="button"
+              onClick={handleFormatLink}
+              disabled={disabled}
+              aria-label={t("editor.link")}
+              title={t("editor.link") + " (Ctrl+K)"}
+              className={cn(
+                "h-8 w-8 hidden sm:flex items-center justify-center rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed",
+                linkInputVisible
+                  ? "bg-accent text-primary"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <Link className="h-3.5 w-3.5" />
+            </button>
+            {linkInputVisible && (
+              <div className="flex items-center gap-1 animate-scale-in ml-1">
+                <input
+                  ref={linkInputRef}
+                  type="url"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitLink();
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      cancelLink();
+                    }
+                  }}
+                  placeholder={t("editor.linkUrl")}
+                  className="h-8 w-44 rounded-md border border-border bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                />
+                <button
+                  type="button"
+                  onClick={commitLink}
+                  className="h-8 w-8 flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:brightness-110 transition-colors"
+                  aria-label="OK"
+                >
+                  <Send className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelLink}
+                  className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  aria-label="Cancel"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Preview toggle */}
+          <button
+            type="button"
+            onClick={() => setPreviewOn((p) => !p)}
+            disabled={disabled}
+            aria-label={t("editor.preview")}
+            title={t("editor.preview")}
+            className={cn(
+              "h-8 w-8 flex items-center justify-center rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed",
+              previewOn
+                ? "bg-accent text-primary"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+          >
+            {previewOn ? (
+              <EyeOff className="h-3.5 w-3.5" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
       )}
 
       {/* Recording indicator (replaces toolbar and input area when recording) */}
@@ -1294,13 +1546,20 @@ export function ChatInput({
               />
             </div>
 
+            {/* Schedule button */}
+            <ScheduleButton
+              onSchedule={handleSchedule}
+              disabled={disabled || !hasContent}
+              scheduled={hasScheduled}
+            />
+
             {/* Send button */}
             <button
               ref={sendBtnRef}
               onClick={handleSend}
               disabled={disabled || !hasContent}
               aria-label={
-                disabled ? t("join.buttonConnecting") : t("input.placeholder")
+                disabled ? t("join.buttonConnecting") : hasScheduled ? t("schedule.schedule") : t("input.placeholder")
               }
               className={cn(
                 "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-all duration-300 ease-out",
@@ -1329,6 +1588,17 @@ export function ChatInput({
         </>
       )}
 
+      {/* Markdown preview */}
+      {!isRecording && previewOn && content.trim() && (
+        <div className="border-t border-border bg-muted/30 px-4 py-3">
+          <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 prose-p:my-1 prose-headings:my-1.5 prose-code:before:content-none prose-code:after:content-none prose-code:bg-accent/60 prose-code:rounded prose-code:px-1 prose-code:py-0.5 prose-pre:bg-muted prose-blockquote:border-l-primary/50">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {content}
+            </ReactMarkdown>
+          </div>
+        </div>
+      )}
+
       {/* Character count */}
       {!isRecording && content.length > 0 && (
         <div className="flex justify-end px-4 pb-1">
@@ -1348,10 +1618,34 @@ export function ChatInput({
 
       {/* Drag-and-drop overlay */}
       {isDragOver && (
-        <div className="file-drop-overlay">
-          <span className="text-sm font-medium text-muted-foreground">
-            {t("input.dropFiles")}
-          </span>
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary/50 rounded-lg m-1">
+          <div className="flex flex-col items-center gap-2 text-primary/70">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span className="text-sm font-medium">{t("file.dropFilesHere")}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Upload progress bar */}
+      {uploadProgress && (
+        <div className="px-4 pt-2 animate-slide-up">
+          <div className="flex items-center gap-3 rounded-lg bg-muted/30 border border-border px-3 py-2">
+            <Loader2 className="h-4 w-4 text-primary animate-spin flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-foreground/70 truncate">{uploadProgress.fileName}</p>
+              <p className="text-[10px] text-muted-foreground/50">{t("file.uploading")}</p>
+            </div>
+            <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden flex-shrink-0">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${Math.min(uploadProgress.progress, 100)}%` }}
+              />
+            </div>
+          </div>
         </div>
       )}
 

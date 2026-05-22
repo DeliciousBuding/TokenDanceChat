@@ -191,6 +191,7 @@ export interface LinkPreviewData {
   description: string;
   image: string;
   url: string;
+  site_name?: string;
 }
 
 // Search types
@@ -210,6 +211,50 @@ export interface WSForwardEvent extends WSMessage {
   content: string;
   id: string;
   timestamp: number;
+}
+
+// Scheduled message types
+export interface ScheduledMessage {
+  id: string;
+  username: string;
+  content: string;
+  room_id: string;
+  to_user: string;
+  group_name: string;
+  reply_to_id: string;
+  thread_id: string;
+  send_at: number;
+  created_at: number;
+  sent: number;
+}
+
+export interface WSScheduledMessageConfirm extends WSMessage {
+  type: "scheduled_message_confirm";
+  id: string;
+  content: string;
+  username: string;
+  timestamp: number;
+  room_id?: string;
+  to?: string;
+  group?: string;
+}
+
+export interface WSScheduledMessagesList extends WSMessage {
+  type: "scheduled_messages_list";
+  messages: ScheduledMessage[];
+}
+
+export interface WSScheduledMessageSent extends WSMessage {
+  type: "scheduled_message_sent";
+  id: string;
+  content: string;
+  username: string;
+  timestamp: number;
+}
+
+export interface WSScheduledMessageCancelled extends WSMessage {
+  type: "scheduled_message_cancelled";
+  id: string;
 }
 
 // Reaction types
@@ -632,6 +677,27 @@ class ChatAPI {
     this.send({ type: "status_update", status });
   }
 
+  sendScheduleMessage(content: string, sendAt: number, roomId?: string, to?: string, group?: string, replyToId?: string, threadId?: string): void {
+    this.send({
+      type: "schedule_message",
+      content,
+      timestamp: sendAt,
+      room_id: roomId ?? "",
+      to: to ?? "",
+      group: group ?? "",
+      reply_to_id: replyToId ?? "",
+      thread_id: threadId ?? "",
+    });
+  }
+
+  sendCancelScheduledMessage(id: string): void {
+    this.send({ type: "cancel_scheduled_message", id });
+  }
+
+  sendScheduledMessagesList(): void {
+    this.send({ type: "scheduled_messages_list" });
+  }
+
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
     try {
       const resp = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
@@ -653,6 +719,16 @@ class ChatAPI {
     } catch {
       return null;
     }
+  }
+
+  async exportChat(conversation: string, format: 'json' | 'text', username?: string): Promise<Blob> {
+    const params = new URLSearchParams({ conversation, format });
+    if (username) params.set("username", username);
+    const resp = await fetch(`/api/export?${params}`);
+    if (!resp.ok) {
+      throw new Error("Export failed");
+    }
+    return await resp.blob();
   }
 
   async searchMessages(query: string, roomID?: string): Promise<SearchResult[]> {

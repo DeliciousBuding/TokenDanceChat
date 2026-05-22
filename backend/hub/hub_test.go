@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -130,6 +131,12 @@ func (m *mockStore) GetNotificationPrefs(username, key string) (int64, bool, err
 func (m *mockStore) ListNotificationPrefs(username string) []store.NotificationPref { return nil }
 func (m *mockStore) GetThreadMessages(parentMessageID string) []StoredMessage { return nil }
 func (m *mockStore) GetThreadReplyCount(parentMessageID string) int { return 0 }
+func (m *mockStore) ScheduleMessage(msg store.ScheduledMessage) error { return nil }
+func (m *mockStore) GetPendingScheduledMessages(ctx context.Context) ([]store.ScheduledMessage, error) { return nil, nil }
+func (m *mockStore) MarkScheduledSent(id string) error { return nil }
+func (m *mockStore) CancelScheduledMessage(id, username string) error { return nil }
+func (m *mockStore) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) { return nil, nil }
+func (m *mockStore) ExportMessages(ctx context.Context, roomID, toUser, groupName, format string, limit int) ([]StoredMessage, error) { return nil, nil }
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}

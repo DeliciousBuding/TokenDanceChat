@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, RoomInfo, UserStatus } from "@/lib/api";
+import type { ChatMessage, RoomInfo, UserStatus, ScheduledMessage } from "@/lib/api";
 
 const MESSAGE_CAP = 500;
 
@@ -132,6 +132,9 @@ interface ChatState {
   // User profiles
   userProfiles: Record<string, UserProfile>;
 
+  // Scheduled messages
+  scheduledMessages: ScheduledMessage[];
+
   // Actions
   setView: (view: ViewState) => void;
   setUsername: (username: string) => void;
@@ -184,6 +187,8 @@ interface ChatState {
   setUserProfile: (profile: UserProfile) => void;
   removeUserProfile: (username: string) => void;
   updateUserProfileStatus: (username: string, status: string) => void;
+  setScheduledMessages: (messages: ScheduledMessage[]) => void;
+  removeScheduledMessage: (id: string) => void;
   reset: () => void;
 }
 
@@ -218,6 +223,7 @@ export const useChatStore = create<ChatState>((set) => ({
   archivedConversations: [],
   lightboxImage: null,
   userProfiles: {},
+  scheduledMessages: [],
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
@@ -421,6 +427,11 @@ export const useChatStore = create<ChatState>((set) => ({
         },
       };
     }),
+  setScheduledMessages: (scheduledMessages) => set({ scheduledMessages }),
+  removeScheduledMessage: (id) =>
+    set((state) => ({
+      scheduledMessages: state.scheduledMessages.filter((m) => m.id !== id),
+    })),
   reset: () =>
     set({
       view: "join",
@@ -453,5 +464,6 @@ export const useChatStore = create<ChatState>((set) => ({
       archivedConversations: [],
       lightboxImage: null,
       userProfiles: {},
+      scheduledMessages: [],
     }),
 }));

@@ -4,6 +4,7 @@ import {
   chatAPI,
   type WSMessage,
   type ChatMessage,
+  type ScheduledMessage,
   type WSChatMessage,
   type WSHistoryMessage,
   type WSUserEvent,
@@ -82,6 +83,8 @@ export function useWebSocket() {
     setMutedConversations,
     setNotificationPrefs,
     setArchivedConversations,
+    setScheduledMessages,
+    removeScheduledMessage,
   } = useChatStore();
 
   // Check if a conversation is muted, considering both legacy mutedConversations
@@ -863,6 +866,63 @@ export function useWebSocket() {
       }),
     );
 
+    // Scheduled message confirm
+    unsubs.push(
+      chatAPI.on("scheduled_message_confirm", (msg: WSMessage) => {
+        const m = msg as {
+          type: string; id: string; content: string; username: string;
+          timestamp: number; room_id?: string; to?: string; group?: string;
+        };
+        if (m.id) {
+          const newScheduled: ScheduledMessage = {
+            id: m.id,
+            username: m.username,
+            content: m.content,
+            room_id: m.room_id ?? "",
+            to_user: m.to ?? "",
+            group_name: m.group ?? "",
+            reply_to_id: "",
+            thread_id: "",
+            send_at: m.timestamp,
+            created_at: Date.now(),
+            sent: 0,
+          };
+          const state = useChatStore.getState();
+          setScheduledMessages([newScheduled, ...state.scheduledMessages]);
+        }
+      }),
+    );
+
+    // Scheduled messages list
+    unsubs.push(
+      chatAPI.on("scheduled_messages_list", (msg: WSMessage) => {
+        const m = msg as { type: string; messages: ScheduledMessage[] };
+        if (m.messages) {
+          setScheduledMessages(m.messages);
+        }
+      }),
+    );
+
+    // Scheduled message sent by server
+    unsubs.push(
+      chatAPI.on("scheduled_message_sent", (msg: WSMessage) => {
+        const m = msg as { type: string; id: string; content: string; username: string; timestamp: number };
+        if (m.id) {
+          removeScheduledMessage(m.id);
+        }
+      }),
+    );
+
+    // Scheduled message cancelled
+    unsubs.push(
+      chatAPI.on("scheduled_message_cancelled", (msg: WSMessage) => {
+        const m = msg as { type: string; id: string };
+        if (m.id) {
+          removeScheduledMessage(m.id);
+        }
+      }),
+    );
+
     // Periodic cleanup of stale stream accumulators (bot crash/disconnect).
     const streamCleanupTimer = setInterval(() => {
       const now = Date.now();
@@ -880,7 +940,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

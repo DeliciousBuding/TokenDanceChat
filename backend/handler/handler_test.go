@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -141,6 +142,12 @@ func (m *mockStore) CreatePoll(poll *hub.Poll) error { return nil }
 func (m *mockStore) GetPoll(pollID string) (*hub.Poll, error) { return nil, nil }
 func (m *mockStore) VotePoll(pollID string, username string, optionIndex int) error { return nil }
 func (m *mockStore) ClosePoll(pollID string) error { return nil }
+func (m *mockStore) ScheduleMessage(msg store.ScheduledMessage) error { return nil }
+func (m *mockStore) GetPendingScheduledMessages(ctx context.Context) ([]store.ScheduledMessage, error) { return nil, nil }
+func (m *mockStore) MarkScheduledSent(id string) error { return nil }
+func (m *mockStore) CancelScheduledMessage(id, username string) error { return nil }
+func (m *mockStore) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) { return nil, nil }
+func (m *mockStore) ExportMessages(ctx context.Context, roomID, toUser, groupName, format string, limit int) ([]hub.StoredMessage, error) { return nil, nil }
 func (m *mockStore) GetThreadMessages(parentMessageID string) []hub.StoredMessage { return nil }
 func (m *mockStore) GetThreadReplyCount(parentMessageID string) int { return 0 }
 

@@ -225,6 +225,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	mux.HandleFunc("/api/link-preview", hdlr.LinkPreview)
 	mux.HandleFunc("/api/upload", hdlr.UploadImage)
 	mux.HandleFunc("/api/search", hdlr.Search)
+	mux.HandleFunc("/api/export", hdlr.ExportMessages)
 	mux.HandleFunc("/uploads/", hdlr.ServeUpload)
 	mux.HandleFunc("/ws", hdlr.HandleWebSocket)
 

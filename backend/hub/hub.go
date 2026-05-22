@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -30,6 +31,9 @@ type Poll = store.Poll
 
 // UserProfile is an alias for store.UserProfile.
 type UserProfile = store.UserProfile
+
+// ScheduledMessage is an alias for store.ScheduledMessage.
+type ScheduledMessage = store.ScheduledMessage
 
 // Store defines the interface for message persistence.
 type Store interface {
@@ -117,6 +121,16 @@ type Store interface {
 	GetPoll(pollID string) (*Poll, error)
 	VotePoll(pollID string, username string, optionIndex int) error
 	ClosePoll(pollID string) error
+
+	// Scheduled messages
+	ScheduleMessage(msg ScheduledMessage) error
+	GetPendingScheduledMessages(ctx context.Context) ([]ScheduledMessage, error)
+	MarkScheduledSent(id string) error
+	CancelScheduledMessage(id, username string) error
+	GetUserScheduledMessages(username string) ([]ScheduledMessage, error)
+
+	// Export
+	ExportMessages(ctx context.Context, roomID, toUser, groupName, username string, limit int) ([]StoredMessage, error)
 }
 
 // Group represents a chat group.
@@ -376,6 +390,9 @@ func (h *Hub) Run() {
 	syncTicker := time.NewTicker(30 * time.Second)
 	defer syncTicker.Stop()
 
+	scheduleTicker := time.NewTicker(5 * time.Second)
+	defer scheduleTicker.Stop()
+
 	for {
 		select {
 		case client := <-h.register:
@@ -499,6 +516,9 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mu.RUnlock()
+
+		case <-scheduleTicker.C:
+			h.processScheduledMessages()
 		}
 	}
 }
@@ -1472,6 +1492,72 @@ func (h *Hub) ExecuteHubCommand(cmd HubCommand) HubCommandResponse {
 			Type:    cmd.Type,
 			Success: false,
 			Error:   fmt.Sprintf("未知命令类型: %s", cmd.Type),
+		}
+	}
+}
+
+// processScheduledMessages checks for pending scheduled messages and delivers them.
+func (h *Hub) processScheduledMessages() {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+
+	pending, err := h.store.GetPendingScheduledMessages(ctx)
+	if err != nil {
+		log.Printf("hub: get pending scheduled messages error: %v", err)
+		return
+	}
+
+	for _, sm := range pending {
+		// Insert as regular message using the scheduled message's timestamp.
+		storedMsg, err := h.store.InsertMessage(sm.Username, sm.Content, sm.ReplyToID, sm.RoomID, sm.ToUser, sm.GroupName, sm.ThreadID)
+		if err != nil {
+			log.Printf("hub: insert scheduled message error: %v", err)
+			continue
+		}
+
+		if err := h.store.MarkScheduledSent(sm.ID); err != nil {
+			log.Printf("hub: mark scheduled sent error: %v", err)
+		}
+
+		// Broadcast the message to appropriate recipients.
+		broadcastMsg, err := json.Marshal(Message{
+			Type:      "message",
+			ID:        storedMsg.ID,
+			Username:  storedMsg.Username,
+			Content:   storedMsg.Content,
+			Timestamp: storedMsg.Timestamp,
+			RoomID:    storedMsg.RoomID,
+			To:        storedMsg.ToUser,
+			Group:     storedMsg.GroupName,
+			ThreadID:  storedMsg.ThreadID,
+		})
+		if err != nil {
+			log.Printf("hub: marshal scheduled message error: %v", err)
+			continue
+		}
+
+		if sm.ToUser != "" {
+			// DM: send to recipient and echo to sender.
+			h.SendToAllSessions(sm.ToUser, broadcastMsg)
+			h.SendToAllSessions(sm.Username, broadcastMsg)
+			// Notify the sender their scheduled message was sent.
+			confirmMsg, _ := json.Marshal(Message{
+				Type:      "scheduled_message_sent",
+				ID:        sm.ID,
+				Content:   sm.Content,
+				Username:  sm.Username,
+				Timestamp: storedMsg.Timestamp,
+			})
+			h.SendToAllSessions(sm.Username, confirmMsg)
+		} else if sm.GroupName != "" {
+			h.SendToGroup(sm.GroupName, broadcastMsg)
+		} else if sm.RoomID != "" {
+			h.BroadcastToRoom(broadcastMsg, sm.RoomID)
+		} else {
+			select {
+			case h.broadcast <- broadcastMsg:
+			default:
+			}
 		}
 	}
 }
