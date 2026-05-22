@@ -399,12 +399,15 @@ export function ChatInput({
   }, [content]);
 
   const handleSend = useCallback(() => {
+    // Prevent double-send from rapid clicks or Enter+click firing.
+    if (sendingRef.current) return;
     const trimmed = content.trim();
     if (!trimmed || disabled) return;
     if (!connected) {
       // Keep content in input so user can retry when reconnected.
       return;
     }
+    sendingRef.current = true;
     onSend(trimmed);
     playSentSound();
     setContent("");
@@ -422,6 +425,8 @@ export function ChatInput({
       textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`;
       textareaRef.current.style.overflowY = "hidden";
     }
+    // Allow sending again after a short delay.
+    setTimeout(() => { sendingRef.current = false; }, 500);
   }, [content, disabled, connected, onSend, typingContext, draftStorageKey]);
 
   // Insert @username at cursor position.
