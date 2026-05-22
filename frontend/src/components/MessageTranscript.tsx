@@ -91,6 +91,7 @@ export function MessageTranscript({
   const [unreadLocalCount, setUnreadLocalCount] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [unreadBounce, setUnreadBounce] = useState(false);
   const hasMoreRef = useRef(true);
   const prevConversationRef = useRef("");
   const prevMessageCountRef = useRef(0);
@@ -206,7 +207,11 @@ export function MessageTranscript({
     const prev = prevMessageCountRef.current;
     const curr = effectiveMessages.length;
     if (curr > prev && !shouldAutoScroll) {
-      setUnreadLocalCount((c) => c + (curr - prev));
+      setUnreadLocalCount((c) => {
+        const next = c + (curr - prev);
+        if (next > 0 && c === 0) setUnreadBounce(true);
+        return next;
+      });
     }
     if (shouldAutoScroll) {
       setUnreadLocalCount(0);
@@ -240,6 +245,7 @@ export function MessageTranscript({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     setShouldAutoScroll(true);
     setUnreadLocalCount(0);
+    setUnreadBounce(false);
   }, []);
 
   const handleLoadOlder = useCallback(() => {
@@ -432,18 +438,43 @@ export function MessageTranscript({
       )}
 
       {!historyLoaded ? (
-        /* Loading skeleton */
+        /* Loading skeleton with shimmer */
         <div
-          className="flex flex-col items-center justify-center h-full gap-3 py-12"
+          className="flex flex-col items-center justify-center h-full gap-6 py-12"
           role="status"
           aria-label={t("transcript.loading")}
         >
+          {/* Shimmer skeleton bubbles */}
+          <div className="flex flex-col gap-4 w-full max-w-sm px-4">
+            {/* Received message skeleton */}
+            <div className="flex items-end gap-2">
+              <div className="h-8 w-8 rounded-full animate-shimmer flex-shrink-0" />
+              <div className="flex flex-col gap-1.5">
+                <div className="h-3 w-16 rounded-md animate-shimmer" />
+                <div className="h-8 w-48 rounded-2xl rounded-bl-md animate-shimmer" />
+              </div>
+            </div>
+            {/* Sent message skeleton */}
+            <div className="flex items-end gap-2 justify-end">
+              <div className="flex flex-col gap-1.5 items-end">
+                <div className="h-8 w-36 rounded-2xl rounded-br-md animate-shimmer" />
+              </div>
+              <div className="h-8 w-8 rounded-full animate-shimmer flex-shrink-0" />
+            </div>
+            {/* Received message skeleton */}
+            <div className="flex items-end gap-2">
+              <div className="h-8 w-8 rounded-full animate-shimmer flex-shrink-0" />
+              <div className="flex flex-col gap-1.5">
+                <div className="h-8 w-64 rounded-2xl rounded-bl-md animate-shimmer" />
+              </div>
+            </div>
+          </div>
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-2 w-2 rounded-full animate-pulse" style={{ backgroundColor: "oklch(71.2% 0.194 13.428 / 0.6)", animationDelay: `${i * 150}ms` }} />
+              <div key={i} className="typing-dot" style={{ animationDelay: `${i * 0.15}s` }} />
             ))}
           </div>
-          <p className="text-xs text-muted-foreground/60">
+          <p className="text-xs text-muted-foreground/50">
             {t("transcript.loading")}
           </p>
         </div>
@@ -468,7 +499,7 @@ export function MessageTranscript({
           if (currentChat.type === "group") {
             return (
               <div className="flex flex-col items-center justify-center h-full py-12 px-4">
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-[hsl(220,2.5%,20%)]">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-border">
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2% 0.194 13.428 / 0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                     <circle cx="9" cy="7" r="4" />
@@ -484,7 +515,7 @@ export function MessageTranscript({
           /* Public chat empty state */
           return (
             <div className="flex flex-col items-center justify-center h-full py-12 px-4">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-[hsl(220,2.5%,20%)] animate-chat-bubble">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-border animate-chat-bubble">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2% 0.194 13.428 / 0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
@@ -590,6 +621,7 @@ export function MessageTranscript({
                         isSelected={selectedIds.has(msg.id)}
                         onToggleSelect={toggleSelect}
                         onLongPress={enterSelectMode}
+                        staggerDelay={gi * 50}
                       />
                     );
                   })}
@@ -625,7 +657,11 @@ export function MessageTranscript({
       {!shouldAutoScroll && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-card border border-border shadow-lg hover:bg-accent hover:scale-105 hover:shadow-xl transition-all duration-200 animate-scale-in text-muted-foreground hover:text-foreground"
+          className={cn(
+            "absolute bottom-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-card border border-border shadow-lg hover:bg-accent hover:scale-105 hover:shadow-xl transition-all duration-200 text-muted-foreground hover:text-foreground",
+            unreadBounce && "animate-bounce-in",
+          )}
+          onAnimationEnd={() => setUnreadBounce(false)}
           aria-label={t("transcript.scrollToBottom")}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

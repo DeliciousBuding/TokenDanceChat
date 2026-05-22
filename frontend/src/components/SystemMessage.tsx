@@ -34,7 +34,8 @@ export const SystemMessage = memo(function SystemMessage({
 
   return (
     <div
-      className="flex items-center justify-center px-4 py-2 animate-fade-in"
+      className="flex items-center justify-center px-4 py-2"
+      style={{ animation: "fadeInGentle 0.5s ease-out" }}
       role="status"
       aria-label={displayText}
     >

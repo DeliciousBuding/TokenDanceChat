@@ -7,6 +7,16 @@ import { chatAPI, type ChatMessage, type TypingContext } from "@/lib/api";
 import { playSentSound } from "@/lib/sound";
 import { mentionableAssistants } from "@/lib/assistantRegistry";
 
+const EMOJI_MAP: Record<string, string> = {
+  smile: "😄", laugh: "😆", heart: "❤️", thumbsup: "👍", thumbsdown: "👎",
+  cry: "😢", angry: "😠", fire: "🔥", clap: "👏", ok: "👌",
+  cool: "😎", thinking: "🤔", party: "🎉", rocket: "🚀", eyes: "👀",
+  pray: "🙏", wave: "👋", joy: "😂", sweat_smile: "😅", sob: "😭",
+  screaming: "😱", smirk: "😏", wink: "😉", blush: "😊", yum: "😋",
+  neutral: "😐", confused: "😕", worried: "😟", tired: "😫", star: "⭐",
+  check: "✅", x: "❌", hundred: "💯", plus1: "👍", minus1: "👎",
+};
+
 interface ChatInputProps {
   onSend: (content: string) => void;
   disabled?: boolean;
@@ -133,6 +143,95 @@ export function ChatInput({
     setMentionActive(mentionFiltered.length > 0);
     setMentionIndex(0);
   }, [mentionFiltered.length]);
+
+  // ── Slash commands ──
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [emojiIndex, setEmojiIndex] = useState(0);
+  const [slashDismissed, setSlashDismissed] = useState(false);
+  const [emojiDismissed, setEmojiDismissed] = useState(false);
+
+  const slashCommands = useMemo(() => [
+    { command: "me", label: t("slash.me") },
+    { command: "topic", label: t("slash.topic") },
+    { command: "shrug", label: t("slash.shrug") },
+    { command: "tableflip", label: t("slash.tableflip") },
+  ], [t]);
+
+  const slashQuery = useMemo(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return { query: "", startPos: -1, args: "" };
+    const cursorPos = textarea.selectionStart;
+    const textBeforeCursor = content.slice(0, cursorPos);
+    const match = textBeforeCursor.match(/(?:^|\s)\/([\w]*)(\s+.*)?$/);
+    if (!match) return { query: "", startPos: -1, args: "" };
+    const fullMatch = match[0];
+    const slashPos = match.index! + fullMatch.indexOf("/");
+    return {
+      query: match[1] || "",
+      args: (match[2] || "").trimStart(),
+      startPos: slashPos,
+    };
+  }, [content]);
+
+  const slashFiltered = useMemo(() => {
+    const { query, startPos } = slashQuery;
+    if (startPos < 0) return [];
+    const lower = query.toLowerCase();
+    return slashCommands.filter((cmd) =>
+      query === "" || cmd.command.toLowerCase().startsWith(lower),
+    );
+  }, [slashQuery, slashCommands]);
+
+  // ── Emoji shortcuts ──
+  const emojiQuery = useMemo(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return { query: "", startPos: -1 };
+    const cursorPos = textarea.selectionStart;
+    const textBeforeCursor = content.slice(0, cursorPos);
+    const match = textBeforeCursor.match(/:([a-z_]*)$/);
+    if (!match) return { query: "", startPos: -1 };
+    return {
+      query: match[1] || "",
+      startPos: match.index!,
+    };
+  }, [content]);
+
+  const emojiFiltered = useMemo(() => {
+    const { query, startPos } = emojiQuery;
+    if (startPos < 0 || query.length < 1) return [];
+    const lower = query.toLowerCase();
+    return Object.entries(EMOJI_MAP)
+      .filter(([key]) => key.toLowerCase().includes(lower))
+      .slice(0, 20);
+  }, [emojiQuery]);
+
+  // Active states with priority: mention > slash > emoji
+  const slashActive = useMemo(
+    () => slashFiltered.length > 0 && mentionFiltered.length === 0 && !slashDismissed,
+    [slashFiltered.length, mentionFiltered.length, slashDismissed],
+  );
+
+  const emojiActive = useMemo(
+    () =>
+      emojiFiltered.length > 0 &&
+      mentionFiltered.length === 0 &&
+      slashFiltered.length === 0 &&
+      !emojiDismissed,
+    [emojiFiltered.length, mentionFiltered.length, slashFiltered.length, emojiDismissed],
+  );
+
+  // Reset dismissed flags when query content changes
+  useEffect(() => {
+    setSlashDismissed(false);
+  }, [slashQuery.query, slashQuery.startPos]);
+
+  useEffect(() => {
+    setEmojiDismissed(false);
+  }, [emojiQuery.query, emojiQuery.startPos]);
+
+  // Reset indices when filtered lists change
+  useEffect(() => { setSlashIndex(0); }, [slashFiltered.length]);
+  useEffect(() => { setEmojiIndex(0); }, [emojiFiltered.length]);
 
   // Auto-resize textarea
   const adjustHeight = useCallback(() => {
@@ -465,6 +564,70 @@ export function ChatInput({
     [content, mentionQuery],
   );
 
+  // Insert slash command at cursor position.
+  const insertSlashCommand = useCallback(
+    (command: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const { startPos, args } = slashQuery;
+      if (startPos < 0) return;
+
+      const cursorPos = textarea.selectionStart;
+      const before = content.slice(0, startPos);
+      const after = content.slice(cursorPos);
+
+      let replacement = "";
+      if (command === "shrug") {
+        replacement = "¯\\_(ツ)_/¯";
+      } else if (command === "tableflip") {
+        replacement = "(╯°□°)╯︵ ┻━┻";
+      } else if (command === "me") {
+        replacement = `_${username} ${args}_`;
+      } else if (command === "topic") {
+        if (args) {
+          chatAPI.sendSetTopic(args);
+        }
+        replacement = "";
+      }
+
+      const newContent = before + replacement + after;
+      setContent(newContent);
+
+      const newCursor = startPos + replacement.length;
+      requestAnimationFrame(() => {
+        textarea.focus();
+        textarea.setSelectionRange(newCursor, newCursor);
+      });
+    },
+    [content, slashQuery, username],
+  );
+
+  // Insert emoji at cursor position.
+  const insertEmoji = useCallback(
+    (emojiKey: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const { startPos } = emojiQuery;
+      if (startPos < 0) return;
+
+      const cursorPos = textarea.selectionStart;
+      const before = content.slice(0, startPos);
+      const after = content.slice(cursorPos);
+      const emojiChar = EMOJI_MAP[emojiKey];
+      if (!emojiChar) return;
+
+      const newContent = before + emojiChar + after;
+      setContent(newContent);
+
+      const newCursor = startPos + emojiChar.length;
+      requestAnimationFrame(() => {
+        textarea.focus();
+        textarea.setSelectionRange(newCursor, newCursor);
+      });
+    },
+    [content, emojiQuery],
+  );
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       // @mention autocomplete keyboard handling
@@ -495,13 +658,69 @@ export function ChatInput({
         }
       }
 
+      // Slash command keyboard handling
+      if (slashActive) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setSlashIndex((prev) =>
+            Math.min(prev + 1, slashFiltered.length - 1),
+          );
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setSlashIndex((prev) => Math.max(prev - 1, 0));
+          return;
+        }
+        if (e.key === "Enter" && !e.shiftKey && !isComposing) {
+          e.preventDefault();
+          if (slashFiltered[slashIndex]) {
+            insertSlashCommand(slashFiltered[slashIndex].command);
+          }
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setSlashDismissed(true);
+          return;
+        }
+      }
+
+      // Emoji shortcut keyboard handling
+      if (emojiActive) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setEmojiIndex((prev) =>
+            Math.min(prev + 1, emojiFiltered.length - 1),
+          );
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setEmojiIndex((prev) => Math.max(prev - 1, 0));
+          return;
+        }
+        if (e.key === "Enter" && !e.shiftKey && !isComposing) {
+          e.preventDefault();
+          if (emojiFiltered[emojiIndex]) {
+            insertEmoji(emojiFiltered[emojiIndex][0]);
+          }
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setEmojiDismissed(true);
+          return;
+        }
+      }
+
       if (e.key === "Enter" && !e.shiftKey && !isComposing) {
         e.preventDefault();
         handleSend();
       }
 
       // ↑ key with empty input → edit last sent message (Telegram-style).
-      if (e.key === "ArrowUp" && !e.shiftKey && !content && !mentionActive) {
+      if (e.key === "ArrowUp" && !e.shiftKey && !content && !mentionActive && !slashActive && !emojiActive) {
         e.preventDefault();
         const allMessages = useChatStore.getState().messages;
         // Filter by current conversation context
@@ -545,8 +764,18 @@ export function ChatInput({
       mentionFiltered,
       mentionIndex,
       insertMention,
+      slashActive,
+      slashFiltered,
+      slashIndex,
+      insertSlashCommand,
+      emojiActive,
+      emojiFiltered,
+      emojiIndex,
+      insertEmoji,
       content,
       username,
+      currentChat,
+      editingMessageId,
     ],
   );
 
@@ -605,7 +834,7 @@ export function ChatInput({
     >
       {/* Reply indicator */}
       {replyTo && (
-        <div className="flex items-center gap-2 px-4 pt-2">
+        <div className="reply-indicator-enter flex items-center gap-2 px-4 pt-2">
           <div className="flex-1 flex items-center gap-2 rounded-lg bg-card border border-border px-3 py-1.5">
             <span className="text-xs text-muted-foreground">
               {t("input.replyTo")}{" "}
@@ -630,9 +859,9 @@ export function ChatInput({
 
       {/* Editing indicator */}
       {editingMessageId && !replyTo && (
-        <div className="flex items-center gap-2 px-4 pt-2">
-          <div className="flex-1 flex items-center gap-2 rounded-lg bg-[oklch(71.2%_0.194_13.428_/_0.06)] border border-[oklch(71.2%_0.194_13.428_/_0.2)] px-3 py-1.5">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2%_0.194_13.428)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+        <div className="reply-indicator-enter flex items-center gap-2 px-4 pt-2">
+          <div className="flex-1 flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-primary">
               <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
             </svg>
             <span className="text-xs text-muted-foreground">
@@ -651,7 +880,7 @@ export function ChatInput({
 
       {/* Image preview */}
       {pendingImage && (
-        <div className="px-4 pt-2">
+        <div className="image-preview-enter px-4 pt-2">
           <div className="flex items-start gap-3 rounded-xl border border-border bg-card/50 p-3 shadow-sm">
             <div className="relative flex-shrink-0">
               <img
@@ -687,11 +916,7 @@ export function ChatInput({
               </div>
               <button
                 onClick={handleSendImage}
-                className="mt-1 flex items-center gap-1.5 self-start rounded-lg px-3 py-1.5 text-xs font-medium transition-all hover:brightness-110"
-                style={{
-                  backgroundColor: "oklch(71.2% 0.194 13.428)",
-                  color: "#fff",
-                }}
+                className="mt-1 flex items-center gap-1.5 self-start rounded-lg px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground hover:brightness-110 transition-all"
               >
                 <Send className="h-3 w-3" />
                 {t("input.sendImage")}
@@ -793,7 +1018,7 @@ export function ChatInput({
 
       {/* Recording indicator (replaces toolbar and input area when recording) */}
       {isRecording ? (
-        <div className="flex items-center gap-3 px-4 py-3">
+        <div className="recording-bar-enter flex items-center gap-3 px-4 py-3 transition-all duration-300 ease-out">
           <div className="flex items-center gap-3 flex-1 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
             {/* Pulsing red dot */}
             <span className="relative flex h-3 w-3">
@@ -818,8 +1043,7 @@ export function ChatInput({
             {/* Stop / Send button */}
             <button
               onClick={stopRecording}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:brightness-110"
-              style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:brightness-110 transition-colors"
               aria-label="Stop recording"
             >
               <Square className="h-4 w-4" fill="currentColor" />
@@ -837,7 +1061,7 @@ export function ChatInput({
               aria-label="Upload image"
               className={cn(
                 "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
-                "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+                "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
               )}
             >
               <ImagePlus className="h-4 w-4" />
@@ -850,7 +1074,7 @@ export function ChatInput({
               aria-label="Upload file"
               className={cn(
                 "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
-                "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+                "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
               )}
             >
               <Paperclip className="h-4 w-4" />
@@ -863,7 +1087,7 @@ export function ChatInput({
               aria-label="Record voice message"
               className={cn(
                 "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
-                "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+                "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
               )}
             >
               <Mic className="h-4 w-4" />
@@ -913,6 +1137,60 @@ export function ChatInput({
                 </div>
               )}
 
+              {/* Slash command dropdown */}
+              {slashActive && (
+                <div
+                  className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-border bg-card shadow-lg animate-scale-in z-20"
+                  style={{ maxHeight: "200px", overflowY: "auto" }}
+                >
+                  {slashFiltered.map((cmd, idx) => (
+                    <button
+                      key={cmd.command}
+                      onClick={() => insertSlashCommand(cmd.command)}
+                      onMouseEnter={() => setSlashIndex(idx)}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
+                        idx === slashIndex
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <span className="text-xs font-mono font-semibold text-muted-foreground/70">
+                        /{cmd.command}
+                      </span>
+                      <span className="truncate">{cmd.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Emoji shortcut dropdown */}
+              {emojiActive && (
+                <div
+                  className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-border bg-card shadow-lg animate-scale-in z-20"
+                  style={{ maxHeight: "200px", overflowY: "auto" }}
+                >
+                  {emojiFiltered.map(([key, emoji], idx) => (
+                    <button
+                      key={key}
+                      onClick={() => insertEmoji(key)}
+                      onMouseEnter={() => setEmojiIndex(idx)}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
+                        idx === emojiIndex
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <span className="text-base">{emoji}</span>
+                      <span className="text-xs text-muted-foreground/70">
+                        :{key}:
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <textarea
                 ref={textareaRef}
                 value={content}
@@ -926,7 +1204,7 @@ export function ChatInput({
                 maxLength={2000}
                 disabled={disabled}
                 aria-label={placeholder}
-                className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-border bg-card px-4 py-[13px] text-sm leading-5 text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
+                className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-border bg-card px-4 py-[13px] text-sm leading-5 text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none disabled:opacity-50"
                 style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT }}
               />
             </div>
@@ -940,35 +1218,26 @@ export function ChatInput({
                 disabled ? t("join.buttonConnecting") : t("input.placeholder")
               }
               className={cn(
-                "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-all duration-200",
+                "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-all duration-300 ease-out",
+                hasContent
+                  ? "bg-primary text-primary-foreground hover:brightness-110"
+                  : "bg-muted text-muted-foreground",
                 "disabled:cursor-not-allowed disabled:opacity-30",
                 pulseButton && "animate-pulse-once",
               )}
-              style={{
-                backgroundColor: hasContent
-                  ? "oklch(71.2% 0.194 13.428)"
-                  : "hsl(220,2.5%,20%)",
-              }}
               onMouseEnter={(e) => {
                 if (hasContent) {
-                  e.currentTarget.style.filter = "brightness(1.1)";
                   e.currentTarget.style.transform = "scale(1.05)";
                 }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.filter = "brightness(1)";
                 e.currentTarget.style.transform = "scale(1)";
               }}
             >
               {disabled ? (
                 <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
               ) : (
-                <Send
-                  className="h-4 w-4"
-                  style={{
-                    color: hasContent ? "#fff" : "hsl(240,2.5%,50%)",
-                  }}
-                />
+                <Send className="h-4 w-4" />
               )}
             </button>
           </div>
@@ -994,7 +1263,7 @@ export function ChatInput({
 
       {/* Drag-and-drop overlay */}
       {isDragOver && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 border-2 border-dashed border-primary rounded-lg pointer-events-none">
+        <div className="file-drop-overlay">
           <span className="text-sm font-medium text-muted-foreground">
             {t("input.dropFiles")}
           </span>

@@ -160,7 +160,7 @@ export function MessageContextMenu({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-[100] animate-fade-in"
+        className="context-menu-backdrop"
         onClick={onClose}
         onTouchEnd={onClose}
         aria-hidden="true"
@@ -170,8 +170,13 @@ export function MessageContextMenu({
         ref={menuRef}
         role="menu"
         aria-label={t("message.contextMenu")}
-        className="fixed z-[101] min-w-[220px] rounded-xl border border-border/60 bg-card/95 backdrop-blur-xl shadow-2xl py-1 animate-scale-in overflow-hidden ring-1 ring-black/5"
-        style={menuStyle}
+        className="context-menu min-w-[220px] rounded-xl border border-border/60 bg-card/95 backdrop-blur-xl shadow-2xl py-1 overflow-hidden ring-1 ring-black/5 animate-scale-in-origin"
+        style={{
+          left: menuStyle.left,
+          top: menuStyle.top,
+          "--origin-x": `${position.x}px`,
+          "--origin-y": `${position.y}px`,
+        } as React.CSSProperties}
       >
         {menuItems.map((item, idx) => {
           if (item.kind === "divider") {
@@ -184,7 +189,8 @@ export function MessageContextMenu({
               key={idx}
               role="menuitem"
               onClick={item.onClick}
-              className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent/80 ${item.className}`}
+              className={`animate-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent/80 ${item.className}`}
+              style={{ animationDelay: `${idx * 25}ms` }}
             >
               <item.icon className="h-4 w-4 flex-shrink-0 opacity-70" />
               <span className="flex-1 text-left">{item.label}</span>

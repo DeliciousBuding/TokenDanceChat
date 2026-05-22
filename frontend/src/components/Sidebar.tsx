@@ -11,6 +11,7 @@ import {
   VolumeX,
   Pin,
   PinOff,
+  BellOff,
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -158,6 +159,7 @@ export function Sidebar({
     unreadByConversation,
     userStatusList,
     pinnedConversations,
+    mutedConversations,
   } = useChatStore();
 
   // Sound toggle state
@@ -246,6 +248,18 @@ export function Sidebar({
     [pinnedConversations],
   );
 
+  const handleMuteToggle = useCallback(
+    (key: string) => {
+      if (mutedConversations.includes(key)) {
+        chatAPI.sendUnmuteConversation(key);
+      } else {
+        chatAPI.sendMuteConversation(key);
+      }
+      setContextMenu(null);
+    },
+    [mutedConversations],
+  );
+
   // Close context menu on any click outside.
   useEffect(() => {
     if (!contextMenu) return;
@@ -298,9 +312,9 @@ export function Sidebar({
           onClick={() => setCurrentChat({ type: "public" })}
           onContextMenu={(e) => handleContextMenu(e, "public")}
           className={cn(
-            "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+            "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
             currentChat.type === "public"
-              ? "bg-accent text-foreground"
+              ? "bg-accent text-foreground border-l-primary"
               : "text-foreground/70 hover:bg-accent hover:text-foreground",
           )}
         >
@@ -323,7 +337,7 @@ export function Sidebar({
             return (
               <div
                 key={key}
-                className="group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                className="group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary"
               >
                 <button
                   onClick={() => navigateToConversation(key)}
@@ -369,7 +383,7 @@ export function Sidebar({
               onMentionAssistant?.(assistant.name);
               onClose?.();
             }}
-            className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+            className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground/80 transition-all border-l-2 border-l-transparent hover:border-l-primary hover:bg-accent hover:text-foreground"
           >
             <AssistantIcon assistant={assistant} size="sm" />
             <span className="min-w-0 flex-1">
@@ -378,7 +392,7 @@ export function Sidebar({
                 {assistant.label} · {assistant.model.name}
               </span>
             </span>
-            <span className="h-2 w-2 rounded-full bg-online" aria-label={assistant.status} />
+            <span className="h-2 w-2 rounded-full bg-online animate-pulse-dot" aria-label={assistant.status} />
           </button>
         ))}
       </div>
@@ -419,10 +433,10 @@ export function Sidebar({
               }
               onContextMenu={(e) => handleContextMenu(e, `dm:${partner}`)}
               className={cn(
-                "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
+                "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
                 currentChat.type === "dm" &&
                   currentChat.username === partner
-                  ? "bg-accent text-foreground"
+                  ? "bg-accent text-foreground border-l-primary"
                   : "text-foreground/70 hover:bg-accent hover:text-foreground",
               )}
             >
@@ -477,9 +491,9 @@ export function Sidebar({
             onClick={() => setCurrentChat({ type: "group", name: g.name })}
             onContextMenu={(e) => handleContextMenu(e, `group:${g.name}`)}
             className={cn(
-              "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
+              "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
               currentChat.type === "group" && currentChat.name === g.name
-                ? "bg-accent text-foreground"
+                ? "bg-accent text-foreground border-l-primary"
                 : "text-foreground/70 hover:bg-accent hover:text-foreground",
             )}
           >
@@ -529,7 +543,7 @@ export function Sidebar({
                 onClick={() =>
                   setCurrentChat({ type: "dm", username: friend })
                 }
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent transition-colors"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-foreground/80 transition-all border-l-2 border-l-transparent hover:border-l-primary hover:bg-accent"
               >
                 <div
                   className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
@@ -684,6 +698,22 @@ export function Sidebar({
               <>
                 <Pin className="h-3 w-3" />
                 {t("sidebar.pinConversation")}
+              </>
+            )}
+          </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
+            onClick={() => handleMuteToggle(contextMenu.key)}
+          >
+            {mutedConversations.includes(contextMenu.key) ? (
+              <>
+                <Volume2 className="h-3 w-3" />
+                {t("sidebar.unmuteConversation")}
+              </>
+            ) : (
+              <>
+                <BellOff className="h-3 w-3" />
+                {t("sidebar.muteConversation")}
               </>
             )}
           </button>

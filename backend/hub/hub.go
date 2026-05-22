@@ -77,6 +77,12 @@ type Store interface {
 	PinConversation(username, key string) error
 	UnpinConversation(username, key string) error
 	ListPinnedConversations(username string) []string
+
+	// Conversation muting
+	MuteConversation(username, key string) error
+	UnmuteConversation(username, key string) error
+	ListMutedConversations(username string) []string
+	IsConversationMuted(username, key string) bool
 }
 
 // Group represents a chat group.
@@ -975,6 +981,26 @@ func (h *Hub) UnpinConversation(username, key string) error {
 // ListPinnedConversations returns the list of pinned conversation keys for a user.
 func (h *Hub) ListPinnedConversations(username string) []string {
 	return h.store.ListPinnedConversations(username)
+}
+
+// MuteConversation mutes a conversation for a user.
+func (h *Hub) MuteConversation(username, key string) error {
+	return h.store.MuteConversation(username, key)
+}
+
+// UnmuteConversation unmutes a conversation for a user.
+func (h *Hub) UnmuteConversation(username, key string) error {
+	return h.store.UnmuteConversation(username, key)
+}
+
+// ListMutedConversations returns the list of muted conversation keys for a user.
+func (h *Hub) ListMutedConversations(username string) []string {
+	return h.store.ListMutedConversations(username)
+}
+
+// IsConversationMuted checks if a conversation is muted for a user.
+func (h *Hub) IsConversationMuted(username, key string) bool {
+	return h.store.IsConversationMuted(username, key)
 }
 
 // SendToAllSessions sends marshaled data to all connected clients with the given username.

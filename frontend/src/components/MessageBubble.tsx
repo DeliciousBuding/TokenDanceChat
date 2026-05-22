@@ -38,6 +38,8 @@ interface MessageBubbleProps {
   onToggleSelect?: (id: string) => void;
   /** Long-press callback to enter select mode */
   onLongPress?: (id: string) => void;
+  /** Stagger delay in ms for cascade entrance animation */
+  staggerDelay?: number;
 }
 
 /** Simple code block renderer with syntax highlighting and copy button */
@@ -179,6 +181,7 @@ export const MessageBubble = memo(function MessageBubble({
   isSelected = false,
   onToggleSelect,
   onLongPress,
+  staggerDelay,
 }: MessageBubbleProps) {
   const { t } = useTranslation();
   const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
@@ -456,20 +459,11 @@ export const MessageBubble = memo(function MessageBubble({
                 key={i}
                 onClick={() => setSelectedProfileUser(part.username)}
                 className={cn(
-                  "hover:underline cursor-pointer",
-                  isSelfMention ? "mention-self" : "mention-other",
+                  "hover:underline cursor-pointer text-primary font-medium",
+                  isSelfMention
+                    ? "bg-primary/10 rounded-sm px-0.5"
+                    : "",
                 )}
-                style={{
-                  color: "oklch(71.2% 0.194 13.428)",
-                  fontWeight: 500,
-                  ...(isSelfMention
-                    ? {
-                        backgroundColor: "oklch(71.2% 0.194 13.428 / 0.12)",
-                        borderRadius: "3px",
-                        padding: "0 2px",
-                      }
-                    : {}),
-                }}
               >
                 @{part.username}
               </button>
@@ -577,12 +571,13 @@ export const MessageBubble = memo(function MessageBubble({
         }
       }}
       className={cn(
-        "group flex gap-3 px-4 animate-slide-up scroll-mt-16",
+        "group flex gap-3 px-4 animate-spring-up scroll-mt-16",
         isOwn ? "justify-end" : "justify-start",
         paddingY,
         selectMode && "cursor-pointer",
         isSelected && "bg-primary/5",
       )}
+      style={{ animationDelay: staggerDelay ? `${staggerDelay}ms` : undefined }}
     >
       {/* Select checkbox (visible in select mode) */}
       {selectMode && (
@@ -750,7 +745,7 @@ export const MessageBubble = memo(function MessageBubble({
         {/* Reply preview (quoted message) — clickable to jump to original */}
         {!selectMode && (message.reply_to_id || message.reply_to_content) && (
           <div
-            className="mb-1 ml-0 border-l-2 border-[hsl(220,2.5%,30%)] pl-2 py-0.5 rounded-sm bg-card cursor-pointer hover:border-[hsl(220,2.5%,45%)] transition-colors"
+            className="mb-1 ml-0 border-l-2 border-border/80 pl-2 py-0.5 rounded-sm bg-card cursor-pointer hover:border-border transition-colors"
             role="button"
             tabIndex={0}
             aria-label={`Jump to replied message from ${message.reply_to_user || "unknown"}`}
@@ -786,7 +781,7 @@ export const MessageBubble = memo(function MessageBubble({
             "rounded-2xl px-4 py-2.5 text-sm leading-relaxed relative",
             isOwn
               ? "rounded-br-md"
-              : "rounded-bl-md bg-secondary",
+              : "rounded-bl-md bg-secondary border border-border",
             isDeleted && "opacity-40",
           )}
           style={
@@ -795,9 +790,7 @@ export const MessageBubble = memo(function MessageBubble({
                   backgroundColor: bubbleBg,
                   border: `1px solid ${bubbleBorder}`,
                 }
-              : {
-                  border: "1px solid hsl(220,2.5%,22%)",
-                }
+              : undefined
           }
         >
           {isEditing ? (
@@ -816,7 +809,7 @@ export const MessageBubble = memo(function MessageBubble({
                     setIsEditing(false);
                   }
                 }}
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] resize-none"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none resize-none"
                 style={{ minHeight: "60px", scrollbarWidth: "thin" }}
                 autoFocus
               />
@@ -837,8 +830,7 @@ export const MessageBubble = memo(function MessageBubble({
                       setIsEditing(false);
                     }
                   }}
-                  className="rounded-lg px-3 py-1 text-xs font-medium text-white transition-colors"
-                  style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}
+                  className="rounded-lg px-3 py-1 text-xs font-medium bg-primary text-primary-foreground hover:brightness-110 transition-colors"
                 >
                   {t("input.save")}
                 </button>
@@ -909,7 +901,7 @@ export const MessageBubble = memo(function MessageBubble({
                     setTimeout(() => setBubbleCopied(false), 1500);
                   } catch { /* Clipboard API may not be available */ }
                 }}
-                className="flex items-center gap-1 rounded-lg bg-accent border border-[hsl(220,2.5%,28%)] px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-[hsl(231,4%,26%)] transition-colors shadow-md"
+                className="flex items-center gap-1 rounded-lg bg-accent border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
                 aria-label={t("message.copy")}
               >
                 {bubbleCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
@@ -920,7 +912,7 @@ export const MessageBubble = memo(function MessageBubble({
                     e.stopPropagation();
                     onForward(message);
                   }}
-                  className="flex items-center gap-1 rounded-lg bg-accent border border-[hsl(220,2.5%,28%)] px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-[hsl(231,4%,26%)] transition-colors shadow-md"
+                  className="flex items-center gap-1 rounded-lg bg-accent border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
                   aria-label={t("message.forward")}
                 >
                   <Forward className="h-3 w-3" />
@@ -953,7 +945,7 @@ export const MessageBubble = memo(function MessageBubble({
                     new CustomEvent("tdchat:view-thread", { detail: { messageId: message.id } }),
                   );
                 }}
-                className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs border border-[hsl(220,2.5%,20%)] bg-card hover:bg-accent transition-colors text-muted-foreground/70"
+                className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs border border-border/50 bg-card hover:bg-accent transition-colors text-muted-foreground/70"
                 aria-label={`${replyCount} replies`}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -973,10 +965,10 @@ export const MessageBubble = memo(function MessageBubble({
                         handleAddReaction(emoji)
                       }
                       className={cn(
-                        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs border border-[hsl(220,2.5%,20%)] bg-card hover:bg-accent transition-colors",
+                        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs border border-border/50 bg-card hover:bg-accent transition-colors",
                         currentUsername &&
                           users.includes(currentUsername) &&
-                          "border-[hsl(220,2.5%,30%)] bg-[hsl(231,4%,24%)]",
+                          "border-border bg-accent",
                         recentlyToggledReaction === emoji && "animate-pop",
                       )}
                       aria-label={`${emoji} ${users.length} reactions`}
@@ -993,14 +985,14 @@ export const MessageBubble = memo(function MessageBubble({
               <>
                 <button
                   onClick={() => setShowEmojiPicker(true)}
-                  className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-[hsl(220,2.5%,20%)] hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
+                  className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-border/50 hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
                   aria-label="Add reaction"
                 >
                   <span className="text-xs">+</span>
                 </button>
                 <button
                   onClick={() => chatAPI.sendPinMessage(message.id)}
-                  className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-[hsl(220,2.5%,20%)] hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
+                  className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-border/50 hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
                   aria-label="Pin message"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

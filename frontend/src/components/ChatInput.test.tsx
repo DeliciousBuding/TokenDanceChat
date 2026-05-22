@@ -24,6 +24,7 @@ vi.mock("@/lib/api", () => ({
     sendGroupMessage: vi.fn(),
     sendReaction: vi.fn(),
     sendMessageEdit: vi.fn(),
+    sendSetTopic: vi.fn(),
     sendPinMessage: vi.fn(),
     deleteMessage: vi.fn(),
     sendFriendRequest: vi.fn(),

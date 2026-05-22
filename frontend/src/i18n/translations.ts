@@ -50,6 +50,9 @@ export interface TranslationDict {
     pinned: string;
     pinConversation: string;
     unpinConversation: string;
+    muteConversation: string;
+    unmuteConversation: string;
+    muted: string;
   };
   transcript: {
     loading: string;
@@ -252,6 +255,9 @@ const zhCN: TranslationDict = {
     pinned: "置顶",
     pinConversation: "置顶会话",
     unpinConversation: "取消置顶",
+    muteConversation: "免打扰",
+    unmuteConversation: "取消免打扰",
+    muted: "已静音",
   },
   transcript: {
     loading: "加载消息中...",
@@ -455,6 +461,9 @@ const enUS: TranslationDict = {
     pinned: "Pinned",
     pinConversation: "Pin conversation",
     unpinConversation: "Unpin conversation",
+    muteConversation: "Mute",
+    unmuteConversation: "Unmute",
+    muted: "Muted",
   },
   transcript: {
     loading: "Loading messages...",
@@ -598,6 +607,12 @@ const enUS: TranslationDict = {
     sound: "Sound",
     soundOn: "Sound on",
     soundOff: "Sound off",
+  },
+  slash: {
+    me: "Send as action message",
+    topic: "Change group topic",
+    shrug: "¯\\_(ツ)_/¯",
+    tableflip: "(╯°□°)╯︵ ┻━┻",
   },
 };
 

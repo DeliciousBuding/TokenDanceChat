@@ -80,6 +80,7 @@ export function useWebSocket() {
     setBlockedUsers,
     setPinnedMessages,
     setPinnedConversations,
+    setMutedConversations,
   } = useChatStore();
 
   const connect = useCallback(
@@ -227,8 +228,8 @@ export function useWebSocket() {
         const state = useChatStore.getState();
         if (state.currentChat.type !== "public") {
           useChatStore.getState().incrementConversationUnread("public");
-          if (!isTabActive) playMessageSound();
-            notifyMessage(username, content);
+          if (!isTabActive && !state.mutedConversations.includes("public")) playMessageSound();
+          if (!state.mutedConversations.includes("public")) notifyMessage(username, content);
         }
       }),
     );
@@ -253,8 +254,8 @@ export function useWebSocket() {
         const partner = m.username === state.username ? m.to : (m.from || m.username);
         if (partner && m.username !== state.username && !(state.currentChat.type === "dm" && state.currentChat.username === partner)) {
           useChatStore.getState().incrementConversationUnread(`dm:${partner}`);
-          playMessageSound();
-          notifyMessage(partner, m.content);
+          if (!state.mutedConversations.includes(`dm:${partner}`)) playMessageSound();
+          if (!state.mutedConversations.includes(`dm:${partner}`)) notifyMessage(partner, m.content);
         }
       }),
     );
@@ -277,8 +278,8 @@ export function useWebSocket() {
         const groupName = m.group || m.to;
         if (groupName && !(state.currentChat.type === "group" && state.currentChat.name === groupName)) {
           useChatStore.getState().incrementConversationUnread(`group:${groupName}`);
-          playMessageSound();
-          notifyMessage(groupName, `${m.username}: ${m.content}`);
+          if (!state.mutedConversations.includes(`group:${groupName}`)) playMessageSound();
+          if (!state.mutedConversations.includes(`group:${groupName}`)) notifyMessage(groupName, `${m.username}: ${m.content}`);
         }
       }),
     );
@@ -521,6 +522,16 @@ export function useWebSocket() {
       }),
     );
 
+    // Muted conversations list
+    unsubs.push(
+      chatAPI.on("muted_conversations", (msg: WSMessage) => {
+        const { keys } = msg as { type: string; keys: string[] };
+        if (keys) {
+          setMutedConversations(keys);
+        }
+      }),
+    );
+
     // Group create
     unsubs.push(
       chatAPI.on("group_create", (msg: WSMessage) => {
@@ -743,7 +754,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }
