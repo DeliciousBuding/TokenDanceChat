@@ -40,6 +40,21 @@ export interface MentionNotification {
   timestamp: number;
 }
 
+export interface UserProfile {
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  bio: string;
+  status: string;
+  last_seen: number;
+  created_at: number;
+}
+
+export interface NotificationPref {
+  mutedUntil: number;
+  showPreview: boolean;
+}
+
 interface ChatState {
   // Connection state
   view: ViewState;
@@ -102,14 +117,20 @@ interface ChatState {
   // Pinned conversations
   pinnedConversations: string[];
 
-  // Muted conversations
+  // Muted conversations (legacy)
   mutedConversations: string[];
+
+  // Notification preferences (per-conversation mute duration + preview toggle)
+  notificationPrefs: Record<string, NotificationPref>;
 
   // Archived conversations
   archivedConversations: string[];
 
   // Lightbox
   lightboxImage: string | null;
+
+  // User profiles
+  userProfiles: Record<string, UserProfile>;
 
   // Actions
   setView: (view: ViewState) => void;
@@ -154,10 +175,15 @@ interface ChatState {
   setMutedConversations: (keys: string[]) => void;
   addMutedConversation: (key: string) => void;
   removeMutedConversation: (key: string) => void;
+  setNotificationPrefs: (prefs: Record<string, NotificationPref>) => void;
+  updateNotificationPref: (key: string, pref: NotificationPref) => void;
   setArchivedConversations: (keys: string[]) => void;
   addArchivedConversation: (key: string) => void;
   removeArchivedConversation: (key: string) => void;
   setLightboxImage: (url: string | null) => void;
+  setUserProfile: (profile: UserProfile) => void;
+  removeUserProfile: (username: string) => void;
+  updateUserProfileStatus: (username: string, status: string) => void;
   reset: () => void;
 }
 
@@ -188,8 +214,10 @@ export const useChatStore = create<ChatState>((set) => ({
   pinnedMessages: [],
   pinnedConversations: [],
   mutedConversations: [],
+  notificationPrefs: {},
   archivedConversations: [],
   lightboxImage: null,
+  userProfiles: {},
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
@@ -355,6 +383,11 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => ({
       mutedConversations: state.mutedConversations.filter((k) => k !== key),
     })),
+  setNotificationPrefs: (prefs) => set({ notificationPrefs: prefs }),
+  updateNotificationPref: (key, pref) =>
+    set((state) => ({
+      notificationPrefs: { ...state.notificationPrefs, [key]: pref },
+    })),
   setArchivedConversations: (archivedConversations) => set({ archivedConversations }),
   addArchivedConversation: (key) =>
     set((state) => ({
@@ -367,6 +400,27 @@ export const useChatStore = create<ChatState>((set) => ({
       archivedConversations: state.archivedConversations.filter((k) => k !== key),
     })),
   setLightboxImage: (lightboxImage) => set({ lightboxImage }),
+  setUserProfile: (profile) =>
+    set((state) => ({
+      userProfiles: { ...state.userProfiles, [profile.username]: profile },
+    })),
+  removeUserProfile: (username) =>
+    set((state) => {
+      const next = { ...state.userProfiles };
+      delete next[username];
+      return { userProfiles: next };
+    }),
+  updateUserProfileStatus: (username, status) =>
+    set((state) => {
+      const existing = state.userProfiles[username];
+      if (!existing) return state;
+      return {
+        userProfiles: {
+          ...state.userProfiles,
+          [username]: { ...existing, status },
+        },
+      };
+    }),
   reset: () =>
     set({
       view: "join",
@@ -395,7 +449,9 @@ export const useChatStore = create<ChatState>((set) => ({
       pinnedMessages: [],
       pinnedConversations: [],
       mutedConversations: [],
+      notificationPrefs: {},
       archivedConversations: [],
       lightboxImage: null,
+      userProfiles: {},
     }),
 }));

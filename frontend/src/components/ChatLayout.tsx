@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from "react";
-import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin } from "lucide-react";
+import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
@@ -8,6 +8,8 @@ import { ForwardModal } from "./ForwardModal";
 import { ThemeToggle } from "./ThemeToggle";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { SearchBar } from "./SearchBar";
+import { SettingsPanel } from "./SettingsPanel";
+import { ThreadPanel } from "./ThreadPanel";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
@@ -24,6 +26,9 @@ export function ChatLayout() {
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [forwardTarget, setForwardTarget] = useState<import("@/lib/api").ChatMessage | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [threadParent, setThreadParent] = useState<ChatMessage | null>(null);
+  const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
   const {
     reset,
     currentChat,
@@ -117,6 +122,9 @@ export function ChatLayout() {
           e.preventDefault();
           setReplyTo(null);
         }
+        // Close thread panel if open
+        setThreadParent((prev) => { if (prev) { e.preventDefault(); } return null; });
+        setThreadMessages([]);
         // Exit multi-select mode (via event — no-op if not active)
         window.dispatchEvent(new CustomEvent("tdchat:exit-select-mode"));
         // Close all open emoji pickers
@@ -133,6 +141,32 @@ export function ChatLayout() {
     const next: Language = lang === "zh-CN" ? "en-US" : "zh-CN";
     setLang(next);
   }, [lang, setLang]);
+
+  // Thread messages WebSocket listener
+  useEffect(() => {
+    const unsub = chatAPI.on("thread_messages", (msg: { type: string; parent_message_id?: string; messages?: ChatMessage[] }) => {
+      if (msg.messages) {
+        setThreadMessages(msg.messages as ChatMessage[]);
+      }
+    });
+    return () => { unsub(); };
+  }, []);
+
+  const handleOpenThread = useCallback((message: ChatMessage) => {
+    setThreadParent(message);
+    setThreadMessages([]);
+    chatAPI.requestThreadMessages(message.id);
+  }, []);
+
+  const handleCloseThread = useCallback(() => {
+    setThreadParent(null);
+    setThreadMessages([]);
+  }, []);
+
+  const handleSendThreadReply = useCallback((content: string) => {
+    if (!threadParent) return;
+    chatAPI.sendThreadReply(threadParent.id, content);
+  }, [threadParent]);
 
   const handleReply = useCallback(
     (message: ChatMessage) => {
@@ -322,6 +356,13 @@ export function ChatLayout() {
           </button>
           <ThemeToggle />
           <button
+            onClick={() => setSettingsOpen(true)}
+            aria-label={t("settings.notificationPrefs")}
+            className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+          <button
             onClick={handleDisconnect}
             aria-label={t("chat.disconnect")}
             className="touch-target rounded-lg p-2 text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
@@ -360,6 +401,14 @@ export function ChatLayout() {
               {t("lang.switchTo")}
             </button>
             <ThemeToggle />
+            <button
+              onClick={() => setSettingsOpen(true)}
+              aria-label={t("settings.notificationPrefs")}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              {t("settings.notificationPrefs")}
+            </button>
             <button
               onClick={handleDisconnect}
               aria-label={t("chat.disconnect")}
@@ -518,7 +567,7 @@ export function ChatLayout() {
         {/* Message transcript */}
         <div className="relative flex-1 overflow-hidden flex flex-col">
           <ErrorBoundary fallback={<div className="flex items-center justify-center h-full text-sm text-muted-foreground/50">Chat transcript unavailable</div>}>
-            <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} />
+            <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} onOpenThread={handleOpenThread} />
           </ErrorBoundary>
 
           {/* Chat input - fixed at bottom */}
@@ -527,6 +576,14 @@ export function ChatLayout() {
           </ErrorBoundary>
         </div>
       </div>
+
+      {/* Thread panel */}
+      <ThreadPanel
+        parentMessage={threadParent}
+        threadMessages={threadMessages}
+        onClose={handleCloseThread}
+        onSendReply={handleSendThreadReply}
+      />
 
       {/* Group create modal */}
       <GroupCreateModal
@@ -541,6 +598,11 @@ export function ChatLayout() {
           onClose={() => setForwardTarget(null)}
           onForward={handleForwardSend}
         />
+      )}
+
+      {/* Settings panel */}
+      {settingsOpen && (
+        <SettingsPanel onClose={() => setSettingsOpen(false)} />
       )}
 
       {/* Search dialog (Ctrl+K) */}

@@ -15,10 +15,12 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
+  Clock,
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
 import { cn, avatarGradient, formatLastSeen } from "@/lib/utils";
+import { Avatar } from "@/components/Avatar";
 import { assistants, modelCatalog } from "@/lib/assistantRegistry";
 import { AssistantIcon } from "@/components/AssistantIcon";
 import { isSoundEnabled, setSoundEnabled } from "@/lib/soundToggle";
@@ -47,6 +49,9 @@ const UserListItem = memo(function UserListItem({
   hasPendingRequest,
   onlineLabel,
   requestPendingLabel,
+  displayName,
+  avatarUrl,
+  statusText,
 }: {
   user: string;
   isSelf: boolean;
@@ -59,9 +64,12 @@ const UserListItem = memo(function UserListItem({
   hasPendingRequest?: boolean;
   onlineLabel: string;
   requestPendingLabel: string;
+  displayName?: string;
+  avatarUrl?: string | null;
+  statusText?: string;
 }) {
-  const gradient = useMemo(() => avatarGradient(user), [user]);
   const [showMenu, setShowMenu] = useState(false);
+  const shownName = displayName || user;
 
   return (
     <button
@@ -76,18 +84,24 @@ const UserListItem = memo(function UserListItem({
           setShowMenu(!showMenu);
         }
       }}
-      aria-label={`${user}${isSelf ? ` (${youLabel})` : ""}`}
+      aria-label={`${shownName}${isSelf ? ` (${youLabel})` : ""}`}
     >
       <div className="relative flex-shrink-0">
-        <div
-          className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-          style={{ background: gradient }}
-        >
-          {user.charAt(0).toUpperCase()}
-        </div>
+        <Avatar
+          src={avatarUrl || null}
+          name={shownName}
+          size="sm"
+        />
         <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-card bg-online animate-pulse-dot" role="status" aria-label={onlineLabel} />
       </div>
-      <span className="flex-1 truncate text-sm">{user}</span>
+      <div className="flex-1 min-w-0">
+        <span className="block truncate text-sm">{shownName}</span>
+        {statusText && (
+          <span className="block truncate text-[10px] text-muted-foreground/55">
+            {statusText}
+          </span>
+        )}
+      </div>
       {isFriend && !isSelf && (
         <span className="flex-shrink-0 text-[10px] text-muted-foreground/50">
           &#10003;
@@ -164,6 +178,7 @@ export function Sidebar({
     pinnedConversations,
     mutedConversations,
     archivedConversations,
+    userProfiles,
   } = useChatStore();
 
   // Sound toggle state
@@ -252,17 +267,19 @@ export function Sidebar({
     [pinnedConversations],
   );
 
-  const handleMuteToggle = useCallback(
-    (key: string) => {
-      if (mutedConversations.includes(key)) {
-        chatAPI.sendUnmuteConversation(key);
-      } else {
-        chatAPI.sendMuteConversation(key);
-      }
+  const handleMuteDuration = useCallback(
+    (key: string, hours: number) => {
+      const mutedUntil = hours === 0 ? 0 : Date.now() + hours * 60 * 60 * 1000;
+      chatAPI.sendSetNotificationPrefs(key, mutedUntil, true);
       setContextMenu(null);
     },
-    [mutedConversations],
+    [],
   );
+
+  const handleUnmuteConversation = useCallback((key: string) => {
+    chatAPI.sendSetNotificationPrefs(key, 0, true);
+    setContextMenu(null);
+  }, []);
 
   const [archivedExpanded, setArchivedExpanded] = useState(false);
 
@@ -649,6 +666,9 @@ export function Sidebar({
                     addFriendLabel={t("sidebar.addFriend")}
                     onlineLabel={t("sidebar.online")}
                     requestPendingLabel={t("sidebar.requestPending")}
+                    displayName={userProfiles[username]?.display_name || username}
+                    avatarUrl={userProfiles[username]?.avatar_url || null}
+                    statusText={userProfiles[username]?.status || ""}
                   />
                   {/* Divider between you and others */}
                   {otherUsers.length > 0 && (
@@ -673,6 +693,9 @@ export function Sidebar({
                   onAddFriend={onAddFriend}
                   isFriend={friends.includes(user)}
                   hasPendingRequest={pendingFriendUsers.includes(user)}
+                  displayName={userProfiles[user]?.display_name || user}
+                  avatarUrl={userProfiles[user]?.avatar_url || null}
+                  statusText={userProfiles[user]?.status || ""}
                 />
               ))}
             </div>
@@ -735,11 +758,22 @@ export function Sidebar({
       {/* Footer */}
       <div className="border-t border-border px-5 py-3">
         <div className="flex items-center gap-2">
+          <Avatar
+            src={userProfiles[username]?.avatar_url || null}
+            name={userProfiles[username]?.display_name || username}
+            size="sm"
+          />
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-medium text-foreground/70 block truncate">
+              {userProfiles[username]?.display_name || username}
+            </span>
+            {userProfiles[username]?.status && (
+              <span className="text-[10px] text-muted-foreground/50 block truncate">
+                {userProfiles[username].status}
+              </span>
+            )}
+          </div>
           <span className="flex h-2 w-2 rounded-full bg-online animate-pulse-dot" />
-          <span className="text-xs text-muted-foreground">
-            {t("sidebar.connectedAs")}{" "}
-            <span className="font-medium text-foreground/70">{username}</span>
-          </span>
         </div>
         {/* Sound toggle */}
         <div className="mt-2 flex items-center justify-between">
@@ -778,21 +812,43 @@ export function Sidebar({
               </>
             )}
           </button>
+          {mutedConversations.includes(contextMenu.key) && (
+            <button
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
+              onClick={() => handleUnmuteConversation(contextMenu.key)}
+            >
+              <Volume2 className="h-3 w-3" />
+              {t("sidebar.unmuteConversation")}
+            </button>
+          )}
+          <div className="border-t border-border my-1" />
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
-            onClick={() => handleMuteToggle(contextMenu.key)}
+            onClick={() => handleMuteDuration(contextMenu.key, 1)}
           >
-            {mutedConversations.includes(contextMenu.key) ? (
-              <>
-                <Volume2 className="h-3 w-3" />
-                {t("sidebar.unmuteConversation")}
-              </>
-            ) : (
-              <>
-                <BellOff className="h-3 w-3" />
-                {t("sidebar.muteConversation")}
-              </>
-            )}
+            <Clock className="h-3 w-3" />
+            {t("settings.muteFor1h")}
+          </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
+            onClick={() => handleMuteDuration(contextMenu.key, 8)}
+          >
+            <Clock className="h-3 w-3" />
+            {t("settings.muteFor8h")}
+          </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
+            onClick={() => handleMuteDuration(contextMenu.key, 24)}
+          >
+            <Clock className="h-3 w-3" />
+            {t("settings.muteFor24h")}
+          </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
+            onClick={() => handleMuteDuration(contextMenu.key, 876000)}
+          >
+            <BellOff className="h-3 w-3" />
+            {t("settings.muteForever")}
           </button>
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"

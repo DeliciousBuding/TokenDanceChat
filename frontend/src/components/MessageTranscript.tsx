@@ -17,6 +17,7 @@ interface MessageTranscriptProps {
   onReply?: (message: ChatMessage) => void;
   onDelete?: (messageId: string) => void;
   onForward?: (message: ChatMessage) => void;
+  onOpenThread?: (message: ChatMessage) => void;
 }
 
 interface UserMessageGroup {
@@ -74,6 +75,7 @@ export function MessageTranscript({
   onReply,
   onDelete,
   onForward,
+  onOpenThread,
 }: MessageTranscriptProps) {
   const { t } = useTranslation();
   const {
@@ -665,6 +667,7 @@ export function MessageTranscript({
                         onDelete={onDelete}
                         onForward={onForward}
                         replyCount={replyCounts[msg.id] || 0}
+                        onOpenThread={onOpenThread}
                         selectMode={selectMode}
                         isSelected={selectedIds.has(msg.id)}
                         onToggleSelect={toggleSelect}

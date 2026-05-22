@@ -3,13 +3,14 @@ import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Copy, Check, Forward, Reply, Trash2, Mic, Play, Pause } from "lucide-react";
-import { cn, formatTime, formatFullTime, avatarGradient, usernameHue } from "@/lib/utils";
+import { cn, formatTime, formatFullTime, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI } from "@/lib/api";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MessageContextMenu } from "@/components/MessageContextMenu";
 import { useSwipeableMessage } from "@/hooks/useTouchGestures";
+import { Avatar } from "@/components/Avatar";
 import type { ChatMessage, LinkPreviewData } from "@/lib/api";
 
 const EmojiPicker = lazy(() => import("@/components/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
@@ -30,6 +31,8 @@ interface MessageBubbleProps {
   onForward?: (message: ChatMessage) => void;
   /** Number of replies to this message */
   replyCount?: number;
+  /** Callback to open the thread panel for this message */
+  onOpenThread?: (message: ChatMessage) => void;
   /** Multi-select mode: whether the bubble is in selection mode */
   selectMode?: boolean;
   /** Multi-select mode: whether this message is currently selected */
@@ -349,6 +352,7 @@ export const MessageBubble = memo(function MessageBubble({
   onDelete,
   onForward,
   replyCount = 0,
+  onOpenThread,
   selectMode = false,
   isSelected = false,
   onToggleSelect,
@@ -513,10 +517,6 @@ export const MessageBubble = memo(function MessageBubble({
     return () => window.removeEventListener("tdchat:close-emoji-picker", handler);
   }, []);
 
-  const gradient = useMemo(
-    () => avatarGradient(message.username),
-    [message.username],
-  );
   const hue = useMemo(
     () => usernameHue(message.username),
     [message.username],
@@ -524,6 +524,12 @@ export const MessageBubble = memo(function MessageBubble({
   const nameColor = `oklch(72% 0.16 ${hue})`;
   const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
   const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
+
+  // Get profile info for display name and avatar.
+  const userProfiles = useChatStore((s) => s.userProfiles);
+  const userProfile = userProfiles[message.username];
+  const messageDisplayName = userProfile?.display_name || message.username;
+  const messageAvatarUrl = userProfile?.avatar_url || null;
 
   // Detect if this message is a voice message (audio-only)
   const isVoiceMessage = useMemo(() => {
@@ -830,14 +836,13 @@ export const MessageBubble = memo(function MessageBubble({
       {/* Avatar for others */}
       {!isOwn && !hideAvatar && (
         <div className="mt-0.5 flex-shrink-0">
-          <button
+          <Avatar
+            src={messageAvatarUrl}
+            name={messageDisplayName}
+            size="md"
             onClick={handleAvatarClick}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ring-1 ring-white/10 hover:ring-white/30 hover:scale-110 transition-all cursor-pointer"
-            style={{ background: gradient }}
-            aria-label={`View ${message.username}'s profile`}
-          >
-            {message.username.charAt(0).toUpperCase()}
-          </button>
+            className="ring-1 ring-white/10 hover:ring-white/30 hover:scale-110 transition-all"
+          />
         </div>
       )}
 
@@ -867,7 +872,7 @@ export const MessageBubble = memo(function MessageBubble({
                 className="text-xs font-medium hover:underline cursor-pointer"
                 style={{ color: nameColor }}
               >
-                {message.username}
+                {messageDisplayName}
               </button>
             )}
             {isOwn && !isGrouped && (
@@ -1131,14 +1136,14 @@ export const MessageBubble = memo(function MessageBubble({
             {replyCount > 0 && (
               <button
                 onClick={selectMode ? undefined : () => {
-                  const el = document.getElementById(`msg-${message.id}`);
-                  if (el) {
-                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  if (onOpenThread) {
+                    onOpenThread(message);
+                  } else {
+                    // Legacy event-based fallback
+                    window.dispatchEvent(
+                      new CustomEvent("tdchat:view-thread", { detail: { messageId: message.id } }),
+                    );
                   }
-                  // Dispatch event to filter thread view.
-                  window.dispatchEvent(
-                    new CustomEvent("tdchat:view-thread", { detail: { messageId: message.id } }),
-                  );
                 }}
                 className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs border border-border/50 bg-card hover:bg-accent transition-colors text-muted-foreground/70"
                 aria-label={`${replyCount} replies`}
@@ -1279,14 +1284,13 @@ export const MessageBubble = memo(function MessageBubble({
 
       {isOwn && !hideAvatar && (
         <div className="mt-0.5 flex-shrink-0">
-          <button
+          <Avatar
+            src={messageAvatarUrl}
+            name={messageDisplayName}
+            size="md"
             onClick={handleAvatarClick}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ring-1 ring-white/10 hover:ring-white/30 hover:scale-110 transition-all cursor-pointer"
-            style={{ background: gradient }}
-            aria-label={`View ${message.username}'s profile`}
-          >
-            {message.username.charAt(0).toUpperCase()}
-          </button>
+            className="ring-1 ring-white/10 hover:ring-white/30 hover:scale-110 transition-all"
+          />
         </div>
       )}
 

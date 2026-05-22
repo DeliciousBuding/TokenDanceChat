@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -24,6 +25,7 @@ type StoredMessage struct {
 	Edited    bool                `json:"edited"`
 	ToUser    string              `json:"to,omitempty"`
 	GroupName string              `json:"group,omitempty"`
+	ThreadID  string              `json:"thread_id,omitempty"`
 	Reactions map[string][]string `json:"reactions,omitempty"`
 }
 
@@ -31,6 +33,38 @@ type StoredMessage struct {
 type StoredRoom struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+// NotificationPref is the per-conversation notification preference record.
+type NotificationPref struct {
+	Key         string `json:"key"`
+	MutedUntil  int64  `json:"muted_until"`
+	ShowPreview bool   `json:"show_preview"`
+}
+
+// UserProfile stores user profile data.
+type UserProfile struct {
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+	Bio         string `json:"bio"`
+	Status      string `json:"status"`
+	LastSeen    int64  `json:"last_seen"`
+}
+
+// Poll represents a poll.
+type Poll struct {
+	ID             string            `json:"id"`
+	RoomID         string            `json:"room_id"`
+	Creator        string            `json:"creator"`
+	Question       string            `json:"question"`
+	Options        []string          `json:"options"`
+	MultipleChoice bool              `json:"multiple_choice"`
+	IsAnonymous    bool              `json:"is_anonymous"`
+	IsClosed       bool              `json:"is_closed"`
+	Votes          map[int]int       `json:"votes"`
+	Voters         map[int][]string  `json:"voters"`
+	CreatedAt      int64             `json:"created_at"`
 }
 
 // Store handles SQLite message persistence.
@@ -72,75 +106,106 @@ func New(dbPath string) (*Store, error) {
 
 func (s *Store) migrate() error {
 	query := `
-	CREATE TABLE IF NOT EXISTS rooms (
-		id TEXT PRIMARY KEY,
-		name TEXT UNIQUE NOT NULL
-	);
-	CREATE TABLE IF NOT EXISTS messages (
-		id TEXT PRIMARY KEY,
-		username TEXT NOT NULL,
-		content TEXT NOT NULL,
-		timestamp INTEGER NOT NULL,
-		reply_to_id TEXT DEFAULT '',
-		room_id TEXT DEFAULT '',
-		deleted INTEGER NOT NULL DEFAULT 0,
-		edited INTEGER NOT NULL DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
-	CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, timestamp DESC);
-	CREATE TABLE IF NOT EXISTS reactions (
-		message_id TEXT NOT NULL,
-		emoji TEXT NOT NULL,
-		username TEXT NOT NULL,
-		PRIMARY KEY (message_id, emoji, username),
-		FOREIGN KEY (message_id) REFERENCES messages(id)
-	);
-	CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id);
-
-	CREATE TABLE IF NOT EXISTS friends (
-		username TEXT NOT NULL,
-		friend TEXT NOT NULL,
-		PRIMARY KEY (username, friend)
-	);
-
-	CREATE TABLE IF NOT EXISTS group_members (
-		group_name TEXT NOT NULL,
-		username TEXT NOT NULL,
-		PRIMARY KEY (group_name, username)
-	);
-
-		CREATE TABLE IF NOT EXISTS blocked_users (
-			username TEXT NOT NULL,
-			blocked TEXT NOT NULL,
-			PRIMARY KEY (username, blocked)
+		CREATE TABLE IF NOT EXISTS rooms (
+			id TEXT PRIMARY KEY,
+			name TEXT UNIQUE NOT NULL
 		);
-
-		CREATE TABLE IF NOT EXISTS pinned_messages (
-			room_id TEXT NOT NULL DEFAULT "",
+		CREATE TABLE IF NOT EXISTS messages (
+			id TEXT PRIMARY KEY,
+			username TEXT NOT NULL,
+			content TEXT NOT NULL,
+			timestamp INTEGER NOT NULL,
+			reply_to_id TEXT DEFAULT '',
+			room_id TEXT DEFAULT '',
+			deleted INTEGER NOT NULL DEFAULT 0,
+			edited INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, timestamp DESC);
+		CREATE TABLE IF NOT EXISTS reactions (
 			message_id TEXT NOT NULL,
-			pinned_by TEXT NOT NULL,
-			pinned_at INTEGER NOT NULL,
-			PRIMARY KEY (room_id, message_id)
+			emoji TEXT NOT NULL,
+			username TEXT NOT NULL,
+			PRIMARY KEY (message_id, emoji, username),
+			FOREIGN KEY (message_id) REFERENCES messages(id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id);
+
+		CREATE TABLE IF NOT EXISTS friends (
+			username TEXT NOT NULL,
+			friend TEXT NOT NULL,
+			PRIMARY KEY (username, friend)
 		);
 
-		CREATE TABLE IF NOT EXISTS pinned_conversations (
+		CREATE TABLE IF NOT EXISTS group_members (
+			group_name TEXT NOT NULL,
 			username TEXT NOT NULL,
-			key TEXT NOT NULL,
-			PRIMARY KEY (username, key)
+			PRIMARY KEY (group_name, username)
 		);
 
-		CREATE TABLE IF NOT EXISTS muted_conversations (
-			username TEXT NOT NULL,
-			key TEXT NOT NULL,
-			PRIMARY KEY (username, key)
-		);
+			CREATE TABLE IF NOT EXISTS blocked_users (
+				username TEXT NOT NULL,
+				blocked TEXT NOT NULL,
+				PRIMARY KEY (username, blocked)
+			);
 
-		CREATE TABLE IF NOT EXISTS archived_conversations (
-			username TEXT NOT NULL,
-			key TEXT NOT NULL,
-			PRIMARY KEY (username, key)
-		);
-	`
+			CREATE TABLE IF NOT EXISTS pinned_messages (
+				room_id TEXT NOT NULL DEFAULT "",
+				message_id TEXT NOT NULL,
+				pinned_by TEXT NOT NULL,
+				pinned_at INTEGER NOT NULL,
+				PRIMARY KEY (room_id, message_id)
+			);
+
+			CREATE TABLE IF NOT EXISTS pinned_conversations (
+				username TEXT NOT NULL,
+				key TEXT NOT NULL,
+				PRIMARY KEY (username, key)
+			);
+
+			CREATE TABLE IF NOT EXISTS muted_conversations (
+				username TEXT NOT NULL,
+				key TEXT NOT NULL,
+				PRIMARY KEY (username, key)
+			);
+
+			CREATE TABLE IF NOT EXISTS archived_conversations (
+				username TEXT NOT NULL,
+				key TEXT NOT NULL,
+				PRIMARY KEY (username, key)
+			);
+
+			CREATE TABLE IF NOT EXISTS notification_prefs (
+				username TEXT NOT NULL,
+				key TEXT NOT NULL,
+				muted_until INTEGER DEFAULT 0,
+				show_preview INTEGER DEFAULT 1,
+				PRIMARY KEY (username, key)
+			);
+
+			CREATE TABLE IF NOT EXISTS user_profiles (
+				username TEXT PRIMARY KEY,
+				display_name TEXT DEFAULT '',
+				avatar_url TEXT DEFAULT '',
+				bio TEXT DEFAULT '',
+				status TEXT DEFAULT '',
+				last_seen INTEGER DEFAULT 0
+			);
+
+			CREATE TABLE IF NOT EXISTS polls (
+				id TEXT PRIMARY KEY,
+				room_id TEXT NOT NULL DEFAULT 'public',
+				creator TEXT NOT NULL,
+				question TEXT NOT NULL,
+				options TEXT NOT NULL,
+				multiple_choice INTEGER DEFAULT 0,
+				is_anonymous INTEGER DEFAULT 0,
+				is_closed INTEGER DEFAULT 0,
+				votes TEXT DEFAULT '{}',
+				voters TEXT DEFAULT '{}',
+				created_at INTEGER NOT NULL
+			);
+		`
 	_, err := s.db.Exec(query)
 	if err != nil {
 		return err
@@ -168,6 +233,9 @@ func (s *Store) migrate() error {
 	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN delivered INTEGER NOT NULL DEFAULT 0"); err != nil {
 		log.Printf("store: migrate add column delivered: %v", err)
 	}
+	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN thread_id TEXT DEFAULT ''"); err != nil {
+		log.Printf("store: migrate add column thread_id: %v", err)
+	}
 
 	// Add indexes for DM/group/delivery queries.
 	// These must be after all ALTER TABLE statements because the columns may
@@ -180,6 +248,9 @@ func (s *Store) migrate() error {
 	}
 	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_delivered ON messages(delivered, to_user)"); err != nil {
 		log.Printf("store: idx_messages_delivered: %v", err)
+	}
+	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, timestamp)"); err != nil {
+		log.Printf("store: idx_messages_thread: %v", err)
 	}
 
 	// Seed default room if not present.
@@ -204,7 +275,7 @@ func (s *Store) ensureDefaultRoom() {
 	}
 }
 
-func (s *Store) InsertMessage(username, content, replyToID, roomID, toUser, groupName string) (StoredMessage, error) {
+func (s *Store) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -212,8 +283,8 @@ func (s *Store) InsertMessage(username, content, replyToID, roomID, toUser, grou
 	ts := time.Now().UnixMilli()
 
 	_, err := s.db.Exec(
-		"INSERT INTO messages (id, username, content, timestamp, reply_to_id, room_id, to_user, group_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		id, username, content, ts, replyToID, roomID, toUser, groupName,
+		"INSERT INTO messages (id, username, content, timestamp, reply_to_id, room_id, to_user, group_name, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		id, username, content, ts, replyToID, roomID, toUser, groupName, threadID,
 	)
 	if err != nil {
 		return StoredMessage{}, err
@@ -228,6 +299,7 @@ func (s *Store) InsertMessage(username, content, replyToID, roomID, toUser, grou
 		Timestamp: ts,
 		ReplyToID: replyToID,
 		RoomID:    roomID,
+		ThreadID:  threadID,
 	}, nil
 }
 
@@ -249,24 +321,24 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 	if before > 0 {
 		if roomID != "" {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE room_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE room_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
 				roomID, before, limit,
 			)
 		} else {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE to_user = '' AND group_name = '' AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE to_user = '' AND group_name = '' AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
 				before, limit,
 			)
 		}
 	} else {
 		if roomID != "" {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE room_id = ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE room_id = ? ORDER BY timestamp DESC LIMIT ?",
 				roomID, limit,
 			)
 		} else {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE to_user = '' AND group_name = '' ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE to_user = '' AND group_name = '' ORDER BY timestamp DESC LIMIT ?",
 				limit,
 			)
 		}
@@ -281,7 +353,7 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 	messages := make([]StoredMessage, 0, limit)
 	for rows.Next() {
 		var m StoredMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
 			log.Printf("store: scan error: %v", err)
 			continue
 		}
@@ -502,9 +574,9 @@ func (s *Store) GetMessageByID(messageID string) (StoredMessage, error) {
 func (s *Store) getMessageByIDLocked(messageID string) (StoredMessage, error) {
 	var m StoredMessage
 	err := s.db.QueryRow(
-		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE id = ?",
+		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE id = ?",
 		messageID,
-	).Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName)
+	).Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID)
 	if err != nil {
 		return StoredMessage{}, err
 	}
@@ -518,29 +590,29 @@ func (s *Store) getMessageByIDLocked(messageID string) (StoredMessage, error) {
 
 func (s *Store) createFTS5() error {
 	query := `
-	CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-		content, username, room_id UNINDEXED,
-		content='messages', content_rowid='rowid',
-		tokenize='unicode61'
-	);
+		CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+			content, username, room_id UNINDEXED,
+			content='messages', content_rowid='rowid',
+			tokenize='unicode61'
+		);
 
-	CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
-		INSERT INTO messages_fts(rowid, content, username, room_id)
-		VALUES (new.rowid, new.content, new.username, new.room_id);
-	END;
+		CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+			INSERT INTO messages_fts(rowid, content, username, room_id)
+			VALUES (new.rowid, new.content, new.username, new.room_id);
+		END;
 
-	CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
-		INSERT INTO messages_fts(messages_fts, rowid, content, username, room_id)
-		VALUES ('delete', old.rowid, old.content, old.username, old.room_id);
-	END;
+		CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+			INSERT INTO messages_fts(messages_fts, rowid, content, username, room_id)
+			VALUES ('delete', old.rowid, old.content, old.username, old.room_id);
+		END;
 
-	CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
-		INSERT INTO messages_fts(messages_fts, rowid, content, username, room_id)
-		VALUES ('delete', old.rowid, old.content, old.username, old.room_id);
-		INSERT INTO messages_fts(rowid, content, username, room_id)
-		VALUES (new.rowid, new.content, new.username, new.room_id);
-	END;
-	`
+		CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
+			INSERT INTO messages_fts(messages_fts, rowid, content, username, room_id)
+			VALUES ('delete', old.rowid, old.content, old.username, old.room_id);
+			INSERT INTO messages_fts(rowid, content, username, room_id)
+			VALUES (new.rowid, new.content, new.username, new.room_id);
+		END;
+		`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -613,22 +685,22 @@ func (s *Store) SearchMessages(query string, roomID string, limit int) ([]Search
 
 	if roomID != "" {
 		rows, err = s.db.Query(`
-			SELECT m.id, m.username, m.content, m.timestamp,
-				snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
-				bm25(messages_fts) AS rank
-			FROM messages_fts
-			JOIN messages m ON m.rowid = messages_fts.rowid
-			WHERE m.deleted = 0 AND messages_fts MATCH ? AND messages_fts.room_id = ?
-			ORDER BY rank LIMIT ?`, query, roomID, limit)
+				SELECT m.id, m.username, m.content, m.timestamp,
+					snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
+					bm25(messages_fts) AS rank
+				FROM messages_fts
+				JOIN messages m ON m.rowid = messages_fts.rowid
+				WHERE m.deleted = 0 AND messages_fts MATCH ? AND messages_fts.room_id = ?
+				ORDER BY rank LIMIT ?`, query, roomID, limit)
 	} else {
 		rows, err = s.db.Query(`
-			SELECT m.id, m.username, m.content, m.timestamp,
-				snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
-				bm25(messages_fts) AS rank
-			FROM messages_fts
-			JOIN messages m ON m.rowid = messages_fts.rowid
-			WHERE messages_fts MATCH ?
-			ORDER BY rank LIMIT ?`, query, limit)
+				SELECT m.id, m.username, m.content, m.timestamp,
+					snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
+					bm25(messages_fts) AS rank
+				FROM messages_fts
+				JOIN messages m ON m.rowid = messages_fts.rowid
+				WHERE messages_fts MATCH ?
+				ORDER BY rank LIMIT ?`, query, limit)
 	}
 
 	if err != nil {
@@ -792,7 +864,7 @@ func (s *Store) GetUndeliveredDMs(username string, limit int) []StoredMessage {
 		limit = 50
 	}
 	rows, err := s.db.Query(
-		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name FROM messages WHERE to_user = ? AND deleted = 0 AND delivered = 0 ORDER BY timestamp ASC LIMIT ?",
+		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE to_user = ? AND deleted = 0 AND delivered = 0 ORDER BY timestamp ASC LIMIT ?",
 		username, limit,
 	)
 	if err != nil {
@@ -802,7 +874,7 @@ func (s *Store) GetUndeliveredDMs(username string, limit int) []StoredMessage {
 	var msgs []StoredMessage
 	for rows.Next() {
 		var m StoredMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
 			continue
 		}
 		msgs = append(msgs, m)
@@ -921,7 +993,7 @@ func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
 	var msgs []StoredMessage
 	for rows.Next() {
 		var m StoredMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
 			continue
 		}
 		if m.Deleted {
@@ -1079,3 +1151,309 @@ func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
 		}
 		return count > 0
 	}
+
+	// --- Threaded replies ---
+
+	// GetThreadMessages returns messages in a thread, ordered by creation time ascending.
+	func (s *Store) GetThreadMessages(parentMessageID string) []StoredMessage {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+
+		rows, err := s.db.Query(
+			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE thread_id = ? AND deleted = 0 ORDER BY timestamp ASC",
+			parentMessageID,
+		)
+		if err != nil {
+			log.Printf("store: GetThreadMessages query error: %v", err)
+			return nil
+		}
+		defer rows.Close()
+
+		messages := make([]StoredMessage, 0)
+		for rows.Next() {
+			var m StoredMessage
+			if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
+				log.Printf("store: GetThreadMessages scan error: %v", err)
+				continue
+			}
+			messages = append(messages, m)
+		}
+		if err := rows.Err(); err != nil {
+			log.Printf("store: GetThreadMessages iteration error: %v", err)
+		}
+
+		// Enrich with reactions.
+		if len(messages) > 0 {
+			messageIDs := make([]string, len(messages))
+			for i, m := range messages {
+				messageIDs[i] = m.ID
+			}
+			reactions := s.GetReactionsForMessages(messageIDs)
+			for i := range messages {
+				messages[i].Reactions = reactions[messages[i].ID]
+			}
+		}
+
+		return messages
+	}
+
+	// GetThreadReplyCount returns the number of replies in a thread.
+	func (s *Store) GetThreadReplyCount(parentMessageID string) int {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		var count int
+		if err := s.db.QueryRow(
+			"SELECT COUNT(*) FROM messages WHERE thread_id = ? AND deleted = 0",
+			parentMessageID,
+		).Scan(&count); err != nil {
+			log.Printf("store: GetThreadReplyCount error: %v", err)
+			return 0
+		}
+		return count
+	}
+
+	// --- Notification preferences ---
+
+	// SetNotificationPrefs upserts notification preferences for a (username, key) pair.
+	func (s *Store) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		showPreviewInt := 0
+		if showPreview {
+			showPreviewInt = 1
+		}
+		_, err := s.db.Exec(
+			"INSERT INTO notification_prefs (username, key, muted_until, show_preview) VALUES (?, ?, ?, ?) ON CONFLICT(username, key) DO UPDATE SET muted_until = excluded.muted_until, show_preview = excluded.show_preview",
+			username, key, mutedUntil, showPreviewInt,
+		)
+		return err
+	}
+
+	// GetNotificationPrefs returns the notification preferences for a (username, key) pair.
+	func (s *Store) GetNotificationPrefs(username, key string) (mutedUntil int64, showPreview bool, err error) {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+
+		var showPreviewInt int
+		err = s.db.QueryRow(
+			"SELECT muted_until, show_preview FROM notification_prefs WHERE username = ? AND key = ?",
+			username, key,
+		).Scan(&mutedUntil, &showPreviewInt)
+		if err != nil {
+			if err.Error() == "sql: no rows in result set" {
+				return 0, true, nil
+			}
+			return 0, true, err
+		}
+		return mutedUntil, showPreviewInt != 0, nil
+	}
+
+	// ListNotificationPrefs returns all notification preference records for a user.
+	func (s *Store) ListNotificationPrefs(username string) []NotificationPref {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+
+		rows, err := s.db.Query(
+			"SELECT key, muted_until, show_preview FROM notification_prefs WHERE username = ? ORDER BY rowid",
+			username,
+		)
+		if err != nil {
+			return nil
+		}
+		defer rows.Close()
+
+		var prefs []NotificationPref
+		for rows.Next() {
+			var p NotificationPref
+			var showPreviewInt int
+			if err := rows.Scan(&p.Key, &p.MutedUntil, &showPreviewInt); err != nil {
+				continue
+			}
+			p.ShowPreview = showPreviewInt != 0
+			prefs = append(prefs, p)
+		}
+		if err := rows.Err(); err != nil {
+			log.Printf("store: ListNotificationPrefs iteration error: %v", err)
+		}
+		if prefs == nil {
+			prefs = []NotificationPref{}
+		}
+		return prefs
+	}
+
+
+// --- User profiles ---
+
+// UpsertUserProfile inserts or updates a user profile.
+func (s *Store) UpsertUserProfile(username, displayName, avatarURL, bio, status string, lastSeen int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(
+		"INSERT INTO user_profiles (username, display_name, avatar_url, bio, status, last_seen) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(username) DO UPDATE SET display_name = excluded.display_name, avatar_url = excluded.avatar_url, bio = excluded.bio, status = excluded.status, last_seen = excluded.last_seen",
+		username, displayName, avatarURL, bio, status, lastSeen,
+	)
+	return err
+}
+
+// GetUserProfile returns a user profile by username.
+func (s *Store) GetUserProfile(username string) (*UserProfile, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var p UserProfile
+	err := s.db.QueryRow(
+		"SELECT username, display_name, avatar_url, bio, status, last_seen FROM user_profiles WHERE username = ?",
+		username,
+	).Scan(&p.Username, &p.DisplayName, &p.AvatarURL, &p.Bio, &p.Status, &p.LastSeen)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// UpdateUserStatus updates the custom status for a user.
+func (s *Store) UpdateUserStatus(username, status string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("UPDATE user_profiles SET status = ? WHERE username = ?", status, username)
+	return err
+}
+
+// UpdateUserLastSeen updates the last seen timestamp for a user.
+func (s *Store) UpdateUserLastSeen(username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ts := time.Now().UnixMilli()
+	_, err := s.db.Exec(
+		"INSERT INTO user_profiles (username, last_seen) VALUES (?, ?) ON CONFLICT(username) DO UPDATE SET last_seen = excluded.last_seen",
+		username, ts,
+	)
+	return err
+}
+
+// GetAllUserProfiles returns all user profiles.
+func (s *Store) GetAllUserProfiles() ([]UserProfile, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query("SELECT username, display_name, avatar_url, bio, status, last_seen FROM user_profiles ORDER BY username")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var profiles []UserProfile
+	for rows.Next() {
+		var p UserProfile
+		if err := rows.Scan(&p.Username, &p.DisplayName, &p.AvatarURL, &p.Bio, &p.Status, &p.LastSeen); err != nil {
+			continue
+		}
+		profiles = append(profiles, p)
+	}
+	if profiles == nil {
+		profiles = []UserProfile{}
+	}
+	return profiles, rows.Err()
+}
+
+// --- Polls ---
+
+// CreatePoll inserts a new poll.
+func (s *Store) CreatePoll(poll *Poll) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	optsJSON, _ := json.Marshal(poll.Options)
+	votesJSON, _ := json.Marshal(poll.Votes)
+	votersJSON, _ := json.Marshal(poll.Voters)
+	_, err := s.db.Exec(
+		"INSERT INTO polls (id, room_id, creator, question, options, multiple_choice, is_anonymous, is_closed, votes, voters, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		poll.ID, poll.RoomID, poll.Creator, poll.Question, string(optsJSON),
+		boolToInt(poll.MultipleChoice), boolToInt(poll.IsAnonymous), 0,
+		string(votesJSON), string(votersJSON), poll.CreatedAt,
+	)
+	return err
+}
+
+// GetPoll returns a poll by ID.
+func (s *Store) GetPoll(pollID string) (*Poll, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var p Poll
+	var optsJSON, votesJSON, votersJSON string
+	var mc, anon, closed int
+	err := s.db.QueryRow(
+		"SELECT id, room_id, creator, question, options, multiple_choice, is_anonymous, is_closed, votes, voters, created_at FROM polls WHERE id = ?",
+		pollID,
+	).Scan(&p.ID, &p.RoomID, &p.Creator, &p.Question, &optsJSON, &mc, &anon, &closed, &votesJSON, &votersJSON, &p.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	p.MultipleChoice = mc != 0
+	p.IsAnonymous = anon != 0
+	p.IsClosed = closed != 0
+	json.Unmarshal([]byte(optsJSON), &p.Options)
+	json.Unmarshal([]byte(votesJSON), &p.Votes)
+	json.Unmarshal([]byte(votersJSON), &p.Voters)
+	if p.Options == nil {
+		p.Options = []string{}
+	}
+	if p.Votes == nil {
+		p.Votes = make(map[int]int)
+	}
+	if p.Voters == nil {
+		p.Voters = make(map[int][]string)
+	}
+	return &p, nil
+}
+
+// VotePoll records a vote for a poll option.
+func (s *Store) VotePoll(pollID string, username string, optionIndex int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var optsJSON, votesJSON, votersJSON string
+	err := s.db.QueryRow("SELECT options, votes, voters FROM polls WHERE id = ?", pollID).Scan(&optsJSON, &votesJSON, &votersJSON)
+	if err != nil {
+		return err
+	}
+
+	var options []string
+	var votes map[int]int
+	var voters map[int][]string
+	json.Unmarshal([]byte(optsJSON), &options)
+	json.Unmarshal([]byte(votesJSON), &votes)
+	json.Unmarshal([]byte(votersJSON), &voters)
+	if votes == nil {
+		votes = make(map[int]int)
+	}
+	if voters == nil {
+		voters = make(map[int][]string)
+	}
+
+	for _, v := range voters[optionIndex] {
+		if v == username {
+			return nil
+		}
+	}
+
+	votes[optionIndex]++
+	voters[optionIndex] = append(voters[optionIndex], username)
+
+	newVotesJSON, _ := json.Marshal(votes)
+	newVotersJSON, _ := json.Marshal(voters)
+	_, err = s.db.Exec("UPDATE polls SET votes = ?, voters = ? WHERE id = ?", string(newVotesJSON), string(newVotersJSON), pollID)
+	return err
+}
+
+// ClosePoll marks a poll as closed.
+func (s *Store) ClosePoll(pollID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("UPDATE polls SET is_closed = 1 WHERE id = ?", pollID)
+	return err
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
