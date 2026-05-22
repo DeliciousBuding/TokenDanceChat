@@ -21,7 +21,7 @@ import { playMessageSound, playMentionSound, playOnlineSound } from "@/lib/sound
 
 const BASE_TITLE = "TokenDanceChat";
 let unreadTitleCount = 0;
-let isTabActive = true;
+let isTabActive = typeof document !== "undefined" ? !document.hidden : true;
 
 function updatePageTitle(): void {
   if (!isTabActive && unreadTitleCount > 0) {
