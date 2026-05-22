@@ -99,6 +99,9 @@ interface ChatState {
   // Pinned messages
   pinnedMessages: ChatMessage[];
 
+  // Lightbox
+  lightboxImage: string | null;
+
   // Actions
   setView: (view: ViewState) => void;
   setUsername: (username: string) => void;
@@ -136,6 +139,7 @@ interface ChatState {
   addBlockedUser: (username: string) => void;
   removeBlockedUser: (username: string) => void;
   setPinnedMessages: (messages: ChatMessage[]) => void;
+  setLightboxImage: (url: string | null) => void;
   reset: () => void;
 }
 
@@ -164,6 +168,7 @@ export const useChatStore = create<ChatState>((set) => ({
   latestMention: null,
   blockedUsers: [],
   pinnedMessages: [],
+  lightboxImage: null,
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
@@ -307,6 +312,7 @@ export const useChatStore = create<ChatState>((set) => ({
       blockedUsers: state.blockedUsers.filter((u) => u !== username),
     })),
   setPinnedMessages: (pinnedMessages) => set({ pinnedMessages }),
+  setLightboxImage: (lightboxImage) => set({ lightboxImage }),
   reset: () =>
     set({
       view: "join",
@@ -333,5 +339,6 @@ export const useChatStore = create<ChatState>((set) => ({
       latestMention: null,
       blockedUsers: [],
       pinnedMessages: [],
+      lightboxImage: null,
     }),
 }));

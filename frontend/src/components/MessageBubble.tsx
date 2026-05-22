@@ -2,7 +2,7 @@ import { memo, useMemo, useCallback, useState, useRef, useEffect } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, Check, Forward, Reply, Trash2 } from "lucide-react";
+import { Copy, Check, Forward } from "lucide-react";
 import { cn, formatTime, avatarGradient, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
@@ -257,11 +257,6 @@ export const MessageBubble = memo(function MessageBubble({
   }>({ visible: false, x: 0, y: 0 });
   const contextMenuPosRef = useRef({ x: 0, y: 0 });
 
-  // Track pointer position for context menu placement
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    contextMenuPosRef.current = { x: e.clientX, y: e.clientY };
-  }, []);
-
   // Long-press detection for entering select mode / context menu
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
@@ -512,6 +507,7 @@ export const MessageBubble = memo(function MessageBubble({
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerCancel={clearLongPress}
+      onContextMenu={handleContextMenu}
       onClick={handleBubbleClick}
       onDoubleClick={() => {
         if (!selectMode && !isDeleted && onReply) {
@@ -1036,6 +1032,34 @@ export const MessageBubble = memo(function MessageBubble({
           onConfirm={() => { onDelete?.(message.id); setConfirmDelete(false); }}
           onCancel={() => setConfirmDelete(false)}
         />
+        {contextMenu.visible && (
+          <MessageContextMenu
+            message={message}
+            isOwn={isOwn}
+            position={{ x: contextMenu.x, y: contextMenu.y }}
+            onClose={() => setContextMenu({ visible: false, x: 0, y: 0 })}
+            onReply={() => {
+              setContextMenu({ visible: false, x: 0, y: 0 });
+              onReply?.(message);
+            }}
+            onCopy={async () => {
+              setContextMenu({ visible: false, x: 0, y: 0 });
+              try { await navigator.clipboard.writeText(message.content); } catch { /* noop */ }
+            }}
+            onForward={() => {
+              setContextMenu({ visible: false, x: 0, y: 0 });
+              onForward?.(message);
+            }}
+            onDelete={() => {
+              setContextMenu({ visible: false, x: 0, y: 0 });
+              onDelete?.(message.id);
+            }}
+            onSelect={() => {
+              setContextMenu({ visible: false, x: 0, y: 0 });
+              onLongPress?.(message.id);
+            }}
+          />
+        )}
       </>
     );
 });

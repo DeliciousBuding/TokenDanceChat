@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { X, ZoomIn, ZoomOut } from "lucide-react";
 import { useState } from "react";
 
@@ -9,6 +9,7 @@ interface ImageLightboxProps {
 
 export function ImageLightbox({ imageUrl, onClose }: ImageLightboxProps) {
   const [scale, setScale] = useState(1);
+  const imageWrapperRef = useRef<HTMLDivElement>(null);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -17,16 +18,29 @@ export function ImageLightbox({ imageUrl, onClose }: ImageLightboxProps) {
     [onClose],
   );
 
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    setScale((s) => {
+      const delta = e.deltaY > 0 ? -0.15 : 0.15;
+      return Math.max(0.5, Math.min(3, s + delta));
+    });
+  }, []);
+
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+    const wrapper = imageWrapperRef.current;
+    wrapper?.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      wrapper?.removeEventListener("wheel", handleWheel);
+    };
+  }, [handleKeyDown, handleWheel]);
 
   const zoomIn = () => setScale((s) => Math.min(s + 0.25, 3));
   const zoomOut = () => setScale((s) => Math.max(s - 0.25, 0.5));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
@@ -59,12 +73,16 @@ export function ImageLightbox({ imageUrl, onClose }: ImageLightboxProps) {
       </div>
 
       {/* Image */}
-      <div className="relative max-w-[90vw] max-h-[90vh] overflow-hidden">
+      <div
+        ref={imageWrapperRef}
+        className="relative max-w-[90vw] max-h-[90vh] overflow-hidden"
+      >
         <img
           src={imageUrl}
           alt="Full-size image"
-          className="max-w-full max-h-full object-contain cursor-grab transition-transform duration-200"
+          className="max-w-full max-h-full object-contain cursor-zoom-in transition-transform duration-200"
           style={{ transform: `scale(${scale})` }}
+          draggable={false}
           onClick={(e) => e.stopPropagation()}
         />
       </div>
