@@ -67,6 +67,20 @@ export function ChatLayout() {
   const mainRef = useRef<HTMLDivElement>(null);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
 
+  // Conversation crossfade on switch
+  const conversationKey = useMemo(() =>
+    currentChat.type === "dm" ? `dm:${currentChat.username}` :
+    currentChat.type === "group" ? `group:${currentChat.name}` :
+    "public",
+  [currentChat]);
+  const [convFade, setConvFade] = useState(false);
+
+  useEffect(() => {
+    setConvFade(true);
+    const t = setTimeout(() => setConvFade(false), 200);
+    return () => clearTimeout(t);
+  }, [conversationKey]);
+
   // Clear unread badge and send read receipt when switching conversations.
   useEffect(() => {
     const key =
@@ -103,6 +117,8 @@ export function ChatLayout() {
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
+    setConversationSearchOpen(false);
+    setSearchHighlight("");
   }, [currentChat]);
 
   // Auto-dismiss upload error toast
@@ -143,7 +159,14 @@ export function ChatLayout() {
         const tag = (e.target as HTMLElement).tagName;
         if (tag !== "INPUT" && tag !== "TEXTAREA") {
           e.preventDefault();
-          setConversationSearchOpen((prev) => !prev);
+          setConversationSearchOpen((prev) => {
+            if (!prev) return true;
+            // Already open — focus the input field.
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent("tdchat:focus-conversation-search"));
+            }, 50);
+            return prev;
+          });
         }
       }
       if (e.key === "Escape") {
@@ -785,9 +808,11 @@ export function ChatLayout() {
 
         {/* Message transcript */}
         <div className="relative flex-1 overflow-hidden flex flex-col">
-          <ErrorBoundary fallback={<div className="flex items-center justify-center h-full text-sm text-muted-foreground/50">Chat transcript unavailable</div>}>
-            <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} onOpenThread={handleOpenThread} highlight={searchHighlight} />
-          </ErrorBoundary>
+          <div className={cn("flex-1 min-h-0 transition-opacity duration-150", convFade ? "opacity-40" : "opacity-100")}>
+            <ErrorBoundary fallback={<div className="flex items-center justify-center h-full text-sm text-muted-foreground/50">Chat transcript unavailable</div>}>
+              <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} onOpenThread={handleOpenThread} highlight={searchHighlight} />
+            </ErrorBoundary>
+          </div>
 
           {/* Chat input - fixed at bottom */}
           <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground/50">Chat input unavailable</div>}>

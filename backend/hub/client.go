@@ -216,6 +216,14 @@ func (c *Client) ReadPump() {
 			c.handleCallIceCandidate(msg)
 		case "call_list":
 			c.handleCallList()
+		case "call_room_create":
+			c.handleCallRoomCreate(msg)
+		case "call_room_join":
+			c.handleCallRoomJoin(msg)
+		case "call_room_leave":
+			c.handleCallRoomLeave(msg)
+		case "call_room_list":
+			c.handleCallRoomList(msg)
 		case "custom_emoji_add":
 			c.handleCustomEmojiAdd(msg)
 		case "custom_emoji_list":
@@ -234,6 +242,8 @@ func (c *Client) ReadPump() {
 			c.handleFolderRemoveConversation(msg)
 		case "folder_list":
 			c.handleFolderList()
+		case "translate_message":
+			c.handleTranslateMessage(msg)
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -2747,6 +2757,38 @@ func (c *Client) handleCallStart(msg Message) {
 	}
 
 	callID := uuid.New().String()
+
+	// Group call room routing: forward directly to the target user within the room.
+	if msg.RoomID != "" {
+		room := c.hub.GetCallRoom(msg.RoomID)
+		if room == nil {
+			return
+		}
+		// Verify sender and target are in the room.
+		inRoom := false
+		for _, p := range room.Participants {
+			if p == c.username {
+				inRoom = true
+				break
+			}
+		}
+		if !inRoom {
+			return
+		}
+		incoming, _ := json.Marshal(Message{
+			Type:     "call_incoming",
+			CallID:   callID,
+			From:     c.username,
+			To:       to,
+			CallType: callType,
+			SDP:      msg.SDP,
+			RoomID:   msg.RoomID,
+		})
+		c.hub.SendToUser(to, incoming)
+		return
+	}
+
+	// 1:1 call (original logic)
 	cs := c.hub.CreateCallSession(callID, c.username, to, callType)
 
 	// Log the call start.
@@ -2794,6 +2836,27 @@ func (c *Client) handleCallAccept(msg Message) {
 		return
 	}
 
+	// Group call room routing: forward answer SDP to the caller directly.
+	if msg.RoomID != "" {
+		// In room context, the "from" field is the original caller.
+		caller := msg.From
+		if caller == "" {
+			return
+		}
+		accept, _ := json.Marshal(Message{
+			Type:     "call_accepted",
+			CallID:   callID,
+			From:     c.username,
+			To:       caller,
+			CallType: msg.CallType,
+			SDP:      msg.SDP,
+			RoomID:   msg.RoomID,
+		})
+		c.hub.SendToUser(caller, accept)
+		return
+	}
+
+	// 1:1 call (original logic)
 	cs := c.hub.GetCallSession(callID)
 	if cs == nil {
 		return
@@ -2860,6 +2923,25 @@ func (c *Client) handleCallEnd(msg Message) {
 		return
 	}
 
+	// Group call room: notify the specific peer.
+	if msg.RoomID != "" {
+		to := msg.To
+		if to == "" {
+			return
+		}
+		end, _ := json.Marshal(Message{
+			Type:     "call_ended",
+			CallID:   callID,
+			From:     c.username,
+			To:       to,
+			CallType: msg.CallType,
+			RoomID:   msg.RoomID,
+		})
+		c.hub.SendToUser(to, end)
+		return
+	}
+
+	// 1:1 call (original logic)
 	cs := c.hub.GetCallSession(callID)
 	if cs == nil {
 		return
@@ -2897,6 +2979,25 @@ func (c *Client) handleCallIceCandidate(msg Message) {
 		return
 	}
 
+	// Group call room: relay to the target peer directly.
+	if msg.RoomID != "" {
+		to := msg.To
+		if to == "" {
+			return
+		}
+		ice, _ := json.Marshal(Message{
+			Type:      "call_ice_candidate",
+			CallID:    callID,
+			From:      c.username,
+			To:        to,
+			Candidate: msg.Candidate,
+			RoomID:    msg.RoomID,
+		})
+		c.hub.SendToUser(to, ice)
+		return
+	}
+
+	// 1:1 call (original logic)
 	cs := c.hub.GetCallSession(callID)
 	if cs == nil {
 		return
@@ -2933,6 +3034,168 @@ func (c *Client) handleCallList() {
 	payload, _ := json.Marshal(Message{
 		Type:  "call_list",
 		Calls: calls,
+	})
+	select {
+	case c.send <- payload:
+	default:
+	}
+}
+
+// --- Call room handlers (multi-party group calls) ---
+
+func (c *Client) handleCallRoomCreate(msg Message) {
+	if c.username == "" {
+		return
+	}
+	participants := msg.CallParticipants
+	if len(participants) == 0 {
+		return
+	}
+
+	roomID := uuid.New().String()
+	// Include the creator as a participant.
+	allParticipants := append([]string{c.username}, participants...)
+	room := c.hub.CreateCallRoom(roomID, allParticipants)
+
+	// Confirm to creator.
+	created, _ := json.Marshal(Message{
+		Type:             "call_room_created",
+		RoomID:           roomID,
+		CallType:         msg.CallType,
+		CallParticipants: room.Participants,
+		Username:         c.username,
+	})
+	select {
+	case c.send <- created:
+	default:
+	}
+
+	// Send invite to each participant (excluding creator).
+	invite, _ := json.Marshal(Message{
+		Type:             "call_room_invite",
+		RoomID:           roomID,
+		From:             c.username,
+		CallType:         msg.CallType,
+		CallParticipants: room.Participants,
+	})
+	for _, p := range participants {
+		c.hub.SendToUser(p, invite)
+	}
+}
+
+func (c *Client) handleCallRoomJoin(msg Message) {
+	if c.username == "" {
+		return
+	}
+	roomID := msg.RoomID
+	if roomID == "" {
+		return
+	}
+
+	room, joined := c.hub.JoinCallRoom(roomID, c.username)
+	if room == nil {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "call room not found",
+			ErrorCode: "ROOM_NOT_FOUND",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+	if !joined {
+		// Already in the room — still send existing participants.
+	}
+
+	// Send existing participants to the joiner (excluding self).
+	existing := make([]string, 0)
+	for _, p := range room.Participants {
+		if p != c.username {
+			existing = append(existing, p)
+		}
+	}
+	joinedMsg, _ := json.Marshal(Message{
+		Type:             "call_room_joined",
+		RoomID:           roomID,
+		CallParticipants: existing,
+		Username:         c.username,
+		SDP:              msg.SDP,
+	})
+	select {
+	case c.send <- joinedMsg:
+	default:
+	}
+
+	// Notify existing participants about the new joiner.
+	if joined {
+		newParticipant, _ := json.Marshal(Message{
+			Type:             "call_room_participant_joined",
+			RoomID:           roomID,
+			Username:         c.username,
+			CallParticipants: room.Participants,
+			SDP:              msg.SDP,
+		})
+		for _, p := range room.Participants {
+			if p == c.username {
+				continue
+			}
+			c.hub.SendToUser(p, newParticipant)
+		}
+	}
+}
+
+func (c *Client) handleCallRoomLeave(msg Message) {
+	if c.username == "" {
+		return
+	}
+	roomID := msg.RoomID
+	if roomID == "" {
+		return
+	}
+
+	remaining := c.hub.LeaveCallRoom(roomID, c.username)
+
+	// Notify remaining participants.
+	leftMsg, _ := json.Marshal(Message{
+		Type:             "call_room_participant_left",
+		RoomID:           roomID,
+		Username:         c.username,
+		CallParticipants: remaining,
+	})
+	for _, p := range remaining {
+		c.hub.SendToUser(p, leftMsg)
+	}
+}
+
+func (c *Client) handleCallRoomList(msg Message) {
+	if c.username == "" {
+		return
+	}
+	roomID := msg.RoomID
+	if roomID == "" {
+		return
+	}
+
+	room := c.hub.GetCallRoom(roomID)
+	if room == nil {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "call room not found",
+			ErrorCode: "ROOM_NOT_FOUND",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	payload, _ := json.Marshal(Message{
+		Type:             "call_room_list",
+		RoomID:           roomID,
+		CallParticipants: room.Participants,
 	})
 	select {
 	case c.send <- payload:
@@ -3088,6 +3351,64 @@ func (c *Client) handleCustomEmojiDelete(msg Message) {
 	})
 	c.hub.broadcast <- broadcast
 }
+
+// handleTranslateMessage translates a message using the LLM and sends the result back.
+func (c *Client) handleTranslateMessage(msg Message) {
+	if c.username == "" {
+		return
+	}
+	text := strings.TrimSpace(msg.Content)
+	if text == "" {
+		return
+	}
+	targetLang := msg.To
+	if targetLang == "" {
+		targetLang = "Chinese"
+	}
+	client := c.hub.LLMClient()
+	if client == nil {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "translate_result",
+			MessageID: msg.MessageID,
+			Content:   "[Translation unavailable]",
+			To:        targetLang,
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+	// Translate asynchronously via goroutine.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		prompt := "Translate the following text to " + targetLang + ". Only output the translation, nothing else."
+		resp, err := client.Chat(ctx, prompt, []llm.Message{{Role: "user", Content: text}})
+		var resultMsg Message
+		if err == nil && resp != "" {
+			resultMsg = Message{
+				Type:      "translate_result",
+				MessageID: msg.MessageID,
+				Content:   resp,
+				To:        targetLang,
+			}
+		} else {
+			resultMsg = Message{
+				Type:      "translate_result",
+				MessageID: msg.MessageID,
+				Content:   "[Translation failed]",
+				To:        targetLang,
+			}
+		}
+		data, _ := json.Marshal(resultMsg)
+		select {
+		case c.send <- data:
+		default:
+		}
+	}()
+}
+
 
 // --- Chat folder handlers ---
 

@@ -197,6 +197,13 @@ type CallSession struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
+// CallRoom represents a multi-party group call room.
+type CallRoom struct {
+	ID           string   `json:"id"`
+	Participants []string `json:"participants"`
+	CreatedAt    int64    `json:"created_at"`
+}
+
 // Group represents a chat group.
 type Group struct {
 	Name    string          `json:"name"`
@@ -302,6 +309,9 @@ type Message struct {
 	Candidate string             `json:"candidate,omitempty"`
 	Calls     []store.CallRecord `json:"calls,omitempty"`
 
+	// Multi-party call room
+	CallParticipants []string `json:"call_participants,omitempty"`
+
 	// @all / @everyone mention
 	MentionAll bool `json:"mention_all,omitempty"`
 
@@ -394,6 +404,10 @@ type Hub struct {
 	callSessions   map[string]*CallSession
 	callSessionsMu sync.RWMutex
 
+	// Call room tracking (group calls)
+	callRooms   map[string]*CallRoom
+	callRoomsMu sync.RWMutex
+
 	mu sync.RWMutex
 }
 
@@ -442,6 +456,7 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 		rooms:           make(map[string]map[string]bool),
 		botCooldown:     make(map[string]time.Time),
 		callSessions:    make(map[string]*CallSession),
+		callRooms:       make(map[string]*CallRoom),
 	}
 }
 
@@ -1696,6 +1711,66 @@ func (h *Hub) RemoveCallSession(id string) {
 	h.callSessionsMu.Lock()
 	defer h.callSessionsMu.Unlock()
 	delete(h.callSessions, id)
+}
+
+// CreateCallRoom creates a new multi-party call room.
+func (h *Hub) CreateCallRoom(id string, participants []string) *CallRoom {
+	h.callRoomsMu.Lock()
+	defer h.callRoomsMu.Unlock()
+	cr := &CallRoom{
+		ID:           id,
+		Participants: participants,
+		CreatedAt:    time.Now().UnixMilli(),
+	}
+	h.callRooms[id] = cr
+	return cr
+}
+
+// JoinCallRoom adds a user to an existing call room. Returns the room and whether
+// the user was newly added.
+func (h *Hub) JoinCallRoom(roomID, username string) (*CallRoom, bool) {
+	h.callRoomsMu.Lock()
+	defer h.callRoomsMu.Unlock()
+	cr, ok := h.callRooms[roomID]
+	if !ok {
+		return nil, false
+	}
+	for _, p := range cr.Participants {
+		if p == username {
+			return cr, false // already in room
+		}
+	}
+	cr.Participants = append(cr.Participants, username)
+	return cr, true
+}
+
+// LeaveCallRoom removes a user from a call room. Returns the remaining participants.
+func (h *Hub) LeaveCallRoom(roomID, username string) []string {
+	h.callRoomsMu.Lock()
+	defer h.callRoomsMu.Unlock()
+	cr, ok := h.callRooms[roomID]
+	if !ok {
+		return nil
+	}
+	filtered := make([]string, 0, len(cr.Participants))
+	for _, p := range cr.Participants {
+		if p != username {
+			filtered = append(filtered, p)
+		}
+	}
+	if len(filtered) == 0 {
+		delete(h.callRooms, roomID)
+		return nil
+	}
+	cr.Participants = filtered
+	return filtered
+}
+
+// GetCallRoom returns a call room by ID.
+func (h *Hub) GetCallRoom(roomID string) *CallRoom {
+	h.callRoomsMu.RLock()
+	defer h.callRoomsMu.RUnlock()
+	return h.callRooms[roomID]
 }
 
 // Shutdown gracefully stops the hub and closes all client connections.

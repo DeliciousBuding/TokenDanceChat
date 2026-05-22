@@ -244,6 +244,10 @@ export interface TranslationDict {
     notFoundInConversation: string;
     searchError: string;
     toggleSearch: string;
+    inConversation: string;
+    matchCount: string;
+    noMatchesInConversation: string;
+    pressCtrlF: string;
   };
   emoji: {
     search: string;
@@ -373,6 +377,7 @@ export interface TranslationDict {
     missedCall: string;
     voiceCall: string;
     videoCall: string;
+    groupCall: string;
     muteMic: string;
     unmuteMic: string;
     muteCamera: string;
@@ -384,6 +389,9 @@ export interface TranslationDict {
     rejectCall: string;
     remoteVideoOff: string;
     callEnded: string;
+    joiningRoom: string;
+    participants: string;
+    leaveRoom: string;
   };
 }
 
@@ -630,6 +638,10 @@ const zhCN: TranslationDict = {
     notFoundInConversation: "此对话中无消息",
     searchError: "搜索出错，请重试",
     toggleSearch: "切换搜索",
+    inConversation: "搜索当前对话",
+    matchCount: "{{n}} 条匹配",
+    noMatchesInConversation: "当前对话无匹配",
+    pressCtrlF: "Ctrl+F 搜索",
   },
   emoji: {
     search: "搜索表情...",
@@ -759,6 +771,7 @@ const zhCN: TranslationDict = {
     missedCall: "未接来电",
     voiceCall: "语音通话",
     videoCall: "视频通话",
+    groupCall: "群组通话",
     muteMic: "关闭麦克风",
     unmuteMic: "打开麦克风",
     muteCamera: "关闭摄像头",
@@ -770,6 +783,9 @@ const zhCN: TranslationDict = {
     rejectCall: "拒绝",
     remoteVideoOff: "对方已关闭摄像头",
     callEnded: "通话已结束",
+    joiningRoom: "正在加入通话...",
+    participants: "人",
+    leaveRoom: "离开通话",
   },
 
 };
@@ -1019,6 +1035,10 @@ const enUS: TranslationDict = {
     notFoundInConversation: "No messages in this conversation",
     searchError: "Search error — please try again",
     toggleSearch: "toggle search",
+    inConversation: "Search in conversation",
+    matchCount: "{{n}} matches",
+    noMatchesInConversation: "No matches in conversation",
+    pressCtrlF: "Ctrl+F Search",
   },
   emoji: {
     search: "Search emoji...",
@@ -1148,6 +1168,7 @@ const enUS: TranslationDict = {
     missedCall: "Missed call",
     voiceCall: "Voice Call",
     videoCall: "Video Call",
+    groupCall: "Group Call",
     muteMic: "Mute Mic",
     unmuteMic: "Unmute Mic",
     muteCamera: "Mute Camera",
@@ -1159,6 +1180,9 @@ const enUS: TranslationDict = {
     rejectCall: "Reject",
     remoteVideoOff: "Camera is off",
     callEnded: "Call ended",
+    joiningRoom: "Joining call...",
+    participants: "participants",
+    leaveRoom: "Leave Call",
   },
 
 };
