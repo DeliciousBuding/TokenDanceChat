@@ -419,7 +419,9 @@ func (c *Client) handleChatMessage(msg Message) {
 	targets := assistantMentionTarget(content, c.hub.BotName(), c.hub.AgentName())
 	currentRoom := c.getCurrentRoomID()
 	if targets.TokenBot && c.username != c.hub.BotName() && c.hub.LLMClient() != nil {
-		if c.botResponding.CompareAndSwap(false, true) {
+		if !c.hub.CheckBotCooldown("bot:" + c.username) {
+			// Within 30s per-user cooldown, silently skip.
+		} else if c.botResponding.CompareAndSwap(false, true) {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			go func() {
 				defer cancel()
@@ -438,7 +440,9 @@ func (c *Client) handleChatMessage(msg Message) {
 	}
 	if targets.Agent && c.username != c.hub.AgentName() {
 		if pc := c.hub.PicoclawClient(); pc != nil {
-			if c.botResponding.CompareAndSwap(false, true) {
+			if !c.hub.CheckBotCooldown("agent:" + c.username) {
+				// Within 30s per-user cooldown, silently skip.
+			} else if c.botResponding.CompareAndSwap(false, true) {
 				go func() {
 					defer c.botResponding.Store(false)
 					c.handleAgentResponsePicoClaw(context.Background(), content, currentRoom)
@@ -652,7 +656,7 @@ func assistantMentionTarget(content, botName, agentName string) assistantMention
 			}
 		}
 		// Question trigger — 50% chance
-		if !targets.TokenBot && strings.Contains(content, "?") || strings.Contains(content, "？") {
+		if !targets.TokenBot && (strings.Contains(content, "?") || strings.Contains(content, "？")) {
 			if shouldTrigger(50) {
 				targets.TokenBot = true
 			}
@@ -1581,6 +1585,7 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent, roomID stri
 	}
 
 	response := fullResponse.String()
+	response = sanitizeBotContent(response)
 	if response != "" {
 		// Broadcast the final done signal for the stream.
 		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), "", true, roomID)
@@ -1707,6 +1712,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, r
 	if timedOut.Load() && response == "" {
 		response = "PicoClaw 响应超时，请稍后重试。"
 	}
+	response = sanitizeBotContent(response)
 
 	if response != "" {
 		// Signal stream done.
@@ -1737,7 +1743,6 @@ func sanitizeContent(content string) string {
 	// Strip null bytes.
 	content = strings.ReplaceAll(content, "\x00", "")
 	// Strip HTML tags to prevent stored XSS.
-	htmlTagRe := regexp.MustCompile(`<[^>]*>`)
 	content = htmlTagRe.ReplaceAllString(content, "")
 	// Strip javascript: protocol and common event handlers.
 	content = strings.ReplaceAll(content, "javascript:", "")
@@ -1746,6 +1751,25 @@ func sanitizeContent(content string) string {
 	// Enforce max length.
 	if len([]rune(content)) > maxContentLength {
 		content = string([]rune(content)[:maxContentLength])
+	}
+	return content
+}
+
+// maxBotContentLength is the maximum char count for bot/agent response content.
+const maxBotContentLength = 10000
+
+// htmlTagRe matches HTML tags for stripping from user content.
+var htmlTagRe = regexp.MustCompile(`<[^>]*>`)
+
+// sanitizeBotContent strips null bytes and enforces max length for bot responses.
+// Unlike sanitizeContent, it does NOT strip HTML tags, since bots may
+// legitimately emit code snippets and markup. The frontend is responsible
+// for HTML escaping in display.
+func sanitizeBotContent(content string) string {
+	content = strings.ReplaceAll(content, "\x00", "")
+	content = strings.TrimSpace(content)
+	if len([]rune(content)) > maxBotContentLength {
+		content = string([]rune(content)[:maxBotContentLength])
 	}
 	return content
 }

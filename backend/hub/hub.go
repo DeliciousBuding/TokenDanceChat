@@ -215,6 +215,11 @@ type Hub struct {
 	rooms   map[string]map[string]bool
 	roomsMu sync.RWMutex
 
+	// botCooldown tracks the last time a bot was triggered per key.
+	// Keys use "bot:<username>" and "agent:<username>" for independent cooldowns.
+	botCooldown   map[string]time.Time
+	botCooldownMu sync.Mutex
+
 	mu sync.RWMutex
 }
 
@@ -261,6 +266,7 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 		pendingInvites:  make(map[string]map[string]string),
 		lastSeen:        make(map[string]int64),
 		rooms:           make(map[string]map[string]bool),
+		botCooldown:     make(map[string]time.Time),
 	}
 }
 
@@ -1028,6 +1034,21 @@ func (h *Hub) ShouldBroadcastTyping(username string) bool {
 		return false
 	}
 	h.typingRateLimit[username] = now
+	return true
+}
+
+// CheckBotCooldown returns true if a bot response is allowed for the given key.
+// Keys use "bot:<username>" for TokenBot and "agent:<username>" for PicoClaw,
+// giving each assistant independent 30s per-user cooldowns.
+// Records the current timestamp on success.
+func (h *Hub) CheckBotCooldown(key string) bool {
+	h.botCooldownMu.Lock()
+	defer h.botCooldownMu.Unlock()
+	last, exists := h.botCooldown[key]
+	if exists && time.Since(last) < 30*time.Second {
+		return false
+	}
+	h.botCooldown[key] = time.Now()
 	return true
 }
 
