@@ -47,12 +47,30 @@ const requestIDKey contextKey = "request_id"
 
 // New creates a new Handler.
 func New(h *hub.Hub, s hub.Store, uploadsDir string) *Handler {
-	return &Handler{
+	handler := &Handler{
 		hub:              h,
 		store:            s,
 		uploadsDir:       uploadsDir,
 		mediaStore:       NewLocalMediaStore(uploadsDir),
 		linkPreviewCache: make(map[string]linkPreviewResult),
+	}
+	// Periodic cleanup of expired link preview cache entries.
+	go handler.pruneLinkPreviewCache()
+	return handler
+}
+
+func (h *Handler) pruneLinkPreviewCache() {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		h.mu.Lock()
+		now := time.Now()
+		for k, v := range h.linkPreviewCache {
+			if now.Sub(v.fetchedAt) > 1*time.Hour {
+				delete(h.linkPreviewCache, k)
+			}
+		}
+		h.mu.Unlock()
 	}
 }
 
@@ -179,12 +197,14 @@ func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
 	connections := h.hub.ConnectionCount()
 	messagesTotal := h.store.TotalMessages()
 	uptime := h.hub.Uptime()
+	droppedMessages := h.hub.DroppedMessages()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"connections":    connections,
-		"messages_total": messagesTotal,
-		"uptime_seconds": int64(uptime.Seconds()),
+		"connections":      connections,
+		"messages_total":   messagesTotal,
+		"uptime_seconds":   int64(uptime.Seconds()),
+		"dropped_messages": droppedMessages,
 		"started_at":     h.hub.StartTime.UTC().Format("2006-01-02T15:04:05Z"),
 	})
 }

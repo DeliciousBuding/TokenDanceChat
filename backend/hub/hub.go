@@ -186,6 +186,9 @@ type Hub struct {
 	lastSeen   map[string]int64
 	lastSeenMu sync.RWMutex
 
+	// Metrics
+	droppedMessages atomic.Int64
+
 	// Room system: room ID -> set of member usernames (in-memory).
 	rooms   map[string]map[string]bool
 	roomsMu sync.RWMutex
@@ -440,6 +443,16 @@ func (h *Hub) Uptime() time.Duration {
 	return time.Since(h.StartTime)
 }
 
+// DroppedMessages returns the count of messages dropped due to full send buffers.
+func (h *Hub) DroppedMessages() int64 {
+	return h.droppedMessages.Load()
+}
+
+// IncrementDropped increments the dropped message counter.
+func (h *Hub) IncrementDropped() {
+	h.droppedMessages.Add(1)
+}
+
 // BotName returns the configured bot username, or empty string if no bot is configured.
 func (h *Hub) BotName() string {
 	return h.botName
@@ -637,6 +650,7 @@ func (h *Hub) BroadcastJSON(msg Message) {
 	select {
 	case h.broadcast <- data:
 	default:
+		h.droppedMessages.Add(1)
 		log.Printf("broadcast channel full, dropping message")
 	}
 }
@@ -927,6 +941,7 @@ func (h *Hub) BroadcastStreamChunkToRoom(username, content string, done bool, ro
 		select {
 		case h.broadcast <- data:
 		default:
+			h.droppedMessages.Add(1)
 			log.Printf("broadcast channel full, dropping stream chunk")
 		}
 		return
