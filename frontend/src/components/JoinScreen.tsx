@@ -4,6 +4,7 @@ import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
 import { ChatError, ErrorCode } from "@/lib/api";
+import { ThemeToggle } from "./ThemeToggle";
 import type { Language } from "@/i18n/translations";
 
 const USERNAME_STORAGE_KEY = "tokendance:username";
@@ -173,8 +174,8 @@ export function JoinScreen() {
             </button>
           </form>
 
-          {/* Language toggle */}
-          <div className="mt-4 flex justify-center">
+          {/* Language + Theme toggles */}
+          <div className="mt-4 flex justify-center gap-2">
             <button
               onClick={toggleLang}
               className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-all duration-200"
@@ -183,6 +184,7 @@ export function JoinScreen() {
               <Globe className="h-3 w-3" />
               {t("lang.switchTo")}
             </button>
+            <ThemeToggle />
           </div>
         </div>
 
