@@ -1091,6 +1091,9 @@ func (c *Client) handleRoomJoin(msg Message) {
 	if c.username == "" {
 		return
 	}
+	if !c.checkRateLimit() {
+		return
+	}
 	roomID := msg.RoomID
 	if roomID == "" {
 		return
