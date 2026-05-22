@@ -98,3 +98,9 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 func WSAllow(ip string) bool {
 	return rl.allowWS(ip)
 }
+
+// ResetRateLimiter clears all rate limiter state. Use in tests to avoid
+// cross-test contamination from shared loopback IPs.
+func ResetRateLimiter() {
+	rl = &rateLimiter{}
+}
