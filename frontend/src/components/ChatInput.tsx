@@ -75,6 +75,8 @@ export function ChatInput({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onUploadRef = useRef(onUpload);
+  onUploadRef.current = onUpload;
   const dragCounter = useRef(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
@@ -330,6 +332,7 @@ export function ChatInput({
   }, [content]);
 
   const startRecording = useCallback(async () => {
+    if (isRecording) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -346,7 +349,7 @@ export function ChatInput({
         const blobType = mimeType.split(';')[0];
         const blob = new Blob(chunksRef.current, { type: blobType });
         const file = new File([blob], `voice-${Date.now()}.webm`, { type: blobType });
-        onUpload?.(file);
+        onUploadRef.current?.(file);
       };
       recorder.start();
       setIsRecording(true);
