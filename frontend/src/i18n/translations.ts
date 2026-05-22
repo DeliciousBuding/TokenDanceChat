@@ -36,6 +36,7 @@ export interface TranslationDict {
     groups: string;
     directMessages: string;
     assistants: string;
+    models: string;
     noFriends: string;
     noGroups: string;
     noDMs: string;
@@ -211,6 +212,7 @@ const zhCN: TranslationDict = {
     groups: "群组",
     directMessages: "私信",
     assistants: "助手",
+    models: "模型",
     noFriends: "暂无好友",
     noGroups: "暂无群组",
     noDMs: "暂无私信",
@@ -387,6 +389,7 @@ const enUS: TranslationDict = {
     groups: "Groups",
     directMessages: "Direct Messages",
     assistants: "Assistants",
+    models: "Models",
     noFriends: "No friends yet",
     noGroups: "No groups yet",
     noDMs: "No DMs yet",

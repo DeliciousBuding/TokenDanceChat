@@ -7,12 +7,12 @@ import {
   Hash,
   User,
   Plus,
-  Bot,
-  Workflow,
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
 import { cn, avatarGradient, formatLastSeen } from "@/lib/utils";
+import { assistants, modelCatalog } from "@/lib/assistantRegistry";
+import { AssistantIcon } from "@/components/AssistantIcon";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -237,23 +237,48 @@ export function Sidebar({
         <span className="px-2 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
           {t("sidebar.assistants")}
         </span>
-        {[
-          { name: "TokenBot", Icon: Bot },
-          { name: "PicoClaw", Icon: Workflow },
-        ].map(({ name, Icon }) => (
+        {assistants.map((assistant) => (
           <button
-            key={name}
+            key={assistant.id}
             onClick={() => {
               setCurrentChat({ type: "public" });
-              onMentionAssistant?.(name);
+              onMentionAssistant?.(assistant.name);
               onClose?.();
             }}
-            className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+            className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
           >
-            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="truncate">{name}</span>
+            <AssistantIcon assistant={assistant} size="sm" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{assistant.name}</span>
+              <span className="block truncate text-[10px] text-muted-foreground/55">
+                {assistant.label} · {assistant.model.name}
+              </span>
+            </span>
+            <span className="h-2 w-2 rounded-full bg-online" aria-label={assistant.status} />
           </button>
         ))}
+      </div>
+
+      {/* Model catalog */}
+      <div className="px-3 pt-2 pb-1">
+        <span className="px-2 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+          {t("sidebar.models")}
+        </span>
+        <div className="mt-1 grid grid-cols-2 gap-1.5">
+          {modelCatalog.slice(0, 6).map((model) => (
+            <div
+              key={model.id}
+              className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-background/45 px-2 py-1.5"
+              title={`${model.name} · ${model.protocol}`}
+            >
+              <AssistantIcon model={model} size="sm" />
+              <span className="min-w-0">
+                <span className="block truncate text-[11px] text-foreground/80">{model.providerName}</span>
+                <span className="block truncate text-[9px] text-muted-foreground/50">{model.context}</span>
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Direct Messages */}

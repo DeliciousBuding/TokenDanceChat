@@ -21,7 +21,6 @@ console.error = (...args: unknown[]) => {
 
 import { createRoot } from "react-dom/client";
 import { I18nProvider } from "./i18n/context";
-import { ErrorBoundary } from "./components/ErrorBoundary";
 import App from "./App";
 import "./index.css";
 
