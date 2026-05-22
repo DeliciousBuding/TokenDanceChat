@@ -535,8 +535,13 @@ export const STORAGE_KEY = "tokendance:lang";
 
 export function detectLanguage(): Language {
   if (typeof window === "undefined") return "zh-CN";
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === "zh-CN" || stored === "en-US") return stored;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === "zh-CN" || stored === "en-US") return stored;
+  } catch {
+    // localStorage may throw in restrictive environments (iframe sandbox,
+    // private browsing in older browsers).  Fall through to navigator.
+  }
   const navLang =
     navigator.language ||
     (navigator as { userLanguage?: string }).userLanguage ||
