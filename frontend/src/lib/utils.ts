@@ -44,6 +44,21 @@ export function formatFullTime(timestamp: number): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+export function formatDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) {
+    return "今天";
+  }
+  if (date.toDateString() === yesterday.toDateString()) {
+    return "昨天";
+  }
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 function pad(n: number): string {
   return n.toString().padStart(2, "0");
 }

@@ -25,6 +25,7 @@ export function ChatInput({
   const { t } = useTranslation();
   const { onlineUsers, username, currentChat, pendingImage, setPendingImage, setReplyTo, connected } = useChatStore();
   const [content, setContent] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const draftKey = useMemo(() => {
     if (currentChat.type === "dm") return `dm-${currentChat.username}`;
     if (currentChat.type === "group") return `group-${currentChat.name}`;
@@ -409,7 +410,14 @@ export function ChatInput({
       return;
     }
     sendingRef.current = true;
-    onSend(trimmed);
+
+    // If editing a previous message, send edit instead
+    if (editingMessageId) {
+      chatAPI.sendMessageEdit(editingMessageId, trimmed);
+      setEditingMessageId(null);
+    } else {
+      onSend(trimmed);
+    }
     playSentSound();
     setContent("");
     // Clear reply indicator after send
@@ -430,7 +438,7 @@ export function ChatInput({
     }
     // Allow sending again after a short delay.
     setTimeout(() => { sendingRef.current = false; }, 500);
-  }, [content, disabled, connected, onSend, typingContext, draftStorageKey]);
+  }, [content, disabled, connected, onSend, typingContext, draftStorageKey, editingMessageId]);
 
   // Insert @username at cursor position.
   const insertMention = useCallback(
@@ -495,21 +503,39 @@ export function ChatInput({
       // ↑ key with empty input → edit last sent message (Telegram-style).
       if (e.key === "ArrowUp" && !e.shiftKey && !content && !mentionActive) {
         e.preventDefault();
-        const msgs = useChatStore.getState().messages;
-        for (let i = msgs.length - 1; i >= 0; i--) {
-          if (msgs[i].username === username && !msgs[i].deleted) {
-            setContent(msgs[i].content);
-            // Place cursor at end after React re-render.
-            requestAnimationFrame(() => {
-              const ta = textareaRef.current;
-              if (ta) {
-                ta.focus();
-                ta.setSelectionRange(ta.value.length, ta.value.length);
-              }
-            });
-            break;
+        const allMessages = useChatStore.getState().messages;
+        // Filter by current conversation context
+        const partner = currentChat.type === "dm" ? currentChat.username : null;
+        const group = currentChat.type === "group" ? currentChat.name : null;
+        for (let i = allMessages.length - 1; i >= 0; i--) {
+          const m = allMessages[i];
+          if (m.username !== username || m.deleted) continue;
+          // Conversation filter
+          if (partner) {
+            const sender = m.from || m.username;
+            const recipient = m.to;
+            if (!((sender === partner && recipient === username) || (sender === username && recipient === partner))) continue;
+          } else if (group) {
+            if (m.to !== group && (m as any).group !== group) continue;
+          } else if (m.to) {
+            continue; // public chat: only messages without specific recipient
           }
+          setContent(m.content);
+          setEditingMessageId(m.id);
+          requestAnimationFrame(() => {
+            const ta = textareaRef.current;
+            if (ta) {
+              ta.focus();
+              ta.setSelectionRange(ta.value.length, ta.value.length);
+            }
+          });
+          break;
         }
+      }
+
+      // Clear editing state if user types something different
+      if (editingMessageId && e.key !== "ArrowUp" && e.key !== "ArrowDown" && e.key !== "Shift" && e.key !== "Control" && e.key !== "Alt" && e.key !== "Meta") {
+        // Will be cleared by the onChange handler
       }
     },
     [
@@ -594,6 +620,27 @@ export function ChatInput({
           </div>
           <button
             onClick={() => setReplyTo(null)}
+            aria-label={t("input.cancel")}
+            className="flex-shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Editing indicator */}
+      {editingMessageId && !replyTo && (
+        <div className="flex items-center gap-2 px-4 pt-2">
+          <div className="flex-1 flex items-center gap-2 rounded-lg bg-[oklch(71.2%_0.194_13.428_/_0.06)] border border-[oklch(71.2%_0.194_13.428_/_0.2)] px-3 py-1.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2%_0.194_13.428)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+            </svg>
+            <span className="text-xs text-muted-foreground">
+              {t("input.editingMessage")}
+            </span>
+          </div>
+          <button
+            onClick={() => { setEditingMessageId(null); setContent(""); }}
             aria-label={t("input.cancel")}
             className="flex-shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
