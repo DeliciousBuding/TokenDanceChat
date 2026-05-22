@@ -25,8 +25,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-markdown', 'remark-gfm'],
-          'vendor-icons': ['lucide-react'],
-          'vendor-state': ['zustand'],
         },
       },
     },
