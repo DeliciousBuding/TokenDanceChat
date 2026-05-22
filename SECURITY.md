@@ -12,13 +12,15 @@
 |----------|-------|-------------|
 | **HIGH** | 5 | Path traversal, missing security headers, root container, no connection limits, missing backend content validation |
 | **MEDIUM** | 5 | CSWSH via open origin check, CORS wildcard, DB files in Docker image, unused rehype-raw dependency, webhook secret at-rest hardening |
-| **LOW** | 5 | Hardcoded WS URL, username in localStorage, error log verbosity, no DB pool limits, no Docker HEALTHCHECK |
+| **LOW** | 5 | Hardcoded WS URL, username in localStorage, error log verbosity, no DB pool limits, Docker HEALTHCHECK now fixed |
 
 **HIGH severity issues have been fixed in code.** See sections below for details.
 
 **2026-05-23 webhook update**: Incoming webhook list responses require group owner/admin role and redact secrets. `webhook_create` returns a high-entropy secret only once to the creator, frontend state keeps that one-time secret separate from normal redacted webhook lists, and SQLite stores only versioned salted HMAC hashes. Legacy plaintext webhook rows are migrated to hashes when the store starts.
 
 **2026-05-23 media update**: Uploads now share a `MediaStore` abstraction across local disk, WebDAV, and S3-compatible storage. Ordinary uploads and custom emoji both use safe relative object keys, reject traversal segments, and are served back through same-origin `/uploads/...` routes. production-server/S3 credentials must stay in private environment files.
+
+**2026-05-23 deployment update**: Runtime Docker images now define a `HEALTHCHECK` against `/api/health`. The check derives its port from `CHAT_ADDR`, so deployments using non-default listeners such as `:3000` are still checked correctly.
 
 ---
 
@@ -165,12 +167,12 @@ The middleware is applied in the chain: Logging -> SecurityHeaders -> CORS.
 
 ---
 
-### L-05: No Docker HEALTHCHECK
+### L-05: No Docker HEALTHCHECK [FIXED]
 
-**Location**: `Dockerfile`
+**Location**: `Dockerfile`, `Dockerfile.runtime`
 **Description**: No `HEALTHCHECK` instruction is defined. Docker cannot automatically detect if the application is healthy or restart it on failure.
-**Recommendation**: Add `HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:8080/api/health || exit 1`.
-**Status**: ACCEPTED FOR DEMO.
+**Fix**: Added `HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3` to both runtime images. The command extracts the active port from `CHAT_ADDR` and probes `http://127.0.0.1:<port>/api/health`, so it works with default `:8080` and non-default deployment listeners.
+**Status**: FIXED.
 
 ---
 
@@ -195,6 +197,7 @@ The following areas were reviewed and found to be correctly implemented:
 | **Media Key Containment** | Local/WebDAV/S3 media stores reject empty segments, `.` and `..`; custom emoji no longer bypasses the media abstraction. |
 | **.env Gitignored** | `.gitignore:17-18` covers `.env` and `.env.local`. No secrets committed. |
 | **Minimal Docker Image** | `alpine:3.21` base with only `ca-certificates` and `tzdata`. Build uses multi-stage to exclude Go toolchain from runtime. |
+| **Docker Healthcheck** | `Dockerfile` and `Dockerfile.runtime` probe same-container `/api/health` and follow `CHAT_ADDR`, covering both default and non-default listeners. |
 
 ---
 
@@ -235,7 +238,7 @@ The following areas were reviewed and found to be correctly implemented:
 | DB files in Docker image | No (FIXED) | FIXED |
 | Hardcoded WS URL | Yes | No -- make configurable |
 | rehype-raw in deps | Yes | No -- remove unused dependency |
-| No Docker HEALTHCHECK | Yes | Recommended |
+| No Docker HEALTHCHECK | No (FIXED) | FIXED |
 | No DB pool limits | Yes | Recommended |
 | nginx missing security headers | Yes | Recommended |
 | Webhook secrets stored plaintext | No (FIXED) | FIXED; rotation and audit logging still recommended |
