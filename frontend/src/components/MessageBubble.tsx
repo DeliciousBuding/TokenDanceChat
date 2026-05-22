@@ -908,11 +908,11 @@ export const MessageBubble = memo(function MessageBubble({
           <button
             onClick={() => onReply(message)}
             aria-label={t("input.replyTo")}
-            className="btn-micro rounded-md p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+            className="btn-micro flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
           >
             <svg
-              width="14"
-              height="14"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -1001,11 +1001,11 @@ export const MessageBubble = memo(function MessageBubble({
                 <button
                   onClick={() => { setIsEditing(true); setEditContent(message.content); }}
                   aria-label="Edit message"
-                  className="btn-micro opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted-foreground/30 hover:text-foreground hover:bg-accent transition-all"
+                  className="btn-micro flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-accent transition-all"
                 >
                   <svg
-                    width="12"
-                    height="12"
+                    width="15"
+                    height="15"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -1020,11 +1020,11 @@ export const MessageBubble = memo(function MessageBubble({
                   <button
                     onClick={() => setConfirmDelete(true)}
                     aria-label="Delete message"
-                    className="btn-micro opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all"
+                    className="btn-micro flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-all"
                   >
                     <svg
-                      width="12"
-                      height="12"
+                      width="15"
+                      height="15"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -1152,7 +1152,7 @@ export const MessageBubble = memo(function MessageBubble({
           )}
                     {/* Copy & Forward buttons (appear on hover) */}
           {!selectMode && !isEditing && (
-            <div className="absolute -top-1 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute -top-2 right-0 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={async (e) => {
                   e.stopPropagation();
@@ -1162,10 +1162,10 @@ export const MessageBubble = memo(function MessageBubble({
                     setTimeout(() => setBubbleCopied(false), 1500);
                   } catch { /* Clipboard API may not be available */ }
                 }}
-                className="btn-micro flex items-center gap-1 rounded-lg bg-accent border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
+                className="btn-micro flex h-8 items-center gap-1 rounded-lg bg-accent border border-border px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
                 aria-label={t("message.copy")}
               >
-                {bubbleCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {bubbleCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
               {onForward && (
                 <button
@@ -1173,10 +1173,10 @@ export const MessageBubble = memo(function MessageBubble({
                     e.stopPropagation();
                     onForward(message);
                   }}
-                  className="btn-micro flex items-center gap-1 rounded-lg bg-accent border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
+                  className="btn-micro flex h-8 items-center gap-1 rounded-lg bg-accent border border-border px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
                   aria-label={t("message.forward")}
                 >
-                  <Forward className="h-3 w-3" />
+                  <Forward className="h-3.5 w-3.5" />
                   {t("message.forward")}
                 </button>
               )}
@@ -1186,10 +1186,10 @@ export const MessageBubble = memo(function MessageBubble({
                     e.stopPropagation();
                     chatAPI.sendTranslateMessage(message.id, message.content, "");
                   }}
-                  className="flex items-center gap-1 rounded-lg bg-accent border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
+                  className="flex h-8 items-center gap-1 rounded-lg bg-accent border border-border px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
                   aria-label="Translate"
                 >
-                  <Languages className="h-3 w-3" />
+                  <Languages className="h-3.5 w-3.5" />
                   {translatedText ? "Retranslate" : "Translate"}
                 </button>
               )}
@@ -1227,14 +1227,14 @@ export const MessageBubble = memo(function MessageBubble({
                     );
                   }
                 }}
-                className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs border border-border/50 bg-card hover:bg-accent transition-colors text-muted-foreground/70"
+                className="inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-border/50 bg-card hover:bg-accent transition-colors text-muted-foreground/70"
                 aria-label={`${replyCount} replies`}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="9 17 4 12 9 7" />
                   <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
                 </svg>
-                <span className="text-[10px]">{replyCount}</span>
+                <span className="text-xs">{replyCount}</span>
               </button>
             )}
             {message.reactions &&
@@ -1247,7 +1247,7 @@ export const MessageBubble = memo(function MessageBubble({
                         handleAddReaction(emoji)
                       }
                       className={cn(
-                        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs border border-border/50 bg-card hover:bg-accent transition-colors",
+                        "inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-border/50 bg-card hover:bg-accent transition-colors",
                         currentUsername &&
                           users.includes(currentUsername) &&
                           "border-border bg-accent",
@@ -1256,8 +1256,8 @@ export const MessageBubble = memo(function MessageBubble({
                       aria-label={`${emoji} ${users.length} reactions`}
                       title={users.join(", ")}
                     >
-                      <span className="text-sm leading-none">{emoji}</span>
-                      <span className="text-[10px] text-muted-foreground/70">
+                      <span className="text-base leading-none">{emoji}</span>
+                      <span className="text-xs text-muted-foreground/70">
                         {users.length}
                       </span>
                     </button>
@@ -1267,14 +1267,14 @@ export const MessageBubble = memo(function MessageBubble({
               <>
                 <button
                   onClick={() => setShowEmojiPicker(true)}
-                  className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-border/50 hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
+                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm border border-transparent hover:border-border/50 hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
                   aria-label="Add reaction"
                 >
-                  <span className="text-xs">+</span>
+                  <span className="text-base leading-none">+</span>
                 </button>
                 <button
                   onClick={() => chatAPI.sendPinMessage(message.id)}
-                  className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-border/50 hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
+                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm border border-transparent hover:border-border/50 hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
                   aria-label="Pin message"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

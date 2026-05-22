@@ -584,7 +584,7 @@ export function MessageTranscript({
           aria-atomic="false"
           aria-relevant="additions"
           aria-label={t("chat.roomName")}
-          className="mx-auto w-full max-w-5xl py-4"
+          className="mx-auto w-full max-w-7xl px-1 py-5 sm:px-3"
         >
           {hiddenCount > 0 && (
             <div className="flex justify-center pb-3">
@@ -712,13 +712,13 @@ export function MessageTranscript({
         <button
           onClick={scrollToBottom}
           className={cn(
-            "absolute bottom-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-card border border-border shadow-lg hover:bg-accent hover:scale-105 hover:shadow-xl transition-all duration-200 text-muted-foreground hover:text-foreground",
+            "absolute bottom-4 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-card border border-border shadow-lg hover:bg-accent hover:scale-105 hover:shadow-xl transition-all duration-200 text-muted-foreground hover:text-foreground",
             unreadBounce && "animate-bounce-in",
           )}
           onAnimationEnd={() => setUnreadBounce(false)}
           aria-label={t("transcript.scrollToBottom")}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="6 9 12 15 18 9"/>
           </svg>
           {unreadLocalCount > 0 && (

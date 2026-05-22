@@ -212,7 +212,23 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	}
 
 	hdlr := handler.New(h, st, uploadsDir)
-	if endpoint := os.Getenv("CHAT_MEDIA_WEBDAV_ENDPOINT"); endpoint != "" {
+	if endpoint := os.Getenv("CHAT_MEDIA_S3_ENDPOINT"); endpoint != "" {
+		mediaStore, err := handler.NewS3MediaStore(handler.S3MediaStoreConfig{
+			Endpoint:        endpoint,
+			Region:          os.Getenv("CHAT_MEDIA_S3_REGION"),
+			Bucket:          os.Getenv("CHAT_MEDIA_S3_BUCKET"),
+			AccessKeyID:     os.Getenv("CHAT_MEDIA_S3_ACCESS_KEY_ID"),
+			SecretAccessKey: os.Getenv("CHAT_MEDIA_S3_SECRET_ACCESS_KEY"),
+			SessionToken:    os.Getenv("CHAT_MEDIA_S3_SESSION_TOKEN"),
+			Prefix:          os.Getenv("CHAT_MEDIA_S3_PREFIX"),
+			UsePathStyle:    parseEnvBool(os.Getenv("CHAT_MEDIA_S3_FORCE_PATH_STYLE")),
+		})
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("invalid S3 media store configuration: %w", err)
+		}
+		hdlr.SetMediaStore(mediaStore)
+		log.Printf("media uploads configured for S3-compatible endpoint %s", endpoint)
+	} else if endpoint := os.Getenv("CHAT_MEDIA_WEBDAV_ENDPOINT"); endpoint != "" {
 		hdlr.SetMediaStore(handler.NewWebDAVMediaStore(
 			endpoint,
 			os.Getenv("CHAT_MEDIA_WEBDAV_USER"),
@@ -294,6 +310,15 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	}
 
 	return server, st, h, nil
+}
+
+func parseEnvBool(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 // writeAgentsMD writes the AGENTS.md file with bot rules and system prompt.

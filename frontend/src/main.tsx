@@ -32,9 +32,12 @@ function initTheme() {
   if (stored === "light") {
     root.classList.remove("dark");
     root.classList.add("light");
-  } else if (stored === "dark" || !stored) {
+  } else if (stored === "dark") {
     root.classList.add("dark");
     root.classList.remove("light");
+  } else if (!stored) {
+    root.classList.remove("dark");
+    root.classList.add("light");
   } else if (stored === "system") {
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     root.classList.toggle("dark", prefersDark);

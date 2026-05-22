@@ -10,7 +10,7 @@ function getStoredTheme(): Theme {
   if (stored === "light" || stored === "dark" || stored === "system") {
     return stored;
   }
-  return "dark";
+  return "light";
 }
 
 function applyTheme(theme: Theme) {
@@ -35,7 +35,7 @@ const icons: Record<Theme, typeof Moon> = {
   system: Monitor,
 };
 
-const cycleOrder: Theme[] = ["dark", "light", "system"];
+const cycleOrder: Theme[] = ["light", "dark", "system"];
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
@@ -70,11 +70,11 @@ export function ThemeToggle() {
   return (
     <button
       onClick={cycle}
-      className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+      className="flex h-10 min-w-10 items-center justify-center rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
       aria-label={`Theme: ${theme}`}
       title={`Theme: ${theme}`}
     >
-      <Icon className="h-3.5 w-3.5" />
+      <Icon className="h-4 w-4" />
     </button>
   );
 }

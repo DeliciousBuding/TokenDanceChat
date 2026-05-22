@@ -34,7 +34,7 @@ AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/�
 ### 核心聊天 Core Chat
 - 公共聊天室 · 私信 (DM) · 群组聊天 · 多房间
 - Markdown 消息渲染（代码高亮、表格、GFM）
-- 图片粘贴/拖拽上传（WebDAV 存储）
+- 图片粘贴/拖拽上传（本地/WebDAV/S3-compatible 存储）
 - 语音消息录制
 - 文件分享（文档、压缩包）
 - 消息编辑 · 删除 · 转发 · 引用回复
@@ -140,6 +140,14 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 | `CHAT_PICOCLAW_URL` | — | PicoClaw WebSocket 地址 |
 | `CHAT_PICOCLAW_TOKEN` | — | PicoClaw 认证 Token |
 | `CHAT_ALLOWED_ORIGINS` | — | 允许的 WebSocket 来源（逗号分隔） |
+| `CHAT_MEDIA_S3_ENDPOINT` | — | S3-compatible 媒体存储端点；配置后优先于 WebDAV |
+| `CHAT_MEDIA_S3_REGION` | — | S3 签名 region，S3-compatible 服务可用 `auto` |
+| `CHAT_MEDIA_S3_BUCKET` | — | 媒体对象 bucket |
+| `CHAT_MEDIA_S3_ACCESS_KEY_ID` | — | 媒体对象存储 Access Key |
+| `CHAT_MEDIA_S3_SECRET_ACCESS_KEY` | — | 媒体对象存储 Secret Key |
+| `CHAT_MEDIA_S3_PREFIX` | `uploads` | 媒体对象前缀 |
+| `CHAT_MEDIA_S3_FORCE_PATH_STYLE` | `false` | 是否使用 path-style bucket URL |
+| `CHAT_MEDIA_WEBDAV_ENDPOINT` | — | WebDAV 媒体存储端点；仅在未配置 S3 时启用 |
 
 ---
 
@@ -186,6 +194,7 @@ TokenDanceChat/
 | [docs/agenthub-validation.md](./docs/agenthub-validation.md) | AgentHub 验证项目定位、技术栈映射、Demo 边界 |
 | [docs/engineering-goal.md](./docs/engineering-goal.md) | 长期工程目标、设计原则、验证要求 |
 | [docs/webhook-integration.md](./docs/webhook-integration.md) | 群组传入 Webhook 协议、安全契约、验证命令 |
+| [docs/visual-acceptance.md](./docs/visual-acceptance.md) | 前端截图、多模态审美和视觉验收标准 |
 | [ROADMAP.md](./ROADMAP.md) | 持续目标账本、当前增量、验证记录 |
 | [AGENTS.md](./AGENTS.md) | 项目级 Agent 接手规则、架构地图、验证命令 |
 | [deploy.md](./deploy.md) | 通用部署流程 |

@@ -22,6 +22,7 @@ Do not treat this repository as a separate long-term product architecture. The r
 - `docs/agenthub-validation.md` explains the AgentHub mapping.
 - `docs/engineering-goal.md` explains the long-term engineering goal and verification expectations.
 - `docs/webhook-integration.md` documents the current webhook protocol.
+- `docs/visual-acceptance.md` defines screenshot and aesthetic acceptance for frontend polish.
 
 Do not create a separate project transfer file. If takeover context is needed, fold it into this file or `ROADMAP.md`.
 
@@ -35,25 +36,29 @@ Do not create a separate project transfer file. If takeover context is needed, f
 
 ## Current Increment
 
-Webhook security and usability are the active completed slice in this worktree:
+Media storage and UI acceptance are the active slice in this worktree:
 
-- `webhook_create` returns the generated secret once to the creator.
-- `webhook_list` is owner/admin-only and redacts secrets.
-- `store.Webhook.Secret` has `json:"-"`.
-- Group admins can create, list, copy, and delete webhooks in `GroupInfoPanel`.
-- Frontend state stores one-time webhook secrets separately from redacted webhook lists.
+- `MediaStore` supports local disk, WebDAV, and S3-compatible storage.
+- S3-compatible media config is env-driven and preferred for production-server deployment shape.
+- Ordinary uploads and custom emoji both use safe media keys and same-origin `/uploads/...` routes.
+- Frontend defaults to light mode for a Feishu/Lark-like first impression.
+- Mobile composer keeps the textarea usable by collapsing Markdown tools behind an icon.
+- Visual acceptance is backed by `npm run visual:acceptance`, real browser screenshots, metrics, and aesthetic review.
+- Tablet and mobile use the compact top bar until `lg`; 768px must not be forced into the desktop sidebar/header layout.
 
 Remaining follow-ups:
 
 - Hash webhook secrets in SQLite instead of storing plaintext.
 - Add browser/e2e coverage for webhook create -> HTTP POST -> group message.
 - Add group video call multi-browser smoke/e2e.
+- Continue screenshot-driven UI density work: header overflow, sidebar density, message padding, and remaining tiny metadata.
 
 ## Architecture Map
 
 ```text
 backend/main.go                 HTTP + WS entrypoint
 backend/handler/handler.go      REST handlers, auth, uploads, webhook HTTP ingress
+backend/handler/media.go        local/WebDAV/S3-compatible media storage
 backend/hub/hub.go              Store interface, Message struct, Hub state
 backend/hub/client.go           WebSocket message handlers
 backend/store/store.go          SQLite schema and CRUD
@@ -73,6 +78,9 @@ Run focused checks first, then broad checks before claiming completion.
 cd D:\Code\Projects\TokenDanceChat\backend
 go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"
 
+# Backend focused media regression
+go test ./handler -run "Test(UploadEmojiStoresViaMediaStore|ServeEmojiReadsViaMediaStore|S3MediaStoreSaveAndOpen|MediaStoreRejectsTraversalKeys)"
+
 # Backend full
 go test ./...
 
@@ -82,6 +90,11 @@ npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.tes
 
 # Frontend type check
 npx tsc --noEmit
+
+# Frontend build and visual review
+npm run build
+# Serve the production build with the Go backend, then:
+npm run visual:acceptance
 
 # Repository diff hygiene
 cd D:\Code\Projects\TokenDanceChat
@@ -102,9 +115,11 @@ git diff --check
 
 - Preserve the existing React 19 + Zustand + Tailwind patterns.
 - Chat UI should feel restrained and work-focused like Feishu/Lark, with smooth message flow like Telegram.
+- Light mode is the primary aesthetic acceptance target; dark mode must remain usable but not dominate first-run review.
 - Use `lucide-react` icons for controls where possible.
 - Do not use marketing-style landing pages or decorative cards for core app surfaces.
 - Keep text within controls and panels; test dense UI on narrow widths when practical.
+- Use screenshot metrics from `docs/visual-acceptance.md` before claiming meaningful UI polish is complete.
 - For security-sensitive UI such as webhook secrets, keep one-time secrets separate from normal persistent state.
 
 ## Backend Rules
@@ -112,6 +127,7 @@ git diff --check
 - Treat WebSocket message types as API contracts.
 - Keep store behavior explicit and covered by tests when durable state changes.
 - Do not expose secrets in list responses or broad DTOs.
+- Do not expose object-storage credentials or direct bucket URLs to the frontend; keep same-origin `/uploads/...` routes.
 - Prefer role checks at the handler boundary for group/admin actions.
 - For production hardening, hash webhook secrets and use constant-time comparison.
 
@@ -129,6 +145,7 @@ git diff --check
 | `backend/store/` SQLite persistence | Hub Server persistence patterns | Demo-validated |
 | `frontend/src/lib/api.ts` and `useWebSocket` | Shared realtime client helpers | Demo-validated |
 | Group roles, webhooks, calls | IM collaboration primitives | Under validation |
+| `MediaStore` local/WebDAV/S3 abstraction | Hub media deployment primitive | Under validation |
 | TokenBot/PicoClaw surfaces | Agent-as-contact UX | Under validation |
 
 When a feature proves a reusable primitive, document the lesson in `docs/agenthub-validation.md` or a focused `docs/` file.

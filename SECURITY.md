@@ -18,6 +18,8 @@
 
 **2026-05-23 update**: Incoming webhook list responses now require group owner/admin role and redact secrets. `webhook_create` returns the secret only once to the creator, and frontend state keeps that one-time secret separate from normal redacted webhook lists. SQLite still stores webhook secrets in plaintext; hash them before treating webhooks as production-grade.
 
+**2026-05-23 media update**: Uploads now share a `MediaStore` abstraction across local disk, WebDAV, and S3-compatible storage. Ordinary uploads and custom emoji both use safe relative object keys, reject traversal segments, and are served back through same-origin `/uploads/...` routes. production-server/S3 credentials must stay in private environment files.
+
 ---
 
 ## 2. Detailed Findings
@@ -190,6 +192,7 @@ The following areas were reviewed and found to be correctly implemented:
 | **Send Buffer Backpressure** | `hub.go:108-113`, `hub.go:123-129` -- full client send buffers cause message drops (system/user_left) or connection termination (broadcast). Prevents memory unbounded growth. |
 | **WS Error Messages** | Error messages sent to clients are generic descriptions (e.g., "rate limit exceeded"), not stack traces or internal state. |
 | **Webhook List Redaction** | `webhook_list` is owner/admin-only and returns redacted webhook DTOs without `secret`; frontend normal list state also excludes secrets. |
+| **Media Key Containment** | Local/WebDAV/S3 media stores reject empty segments, `.` and `..`; custom emoji no longer bypasses the media abstraction. |
 | **.env Gitignored** | `.gitignore:17-18` covers `.env` and `.env.local`. No secrets committed. |
 | **Minimal Docker Image** | `alpine:3.21` base with only `ca-certificates` and `tzdata`. Build uses multi-stage to exclude Go toolchain from runtime. |
 
@@ -213,6 +216,7 @@ The following areas were reviewed and found to be correctly implemented:
 8. **Add authentication** if user identity matters (JWT, session cookies with HttpOnly/SameSite)
 9. **Set explicit DB connection pool limits** (`store.go:25`)
 10. **Hash webhook secrets** (`store.go` webhooks table) -- do not persist plaintext credentials
+11. **Keep object storage private** -- S3-compatible endpoint, bucket, access key, and secret key belong in deploy env, not public docs or frontend state
 
 ---
 
