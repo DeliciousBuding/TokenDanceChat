@@ -52,9 +52,10 @@ Webhook at-rest security, media storage, and screenshot-driven UI acceptance are
 - Per-message hover actions are consolidated into a single 44px message action menu; copy, forward, translate, react, pin, edit, delete, and select remain available from the menu.
 - Header actions, formatting controls, scheduled-message entry, sidebar utility buttons, and clickable avatars now meet the 44px visual acceptance target in the screenshot pass.
 - Desktop sidebar density has been tightened: four model preview cards, compact empty states, and the online-user section appears above the fold.
+- Core chat surface visual weight has been reduced: message bubbles use quieter borders, composer utility buttons are lighter, the expanded Markdown toolbar is less dominant, and clickable avatars use a 46px floor to avoid pixel-rounding failures.
 - Visual acceptance is backed by `npm run visual:acceptance`, real browser screenshots, metrics, and aesthetic review.
 - Generated `gpt-image-2` references may guide art direction, but cannot replace real browser screenshots for acceptance.
-- Current accepted clean-DB screenshot pass: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T21-19-49-947Z`.
+- Current accepted clean-DB screenshot pass: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T22-17-22-184Z`.
 - Tablet and mobile use the compact top bar until `lg`; 768px must not be forced into the desktop sidebar/header layout.
 
 Remaining follow-ups:

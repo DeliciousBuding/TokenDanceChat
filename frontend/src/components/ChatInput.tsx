@@ -1215,7 +1215,7 @@ export function ChatInput({
       {!isRecording && (
         <div
           className={cn(
-            "items-center gap-1 overflow-x-auto border-b border-border bg-muted/50 px-3 py-1.5 scrollbar-thin sm:flex",
+            "items-center gap-1 overflow-x-auto border-b border-border/60 bg-background/70 px-3 py-1.5 shadow-[inset_0_-1px_0_oklch(0_0_0_/_0.015)] scrollbar-thin sm:flex",
             formatToolbarOpen ? "flex" : "hidden",
           )}
         >
@@ -1458,7 +1458,7 @@ export function ChatInput({
       ) : (
         <>
           {/* Input area */}
-          <div className="flex items-end gap-2 px-3 py-3 sm:px-4">
+          <div className="flex items-end gap-2 px-3 py-2.5 sm:px-4 sm:py-3">
             <div className="flex items-center gap-1.5 pb-0.5 sm:gap-2 sm:pb-0">
               <button
                 type="button"
@@ -1467,10 +1467,10 @@ export function ChatInput({
                 aria-label="Toggle formatting toolbar"
                 title="Toggle formatting toolbar"
                 className={cn(
-                  "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200 sm:hidden",
+                  "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:hidden",
                   formatToolbarOpen
-                    ? "bg-accent text-primary"
-                    : "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    ? "bg-primary/10 text-primary"
+                    : "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
                   "disabled:cursor-not-allowed disabled:opacity-30",
                 )}
               >
@@ -1483,8 +1483,8 @@ export function ChatInput({
                 disabled={disabled}
                 aria-label="Upload image"
                 className={cn(
-                  "hidden h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200 sm:flex sm:h-12 sm:w-12",
-                  "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+                  "hidden h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:flex sm:h-12 sm:w-12",
+                  "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
                 )}
               >
                 <ImagePlus className="h-[18px] w-[18px]" />
@@ -1496,8 +1496,8 @@ export function ChatInput({
                 disabled={disabled}
                 aria-label="Upload file"
                 className={cn(
-                  "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200 sm:h-12 sm:w-12",
-                  "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+                  "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:h-12 sm:w-12",
+                  "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
                 )}
               >
                 <Paperclip className="h-[18px] w-[18px]" />
@@ -1509,8 +1509,8 @@ export function ChatInput({
                 disabled={disabled}
                 aria-label="Record voice message"
                 className={cn(
-                  "hidden h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200 sm:flex sm:h-12 sm:w-12",
-                  "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+                  "hidden h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:flex sm:h-12 sm:w-12",
+                  "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
                 )}
               >
                 <Mic className="h-[18px] w-[18px]" />
@@ -1633,7 +1633,7 @@ export function ChatInput({
                 maxLength={2000}
                 disabled={disabled}
                 aria-label={placeholder}
-                className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-border bg-card px-4 py-[13px] text-base leading-5 text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none disabled:opacity-50 sm:text-sm"
+                className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-border/70 bg-background/90 px-4 py-[13px] text-base leading-5 text-foreground placeholder:text-muted-foreground/60 shadow-[0_1px_2px_oklch(0_0_0_/_0.025)] outline-none transition-colors duration-200 focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:outline-none disabled:opacity-50 sm:text-sm"
                 style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT }}
               />
             </div>
@@ -1660,7 +1660,7 @@ export function ChatInput({
                   "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-all duration-300 ease-out",
                   hasContent
                     ? "bg-primary text-primary-foreground hover:brightness-110"
-                    : "bg-muted text-muted-foreground",
+                    : "bg-accent/50 text-muted-foreground/45",
                   "disabled:cursor-not-allowed disabled:opacity-30",
                   pulseButton && "animate-pulse-once",
                 )}
