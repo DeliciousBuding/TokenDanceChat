@@ -55,11 +55,13 @@ export interface WSTypingEvent extends WSMessage {
   username: string;
   context?: string;
   to?: string;
+  preview?: string;
 }
 
 export interface TypingContext {
   channel: "public" | "dm" | "group";
   target?: string;
+  preview?: string;
 }
 
 export interface UserStatus {
@@ -273,6 +275,7 @@ class ChatAPI {
       }, 8000);
 
       this.ws.onopen = () => {
+        clearTimeout(timeout);
         this.reconnectAttempts = 0;
         this.send({ type: "join", username });
       };
@@ -461,7 +464,7 @@ class ChatAPI {
   }
 
   sendTypingStart(ctx?: TypingContext): void {
-    this.send({ type: "typing_start", context: ctx?.channel, to: ctx?.target });
+    this.send({ type: "typing_start", context: ctx?.channel, to: ctx?.target, preview: ctx?.preview });
   }
 
   sendTypingStop(ctx?: TypingContext): void {

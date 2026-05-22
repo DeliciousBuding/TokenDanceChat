@@ -137,10 +137,15 @@ export function ChatInput({
 
   // Compute typing context from current chat
   const typingContext = useMemo((): TypingContext => {
-    if (currentChat.type === "dm") return { channel: "dm", target: currentChat.username };
-    if (currentChat.type === "group") return { channel: "group", target: currentChat.name };
-    return { channel: "public" };
-  }, [currentChat]);
+    const base: TypingContext = currentChat.type === "dm" ? { channel: "dm", target: currentChat.username } :
+      currentChat.type === "group" ? { channel: "group", target: currentChat.name } :
+      { channel: "public" };
+    const trimmed = content.trim();
+    if (trimmed) {
+      base.preview = trimmed.slice(0, 30);
+    }
+    return base;
+  }, [currentChat, content]);
 
   // Dispatch typing_start / typing_stop events
   useEffect(() => {

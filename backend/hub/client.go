@@ -126,6 +126,10 @@ func (c *Client) ReadPump() {
 			c.handleGroupCreate(msg)
 		case "group_invite":
 			c.handleGroupInvite(msg)
+		case "group_invite_accept":
+			c.handleGroupInviteAccept(msg)
+		case "group_invite_decline":
+			c.handleGroupInviteDecline(msg)
 		case "group_message":
 			c.handleGroupMessage(msg)
 		case "group_join":
@@ -148,6 +152,18 @@ func (c *Client) ReadPump() {
 			c.handleRoomList()
 		case "forward":
 			c.handleForward(msg)
+		case "block":
+			c.handleBlock(msg)
+		case "unblock":
+			c.handleUnblock(msg)
+		case "block_list":
+			c.handleBlockList()
+		case "pin_message":
+			c.handlePinMessage(msg)
+		case "unpin_message":
+			c.handleUnpinMessage(msg)
+		case "load_history":
+			c.handleLoadHistory(msg)
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -389,12 +405,13 @@ func (c *Client) handleChatMessage(msg Message) {
 
 	// Check for @mentions and route TokenBot and PicoClaw independently.
 	targets := assistantMentionTarget(content, c.hub.BotName(), c.hub.AgentName())
+	currentRoom := c.getCurrentRoomID()
 	if targets.TokenBot && c.username != c.hub.BotName() && c.hub.LLMClient() != nil {
-		go c.handleBotResponse(context.Background(), content)
+		go c.handleBotResponse(context.Background(), content, currentRoom)
 	}
 	if targets.Agent && c.username != c.hub.AgentName() {
 		if pc := c.hub.PicoclawClient(); pc != nil {
-			go c.handleAgentResponsePicoClaw(context.Background(), content)
+			go c.handleAgentResponsePicoClaw(context.Background(), content, currentRoom)
 		}
 	}
 }
@@ -1288,6 +1305,107 @@ func (c *Client) handleLoadHistory(msg Message) {
 	}
 }
 
+// --- Block handlers ---
+
+func (c *Client) handleBlock(msg Message) {
+	if c.username == "" {
+		return
+	}
+	blocked := msg.Username
+	if blocked == "" || blocked == c.username {
+		return
+	}
+	if err := c.hub.BlockUser(c.username, blocked); err != nil {
+		log.Printf("block error: %v", err)
+		return
+	}
+	confirm, _ := json.Marshal(Message{
+		Type:     "block",
+		Username: blocked,
+	})
+	select {
+	case c.send <- confirm:
+	default:
+	}
+}
+
+func (c *Client) handleUnblock(msg Message) {
+	if c.username == "" {
+		return
+	}
+	blocked := msg.Username
+	if blocked == "" {
+		return
+	}
+	c.hub.UnblockUser(c.username, blocked)
+	confirm, _ := json.Marshal(Message{
+		Type:     "unblock",
+		Username: blocked,
+	})
+	select {
+	case c.send <- confirm:
+	default:
+	}
+}
+
+func (c *Client) handleBlockList() {
+	if c.username == "" {
+		return
+	}
+	blocked := c.hub.store.GetBlockedUsers(c.username)
+	list, _ := json.Marshal(Message{
+		Type:    "block_list",
+		Blocked: blocked,
+	})
+	select {
+	case c.send <- list:
+	default:
+	}
+}
+
+// handleGroupInviteAccept handles accepting a group invite.
+func (c *Client) handleGroupInviteAccept(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	if groupName == "" {
+		return
+	}
+	if !c.hub.ConsumePendingInvite(c.username, groupName) {
+		return
+	}
+	c.hub.AddGroupMember(groupName, c.username)
+	members := c.hub.GroupMembers(groupName)
+	updateMsg, _ := json.Marshal(Message{
+		Type:    "group_join",
+		Group:   groupName,
+		Members: members,
+	})
+	c.hub.SendToGroup(groupName, updateMsg)
+	confirmMsg, _ := json.Marshal(Message{
+		Type:    "group_join",
+		Group:   groupName,
+		Members: members,
+	})
+	select {
+	case c.send <- confirmMsg:
+	default:
+	}
+}
+
+// handleGroupInviteDecline handles declining a group invite.
+func (c *Client) handleGroupInviteDecline(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	if groupName == "" {
+		return
+	}
+	c.hub.RemovePendingInvite(c.username, groupName)
+}
+
 // handleMarkRead broadcasts a read receipt so message senders know their messages were seen.
 func (c *Client) handleMarkRead(msg Message) {
 	if c.username == "" {
@@ -1316,7 +1434,7 @@ func (c *Client) handleMarkRead(msg Message) {
 	}
 }
 // This runs in its own goroutine and streams the response.
-func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
+func (c *Client) handleBotResponse(ctx context.Context, userContent, roomID string) {
 	// Send typing indicator.
 	c.hub.BroadcastJSON(Message{
 		Type:     "typing",
@@ -1336,7 +1454,7 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	var fullResponse strings.Builder
 	err := client.ChatStream(ctx, systemPrompt, messages, func(chunk string) error {
 		fullResponse.WriteString(chunk)
-		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), chunk, false, c.getCurrentRoomID())
+		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), chunk, false, roomID)
 		return nil
 	})
 
@@ -1344,8 +1462,8 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 		log.Printf("LLM stream error: %v", err)
 		errorContent := "Sorry, I encountered an error while generating a response."
 		// Send the error as a final stream chunk and persist.
-		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), errorContent, true, c.getCurrentRoomID())
-		c.hub.SendBotMessageToRoom(errorContent, c.getCurrentRoomID())
+		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), errorContent, true, roomID)
+		c.hub.SendBotMessageToRoom(errorContent, roomID)
 		c.hub.BroadcastTyping(c.hub.BotName(), "typing_stop", "", "")
 		return
 	}
@@ -1353,10 +1471,10 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 	response := fullResponse.String()
 	if response != "" {
 		// Broadcast the final done signal for the stream.
-		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), "", true, c.getCurrentRoomID())
+		c.hub.BroadcastStreamChunkToRoom(c.hub.BotName(), "", true, roomID)
 
 		// Persist the complete message to the store and broadcast as a normal message.
-		c.hub.SendBotMessageToRoom(response, c.getCurrentRoomID())
+		c.hub.SendBotMessageToRoom(response, roomID)
 
 		// Stop typing indicator after bot finishes responding.
 		c.hub.BroadcastTyping(c.hub.BotName(), "typing_stop", "", "")
@@ -1369,7 +1487,7 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent string) {
 }
 
 // handleAgentResponsePicoClaw handles the PicoClaw agent response via gateway.
-func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent string) {
+func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, roomID string) {
 	pc := c.hub.PicoclawClient()
 	if pc == nil {
 		return
@@ -1393,7 +1511,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 	if err != nil {
 		log.Printf("PicoClaw send error: %v", err)
 		errorContent := "PicoClaw 当前未连接，无法执行 Agent 工作流。"
-		c.hub.SendAssistantMessageToRoom(agentName, errorContent, c.getCurrentRoomID())
+		c.hub.SendAssistantMessageToRoom(agentName, errorContent, roomID)
 		c.hub.BroadcastTyping(agentName, "typing_stop", "public", "")
 		return
 	}
@@ -1423,7 +1541,10 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 	collectDone := make(chan struct{})
 
 	go func() {
-		defer close(collectDone)
+		defer func() {
+			close(collectDone)
+			c.hub.BroadcastTyping(agentName, "typing_stop", "", "")
+		}()
 		timeout := time.After(30 * time.Second)
 		for {
 			select {
@@ -1438,7 +1559,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 					fullResponse.Reset()
 					fullResponse.WriteString(lastPicoContent)
 					if delta != "" {
-						c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, c.getCurrentRoomID())
+						c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, roomID)
 					}
 				} else {
 					// Complete message -- initial chunk from message.create.
@@ -1447,7 +1568,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 					fullResponse.Reset()
 					fullResponse.WriteString(lastPicoContent)
 					if delta != "" {
-						c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, c.getCurrentRoomID())
+						c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, roomID)
 					}
 				}
 			case start := <-typing:
@@ -1477,9 +1598,9 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent st
 
 	if response != "" {
 		// Signal stream done.
-		c.hub.BroadcastStreamChunkToRoom(agentName, "", true, c.getCurrentRoomID())
+		c.hub.BroadcastStreamChunkToRoom(agentName, "", true, roomID)
 		// Persist to store and broadcast.
-		c.hub.SendAssistantMessageToRoom(agentName, response, c.getCurrentRoomID())
+		c.hub.SendAssistantMessageToRoom(agentName, response, roomID)
 
 		// Stop typing indicator after agent finishes responding.
 		c.hub.BroadcastTyping(agentName, "typing_stop", "", "")

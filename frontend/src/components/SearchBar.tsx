@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Search, X, Loader2 } from "lucide-react";
 import { chatAPI, type SearchResult } from "@/lib/api";
+import { useChatStore } from "@/stores/chatStore";
 import { cn } from "@/lib/utils";
 
 function escapeHTML(s: string): string {
@@ -20,6 +21,40 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const currentChat = useChatStore((s) => s.currentChat);
+  const messages = useChatStore((s) => s.messages);
+  const username = useChatStore((s) => s.username);
+
+  // Compute conversation message IDs for client-side filtering.
+  const conversationMessageIDs = useMemo(() => {
+    if (currentChat.type === "dm") {
+      const partner = currentChat.username;
+      return new Set(
+        messages
+          .filter((m) => {
+            const sender = m.from || m.username;
+            const recipient = m.to;
+            return (sender === partner && recipient === username) ||
+              (sender === username && recipient === partner);
+          })
+          .map((m) => m.id),
+      );
+    }
+    if (currentChat.type === "group") {
+      return new Set(
+        messages
+          .filter((m) => m.to === currentChat.name || (m as any).group === currentChat.name)
+          .map((m) => m.id),
+      );
+    }
+    return null; // public — use server-side room filter
+  }, [currentChat, messages, username]);
+
+  // Filter results to current conversation scope.
+  const scopedResults = useMemo(() => {
+    if (!conversationMessageIDs) return results;
+    return results.filter((r) => conversationMessageIDs.has(r.id));
+  }, [results, conversationMessageIDs]);
 
   // Ctrl+K to open, Escape to close
   useEffect(() => {
@@ -61,16 +96,16 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
   }, [query, currentRoomID]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, results.length - 1)); }
+    if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, scopedResults.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setSelectedIndex(i => Math.max(i - 1, 0)); }
-    else if (e.key === "Enter" && results.length > 0) {
-      const r = results[selectedIndex];
+    else if (e.key === "Enter" && scopedResults.length > 0) {
+      const r = scopedResults[selectedIndex];
       if (r) {
         window.dispatchEvent(new CustomEvent("tdchat:scroll-to-message", { detail: { id: r.id, content: r.content } }));
         setOpen(false); setQuery(""); setResults([]);
       }
     }
-  }, [results, selectedIndex]);
+  }, [scopedResults, selectedIndex]);
 
   const handleClickResult = useCallback((r: SearchResult) => {
     window.dispatchEvent(new CustomEvent("tdchat:scroll-to-message", { detail: { id: r.id, content: r.content } }));
@@ -95,13 +130,13 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
           <div className="max-h-72 overflow-y-auto">
             {!query && <div className="px-4 py-8 text-center"><p className="text-xs text-muted-foreground/50">Type to search messages</p></div>}
             {loading && <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 text-muted-foreground/40 animate-spin" /></div>}
-            {error && !loading && query && <div className="px-4 py-8 text-center"><Search className="mx-auto h-5 w-5 text-muted-foreground/30 mb-2" /><p className="text-xs text-muted-foreground/50">No messages found</p></div>}
-            {results.length > 0 && results.map((r, i) => (
+            {error && !loading && query && <div className="px-4 py-8 text-center"><Search className="mx-auto h-5 w-5 text-muted-foreground/30 mb-2" /><p className="text-xs text-muted-foreground/50">{conversationMessageIDs ? "No messages in this conversation" : "No messages found"}</p></div>}
+            {scopedResults.length > 0 && scopedResults.map((r, i) => (
               <button key={r.id} onClick={() => handleClickResult(r)}
                 className={cn("w-full text-left px-4 py-3 border-b border-border last:border-b-0 transition-colors",
                   i === selectedIndex ? "bg-accent" : "hover:bg-accent")}>
                 <div className="flex items-center gap-2 mb-1"><span className="text-xs font-medium text-muted-foreground/70">{r.username}</span></div>
-                <p className="text-xs text-muted-foreground/80 line-clamp-2" dangerouslySetInnerHTML={{ __html: r.snippet || escapeHTML(r.content.substring(0, 120)) }} />
+                <p className="text-xs text-muted-foreground/80 line-clamp-2" dangerouslySetInnerHTML={{ __html: r.snippet ? r.snippet.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/on\w+="[^"]*"/gi, "") : escapeHTML(r.content.substring(0, 120)) }} />
               </button>
             ))}
           </div>
