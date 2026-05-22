@@ -923,7 +923,7 @@ export const MessageBubble = memo(function MessageBubble({
           "flex min-w-0 flex-col",
           isVoiceMessage
             ? "max-w-[280px]"
-            : "max-w-[min(100%,44rem)] sm:max-w-[min(75%,42rem)]",
+            : "max-w-[min(100%,42rem)] sm:max-w-[min(72%,40rem)]",
           isOwn ? "items-end" : "items-start",
         )}
       >
@@ -1007,11 +1007,11 @@ export const MessageBubble = memo(function MessageBubble({
 
         <div
           className={cn(
-            "relative rounded-2xl text-[13.5px] leading-6 sm:text-sm sm:leading-relaxed",
-            isVoiceMessage ? "px-2 py-2" : "px-3 py-2 sm:px-4 sm:py-2.5",
+            "relative rounded-[18px] text-[13.5px] leading-[1.58] shadow-[0_1px_1px_oklch(0_0_0_/_0.025)] sm:text-sm sm:leading-relaxed",
+            isVoiceMessage ? "px-2 py-2" : "px-3 py-2 sm:px-3.5 sm:py-2.5",
             isOwn
               ? "rounded-br-md"
-              : "rounded-bl-md bg-secondary border border-border",
+              : "rounded-bl-md border border-border/70 bg-card/80",
             isDeleted && "opacity-40",
           )}
           style={
@@ -1079,14 +1079,14 @@ export const MessageBubble = memo(function MessageBubble({
           {!selectMode && !isEditing && (
             <div
               className={cn(
-                "absolute -top-3 flex items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+                "absolute top-1/2 flex -translate-y-1/2 items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
                 isOwn ? "left-0 -translate-x-full pr-1" : "right-0 translate-x-full pl-1",
               )}
             >
               <button
                 type="button"
                 onClick={openContextMenuFromButton}
-                className="flex h-[44px] w-[44px] items-center justify-center rounded-xl border border-border/70 bg-card/95 text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border/60 bg-background/90 text-muted-foreground/80 shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
                 aria-label={t("message.contextMenu")}
                 title={t("message.contextMenu")}
               >

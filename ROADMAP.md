@@ -76,6 +76,7 @@ Status: implemented, documented, tested, and accepted with browser screenshots.
 - [x] Tightened visual acceptance metrics so hidden/offscreen controls and ancestor opacity are handled correctly.
 - [x] Re-ran visual acceptance on a clean temporary SQLite DB so final screenshots contain only the seeded demo transcript.
 - [x] Tightened desktop sidebar above-the-fold density with four model preview cards, compact empty states, and a visual gate for online-user section position.
+- [x] Lightened the core chat surface after screenshot review: message bubbles use quieter borders, composer utility buttons no longer render as heavy bordered blocks, and clickable avatars have a 46px safety floor for stable 44px acceptance.
 - [ ] Continue density cleanup for remaining tiny passive metadata using real browser screenshots as acceptance evidence.
 
 ## Next Product Tasks
@@ -141,6 +142,12 @@ Record commands here when they are run for the current increment.
 | 2026-05-23 | `docker build -f Dockerfile.runtime -t tokendancechat:healthcheck-test <deploy-style-temp-context>` | PASS, validates runtime Dockerfile with `tokendancechat` binary and `frontend/dist` at deployment context root |
 | 2026-05-23 | `docker run -d --name tdchat-healthcheck-* -e CHAT_ADDR=:3000 tokendancechat:healthcheck-test`; poll `docker inspect .State.Health.Status` | PASS, status reached `healthy`; test container removed |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
+| 2026-05-23 | `cd frontend; npm test -- --run src/components/ChatInput.test.tsx src/components/MessageContextMenu.test.tsx src/components/AssistantIcon.test.tsx` | PASS, 3 files / 38 tests |
+| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-23 | `cd frontend; npm run build` | PASS |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8095 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T22-17-22-184Z`; all six scenarios `smallControls=0`, no horizontal overflow, no console errors. Mobile collapsed composer is 87px, mobile format composer is 144px, desktop sidebar model preview remains 4 cards, online-user section top remains 561px. |
+| 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 199 tests |
+| 2026-05-23 | `git diff --check` | PASS |
 
 ## Review Gates
 
