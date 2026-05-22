@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useEffect, useRef, useState } from "react";
-import { X, Send, UserPlus, ShieldOff, Shield, Pencil } from "lucide-react";
+import { X, Send, UserPlus, ShieldOff, Shield, Pencil, Phone, Video } from "lucide-react";
 import { cn, usernameHue, formatLastSeen } from "@/lib/utils";
 import { useChatStore, type UserProfile } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -20,6 +20,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
     setCurrentChat,
     blockedUsers,
     userProfiles,
+    setActiveCall,
   } = useChatStore();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -99,6 +100,16 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
     setSelectedProfileUser(null);
     setCurrentChat({ type: "dm", username });
   }, [setSelectedProfileUser, setCurrentChat, username]);
+
+  const handleStartCall = useCallback((callType: "video" | "voice") => {
+    setActiveCall({
+      callId: "",
+      peer: username,
+      callType,
+      startTime: Date.now(),
+    });
+    onClose();
+  }, [setActiveCall, username, onClose]);
 
   // Touch handlers for swipe-to-dismiss (mobile bottom sheet).
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -240,6 +251,24 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
                 <Send className="h-4 w-4 text-muted-foreground" />
                 {t("profile.sendMessage")}
               </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleStartCall("voice")}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
+                  aria-label={t("call.voiceCall")}
+                >
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  {t("call.voiceCall")}
+                </button>
+                <button
+                  onClick={() => handleStartCall("video")}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
+                  aria-label={t("call.videoCall")}
+                >
+                  <Video className="h-4 w-4 text-muted-foreground" />
+                  {t("call.videoCall")}
+                </button>
+              </div>
               <button
                 onClick={() => {
                   chatAPI.sendFriendRequest(username);

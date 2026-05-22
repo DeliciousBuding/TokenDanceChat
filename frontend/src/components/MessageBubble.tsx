@@ -312,6 +312,105 @@ const VoiceMessagePlayer = memo(function VoiceMessagePlayer({
   );
 });
 
+/** ─── GIF Renderer ─── */
+const GifRenderer = memo(function GifRenderer({ url, alt }: { url: string; alt: string }) {
+  const [paused, setPaused] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [firstFrame, setFirstFrame] = useState<string | null>(null);
+
+  // Capture first frame on load.
+  const handleLoad = useCallback(() => {
+    const img = imgRef.current;
+    if (!img || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(img, 0, 0);
+      setFirstFrame(canvas.toDataURL());
+    }
+  }, []);
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (firstFrame) {
+        setPaused((p) => !p);
+      } else {
+        useChatStore.getState().setLightboxImage(url);
+      }
+    },
+    [firstFrame, url],
+  );
+
+  return (
+    <div className="relative group/gif my-1">
+      {/* Paused: show canvas snapshot */}
+      {paused && firstFrame && (
+        <img
+          src={firstFrame}
+          alt={alt}
+          className="max-w-[240px] max-h-[240px] rounded-xl cursor-pointer border border-border/50"
+          onClick={handleClick}
+        />
+      )}
+      {/* Playing: show animated GIF */}
+      <img
+        ref={imgRef}
+        src={url}
+        alt={alt}
+        loading="lazy"
+        onLoad={handleLoad}
+        className={cn(
+          "max-w-[240px] max-h-[240px] rounded-xl cursor-pointer border border-border/50",
+          paused && firstFrame ? "hidden" : "",
+        )}
+        onClick={handleClick}
+      />
+      <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
+
+      {/* Play/pause overlay button */}
+      {firstFrame && (
+        <button
+          onClick={handleClick}
+          className={cn(
+            "absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/80 hover:bg-black/70 hover:text-white transition-all",
+            "opacity-0 group-hover/gif:opacity-100",
+          )}
+          aria-label={paused ? "Play GIF" : "Pause GIF"}
+        >
+          {paused ? (
+            <Play className="h-3.5 w-3.5 ml-0.5" fill="currentColor" />
+          ) : (
+            <Pause className="h-3.5 w-3.5" fill="currentColor" />
+          )}
+        </button>
+      )}
+    </div>
+  );
+});
+
+/** ─── Sticker Renderer (Telegram-style floating, no bubble) ─── */
+const StickerRenderer = memo(function StickerRenderer({ url, alt }: { url: string; alt: string }) {
+  return (
+    <div className="my-1">
+      <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        className="max-w-[128px] max-h-[128px] cursor-pointer hover:scale-110 transition-transform duration-200"
+        draggable={false}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (url) useChatStore.getState().setLightboxImage(url);
+        }}
+      />
+    </div>
+  );
+});
+
 /** Helper: extract code blocks from plain text and render with highlighting */
 function parseContentForCodeBlocks(
   content: string,
@@ -361,6 +460,7 @@ export const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
   const { t } = useTranslation();
   const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
+  const customEmojis = useChatStore((s) => s.customEmojis);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
@@ -528,6 +628,40 @@ export const MessageBubble = memo(function MessageBubble({
       );
     }
 
+    // Pre-process custom emoji :name: patterns, replacing them with img tags.
+    let processedContent = content;
+    if (customEmojis.length > 0) {
+      // Build a map of name -> url for quick lookup.
+      const emojiMap = new Map(customEmojis.map((e) => [e.name, e.url]));
+      // Sort by name length descending to match longer names first (avoid partial matches).
+      const names = [...emojiMap.keys()].sort((a, b) => b.length - a.length);
+      const escapedNames = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const pattern = new RegExp(`:(${escapedNames.join('|')}):`, 'g');
+      processedContent = processedContent.replace(pattern, (_match: string, name: string) => {
+        const url = emojiMap.get(name);
+        if (!url) return _match;
+        return `<img src="${url}" alt=":${name}:" class="inline-custom-emoji" style="width:1.5em;height:1.5em;vertical-align:middle;display:inline-block;" />`;
+      });
+    }
+
+    // Detect GIF/sticker markdown: ![gif](url) and ![sticker](url)
+    const gifMatch = processedContent.match(/^\s*!\[gif\]\(([^)]+)\)\s*$/);
+    const stickerMatch = processedContent.match(/^\s*!\[sticker\]\(([^)]+)\)\s*$/);
+
+    if (gifMatch) {
+      const gifUrl = gifMatch[1];
+      return (
+        <GifRenderer url={gifUrl} alt="GIF" />
+      );
+    }
+
+    if (stickerMatch) {
+      const stickerUrl = stickerMatch[1];
+      return (
+        <StickerRenderer url={stickerUrl} alt="Sticker" />
+      );
+    }
+
     // Detect audio URLs for voice messages
     // Match patterns: ![voice](url), ![audio](url), [filename.webm](url)
     const audioMatch = content.match(
@@ -566,27 +700,27 @@ export const MessageBubble = memo(function MessageBubble({
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
-    while ((match = mentionRegex.exec(content)) !== null) {
+    while ((match = mentionRegex.exec(processedContent)) !== null) {
       if (match.index > lastIndex) {
         parts.push({
           type: "text",
-          value: content.slice(lastIndex, match.index),
+          value: processedContent.slice(lastIndex, match.index),
         });
       }
       parts.push({ type: "mention", username: match[1] });
       lastIndex = match.index + match[0].length;
     }
-    if (lastIndex < content.length) {
-      parts.push({ type: "text", value: content.slice(lastIndex) });
+    if (lastIndex < processedContent.length) {
+      parts.push({ type: "text", value: processedContent.slice(lastIndex) });
     }
 
     if (parts.length === 0) {
       // No mentions, check for code blocks.
-      const codeParts = parseContentForCodeBlocks(content);
+      const codeParts = parseContentForCodeBlocks(processedContent);
       if (codeParts.length === 1 && codeParts[0].type === "text") {
         // No code blocks: render with ReactMarkdown.
         return (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>{content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>{processedContent}</ReactMarkdown>
         );
       }
 
@@ -659,7 +793,7 @@ export const MessageBubble = memo(function MessageBubble({
         })}
       </>
     );
-  }, [message.content, currentUsername, isDeleted, t]);
+  }, [message.content, currentUsername, isDeleted, t, customEmojis]);
 
   const paddingY =
     isGrouped && hideAvatar ? "py-0.5" : "py-1.5";

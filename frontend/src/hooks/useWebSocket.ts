@@ -15,6 +15,9 @@ import {
   type WSForwardEvent,
   type WSReactionUpdate,
   type WSMessageEditBroadcast,
+  type WSCallIncoming,
+  type WSCallAccepted,
+  type WSCallRejected,
 } from "@/lib/api";
 
 // ─── Page title utilities ───
@@ -88,6 +91,11 @@ export function useWebSocket() {
     setArchivedConversations,
     setScheduledMessages,
     removeScheduledMessage,
+    setCustomEmojis,
+    addCustomEmoji,
+    removeCustomEmoji,
+    setIncomingCall,
+    setActiveCall,
   } = useChatStore();
 
   // Check if a conversation is muted, considering both legacy mutedConversations
@@ -773,11 +781,10 @@ export function useWebSocket() {
     // Group owner changed
     unsubs.push(
       chatAPI.on("group_owner_changed", (msg: WSMessage) => {
-        const { group, username, content } = msg as {
+        const { group, username } = msg as {
           type: string;
           group: string;
           username: string;
-          content: string;
         };
         if (group && username) {
           setGroupMemberRole(group, username, "owner");
@@ -1060,6 +1067,80 @@ export function useWebSocket() {
       }),
     );
 
+    // ─── Call signaling ───
+
+    // Incoming call
+    unsubs.push(
+      chatAPI.on("call_incoming", (msg: WSMessage) => {
+        const m = msg as WSCallIncoming;
+        if (!m.call_id || !m.from) return;
+        // If already in a call, auto-reject with busy.
+        const state = useChatStore.getState();
+        if (state.activeCall || state.incomingCall) {
+          chatAPI.sendCallReject(m.call_id);
+          return;
+        }
+        setIncomingCall({
+          callId: m.call_id,
+          from: m.from,
+          callType: (m.call_type as "video" | "voice") || "voice",
+          sdp: m.sdp || "",
+        });
+        import("@/lib/sound").then((snd) => snd.playMentionSound());
+      }),
+    );
+
+    // Call accepted (by callee — forwarded to caller)
+    unsubs.push(
+      chatAPI.on("call_accepted", (msg: WSMessage) => {
+        const m = msg as WSCallAccepted;
+        if (!m.call_id) return;
+        // The VideoCall component handles the SDP; we don't need to set state here.
+        // But the call_accepted is also consumed by VideoCall's internal listener.
+      }),
+    );
+
+    // Call rejected
+    unsubs.push(
+      chatAPI.on("call_rejected", (msg: WSMessage) => {
+        const m = msg as WSCallRejected;
+        // The VideoCall component handles this via its internal listener.
+        // If no VideoCall is mounted yet (e.g., caller gets rejected before mounting),
+        // just clean up any active call state.
+        const state = useChatStore.getState();
+        if (m.call_id === state.activeCall?.callId) {
+          setActiveCall(null);
+        }
+      }),
+    );
+
+    // Call ended
+    unsubs.push(
+      chatAPI.on("call_ended", () => {
+        // The VideoCall component handles this via its internal listener.
+        // Fallback cleanup if VideoCall is not mounted.
+        const state = useChatStore.getState();
+        if (state.activeCall || state.incomingCall) {
+          setActiveCall(null);
+          setIncomingCall(null);
+        }
+      }),
+    );
+
+    // ICE candidate relay
+    unsubs.push(
+      chatAPI.on("call_ice_candidate", (_msg: WSMessage) => {
+        // Handled by VideoCall component's internal listener.
+      }),
+    );
+
+    // Call history list
+    unsubs.push(
+      chatAPI.on("call_list", (_msg: WSMessage) => {
+        // Handled by caller via chatAPI.sendCallList() — UI for history TBD.
+      }),
+    );
+
     // Periodic cleanup of stale stream accumulators (bot crash/disconnect).
     const streamCleanupTimer = setInterval(() => {
       const now = Date.now();
@@ -1077,7 +1158,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setIncomingCall, setActiveCall, setNotificationPrefs]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

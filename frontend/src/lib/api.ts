@@ -228,6 +228,15 @@ export interface ScheduledMessage {
   sent: number;
 }
 
+export interface CustomEmoji {
+  id: string;
+  name: string;
+  url: string;
+  uploader: string;
+  room_id: string;
+  created_at: number;
+}
+
 export interface WSScheduledMessageConfirm extends WSMessage {
   type: "scheduled_message_confirm";
   id: string;
@@ -255,6 +264,66 @@ export interface WSScheduledMessageSent extends WSMessage {
 export interface WSScheduledMessageCancelled extends WSMessage {
   type: "scheduled_message_cancelled";
   id: string;
+}
+
+// Call signaling types
+export interface CallRecord {
+  id: string;
+  caller: string;
+  callee: string;
+  call_type: string;
+  status: string;
+  started_at: number;
+  ended_at: number;
+  created_at: number;
+}
+
+export interface WSCallIncoming extends WSMessage {
+  type: "call_incoming";
+  call_id: string;
+  from: string;
+  to: string;
+  call_type: string;
+  sdp: string;
+}
+
+export interface WSCallAccepted extends WSMessage {
+  type: "call_accepted";
+  call_id: string;
+  from: string;
+  to: string;
+  call_type: string;
+  sdp: string;
+}
+
+export interface WSCallRejected extends WSMessage {
+  type: "call_rejected";
+  call_id: string;
+  from: string;
+  to: string;
+  call_type: string;
+  content: string;
+}
+
+export interface WSCallEnded extends WSMessage {
+  type: "call_ended";
+  call_id: string;
+  from: string;
+  to: string;
+  call_type: string;
+}
+
+export interface WSCallIceCandidate extends WSMessage {
+  type: "call_ice_candidate";
+  call_id: string;
+  from: string;
+  to: string;
+  candidate: string;
+}
+
+export interface WSCallList extends WSMessage {
+  type: "call_list";
+  calls: CallRecord[];
 }
 
 // Reaction types
@@ -723,6 +792,31 @@ class ChatAPI {
     this.send({ type: "group_info", group });
   }
 
+  // Call signaling
+  sendCallStart(to: string, callType: "video" | "voice", sdp: string): void {
+    this.send({ type: "call_start", to, call_type: callType, sdp });
+  }
+
+  sendCallAccept(callId: string, sdp: string): void {
+    this.send({ type: "call_accept", call_id: callId, sdp });
+  }
+
+  sendCallReject(callId: string): void {
+    this.send({ type: "call_reject", call_id: callId });
+  }
+
+  sendCallEnd(callId: string): void {
+    this.send({ type: "call_end", call_id: callId });
+  }
+
+  sendCallIceCandidate(callId: string, candidate: string): void {
+    this.send({ type: "call_ice_candidate", call_id: callId, candidate });
+  }
+
+  sendCallList(): void {
+    this.send({ type: "call_list" });
+  }
+
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
     try {
       const resp = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
@@ -744,6 +838,32 @@ class ChatAPI {
     } catch {
       return null;
     }
+  }
+
+  async uploadEmoji(file: File, name: string): Promise<string | null> {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("name", name);
+      const resp = await fetch("/api/upload/emoji", { method: "POST", body: formData });
+      if (!resp.ok) return null;
+      const data = await resp.json() as { url: string };
+      return data.url;
+    } catch {
+      return null;
+    }
+  }
+
+  sendCustomEmojiAdd(name: string, url: string): void {
+    this.send({ type: "custom_emoji_add", name, url });
+  }
+
+  sendCustomEmojiDelete(name: string): void {
+    this.send({ type: "custom_emoji_delete", name });
+  }
+
+  sendCustomEmojiList(): void {
+    this.send({ type: "custom_emoji_list" });
   }
 
   async exportChat(conversation: string, format: 'json' | 'text', username?: string): Promise<Blob> {
@@ -815,3 +935,72 @@ function getDefaultWSURL(): string {
 }
 
 export const chatAPI = new ChatAPI(getDefaultWSURL());
+
+// --- Auth API (HTTP-based, not WebSocket) ---
+
+export interface RegisterResponse {
+  success: boolean;
+  username: string;
+}
+
+export interface LoginResponse {
+  success: boolean;
+  username: string;
+}
+
+export interface InviteCode {
+  code: string;
+  creator: string;
+  max_uses: number;
+  use_count: number;
+  created_at: number;
+}
+
+export async function registerUser(username: string, password: string, inviteCode: string): Promise<RegisterResponse> {
+  const resp = await fetch("/api/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password, invite_code: inviteCode }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ error: "Registration failed" }));
+    throw new Error((data as { error?: string }).error || "Registration failed");
+  }
+  return await resp.json() as RegisterResponse;
+}
+
+export async function loginUser(username: string, password: string): Promise<LoginResponse> {
+  const resp = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ error: "Login failed" }));
+    throw new Error((data as { error?: string }).error || "Login failed");
+  }
+  return await resp.json() as LoginResponse;
+}
+
+export async function generateInviteCode(username: string, maxUses: number = 5): Promise<{ code: string }> {
+  const resp = await fetch("/api/invite/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, max_uses: maxUses }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ error: "Failed to generate invite code" }));
+    throw new Error((data as { error?: string }).error || "Failed to generate invite code");
+  }
+  return await resp.json() as { code: string };
+}
+
+export async function listInviteCodes(username: string): Promise<InviteCode[]> {
+  const resp = await fetch(`/api/invite/list?username=${encodeURIComponent(username)}`);
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ error: "Failed to list invite codes" }));
+    throw new Error((data as { error?: string }).error || "Failed to list invite codes");
+  }
+  const json = await resp.json() as { codes: InviteCode[] };
+  return json.codes || [];
+}

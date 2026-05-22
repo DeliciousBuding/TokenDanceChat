@@ -67,7 +67,6 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
   const currentUserRole = group.roles[username] ?? "member";
   const isOwner = currentUserRole === "owner";
   const isAdmin = currentUserRole === "admin";
-  const canManage = isOwner || isAdmin;
 
   const handleKick = useCallback((targetUser: string) => {
     setContextMenu(null);

@@ -12,6 +12,38 @@ export interface TranslationDict {
     errorTooShort: string;
     errorTooLong: string;
     errorInvalidChars: string;
+    buttonLogin: string;
+    buttonRegister: string;
+    buttonGuest: string;
+    orText: string;
+  };
+  auth: {
+    register: string;
+    login: string;
+    username: string;
+    password: string;
+    confirmPassword: string;
+    inviteCode: string;
+    registerButton: string;
+    loginButton: string;
+    haveAccount: string;
+    noAccount: string;
+    guestLogin: string;
+    invalidCode: string;
+    codeUsed: string;
+    passwordsMatch: string;
+    registerSuccess: string;
+    passwordMinLength: string;
+    confirmNotMatch: string;
+  };
+  invite: {
+    inviteCodes: string;
+    generateCode: string;
+    maxUses: string;
+    copyCode: string;
+    noCodes: string;
+    codeCopied: string;
+    usesLeft: string;
   };
   chat: {
     roomName: string;
@@ -222,6 +254,13 @@ export interface TranslationDict {
     hearts: string;
     objects: string;
     misc: string;
+    custom: string;
+    addCustomEmoji: string;
+    emojiName: string;
+    emojiNamePlaceholder: string;
+    uploadEmoji: string;
+    deleteEmoji: string;
+    noCustomEmoji: string;
   };
   model: {
     selectModel: string;
@@ -294,12 +333,39 @@ export interface TranslationDict {
     fileSize: string;
     dropFilesHere: string;
   };
+  gif: {
+    searchGifs: string;
+    trending: string;
+    stickers: string;
+    gifs: string;
+    noResults: string;
+    poweredBy: string;
+  };
+  call: {
+    incomingCall: string;
+    calling: string;
+    callRejected: string;
+    missedCall: string;
+    voiceCall: string;
+    videoCall: string;
+    muteMic: string;
+    unmuteMic: string;
+    muteCamera: string;
+    unmuteCamera: string;
+    endCall: string;
+    screenShare: string;
+    switchCamera: string;
+    acceptCall: string;
+    rejectCall: string;
+    remoteVideoOff: string;
+    callEnded: string;
+  };
 }
 
 const zhCN: TranslationDict = {
   join: {
     title: "TokenDance Chat",
-    subtitle: "输入用户名加入公共聊天室",
+    subtitle: "加入公共聊天室",
     placeholder: "你的用户名...",
     buttonJoin: "加入聊天",
     buttonConnecting: "连接中...",
@@ -308,6 +374,38 @@ const zhCN: TranslationDict = {
     errorTooShort: "用户名至少需要2个字符",
     errorTooLong: "用户名不能超过20个字符",
     errorInvalidChars: "用户名只能包含中文、英文、数字和下划线",
+    buttonLogin: "登录",
+    buttonRegister: "注册",
+    buttonGuest: "游客加入",
+    orText: "或者",
+  },
+  auth: {
+    register: "注册账号",
+    login: "登录",
+    username: "用户名",
+    password: "密码",
+    confirmPassword: "确认密码",
+    inviteCode: "邀请码",
+    registerButton: "注册",
+    loginButton: "登录",
+    haveAccount: "已有账号？去登录",
+    noAccount: "还没有账号？去注册",
+    guestLogin: "返回游客模式",
+    invalidCode: "邀请码无效或已过期",
+    codeUsed: "邀请码已达最大使用次数",
+    passwordsMatch: "两次输入的密码不一致",
+    registerSuccess: "注册成功",
+    passwordMinLength: "密码至少需要6个字符",
+    confirmNotMatch: "两次输入的密码不一致",
+  },
+  invite: {
+    inviteCodes: "邀请码管理",
+    generateCode: "生成邀请码",
+    maxUses: "最大使用次数",
+    copyCode: "复制",
+    noCodes: "还没有生成邀请码",
+    codeCopied: "邀请码已复制到剪贴板",
+    usesLeft: "{{used}}/{{max}}",
   },
   chat: {
     roomName: "公共聊天",
@@ -517,6 +615,13 @@ const zhCN: TranslationDict = {
     hearts: "爱心",
     objects: "物品",
     misc: "其他",
+    custom: "自定义表情",
+    addCustomEmoji: "添加自定义表情",
+    emojiName: "表情名称",
+    emojiNamePlaceholder: "输入表情名称...",
+    uploadEmoji: "上传表情",
+    deleteEmoji: "删除表情",
+    noCustomEmoji: "暂无自定义表情",
   },
   model: {
     selectModel: "选择模型",
@@ -589,6 +694,33 @@ const zhCN: TranslationDict = {
     fileSize: "{{size}}",
     dropFilesHere: "拖放文件到此处",
   },
+  gif: {
+    searchGifs: "搜索 GIF 和贴纸...",
+    trending: "热门",
+    stickers: "贴纸",
+    gifs: "GIF",
+    noResults: "未找到结果",
+    poweredBy: "由 GIPHY 提供支持",
+  },
+  call: {
+    incomingCall: "{{name}} 正在呼叫你",
+    calling: "正在呼叫 {{name}}...",
+    callRejected: "通话已拒绝",
+    missedCall: "未接来电",
+    voiceCall: "语音通话",
+    videoCall: "视频通话",
+    muteMic: "关闭麦克风",
+    unmuteMic: "打开麦克风",
+    muteCamera: "关闭摄像头",
+    unmuteCamera: "打开摄像头",
+    endCall: "结束通话",
+    screenShare: "屏幕共享",
+    switchCamera: "切换摄像头",
+    acceptCall: "接听",
+    rejectCall: "拒绝",
+    remoteVideoOff: "对方已关闭摄像头",
+    callEnded: "通话已结束",
+  },
 };
 
 const enUS: TranslationDict = {
@@ -604,6 +736,38 @@ const enUS: TranslationDict = {
     errorTooLong: "Username cannot exceed 20 characters",
     errorInvalidChars:
       "Username can only contain letters, numbers, Chinese characters, and underscores",
+    buttonLogin: "Login",
+    buttonRegister: "Register",
+    buttonGuest: "Join as Guest",
+    orText: "or",
+  },
+  auth: {
+    register: "Register Account",
+    login: "Login",
+    username: "Username",
+    password: "Password",
+    confirmPassword: "Confirm Password",
+    inviteCode: "Invite Code",
+    registerButton: "Register",
+    loginButton: "Login",
+    haveAccount: "Already have an account? Log in",
+    noAccount: "Don't have an account? Register",
+    guestLogin: "Back to Guest Mode",
+    invalidCode: "Invalid or expired invite code",
+    codeUsed: "Invite code has reached maximum uses",
+    passwordsMatch: "Passwords do not match",
+    registerSuccess: "Registration successful",
+    passwordMinLength: "Password must be at least 6 characters",
+    confirmNotMatch: "Passwords do not match",
+  },
+  invite: {
+    inviteCodes: "Invite Codes",
+    generateCode: "Generate Code",
+    maxUses: "Max Uses",
+    copyCode: "Copy",
+    noCodes: "No invite codes generated yet",
+    codeCopied: "Invite code copied to clipboard",
+    usesLeft: "{{used}}/{{max}}",
   },
   chat: {
     roomName: "Public Chat",
@@ -813,6 +977,13 @@ const enUS: TranslationDict = {
     hearts: "Hearts",
     objects: "Objects",
     misc: "Misc",
+    custom: "Custom Emoji",
+    addCustomEmoji: "Add Custom Emoji",
+    emojiName: "Emoji Name",
+    emojiNamePlaceholder: "Enter emoji name...",
+    uploadEmoji: "Upload Emoji",
+    deleteEmoji: "Delete Emoji",
+    noCustomEmoji: "No custom emojis",
   },
   model: {
     selectModel: "Select Model",
@@ -884,6 +1055,33 @@ const enUS: TranslationDict = {
     downloadFile: "Download file",
     fileSize: "{{size}}",
     dropFilesHere: "Drop files here",
+  },
+  gif: {
+    searchGifs: "Search GIFs & Stickers...",
+    trending: "Trending",
+    stickers: "Stickers",
+    gifs: "GIFs",
+    noResults: "No results found",
+    poweredBy: "Powered by GIPHY",
+  },
+  call: {
+    incomingCall: "{{name}} is calling you",
+    calling: "Calling {{name}}...",
+    callRejected: "Call rejected",
+    missedCall: "Missed call",
+    voiceCall: "Voice Call",
+    videoCall: "Video Call",
+    muteMic: "Mute Mic",
+    unmuteMic: "Unmute Mic",
+    muteCamera: "Mute Camera",
+    unmuteCamera: "Unmute Camera",
+    endCall: "End Call",
+    screenShare: "Screen Share",
+    switchCamera: "Switch Camera",
+    acceptCall: "Accept",
+    rejectCall: "Reject",
+    remoteVideoOff: "Camera is off",
+    callEnded: "Call ended",
   },
 };
 

@@ -35,6 +35,9 @@ type UserProfile = store.UserProfile
 // ScheduledMessage is an alias for store.ScheduledMessage.
 type ScheduledMessage = store.ScheduledMessage
 
+// CustomEmoji is an alias for store.CustomEmoji.
+type CustomEmoji = store.CustomEmoji
+
 // GroupInfo is an alias for store.GroupInfo.
 type GroupInfo = store.GroupInfo
 
@@ -147,8 +150,36 @@ type Store interface {
 	CancelScheduledMessage(id, username string) error
 	GetUserScheduledMessages(username string) ([]ScheduledMessage, error)
 
+	// Custom emojis
+	AddCustomEmoji(name, url, uploader, roomID string) error
+	ListCustomEmojis(roomID string) ([]store.CustomEmoji, error)
+	DeleteCustomEmoji(name, username string) error
+	SearchCustomEmojis(query string) ([]store.CustomEmoji, error)
+
 	// Export
 	ExportMessages(ctx context.Context, roomID, toUser, groupName, username string, limit int) ([]StoredMessage, error)
+
+	// Call history
+	LogCall(call store.CallRecord) error
+	UpdateCallRecord(id, status string, startedAt, endedAt int64) error
+	GetCallHistory(username string, limit int) ([]store.CallRecord, error)
+
+	// User registration and authentication
+	RegisterUser(username, passwordHash, inviteCode string) error
+	VerifyUser(username, password string) (bool, error)
+	GenerateInviteCode(creator string, maxUses int) (string, error)
+	ListInviteCodes(creator string) ([]store.InviteCodeRecord, error)
+	ValidateInviteCode(code string) (bool, error)
+}
+
+// CallSession represents an active call between two users.
+type CallSession struct {
+	ID        string `json:"id"`
+	Caller    string `json:"caller"`
+	Callee    string `json:"callee"`
+	Type      string `json:"type"` // video or voice
+	Status    string `json:"status"` // ringing, active, ended
+	CreatedAt int64  `json:"created_at"`
 }
 
 // Group represents a chat group.
@@ -248,6 +279,18 @@ type Message struct {
 	// Poll fields
 	Poll        *Poll `json:"poll,omitempty"`
 	OptionIndex int   `json:"option_index,omitempty"`
+
+	// Call signaling
+	CallID    string             `json:"call_id,omitempty"`
+	SDP       string             `json:"sdp,omitempty"`
+	CallType  string             `json:"call_type,omitempty"`
+	Candidate string             `json:"candidate,omitempty"`
+	Calls     []store.CallRecord `json:"calls,omitempty"`
+
+	// Custom emoji fields
+	EmojiName string         `json:"emoji_name,omitempty"`
+	EmojiURL  string         `json:"emoji_url,omitempty"`
+	Emojis    []CustomEmoji  `json:"emojis,omitempty"`
 }
 
 // HubCommand PicoClaw 可向 Hub 发送的命令类型。
@@ -326,6 +369,10 @@ type Hub struct {
 	botCooldown   map[string]time.Time
 	botCooldownMu sync.Mutex
 
+	// Call session tracking
+	callSessions   map[string]*CallSession
+	callSessionsMu sync.RWMutex
+
 	mu sync.RWMutex
 }
 
@@ -373,6 +420,7 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 		lastSeen:        make(map[string]int64),
 		rooms:           make(map[string]map[string]bool),
 		botCooldown:     make(map[string]time.Time),
+		callSessions:    make(map[string]*CallSession),
 	}
 }
 
@@ -1586,6 +1634,47 @@ func (h *Hub) processScheduledMessages() {
 			}
 		}
 	}
+}
+
+// -------- Call session management --------
+
+// CreateCallSession creates a new call session and stores it.
+func (h *Hub) CreateCallSession(id, caller, callee, callType string) *CallSession {
+	h.callSessionsMu.Lock()
+	defer h.callSessionsMu.Unlock()
+	cs := &CallSession{
+		ID:        id,
+		Caller:    caller,
+		Callee:    callee,
+		Type:      callType,
+		Status:    "ringing",
+		CreatedAt: time.Now().UnixMilli(),
+	}
+	h.callSessions[id] = cs
+	return cs
+}
+
+// GetCallSession returns a call session by ID.
+func (h *Hub) GetCallSession(id string) *CallSession {
+	h.callSessionsMu.RLock()
+	defer h.callSessionsMu.RUnlock()
+	return h.callSessions[id]
+}
+
+// UpdateCallSessionStatus updates the status of a call session.
+func (h *Hub) UpdateCallSessionStatus(id, status string) {
+	h.callSessionsMu.Lock()
+	defer h.callSessionsMu.Unlock()
+	if cs, ok := h.callSessions[id]; ok {
+		cs.Status = status
+	}
+}
+
+// RemoveCallSession removes a call session.
+func (h *Hub) RemoveCallSession(id string) {
+	h.callSessionsMu.Lock()
+	defer h.callSessionsMu.Unlock()
+	delete(h.callSessions, id)
 }
 
 // Shutdown gracefully stops the hub and closes all client connections.

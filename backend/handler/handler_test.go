@@ -160,6 +160,18 @@ func (m *mockStore) LeaveGroup(groupName, username string) error { return nil }
 func (m *mockStore) GetGroupInfo(groupName string) (*store.GroupInfo, error) { return &store.GroupInfo{Name: groupName}, nil }
 func (m *mockStore) GetGroupMemberRole(groupName, username string) (string, error) { return "member", nil }
 func (m *mockStore) GetGroupOwner(groupName string) (string, error) { return "", nil }
+func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error { return nil }
+func (m *mockStore) ListCustomEmojis(roomID string) ([]store.CustomEmoji, error) { return nil, nil }
+func (m *mockStore) DeleteCustomEmoji(name, username string) error { return nil }
+func (m *mockStore) SearchCustomEmojis(query string) ([]store.CustomEmoji, error) { return nil, nil }
+func (m *mockStore) LogCall(call store.CallRecord) error { return nil }
+func (m *mockStore) UpdateCallRecord(id, status string, startedAt, endedAt int64) error { return nil }
+func (m *mockStore) GetCallHistory(username string, limit int) ([]store.CallRecord, error) { return nil, nil }
+func (m *mockStore) RegisterUser(username, passwordHash, inviteCode string) error { return nil }
+func (m *mockStore) VerifyUser(username, password string) (bool, error) { return true, nil }
+func (m *mockStore) GenerateInviteCode(creator string, maxUses int) (string, error) { return "TESTCODE", nil }
+func (m *mockStore) ListInviteCodes(creator string) ([]store.InviteCodeRecord, error) { return nil, nil }
+func (m *mockStore) ValidateInviteCode(code string) (bool, error) { return true, nil }
 
 func TestHealthCheck(t *testing.T) {
 	h := newTestHandler()
