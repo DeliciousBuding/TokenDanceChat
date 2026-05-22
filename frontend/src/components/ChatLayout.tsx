@@ -88,6 +88,27 @@ export function ChatLayout() {
     reset();
   }, [disconnect, reset]);
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key === "k") {
+        e.preventDefault();
+        const toggleBtn = document.querySelector<HTMLButtonElement>('[aria-label="toggle search"]');
+        if (toggleBtn) toggleBtn.click();
+        setTimeout(() => {
+          const searchField = document.querySelector<HTMLInputElement>('[aria-label*="search"] input');
+          searchField?.focus();
+        }, 100);
+      }
+      if (e.key === "Escape") {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const toggleLang = useCallback(() => {
     const next: Language = lang === "zh-CN" ? "en-US" : "zh-CN";
     setLang(next);
