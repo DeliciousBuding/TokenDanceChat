@@ -123,7 +123,7 @@ export function ModelSelector({
         <div
           role="listbox"
           aria-label={t("model.selectModel")}
-          className="absolute top-full left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border border-border bg-card shadow-xl animate-scale-in"
+          className="absolute top-full left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border border-border bg-card shadow-2xl animate-scale-in"
           style={{ minWidth: "220px" }}
         >
           {modelCatalog.map((model, idx) => (

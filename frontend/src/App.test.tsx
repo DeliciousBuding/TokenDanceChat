@@ -21,6 +21,12 @@ vi.mock("@/hooks/useWebSocket", () => ({
   }),
 }));
 
+// Mock sound config module
+vi.mock("@/lib/soundToggle", () => ({
+  isSoundEnabled: vi.fn(() => true),
+  setSoundEnabled: vi.fn(),
+}));
+
 // Mock sound module — AudioContext not available in jsdom
 vi.mock("@/lib/sound", () => ({
   playMessageSound: vi.fn(),

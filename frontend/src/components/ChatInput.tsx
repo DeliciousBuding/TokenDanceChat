@@ -4,7 +4,6 @@ import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI, type ChatMessage, type TypingContext } from "@/lib/api";
-import { playSentSound } from "@/lib/sound";
 import { mentionableAssistants } from "@/lib/assistantRegistry";
 
 const EMOJI_MAP: Record<string, string> = {
@@ -517,7 +516,7 @@ export function ChatInput({
     } else {
       onSend(trimmed);
     }
-    playSentSound();
+    import("@/lib/sound").then((m) => m.playSentSound());
     setContent("");
     // Clear reply indicator after send
     setReplyTo(null);

@@ -4,14 +4,9 @@ import { I18nProvider } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 
 // ── Mocks ──────────────────────────────────────────
-vi.mock("@/lib/sound", () => ({
-  playSentSound: vi.fn(),
-  playMessageSound: vi.fn(),
-  playMentionSound: vi.fn(),
-  playOnlineSound: vi.fn(),
-  playOfflineSound: vi.fn(),
-  playReactionSound: vi.fn(),
+vi.mock("@/lib/soundToggle", () => ({
   isSoundEnabled: vi.fn(() => true),
+  setSoundEnabled: vi.fn(),
 }));
 
 // Mock localStorage

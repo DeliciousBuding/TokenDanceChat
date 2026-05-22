@@ -5,7 +5,7 @@ import { useTranslation } from "@/i18n/context";
 import { usePullDownGesture } from "@/hooks/useTouchGestures";
 import { MessageBubble } from "./MessageBubble";
 import { SystemMessage } from "./SystemMessage";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, formatFullTime } from "@/lib/utils";
 import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 
@@ -150,6 +150,21 @@ export function MessageTranscript({
   const [showBatchForwardPicker, setShowBatchForwardPicker] = useState(false);
   const [batchForwardUser, setBatchForwardUser] = useState("");
 
+  // Drag-select: after long-press enters select mode, continue holding and drag
+  // to select adjacent messages (Telegram-style gesture).
+  const dragSelectRef = useRef(false);
+
+  const handleDragSelectEnter = useCallback((messageId: string) => {
+    if (!dragSelectRef.current) return;
+    setSelectedIds((prev) => {
+      if (prev.has(messageId)) return prev;
+      const next = new Set(prev);
+      next.add(messageId);
+      return next;
+    });
+  }, []);
+
+
 
   // Save scroll position on scroll + detect scroll-to-top for pagination.
   const handleScroll = useCallback(() => {
@@ -268,7 +283,11 @@ export function MessageTranscript({
   }, [contextMenu.message, onReply, closeContextMenu]);
 
   const handleContextCopy = useCallback(() => {
-    if (contextMenu.message) navigator.clipboard.writeText(contextMenu.message.content).catch(() => {});
+    if (contextMenu.message) {
+      const time = formatFullTime(contextMenu.message.timestamp);
+      const text = `[${contextMenu.message.username}] ${time}\n${contextMenu.message.content}`;
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
     closeContextMenu();
   }, [contextMenu.message, closeContextMenu]);
 
@@ -327,12 +346,15 @@ export function MessageTranscript({
     setSelectedIds(new Set(ids));
   }, [effectiveMessages]);
 
-  // Copy content of all selected messages
+  // Copy content of all selected messages with formatted output.
   const handleCopySelected = useCallback(async () => {
     const selectedMessages = effectiveMessages.filter((m) => selectedIds.has(m.id));
     const text = selectedMessages
-      .map((m) => `[${m.username}] ${m.content}`)
-      .join("\n");
+      .map((m) => {
+        const time = formatFullTime(m.timestamp);
+        return `[${m.username}] ${time}\n${m.content}`;
+      })
+      .join("\n\n");
     try {
       await navigator.clipboard.writeText(text);
     } catch { /* Clipboard API may not be available */ }
@@ -350,6 +372,29 @@ export function MessageTranscript({
     },
     [selectMode, exitSelectMode],
   );
+
+  // Drag-select: track pointer movement over messages during long-press.
+  const handleContainerPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragSelectRef.current) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el) return;
+    const msgEl = (el as HTMLElement).closest('[id^="msg-"]');
+    if (msgEl) {
+      const id = msgEl.id.replace('msg-', '');
+      handleDragSelectEnter(id);
+    }
+  }, [handleDragSelectEnter]);
+
+  const handleContainerPointerUp = useCallback(() => {
+    dragSelectRef.current = false;
+  }, []);
+
+  // Start drag-select (called by MessageBubble long-press).
+  const startDragSelect = useCallback((messageId: string) => {
+    dragSelectRef.current = true;
+    setSelectMode(true);
+    setSelectedIds(new Set([messageId]));
+  }, []);
 
   // Listen for Escape key (or external exit-select-mode event)
   useEffect(() => {
@@ -374,6 +419,9 @@ export function MessageTranscript({
       ref={containerRef}
       onScroll={handleScroll}
       onClick={handleContainerClick}
+      onPointerMove={handleContainerPointerMove}
+      onPointerUp={handleContainerPointerUp}
+      onPointerCancel={handleContainerPointerUp}
       className={cn("flex-1 overflow-y-auto relative scrollbar-thin", className)}
       style={{ willChange: "transform" }}
       {...pullDownHandlers}
@@ -486,42 +534,42 @@ export function MessageTranscript({
             return (
               <div className="flex flex-col items-center justify-center h-full py-12 px-4">
                 <div
-                  className="mb-4 flex h-16 w-16 items-center justify-center rounded-full text-lg font-semibold text-white ring-1 ring-white/10"
+                  className="mb-5 flex h-20 w-20 items-center justify-center rounded-full text-2xl font-semibold text-white ring-1 ring-border shadow-sm"
                   style={{ background: `linear-gradient(135deg, oklch(65% 0.16 ${currentChat.username.charCodeAt(0) % 360}), oklch(58% 0.14 ${(currentChat.username.charCodeAt(0) + 45) % 360}))` }}
                 >
                   {initial}
                 </div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("transcript.emptyDmTitle")}</h3>
-                <p className="text-xs text-muted-foreground/60 text-center max-w-xs">{t("transcript.emptyDmDescription", { username: currentChat.username })}</p>
+                <h3 className="text-sm font-semibold text-foreground/80 mb-1.5">{t("transcript.emptyDmTitle")}</h3>
+                <p className="text-xs text-muted-foreground/50 text-center max-w-xs leading-relaxed">{t("transcript.emptyDmDescription", { username: currentChat.username })}</p>
               </div>
             );
           }
           if (currentChat.type === "group") {
             return (
               <div className="flex flex-col items-center justify-center h-full py-12 px-4">
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-border">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/60">
+                <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-secondary to-accent ring-1 ring-border shadow-sm">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/50">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                     <circle cx="9" cy="7" r="4" />
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
                 </div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("transcript.emptyGroupTitle")}</h3>
-                <p className="text-xs text-muted-foreground/60 text-center max-w-xs">{t("transcript.emptyGroupDescription", { name: currentChat.name })}</p>
+                <h3 className="text-sm font-semibold text-foreground/80 mb-1.5">{t("transcript.emptyGroupTitle")}</h3>
+                <p className="text-xs text-muted-foreground/50 text-center max-w-xs leading-relaxed">{t("transcript.emptyGroupDescription", { name: currentChat.name })}</p>
               </div>
             );
           }
           /* Public chat empty state */
           return (
             <div className="flex flex-col items-center justify-center h-full py-12 px-4">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-border animate-chat-bubble">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/60">
+              <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary/10 to-accent ring-1 ring-border shadow-sm animate-chat-bubble">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/50">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
               </div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("transcript.emptyTitle")}</h3>
-              <p className="text-xs text-muted-foreground/60 text-center max-w-xs">{t("transcript.emptyDescription")}</p>
+              <h3 className="text-sm font-semibold text-foreground/80 mb-1.5">{t("transcript.emptyTitle")}</h3>
+              <p className="text-xs text-muted-foreground/50 text-center max-w-xs leading-relaxed">{t("transcript.emptyDescription")}</p>
             </div>
           );
         })()
@@ -620,7 +668,7 @@ export function MessageTranscript({
                         selectMode={selectMode}
                         isSelected={selectedIds.has(msg.id)}
                         onToggleSelect={toggleSelect}
-                        onLongPress={enterSelectMode}
+                        onLongPress={startDragSelect}
                         staggerDelay={gi * 50}
                       />
                     );

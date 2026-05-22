@@ -527,6 +527,14 @@ class ChatAPI {
     this.send({ type: "unmute_conversation", key });
   }
 
+  sendArchiveConversation(key: string): void {
+    this.send({ type: "archive_conversation", key });
+  }
+
+  sendUnarchiveConversation(key: string): void {
+    this.send({ type: "unarchive_conversation", key });
+  }
+
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
     try {
       const resp = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);

@@ -83,6 +83,12 @@ type Store interface {
 	UnmuteConversation(username, key string) error
 	ListMutedConversations(username string) []string
 	IsConversationMuted(username, key string) bool
+
+	// Conversation archiving
+	ArchiveConversation(username, key string) error
+	UnarchiveConversation(username, key string) error
+	ListArchivedConversations(username string) []string
+	IsConversationArchived(username, key string) bool
 }
 
 // Group represents a chat group.
@@ -1003,6 +1009,26 @@ func (h *Hub) IsConversationMuted(username, key string) bool {
 	return h.store.IsConversationMuted(username, key)
 }
 
+// ArchiveConversation archives a conversation for a user.
+func (h *Hub) ArchiveConversation(username, key string) error {
+	return h.store.ArchiveConversation(username, key)
+}
+
+// UnarchiveConversation unarchives a conversation for a user.
+func (h *Hub) UnarchiveConversation(username, key string) error {
+	return h.store.UnarchiveConversation(username, key)
+}
+
+// ListArchivedConversations returns the list of archived conversation keys for a user.
+func (h *Hub) ListArchivedConversations(username string) []string {
+	return h.store.ListArchivedConversations(username)
+}
+
+// IsConversationArchived checks if a conversation is archived for a user.
+func (h *Hub) IsConversationArchived(username, key string) bool {
+	return h.store.IsConversationArchived(username, key)
+}
+
 // SendToAllSessions sends marshaled data to all connected clients with the given username.
 func (h *Hub) SendToAllSessions(username string, data []byte) {
 	h.mu.RLock()
@@ -1103,13 +1129,20 @@ func (h *Hub) ShouldBroadcastTyping(username string) bool {
 
 // CheckBotCooldown returns true if a bot response is allowed for the given key.
 // Keys use "bot:<username>" for TokenBot and "agent:<username>" for PicoClaw,
-// giving each assistant independent 30s per-user cooldowns.
+// giving each assistant independent per-user cooldowns.
+// TokenBot cooldown: 3s (fast Q&A). PicoClaw cooldown: 8s (Agent workflows).
 // Records the current timestamp on success.
 func (h *Hub) CheckBotCooldown(key string) bool {
 	h.botCooldownMu.Lock()
 	defer h.botCooldownMu.Unlock()
 	last, exists := h.botCooldown[key]
-	if exists && time.Since(last) < 30*time.Second {
+	cooldown := 30 * time.Second
+	if strings.HasPrefix(key, "bot:") {
+		cooldown = 3 * time.Second
+	} else if strings.HasPrefix(key, "agent:") {
+		cooldown = 8 * time.Second
+	}
+	if exists && time.Since(last) < cooldown {
 		return false
 	}
 	h.botCooldown[key] = time.Now()

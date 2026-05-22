@@ -15,9 +15,8 @@ import {
   type WSReactionUpdate,
   type WSMessageEditBroadcast,
 } from "@/lib/api";
-import { playMessageSound, playMentionSound, playOnlineSound } from "@/lib/sound";
 
-// --- Page title utilities ---
+// ─── Page title utilities ───
 
 const BASE_TITLE = "TokenDanceChat";
 let unreadTitleCount = 0;
@@ -81,6 +80,7 @@ export function useWebSocket() {
     setPinnedMessages,
     setPinnedConversations,
     setMutedConversations,
+    setArchivedConversations,
   } = useChatStore();
 
   const connect = useCallback(
@@ -228,7 +228,7 @@ export function useWebSocket() {
         const state = useChatStore.getState();
         if (state.currentChat.type !== "public") {
           useChatStore.getState().incrementConversationUnread("public");
-          if (!isTabActive && !state.mutedConversations.includes("public")) playMessageSound();
+          if (!isTabActive && !state.mutedConversations.includes("public")) import("@/lib/sound").then((m) => m.playMessageSound());
           if (!state.mutedConversations.includes("public")) notifyMessage(username, content);
         }
       }),
@@ -254,7 +254,7 @@ export function useWebSocket() {
         const partner = m.username === state.username ? m.to : (m.from || m.username);
         if (partner && m.username !== state.username && !(state.currentChat.type === "dm" && state.currentChat.username === partner)) {
           useChatStore.getState().incrementConversationUnread(`dm:${partner}`);
-          if (!state.mutedConversations.includes(`dm:${partner}`)) playMessageSound();
+          if (!state.mutedConversations.includes(`dm:${partner}`)) import("@/lib/sound").then((m) => m.playMessageSound());
           if (!state.mutedConversations.includes(`dm:${partner}`)) notifyMessage(partner, m.content);
         }
       }),
@@ -278,7 +278,7 @@ export function useWebSocket() {
         const groupName = m.group || m.to;
         if (groupName && !(state.currentChat.type === "group" && state.currentChat.name === groupName)) {
           useChatStore.getState().incrementConversationUnread(`group:${groupName}`);
-          if (!state.mutedConversations.includes(`group:${groupName}`)) playMessageSound();
+          if (!state.mutedConversations.includes(`group:${groupName}`)) import("@/lib/sound").then((m) => m.playMessageSound());
           if (!state.mutedConversations.includes(`group:${groupName}`)) notifyMessage(groupName, `${m.username}: ${m.content}`);
         }
       }),
@@ -387,7 +387,7 @@ export function useWebSocket() {
                   i18nSys("system.userOnline", { username: user.username }),
                   Date.now(),
                 );
-                playOnlineSound();
+                import("@/lib/sound").then((m) => m.playOnlineSound());
               }
             }
           }
@@ -528,6 +528,16 @@ export function useWebSocket() {
         const { keys } = msg as { type: string; keys: string[] };
         if (keys) {
           setMutedConversations(keys);
+        }
+      }),
+    );
+
+    // Archived conversations list
+    unsubs.push(
+      chatAPI.on("archived_conversations", (msg: WSMessage) => {
+        const { keys } = msg as { type: string; keys: string[] };
+        if (keys) {
+          setArchivedConversations(keys);
         }
       }),
     );
@@ -727,7 +737,7 @@ export function useWebSocket() {
             group: grp,
             timestamp: Date.now(),
           });
-          playMentionSound();
+          import("@/lib/sound").then((m) => m.playMentionSound());
           // Flash title if tab not active.
           if (!isTabActive) {
             unreadTitleCount++;
@@ -754,7 +764,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

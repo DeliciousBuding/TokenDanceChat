@@ -19,6 +19,7 @@
   --border: oklch(0.26 0.01 260);
   --input: oklch(0.26 0.01 260);
   --ring: oklch(71.2% 0.194 13.428);
+  --ring-focus: oklch(71.2% 0.194 13.428 / 0.5);
   --warning: oklch(0.65 0.18 85);
   --warning-foreground: oklch(0.18 0.01 260);
   --mention: oklch(0.65 0.18 30);
@@ -44,6 +45,7 @@
   --border: oklch(0.88 0.01 260);
   --input: oklch(0.88 0.01 260);
   --ring: oklch(55% 0.194 13.428);
+  --ring-focus: oklch(55% 0.194 13.428 / 0.5);
   --warning: oklch(0.55 0.18 85);
   --warning-foreground: oklch(0.12 0.01 260);
   --mention: oklch(0.55 0.18 30);
@@ -70,6 +72,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-ring-focus: var(--ring-focus);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-mention: var(--mention);
@@ -103,18 +106,18 @@
   }
 
   /* Focus ring for keyboard navigation */
-  :focus-visible {
-    outline: none;
-  }
-
   button:focus-visible,
   a:focus-visible,
   input:focus-visible,
   textarea:focus-visible,
   select:focus-visible,
-  [tabindex]:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
+  [tabindex]:focus-visible,
+  [role="button"]:focus-visible,
+  [role="menuitem"]:focus-visible,
+  [role="option"]:focus-visible,
+  [role="listbox"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--ring-focus);
     border-radius: var(--radius);
   }
 

@@ -173,6 +173,10 @@ func (c *Client) ReadPump() {
 			c.handleMuteConversation(msg)
 		case "unmute_conversation":
 			c.handleUnmuteConversation(msg)
+		case "archive_conversation":
+			c.handleArchiveConversation(msg)
+		case "unarchive_conversation":
+			c.handleUnarchiveConversation(msg)
 		case "load_history":
 			c.handleLoadHistory(msg)
 		default:
@@ -284,6 +288,17 @@ func (c *Client) handleJoin(msg Message) {
 	})
 	select {
 	case c.send <- mutedPayload:
+	default:
+	}
+
+	// Send archived conversations list.
+	archivedKeys := c.hub.ListArchivedConversations(c.username)
+	archivedPayload, _ := json.Marshal(Message{
+		Type: "archived_conversations",
+		Keys: archivedKeys,
+	})
+	select {
+	case c.send <- archivedPayload:
 	default:
 	}
 
@@ -937,6 +952,18 @@ func (c *Client) handleGroupMessage(msg Message) {
 		return
 	}
 
+	// Auto-unarchive the group conversation for the sender.
+	groupKey := "group:" + groupName
+	if c.hub.IsConversationArchived(c.username, groupKey) {
+		c.hub.UnarchiveConversation(c.username, groupKey)
+		archivedKeys := c.hub.ListArchivedConversations(c.username)
+		archivedPayload, _ := json.Marshal(Message{
+			Type: "archived_conversations",
+			Keys: archivedKeys,
+		})
+		c.hub.SendToAllSessions(c.username, archivedPayload)
+	}
+
 	// Rate limit.
 	if !c.checkRateLimit() {
 		return
@@ -1037,6 +1064,17 @@ func (c *Client) handleDMMessage(msg Message) {
 	// Block check: if recipient has blocked sender, reject.
 	if c.hub.IsBlocked(to, c.username) {
 		return
+	}
+	// Auto-unarchive the DM conversation for the sender.
+	dmKey := "dm:" + to
+	if c.hub.IsConversationArchived(c.username, dmKey) {
+		c.hub.UnarchiveConversation(c.username, dmKey)
+		archivedKeys := c.hub.ListArchivedConversations(c.username)
+		archivedPayload, _ := json.Marshal(Message{
+			Type: "archived_conversations",
+			Keys: archivedKeys,
+		})
+		c.hub.SendToAllSessions(c.username, archivedPayload)
 	}
 	content := sanitizeContent(msg.Content)
 	if content == "" {
@@ -1530,6 +1568,50 @@ func (c *Client) handleUnmuteConversation(msg Message) {
 	c.hub.SendToAllSessions(c.username, mutedPayload)
 }
 
+// handleArchiveConversation archives a conversation for the current user.
+func (c *Client) handleArchiveConversation(msg Message) {
+	if c.username == "" {
+		return
+	}
+	key := msg.Key
+	if key == "" {
+		return
+	}
+	if err := c.hub.ArchiveConversation(c.username, key); err != nil {
+		log.Printf("archive_conversation error: %v", err)
+		return
+	}
+	// Send updated list to all sessions of this user.
+	archivedKeys := c.hub.ListArchivedConversations(c.username)
+	archivedPayload, _ := json.Marshal(Message{
+		Type: "archived_conversations",
+		Keys: archivedKeys,
+	})
+	c.hub.SendToAllSessions(c.username, archivedPayload)
+}
+
+// handleUnarchiveConversation unarchives a conversation for the current user.
+func (c *Client) handleUnarchiveConversation(msg Message) {
+	if c.username == "" {
+		return
+	}
+	key := msg.Key
+	if key == "" {
+		return
+	}
+	if err := c.hub.UnarchiveConversation(c.username, key); err != nil {
+		log.Printf("unarchive_conversation error: %v", err)
+		return
+	}
+	// Send updated list to all sessions of this user.
+	archivedKeys := c.hub.ListArchivedConversations(c.username)
+	archivedPayload, _ := json.Marshal(Message{
+		Type: "archived_conversations",
+		Keys: archivedKeys,
+	})
+	c.hub.SendToAllSessions(c.username, archivedPayload)
+}
+
 // handleLoadHistory sends older messages to the requesting client for pagination.
 func (c *Client) handleLoadHistory(msg Message) {
 	if c.username == "" {
@@ -1794,7 +1876,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, r
 			close(collectDone)
 			c.hub.BroadcastTyping(agentName, "typing_stop", "", "")
 		}()
-		timeout := time.After(30 * time.Second)
+		timeout := time.After(120 * time.Second)
 		for {
 			select {
 			case msg := <-chunks:
@@ -1842,7 +1924,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, r
 
 	response := fullResponse.String()
 	if timedOut.Load() && response == "" {
-		response = "PicoClaw 响应超时，请稍后重试。"
+		response = "PicoClaw Agent 工作流执行中（最长等待 120 秒）..."
 	}
 	response = sanitizeBotContent(response)
 

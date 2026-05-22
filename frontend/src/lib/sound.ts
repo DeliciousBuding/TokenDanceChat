@@ -1,4 +1,6 @@
 // Simple notification sound using Web Audio API — no external files needed.
+import { isSoundEnabled } from "./soundToggle";
+
 let audioCtx: AudioContext | null = null;
 
 function getCtx(): AudioContext {
@@ -6,28 +8,6 @@ function getCtx(): AudioContext {
     audioCtx = new AudioContext();
   }
   return audioCtx;
-}
-
-// ─── Global sound toggle ───
-
-const SOUND_STORAGE_KEY = "tokendance:soundEnabled";
-
-export function isSoundEnabled(): boolean {
-  try {
-    const stored = localStorage.getItem(SOUND_STORAGE_KEY);
-    if (stored === "false") return false;
-    return true; // default on
-  } catch {
-    return true;
-  }
-}
-
-export function setSoundEnabled(enabled: boolean): void {
-  try {
-    localStorage.setItem(SOUND_STORAGE_KEY, String(enabled));
-  } catch {
-    // ignore
-  }
 }
 
 function shouldPlay(): boolean {

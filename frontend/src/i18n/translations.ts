@@ -53,6 +53,10 @@ export interface TranslationDict {
     muteConversation: string;
     unmuteConversation: string;
     muted: string;
+    archived: string;
+    archivedSection: string;
+    archiveConversation: string;
+    unarchiveConversation: string;
   };
   transcript: {
     loading: string;
@@ -258,6 +262,10 @@ const zhCN: TranslationDict = {
     muteConversation: "免打扰",
     unmuteConversation: "取消免打扰",
     muted: "已静音",
+    archived: "已归档",
+    archivedSection: "已归档会话",
+    archiveConversation: "归档会话",
+    unarchiveConversation: "取消归档",
   },
   transcript: {
     loading: "加载消息中...",
@@ -464,6 +472,10 @@ const enUS: TranslationDict = {
     muteConversation: "Mute",
     unmuteConversation: "Unmute",
     muted: "Muted",
+    archived: "Archived",
+    archivedSection: "Archived",
+    archiveConversation: "Archive",
+    unarchiveConversation: "Unarchive",
   },
   transcript: {
     loading: "Loading messages...",
