@@ -412,6 +412,8 @@ export function ChatInput({
     onSend(trimmed);
     playSentSound();
     setContent("");
+    // Clear reply indicator after send
+    setReplyTo(null);
     // Pulse the send button as visual confirmation of sent message.
     setPulseButton(true);
     setTimeout(() => setPulseButton(false), 400);
