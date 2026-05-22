@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -535,5 +536,112 @@ func TestServeUploadReadsViaMediaStore(t *testing.T) {
 	}
 	if string(body) != "webp-bytes" {
 		t.Fatalf("expected media bytes, got %q", string(body))
+	}
+}
+
+// mockStoreDBError is a mockStore variant that returns an error from Ping.
+type mockStoreDBError struct {
+	mockStore
+}
+
+func (m *mockStoreDBError) Ping() error {
+	return errors.New("database connection lost")
+}
+
+func newTestHandlerWithDBError() *Handler {
+	ms := &mockStoreDBError{}
+	h := hub.New(ms, nil, nil, "")
+	go h.Run()
+	return New(h, ms, "/tmp/test-uploads")
+}
+
+// TestHealthCheckDBError verifies that HealthCheck returns 503 when the database ping fails.
+func TestHealthCheckDBError(t *testing.T) {
+	h := newTestHandlerWithDBError()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	w := httptest.NewRecorder()
+
+	h.HealthCheck(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected status 503, got %d", resp.StatusCode)
+	}
+
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+
+	if body["status"] != "error" {
+		t.Errorf("expected status 'error', got '%v'", body["status"])
+	}
+	if body["db"] != "error" {
+		t.Errorf("expected db 'error', got '%v'", body["db"])
+	}
+	if body["service"] != "tokendancechat" {
+		t.Errorf("expected service 'tokendancechat', got '%v'", body["service"])
+	}
+}
+
+// TestCSPHeaders verifies that SecurityHeadersMiddleware sets the expected security headers.
+func TestCSPHeaders(t *testing.T) {
+	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// Verify each security header.
+	tests := []struct {
+		header string
+		want   string
+	}{
+		{"X-Content-Type-Options", "nosniff"},
+		{"X-Frame-Options", "DENY"},
+		{"Referrer-Policy", "strict-origin-when-cross-origin"},
+		{"X-XSS-Protection", "0"},
+		{"Permissions-Policy", "camera=(), microphone=(), geolocation=()"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.header, func(t *testing.T) {
+			got := resp.Header.Get(tc.header)
+			if got != tc.want {
+				t.Errorf("%s: expected %q, got %q", tc.header, tc.want, got)
+			}
+		})
+	}
+
+	// Verify Content-Security-Policy is present and contains key directives.
+	csp := resp.Header.Get("Content-Security-Policy")
+	if csp == "" {
+		t.Error("missing Content-Security-Policy header")
+	} else {
+		requiredDirectives := []string{
+			"default-src",
+			"script-src",
+			"style-src",
+			"img-src",
+		}
+		for _, directive := range requiredDirectives {
+			if !strings.Contains(csp, directive) {
+				t.Errorf("CSP missing directive: %s", directive)
+			}
+		}
 	}
 }

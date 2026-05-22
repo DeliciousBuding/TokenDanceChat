@@ -325,3 +325,64 @@ func TestHubRunStartStop(t *testing.T) {
 	h.unregister <- client
 	time.Sleep(10 * time.Millisecond)
 }
+
+func TestDroppedMessages(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Initially, dropped messages should be 0.
+	if d := h.DroppedMessages(); d != 0 {
+		t.Errorf("expected 0 dropped messages initially, got %d", d)
+	}
+
+	// Increment dropped messages.
+	h.IncrementDropped()
+	h.IncrementDropped()
+	h.IncrementDropped()
+
+	if d := h.DroppedMessages(); d != 3 {
+		t.Errorf("expected 3 dropped messages after 3 increments, got %d", d)
+	}
+}
+
+func TestShutdown(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	// Shutdown on an empty hub should not panic.
+	h.Shutdown()
+
+	// Verify connection count is 0 after shutdown.
+	if h.ConnectionCount() != 0 {
+		t.Errorf("expected 0 connections after shutdown, got %d", h.ConnectionCount())
+	}
+
+	// Calling Shutdown again on an already-shutdown hub should not panic.
+	h.Shutdown()
+}
+
+func TestRateLimit(t *testing.T) {
+	c := &Client{
+		send: make(chan []byte, 1),
+	}
+
+	// First 5 messages within 1 second should be allowed.
+	for i := 0; i < 5; i++ {
+		if !c.checkRateLimit() {
+			t.Errorf("expected checkRateLimit to return true for message %d", i+1)
+		}
+	}
+
+	// 6th message should be rate-limited.
+	if c.checkRateLimit() {
+		t.Error("expected checkRateLimit to return false on 6th message within 1 second")
+	}
+
+	// After 1 second window expires, messages should be allowed again.
+	time.Sleep(1100 * time.Millisecond)
+
+	if !c.checkRateLimit() {
+		t.Error("expected checkRateLimit to return true after rate limit window expires")
+	}
+}

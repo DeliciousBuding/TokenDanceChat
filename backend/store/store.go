@@ -551,6 +551,31 @@ type SearchResult struct {
 	Rank      float64 `json:"rank"`
 }
 
+// sanitizeFTS5Query strips FTS5 expression operators from user input
+// to prevent syntax errors and expression injection.
+func sanitizeFTS5Query(q string) string {
+	var b strings.Builder
+	for _, r := range q {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == ' ' || r >= 0x4e00 {
+			b.WriteRune(r)
+		}
+	}
+	cleaned := strings.TrimSpace(b.String())
+	if cleaned == "" {
+		return ""
+	}
+	fields := strings.Fields(cleaned)
+	b.Reset()
+	for i, f := range fields {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(f)
+		b.WriteByte('*')
+	}
+	return b.String()
+}
+
 // SearchMessages performs a full-text search over messages using FTS5.
 func (s *Store) SearchMessages(query string, roomID string, limit int) ([]SearchResult, error) {
 	s.mu.RLock()
@@ -558,6 +583,11 @@ func (s *Store) SearchMessages(query string, roomID string, limit int) ([]Search
 
 	if limit <= 0 {
 		limit = 20
+	}
+
+	query = sanitizeFTS5Query(query)
+	if query == "" {
+		return []SearchResult{}, nil
 	}
 
 	var rows *sql.Rows
