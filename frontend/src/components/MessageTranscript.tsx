@@ -584,7 +584,7 @@ export function MessageTranscript({
           aria-atomic="false"
           aria-relevant="additions"
           aria-label={t("chat.roomName")}
-          className="mx-auto w-full max-w-7xl px-1 py-5 sm:px-3"
+          className="mx-auto w-full max-w-7xl px-1 py-3 sm:px-3 sm:py-4"
         >
           {hiddenCount > 0 && (
             <div className="flex justify-center pb-3">
@@ -624,7 +624,7 @@ export function MessageTranscript({
                 new Date(groupTs).toDateString();
 
             const dateSep = showDateSep ? (
-              <div className="flex items-center gap-3 px-4 py-3">
+              <div className="flex items-center gap-3 px-4 py-1.5 sm:py-2">
                 <div className="h-px flex-1 bg-border/50" />
                 <span className="text-[11px] font-medium text-muted-foreground/40 whitespace-nowrap select-none">
                   {formatDate(groupTs)}

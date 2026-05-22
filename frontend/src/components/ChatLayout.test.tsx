@@ -162,9 +162,19 @@ describe("ChatLayout", () => {
       expect(container.querySelector(".flex")).toBeTruthy();
     });
 
-    it("语言切换按钮可见", () => {
+    it("桌面语言切换按钮可见", () => {
       renderChatLayout();
       expect(screen.getByText("English")).toBeTruthy();
+    });
+
+    it("移动端次要操作收纳在更多菜单", () => {
+      renderChatLayout();
+      fireEvent.click(screen.getByLabelText("More chat actions"));
+      expect(screen.getAllByText("English").length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText("导出为 JSON")).toBeTruthy();
+      expect(screen.getByText("导出为文本")).toBeTruthy();
+      expect(screen.getAllByText("通知偏好").length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText("断开连接")).toBeTruthy();
     });
 
     it("移动端折叠菜单按钮存在", () => {

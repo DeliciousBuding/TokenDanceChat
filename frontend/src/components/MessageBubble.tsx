@@ -788,7 +788,7 @@ export const MessageBubble = memo(function MessageBubble({
   }, [message.content, currentUsername, isDeleted, t, customEmojis, highlight, isOwn, bubbleBg]);
 
   const paddingY =
-    isGrouped && hideAvatar ? "py-0.5" : "py-1.5";
+    isGrouped && hideAvatar ? "py-0.5" : "py-1 sm:py-1.5";
 
   return (
     <>
@@ -862,7 +862,7 @@ export const MessageBubble = memo(function MessageBubble({
         }
       }}
       className={cn(
-        "group flex gap-3 px-4 animate-spring-up scroll-mt-16",
+        "group flex gap-2 px-3 animate-spring-up scroll-mt-16 sm:gap-3 sm:px-4",
         isOwn ? "justify-end" : "justify-start",
         paddingY,
         selectMode && "cursor-pointer",
@@ -949,14 +949,14 @@ export const MessageBubble = memo(function MessageBubble({
           "flex min-w-0 flex-col",
           isVoiceMessage
             ? "max-w-[280px]"
-            : "max-w-[min(90%,42rem)] sm:max-w-[min(75%,42rem)]",
+            : "max-w-[min(100%,44rem)] sm:max-w-[min(75%,42rem)]",
           isOwn ? "items-end" : "items-start",
         )}
       >
         {!hideUsername && (
           <div
             className={cn(
-              "mb-1 flex items-baseline gap-2",
+              "mb-0.5 flex items-baseline gap-2 sm:mb-1",
               isOwn ? "justify-end" : "justify-start",
             )}
           >
@@ -1081,8 +1081,8 @@ export const MessageBubble = memo(function MessageBubble({
 
         <div
           className={cn(
-            "rounded-2xl text-sm leading-relaxed relative",
-            isVoiceMessage ? "px-2 py-2" : "px-4 py-2.5",
+            "relative rounded-2xl text-[13.5px] leading-6 sm:text-sm sm:leading-relaxed",
+            isVoiceMessage ? "px-2 py-2" : "px-3 py-2 sm:px-4 sm:py-2.5",
             isOwn
               ? "rounded-br-md"
               : "rounded-bl-md bg-secondary border border-border",
@@ -1342,13 +1342,6 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
-        {!isOwn && forceShowTimestamp && (
-          <div className="mt-1 flex justify-start">
-            <span className="text-[10px] text-muted-foreground/50" title={formatFullTime(message.timestamp)}>
-              {formatTime(message.timestamp)}
-            </span>
-          </div>
-        )}
       </div>
 
       {isOwn && !hideAvatar && (

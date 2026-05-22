@@ -44,7 +44,7 @@ The long-running product goal is to validate AgentHub's realtime Hub, SQLite per
 | P2 | Operations/performance | Health checks, deployment checklist, bundle/runtime profiling, virtualized list tuning, WebSocket fanout/load checks. |
 | P2 | UI/art direction | Restrained enterprise UI with smooth chat interactions; avoid decorative marketing layouts. |
 
-## Current Increment: Media Storage + UI Acceptance
+## Current Increment: Media Storage + Screenshot-Driven UI Acceptance
 
 Status: implemented, documented, tested, and accepted with browser screenshots.
 
@@ -61,6 +61,10 @@ Status: implemented, documented, tested, and accepted with browser screenshots.
 - [x] Fixed production static assets being counted against REST API rate limits; `/api/...` remains limited, static SPA assets do not.
 - [x] Completed Playwright screenshot review for desktop, tablet, and mobile light/dark mode.
 - [x] Moved the desktop layout breakpoint from `md` to `lg` after screenshots showed a 768px tablet textarea squeezed to 144px; final tablet textarea is 456px.
+- [x] Moved mobile secondary actions into a more menu so `公共聊天` stays readable instead of clipping to `公...`.
+- [x] Tightened mobile message density: smaller mobile bubble text, narrower bubble padding, reduced transcript/date-separator padding, and no duplicated non-own bottom timestamp.
+- [x] Hardened `npm run visual:acceptance` so seeded messages wait past the input send guard and fail fast if fewer than 4 acceptance messages are present.
+- [x] Added visual hard gates for mobile title clipping, mobile message font size, and minimum visible message density.
 - [ ] Continue density cleanup for message action buttons, header overflow at narrower desktop widths, sidebar above-the-fold utility, and remaining tiny metadata.
 
 ## Next Product Tasks
@@ -95,6 +99,11 @@ Record commands here when they are run for the current increment.
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
 | 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8091 npm run visual:acceptance` | PASS. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T18-52-21-915Z`; final metrics: desktop textarea 816px, tablet 456px, mobile 208px, no horizontal overflow, no console errors. |
+| 2026-05-23 | `cd frontend; npm test -- --run src/components/ChatLayout.test.tsx src/components/ChatInput.test.tsx` | PASS, 2 files / 40 tests |
+| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-23 | `cd frontend; npm run build` | PASS |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8091 npm run visual:acceptance` | PASS. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T19-36-55-386Z`; final metrics: desktop/tablet/mobile all show 4 seeded messages, mobile title 202px unclipped, mobile message font 13.5px, mobile textarea 208px, no horizontal overflow, no console errors. |
+| 2026-05-23 | `cd frontend; npm test` | PASS, 13 files / 197 tests |
 
 ## Review Gates
 
