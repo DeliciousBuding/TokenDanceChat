@@ -73,7 +73,7 @@ const safeMarkdownComponents = {
         </div>
       );
     }
-    return <img src={src} alt={alt} loading="lazy" {...props} />;
+    return <img src={src} alt={alt} loading="lazy" className="max-w-full rounded" {...props} />;
   },
 };
 
@@ -309,7 +309,7 @@ export const MessageBubble = memo(function MessageBubble({
     // Detect audio URLs for voice messages
     const audioMatch = content.match(/!?\[(?:audio|voice)\]\(([^)]+)\)/);
     const audioUrl = audioMatch?.[1] || null;
-    const isAudio = audioUrl && /\.(webm|ogg|mp3|wav|m4a)(|$)/i.test(audioUrl);
+    const isAudio = audioUrl && AUDIO_EXT_RE.test(audioUrl);
 
     if (isAudio && audioUrl) {
       return (
