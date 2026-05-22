@@ -661,7 +661,7 @@ export const MessageBubble = memo(function MessageBubble({
 
       <div
         className={cn(
-          "flex min-w-0 max-w-[min(75%,42rem)] flex-col",
+          "flex min-w-0 max-w-[min(90%,42rem)] sm:max-w-[min(75%,42rem)] flex-col",
           isOwn ? "items-end" : "items-start",
         )}
       >

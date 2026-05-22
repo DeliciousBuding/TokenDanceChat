@@ -30,6 +30,8 @@ vi.mock("@/lib/sound", () => ({
   playOnlineSound: vi.fn(),
   playOfflineSound: vi.fn(),
   playReactionSound: vi.fn(),
+  isSoundEnabled: vi.fn(() => true),
+  setSoundEnabled: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({

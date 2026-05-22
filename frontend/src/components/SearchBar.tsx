@@ -5,15 +5,23 @@ import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 
-function escapeHTML(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-/** Strips <mark> tags from server snippet, escaping everything else. */
-function stripMarkTags(s: string): string {
-  return escapeHTML(s).replace(/&lt;\/?mark&gt;/g, (m) =>
-    m === "&lt;mark&gt;" ? "<mark>" : "</mark>"
-  );
+/** Splits an FTS5 snippet into text and highlighted segments. */
+function parseSnippetParts(raw: string): Array<{ text: string; highlight: boolean }> {
+  const parts: Array<{ text: string; highlight: boolean }> = [];
+  const regex = /<mark>([\s\S]*?)<\/mark>/g;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(raw)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push({ text: raw.slice(lastIdx, match.index), highlight: false });
+    }
+    parts.push({ text: match[1], highlight: true });
+    lastIdx = match.index + match[0].length;
+  }
+  if (lastIdx < raw.length) {
+    parts.push({ text: raw.slice(lastIdx), highlight: false });
+  }
+  return parts;
 }
 
 interface SearchBarProps {
@@ -147,7 +155,16 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
                 className={cn("w-full text-left px-4 py-3 border-b border-border last:border-b-0 transition-colors",
                   i === selectedIndex ? "bg-accent" : "hover:bg-accent")}>
                 <div className="flex items-center gap-2 mb-1"><span className="text-xs font-medium text-muted-foreground/70">{r.username}</span></div>
-                <p className="text-xs text-muted-foreground/80 line-clamp-2" dangerouslySetInnerHTML={{ __html: r.snippet ? stripMarkTags(r.snippet) : escapeHTML(r.content.substring(0, 120)) }} />
+                <p className="text-xs text-muted-foreground/80 line-clamp-2">
+                  {r.snippet
+                    ? parseSnippetParts(r.snippet).map((part, j) =>
+                        part.highlight
+                          ? <mark key={j} className="bg-[oklch(71.2%_0.194_13.428_/_0.2)] text-foreground/90 rounded-sm px-0.5">{part.text}</mark>
+                          : <span key={j}>{part.text}</span>
+                      )
+                    : r.content.substring(0, 120)
+                  }
+                </p>
               </button>
             ))}
           </div>

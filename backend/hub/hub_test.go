@@ -100,6 +100,9 @@ func (m *mockStore) PinMessage(roomID, messageID, pinnedBy string) error        
 func (m *mockStore) UnpinMessage(roomID, messageID string) error                   { return nil }
 func (m *mockStore) GetPinnedMessages(roomID string) []StoredMessage               { return nil }
 func (m *mockStore) Ping() error                                                   { return nil }
+func (m *mockStore) PinConversation(username, key string) error                       { return nil }
+func (m *mockStore) UnpinConversation(username, key string) error                     { return nil }
+func (m *mockStore) ListPinnedConversations(username string) []string                 { return nil }
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}

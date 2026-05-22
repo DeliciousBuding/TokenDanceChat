@@ -165,6 +165,10 @@ func (c *Client) ReadPump() {
 			c.handlePinMessage(msg)
 		case "unpin_message":
 			c.handleUnpinMessage(msg)
+		case "pin_conversation":
+			c.handlePinConversation(msg)
+		case "unpin_conversation":
+			c.handleUnpinConversation(msg)
 		case "load_history":
 			c.handleLoadHistory(msg)
 		default:
@@ -254,6 +258,17 @@ func (c *Client) handleJoin(msg Message) {
 	})
 	select {
 	case c.send <- friendPayload:
+	default:
+	}
+
+	// Send pinned conversations list.
+	pinnedKeys := c.hub.ListPinnedConversations(c.username)
+	pinnedPayload, _ := json.Marshal(Message{
+		Type: "pinned_conversations",
+		Keys: pinnedKeys,
+	})
+	select {
+	case c.send <- pinnedPayload:
 	default:
 	}
 
@@ -1396,6 +1411,50 @@ func (c *Client) handleUnpinMessage(msg Message) {
 		Pinned: false,
 	})
 	c.hub.BroadcastToRoom(unpinMsg, roomID)
+}
+
+// handlePinConversation pins a conversation for the current user.
+func (c *Client) handlePinConversation(msg Message) {
+	if c.username == "" {
+		return
+	}
+	key := msg.Key
+	if key == "" {
+		return
+	}
+	if err := c.hub.PinConversation(c.username, key); err != nil {
+		log.Printf("pin_conversation error: %v", err)
+		return
+	}
+	// Send updated list to all sessions of this user.
+	pinnedKeys := c.hub.ListPinnedConversations(c.username)
+	pinnedPayload, _ := json.Marshal(Message{
+		Type: "pinned_conversations",
+		Keys: pinnedKeys,
+	})
+	c.hub.SendToAllSessions(c.username, pinnedPayload)
+}
+
+// handleUnpinConversation unpins a conversation for the current user.
+func (c *Client) handleUnpinConversation(msg Message) {
+	if c.username == "" {
+		return
+	}
+	key := msg.Key
+	if key == "" {
+		return
+	}
+	if err := c.hub.UnpinConversation(c.username, key); err != nil {
+		log.Printf("unpin_conversation error: %v", err)
+		return
+	}
+	// Send updated list to all sessions of this user.
+	pinnedKeys := c.hub.ListPinnedConversations(c.username)
+	pinnedPayload, _ := json.Marshal(Message{
+		Type: "pinned_conversations",
+		Keys: pinnedKeys,
+	})
+	c.hub.SendToAllSessions(c.username, pinnedPayload)
 }
 
 // handleLoadHistory sends older messages to the requesting client for pagination.

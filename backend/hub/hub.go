@@ -72,6 +72,11 @@ type Store interface {
 	UnblockUser(username, blocked string) error
 	IsBlocked(username, blocked string) bool
 	GetBlockedUsers(username string) []string
+
+	// Conversation pinning
+	PinConversation(username, key string) error
+	UnpinConversation(username, key string) error
+	ListPinnedConversations(username string) []string
 }
 
 // Group represents a chat group.
@@ -142,6 +147,10 @@ type Message struct {
 	Pinned   bool            `json:"pinned,omitempty"`
 	PinnedBy string           `json:"pinned_by,omitempty"`
 	PinnedAt int64            `json:"pinned_at,omitempty"`
+
+	// Conversation pinning
+	Key  string   `json:"key,omitempty"`
+	Keys []string `json:"keys,omitempty"`
 }
 
 // HubCommand PicoClaw 可向 Hub 发送的命令类型。
@@ -951,6 +960,35 @@ func (h *Hub) UnpinMessage(roomID, messageID string) error {
 // GetPinnedMessages returns pinned messages for a room.
 func (h *Hub) GetPinnedMessages(roomID string) []StoredMessage {
 	return h.store.GetPinnedMessages(roomID)
+}
+
+// PinConversation pins a conversation for a user.
+func (h *Hub) PinConversation(username, key string) error {
+	return h.store.PinConversation(username, key)
+}
+
+// UnpinConversation unpins a conversation for a user.
+func (h *Hub) UnpinConversation(username, key string) error {
+	return h.store.UnpinConversation(username, key)
+}
+
+// ListPinnedConversations returns the list of pinned conversation keys for a user.
+func (h *Hub) ListPinnedConversations(username string) []string {
+	return h.store.ListPinnedConversations(username)
+}
+
+// SendToAllSessions sends marshaled data to all connected clients with the given username.
+func (h *Hub) SendToAllSessions(username string, data []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.clients {
+		if c.username == username {
+			select {
+			case c.send <- data:
+			default:
+			}
+		}
+	}
 }
 
 // BroadcastStreamChunk sends a streaming chunk to all connected clients.
