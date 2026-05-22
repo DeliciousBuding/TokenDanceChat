@@ -36,7 +36,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="flex min-h-screen items-center justify-center bg-[hsl(231,4%,12%)] p-8">
           <div className="flex max-w-md flex-col items-center gap-4 rounded-2xl border border-[hsl(220,2.5%,20%)] bg-card p-8 text-center shadow-xl">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
-              <AlertTriangle className="h-7 w-7 text-destructive" />
+              <AlertTriangle className="h-7 w-7 text-destructive" aria-hidden="true" />
             </div>
             <h2 className="text-lg font-semibold text-foreground">Something went wrong</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">

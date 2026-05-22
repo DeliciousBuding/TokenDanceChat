@@ -50,9 +50,9 @@ const UserListItem = memo(function UserListItem({
   const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <div
+    <button
       className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors w-full text-left",
         isSelf
           ? "bg-accent text-foreground"
           : "text-foreground/80 hover:bg-accent",
@@ -62,6 +62,7 @@ const UserListItem = memo(function UserListItem({
           setShowMenu(!showMenu);
         }
       }}
+      aria-label={`${user}${isSelf ? ` (${youLabel})` : ""}`}
     >
       <div className="relative flex-shrink-0">
         <div
@@ -70,7 +71,7 @@ const UserListItem = memo(function UserListItem({
         >
           {user.charAt(0).toUpperCase()}
         </div>
-        <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-[hsl(231,4%,16%)] bg-online animate-pulse-dot" />
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-[hsl(231,4%,16%)] bg-online animate-pulse-dot" role="status" aria-label="Online" />
       </div>
       <span className="flex-1 truncate text-sm">{user}</span>
       {isFriend && !isSelf && (
@@ -122,7 +123,7 @@ const UserListItem = memo(function UserListItem({
           )}
         </div>
       )}
-    </div>
+    </button>
   );
 });
 
