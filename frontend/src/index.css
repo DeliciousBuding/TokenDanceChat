@@ -430,3 +430,12 @@
 .highlight-flash {
   animation: highlight-flash 2s ease-in-out;
 }
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.animate-pop {
+  animation: pop 0.2s ease-out;
+}

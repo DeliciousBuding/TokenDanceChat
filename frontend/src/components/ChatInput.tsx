@@ -394,6 +394,9 @@ export function ChatInput({
     onSend(trimmed);
     playSentSound();
     setContent("");
+    // Pulse the send button as visual confirmation of sent message.
+    setPulseButton(true);
+    setTimeout(() => setPulseButton(false), 400);
     // Clear draft.
     try { localStorage.removeItem(draftStorageKey); } catch { /* ignore */ }
     // Clear typing state.
@@ -518,7 +521,7 @@ export function ChatInput({
         if (!files || files.length === 0) return;
         const file = files[0];
         if (file.size > 20 * 1024 * 1024) {
-          setDragError("File too large (max 20MB)");
+          setDragError(t("input.fileTooLarge"));
           return;
         }
         if (file.type.startsWith("image/")) {
@@ -550,7 +553,7 @@ export function ChatInput({
           </div>
           <button
             onClick={() => setReplyTo(null)}
-            aria-label="Cancel reply"
+            aria-label={t("input.cancel")}
             className="flex-shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <X className="h-3.5 w-3.5" />
@@ -583,7 +586,7 @@ export function ChatInput({
             <div className="flex flex-col gap-1.5 min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-foreground/80 truncate">
-                  Pasted image
+                  {t("input.pastedImage")}
                 </span>
                 {imageDimensions && (
                   <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
@@ -603,7 +606,7 @@ export function ChatInput({
                 }}
               >
                 <Send className="h-3 w-3" />
-                Send image
+                {t("input.sendImage")}
               </button>
             </div>
           </div>
@@ -714,7 +717,7 @@ export function ChatInput({
               {String(Math.floor(recordingTime / 60))}:{String(recordingTime % 60).padStart(2, '0')}
             </span>
             <span className="flex-1 text-xs text-muted-foreground truncate">
-              Recording voice message...
+              {t("input.recording")}
             </span>
             {/* Cancel button */}
             <button
@@ -905,7 +908,7 @@ export function ChatInput({
       {isDragOver && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 border-2 border-dashed border-primary rounded-lg pointer-events-none">
           <span className="text-sm font-medium text-muted-foreground">
-            Drop files here
+            {t("input.dropFiles")}
           </span>
         </div>
       )}
