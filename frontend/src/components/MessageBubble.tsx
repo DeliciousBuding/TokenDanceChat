@@ -3,7 +3,7 @@ import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Copy, Check, Forward, Reply, Trash2 } from "lucide-react";
-import { cn, formatTime, avatarGradient, usernameHue } from "@/lib/utils";
+import { cn, formatTime, formatFullTime, avatarGradient, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI } from "@/lib/api";
@@ -682,7 +682,7 @@ export const MessageBubble = memo(function MessageBubble({
               </button>
             )}
             {isOwn && !isGrouped && (
-              <span className="text-xs text-muted-foreground/60">
+              <span className="text-xs text-muted-foreground/60" title={formatFullTime(message.timestamp)}>
                 {formatTime(message.timestamp)}
                 {message.edited && (
                   <span className="text-[10px] text-muted-foreground/40 ml-1">
@@ -692,7 +692,7 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             )}
             {!isOwn && !isGrouped && (
-              <span className="text-[10px] text-muted-foreground/50">
+              <span className="text-[10px] text-muted-foreground/50" title={formatFullTime(message.timestamp)}>
                 {formatTime(message.timestamp)}
               </span>
             )}
@@ -1062,6 +1062,7 @@ export const MessageBubble = memo(function MessageBubble({
                   ? "opacity-100"
                   : "opacity-0 group-hover:opacity-100",
               )}
+              title={formatFullTime(message.timestamp)}
             >
               {formatTime(message.timestamp)}
               {message.edited && (
@@ -1075,7 +1076,7 @@ export const MessageBubble = memo(function MessageBubble({
 
         {!isOwn && forceShowTimestamp && (
           <div className="mt-1 flex justify-start">
-            <span className="text-[10px] text-muted-foreground/50">
+            <span className="text-[10px] text-muted-foreground/50" title={formatFullTime(message.timestamp)}>
               {formatTime(message.timestamp)}
             </span>
           </div>
