@@ -73,7 +73,19 @@ const safeMarkdownComponents = {
         </div>
       );
     }
-    return <img src={src} alt={alt} loading="lazy" className="max-w-full rounded" {...props} />;
+    return (
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        className="max-w-full rounded cursor-pointer hover:brightness-90 transition-all duration-200"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (src) useChatStore.getState().setLightboxImage(src);
+        }}
+        {...props}
+      />
+    );
   },
 };
 
@@ -173,6 +185,7 @@ export const MessageBubble = memo(function MessageBubble({
   const [editContent, setEditContent] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [recentlyToggledReaction, setRecentlyToggledReaction] = useState<string | null>(null);
+  const [bubbleCopied, setBubbleCopied] = useState(false);
   const isDeleted = message.deleted === true;
   // Link preview: fetch OpenGraph metadata for URLs in message content
   const [linkPreview, setLinkPreview] = useState<LinkPreviewData | null>(null);
@@ -444,6 +457,11 @@ export const MessageBubble = memo(function MessageBubble({
       onPointerUp={handlePointerUp}
       onPointerCancel={clearLongPress}
       onClick={handleBubbleClick}
+      onDoubleClick={() => {
+        if (!selectMode && !isDeleted && onReply) {
+          onReply(message);
+        }
+      }}
       className={cn(
         "group flex gap-3 px-4 animate-slide-up scroll-mt-16",
         isOwn ? "justify-end" : "justify-start",
@@ -713,7 +731,7 @@ export const MessageBubble = memo(function MessageBubble({
               </div>
             </div>
           ) : (
-            <div className="markdown-body text-foreground/90">
+            <div className="markdown-body text-foreground/90 select-text">
               {mentionContent}
             </div>
           )}
@@ -751,20 +769,36 @@ export const MessageBubble = memo(function MessageBubble({
               </div>
             </a>
           )}
-                    {/* Forward button (appears on hover) */}
-          {!selectMode && onForward && (
-            <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Copy & Forward buttons (appear on hover) */}
+          {!selectMode && !isEditing && (
+            <div className="absolute -top-1 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
-                  onForward(message);
+                  try {
+                    await navigator.clipboard.writeText(message.content);
+                    setBubbleCopied(true);
+                    setTimeout(() => setBubbleCopied(false), 1500);
+                  } catch { /* Clipboard API may not be available */ }
                 }}
                 className="flex items-center gap-1 rounded-lg bg-accent border border-[hsl(220,2.5%,28%)] px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-[hsl(231,4%,26%)] transition-colors shadow-md"
-                aria-label={t("message.forward")}
+                aria-label={t("message.copy")}
               >
-                <Forward className="h-3 w-3" />
-                {t("message.forward")}
+                {bubbleCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
               </button>
+              {onForward && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onForward(message);
+                  }}
+                  className="flex items-center gap-1 rounded-lg bg-accent border border-[hsl(220,2.5%,28%)] px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-[hsl(231,4%,26%)] transition-colors shadow-md"
+                  aria-label={t("message.forward")}
+                >
+                  <Forward className="h-3 w-3" />
+                  {t("message.forward")}
+                </button>
+              )}
             </div>
           )}
         </div>
