@@ -445,7 +445,7 @@ export const MessageBubble = memo(function MessageBubble({
       onPointerCancel={clearLongPress}
       onClick={handleBubbleClick}
       className={cn(
-        "group flex gap-3 px-4 animate-slide-up select-none scroll-mt-16",
+        "group flex gap-3 px-4 animate-slide-up scroll-mt-16",
         isOwn ? "justify-end" : "justify-start",
         paddingY,
         selectMode && "cursor-pointer",
