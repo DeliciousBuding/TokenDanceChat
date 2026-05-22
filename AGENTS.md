@@ -56,14 +56,14 @@ Webhook at-rest security, media storage, and screenshot-driven UI acceptance are
 - Group info/admin surfaces are now part of visual acceptance: the script creates a real group, opens the right-side panel, verifies the owner-only Webhook section, and gates panel controls against the 44px target.
 - Frontend `group_info` handling reads the backend `group_members` role payload, so owner/admin roles now drive group info and Webhook management after a real WebSocket round trip.
 - The group-info screenshot gate now also checks desktop title single-line stability and a visible group empty state, after manual screenshot review caught header squeeze and sparse first-run group content.
+- Browser E2E now covers the complete Webhook ingress loop: group admin creates a one-time webhook in the UI, HTTP POSTs to the generated URL, and sees the external message appear in the group transcript.
 - Visual acceptance is backed by `npm run visual:acceptance`, real browser screenshots, metrics, and aesthetic review.
 - Generated `gpt-image-2` references may guide art direction, but cannot replace real browser screenshots for acceptance.
-- Current accepted clean-DB screenshot pass: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-29-14-410Z`.
+- Current accepted clean-DB screenshot pass: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-53-00-860Z`.
 - Tablet and mobile use the compact top bar until `lg`; 768px must not be forced into the desktop sidebar/header layout.
 
 Remaining follow-ups:
 
-- Add browser/e2e coverage for webhook create -> HTTP POST -> group message.
 - Add webhook secret rotation and audit logging design before production use.
 - Add group video call multi-browser smoke/e2e.
 
@@ -110,6 +110,7 @@ docker build --check -f Dockerfile.runtime .
 # Frontend focused webhook/store regression
 cd D:\Code\Projects\TokenDanceChat\frontend
 npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx
+npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium
 
 # Frontend type check
 npx tsc --noEmit
@@ -143,6 +144,7 @@ git diff --check
 - Do not use marketing-style landing pages or decorative cards for core app surfaces.
 - Keep text within controls and panels; test dense UI on narrow widths when practical.
 - Use screenshot metrics from `docs/visual-acceptance.md` before claiming meaningful UI polish is complete; real screenshots are mandatory for UI polish acceptance.
+- `gpt-image-2` mockups can be used as art-direction references for layout, icons, density, and hierarchy, but acceptance still requires real browser screenshots.
 - For security-sensitive UI such as webhook secrets, keep one-time secrets separate from normal persistent state.
 
 ## Backend Rules

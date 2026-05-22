@@ -147,7 +147,10 @@ Focused frontend tests:
 ```powershell
 cd frontend
 npm test -- --run src/lib/groupInfo.test.ts src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx
+npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium
 ```
+
+The Playwright ingress test must run against a local Go backend serving the built frontend. It covers the full browser path: join as a group owner, create a group through the UI, open the group admin panel, create a one-time webhook, POST to the generated HTTP URL, and verify that the group transcript shows the webhook message.
 
 Broader gates:
 

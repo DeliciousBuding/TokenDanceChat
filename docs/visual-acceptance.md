@@ -79,15 +79,15 @@ The script writes screenshots and `metrics.json` to a temp directory such as `C:
 
 Latest accepted screenshot pass:
 
-- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-29-14-410Z`
+- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-53-00-860Z`
 - Baseline: production build served by the Go backend on a clean temporary SQLite DB, so screenshots contain only the current seeded demo transcript and no repeated history from earlier runs.
 - Scenarios: seven screenshots, including `desktop-light-group-info`.
 - Desktop light/dark 1440x900: textarea 816x48px, composer 130px, 4 visible seeded messages, `smallControls=0`, sidebar width 312px, sidebar model preview 4 cards, sidebar online-user section top 561px, no horizontal overflow, no console errors.
-- Desktop light group info 1440x900: right-side panel 384px wide and full height, Webhook section visible for the owner, 1 member row, `groupSmallControls=0`, desktop title 174x24 and single-line, visible group empty state, no horizontal overflow, no console errors.
+- Desktop light group info 1440x900: right-side panel 384px wide and full height, Webhook section visible for the owner, 1 member row, `groupSmallControls=0`, desktop title 169x24 and single-line, visible group empty state, no horizontal overflow, no console errors.
 - Tablet light 768x1024: textarea 456x48px, mobile title width 580px, composer 130px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
 - Mobile light/dark 390x844: title width 202px with `公共聊天` unclipped, message font 13.5px, collapsed composer textarea 208x66px, composer 87px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
 - Mobile light with formatting toolbar: textarea 208x66px, composer 144px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
-- Screenshot review confirms the group admin panel controls are readable and no longer tiny; desktop title no longer wraps when the right panel is open; the first-run group empty state is present without decorative filler; mobile and desktop core chat remain visually stable.
+- Screenshot review confirms desktop core chat, the group admin panel, and the mobile composer remain readable and stable; no tiny controls, title clipping, overlapping UI, or layout overflow were observed.
 
 Screenshot passes caught real implementation issues:
 

@@ -34,6 +34,9 @@ This means:
 6. **No sensitive operational leakage**
    Public docs can describe deployment shape, but not server IPs, internal ports, SSH details, credentials, or production data.
 
+7. **Multimodal UI acceptance**
+   Meaningful frontend polish must be checked with real browser screenshots and metrics. Generated `gpt-image-2` references can guide visual direction, but they are not acceptance evidence.
+
 ## Workstreams
 
 | Priority | Workstream | Why it matters |
@@ -49,7 +52,7 @@ This means:
 ## Current High-Value Next Steps
 
 1. Add browser-level smoke coverage for group video call setup with two sessions or a mocked media/WebRTC boundary.
-2. Add e2e coverage for webhook create -> HTTP POST -> group message.
+2. Add webhook secret rotation and audit logging design before production use.
 3. Split the largest UI surfaces only where tests or porting pressure justify it, starting with `MessageBubble.tsx` and `VideoCall.tsx`.
 4. Add an AgentHub mapping note whenever a feature proves a reusable primitive, especially for WebSocket events, store interfaces, and Agent UX.
 5. Keep `AGENTS.md`, README, ROADMAP, and `docs/agenthub-validation.md` synchronized after each milestone.
@@ -63,6 +66,7 @@ Use the smallest command that proves the change, then run broader checks before 
 | Go backend/store/protocol | `cd backend && go test ./...` |
 | Frontend component/store/API | `cd frontend && npm test -- --run <focused test>` plus `npx tsc --noEmit` |
 | Frontend build/runtime surface | `cd frontend && npm run build` |
+| Frontend visual polish | `cd frontend && npm run visual:acceptance`, then review the screenshot output directory |
 | Docs only | Link/path check by reading changed docs and `git diff --check` |
 | Deployment | Health check after restart and a WebSocket/manual smoke relevant to the change |
 
