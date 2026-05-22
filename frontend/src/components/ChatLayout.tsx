@@ -425,17 +425,17 @@ export function ChatLayout() {
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden animate-fade-in"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden animate-fade-in"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* Sidebar - slide-in on mobile */}
+      {/* Sidebar - slide-in on mobile/tablet */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out md:relative md:flex md:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out lg:relative lg:flex lg:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
         <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground/50">Sidebar unavailable</div>}>
@@ -454,7 +454,7 @@ export function ChatLayout() {
       {/* Main chat area */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden" style={{ paddingBottom: keyboardPadding }}>
         {/* Mobile top bar */}
-        <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-2.5 md:hidden pt-safe">
+        <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-2.5 lg:hidden pt-safe">
           <button
             onClick={() => setSidebarOpen(true)}
             aria-label="Open sidebar"
@@ -558,53 +558,53 @@ export function ChatLayout() {
         </div>
 
         {/* Desktop header */}
-        <div className="hidden md:flex items-center justify-between border-b border-border bg-card px-6 py-3 transition-colors duration-300">
+        <div className="hidden lg:flex items-center justify-between gap-4 border-b border-border bg-card px-6 py-3.5 transition-colors duration-300">
           <div className="flex items-center gap-3">
             {/* Back to public chat button (when in DM or group) */}
             {currentChat.type !== "public" && (
               <button
                 onClick={() => setCurrentChat({ type: "public" })}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 aria-label={t("chat.publicChat")}
               >
-                <ArrowLeft className="h-3.5 w-3.5" />
+                <ArrowLeft className="h-[18px] w-[18px]" />
               </button>
             )}
             {/* Group info button (when in group chat) */}
             {currentChat.type === "group" && (
               <button
                 onClick={() => setGroupInfoPanel(currentChat.name)}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 aria-label={t("group.groupInfo")}
               >
-                <Info className="h-3.5 w-3.5" />
+                <Info className="h-[18px] w-[18px]" />
               </button>
             )}
             <div>
-              <h1 className="text-sm font-semibold text-foreground">
+              <h1 className="text-base font-semibold text-foreground">
                 {headerTitle}
               </h1>
               <p className="text-xs text-muted-foreground">{headerSubtitle}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center justify-end gap-2 overflow-x-auto scrollbar-thin">
             {/* Call buttons (desktop, DM only) */}
             {currentChat.type === "dm" && (
               <div className="flex items-center gap-1 mr-1">
                 <button
                   onClick={() => handleStartCall("voice")}
-                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+                  className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
                   aria-label={t("call.voiceCall")}
                 >
-                  <Phone className="h-3.5 w-3.5" />
+                  <Phone className="h-4 w-4" />
                   {t("call.voiceCall")}
                 </button>
                 <button
                   onClick={() => handleStartCall("video")}
-                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+                  className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
                   aria-label={t("call.videoCall")}
                 >
-                  <Video className="h-3.5 w-3.5" />
+                  <Video className="h-4 w-4" />
                   {t("call.videoCall")}
                 </button>
               </div>
@@ -612,19 +612,19 @@ export function ChatLayout() {
             {currentChat.type === "group" && groupCallParticipants.length > 0 && (
               <button
                 onClick={() => handleStartCall("video")}
-                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+                className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
                 aria-label={t("call.groupCall")}
               >
-                <Video className="h-3.5 w-3.5" />
+                <Video className="h-4 w-4" />
                 {t("call.groupCall")}
               </button>
             )}
             <button
               onClick={toggleLang}
               aria-label={t("lang.label")}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+              className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
             >
-              <Globe className="h-3 w-3" />
+              <Globe className="h-4 w-4" />
               {t("lang.switchTo")}
             </button>
             <ThemeToggle />
@@ -632,9 +632,9 @@ export function ChatLayout() {
             <button
               onClick={() => setConversationSearchOpen((prev) => !prev)}
               aria-label={t("search.inConversation")}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+              className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
             >
-              <Search className="h-3.5 w-3.5" />
+              <Search className="h-4 w-4" />
               {t("search.pressCtrlF")}
             </button>
             {/* Export button (desktop) */}
@@ -642,9 +642,9 @@ export function ChatLayout() {
               <button
                 onClick={() => setExportOpen(!exportOpen)}
                 aria-label={t("export.exportChat")}
-                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+                className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
               >
-                <Download className="h-3.5 w-3.5" />
+                <Download className="h-4 w-4" />
                 {t("export.exportChat")}
               </button>
               {exportOpen && (
@@ -667,18 +667,18 @@ export function ChatLayout() {
             <button
               onClick={() => setSettingsOpen(true)}
               aria-label={t("settings.notificationPrefs")}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+              className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
             >
-              <Settings className="h-3.5 w-3.5" />
+              <Settings className="h-4 w-4" />
               {t("settings.notificationPrefs")}
             </button>
             <ScheduledMessagesPanel roomId={currentRoomID} />
             <button
               onClick={handleDisconnect}
               aria-label={t("chat.disconnect")}
-              className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive/80 transition-colors"
+              className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive/80 transition-colors"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-4 w-4" />
               {t("chat.leave")}
             </button>
           </div>

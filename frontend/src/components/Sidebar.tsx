@@ -369,7 +369,7 @@ export function Sidebar({
       className={cn(
         "flex h-full flex-col border-r border-border bg-card transition-all duration-300 ease-out",
         collapsed ? "hidden" : "flex",
-        "md:flex md:w-[280px] md:min-w-[280px]",
+        "lg:flex lg:w-[312px] lg:min-w-[312px]",
         "w-full animate-fade-in",
       )}
     >
@@ -393,7 +393,7 @@ export function Sidebar({
           <button
             onClick={onClose}
             aria-label="Close sidebar"
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
           >
             <X className="h-4 w-4" />
           </button>
@@ -406,7 +406,7 @@ export function Sidebar({
           onClick={() => setCurrentChat({ type: "public" })}
           onContextMenu={(e) => handleContextMenu(e, "public")}
           className={cn(
-            "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
+            "flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
             currentChat.type === "public"
               ? "bg-accent text-foreground border-l-primary"
               : "text-foreground/70 hover:bg-accent hover:text-foreground",
@@ -420,7 +420,7 @@ export function Sidebar({
       {/* Pinned conversations */}
       {pinnedConversations.length > 0 && (
         <div className="px-3 pt-2 pb-1">
-          <span className="px-2 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+          <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
             {t("sidebar.pinned")}
           </span>
           {pinnedConversations.map((key) => {
@@ -431,7 +431,7 @@ export function Sidebar({
             return (
               <div
                 key={key}
-                className="group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary"
+                className="group flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary"
               >
                 <button
                   onClick={() => navigateToConversation(key)}
@@ -452,11 +452,11 @@ export function Sidebar({
                 </button>
                 <button
                   onClick={() => chatAPI.sendUnpinConversation(key)}
-                  className="flex-shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-muted-foreground hover:bg-accent transition-all"
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-muted-foreground hover:bg-accent transition-all"
                   aria-label={t("sidebar.unpinConversation")}
                   title={t("sidebar.unpinConversation")}
                 >
-                  <PinOff className="h-3 w-3" />
+                  <PinOff className="h-4 w-4" />
                 </button>
               </div>
             );
@@ -466,7 +466,7 @@ export function Sidebar({
 
       {/* Assistants */}
       <div className="px-3 pt-2 pb-1">
-        <span className="px-2 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+        <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
           {t("sidebar.assistants")}
         </span>
         {assistants.map((assistant) => (
@@ -477,12 +477,12 @@ export function Sidebar({
               onMentionAssistant?.(assistant.name);
               onClose?.();
             }}
-            className="mt-1 flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground/80 transition-all border-l-2 border-l-transparent hover:border-l-primary hover:bg-accent hover:text-foreground"
+            className="mt-1 flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-foreground/80 transition-all border-l-2 border-l-transparent hover:border-l-primary hover:bg-accent hover:text-foreground"
           >
             <AssistantIcon assistant={assistant} size="sm" />
             <span className="min-w-0 flex-1">
               <span className="block truncate">{assistant.name}</span>
-              <span className="block truncate text-[10px] text-muted-foreground/55">
+              <span className="block truncate text-xs text-muted-foreground/55">
                 {assistant.label} · {assistant.model.name}
               </span>
             </span>
@@ -493,20 +493,20 @@ export function Sidebar({
 
       {/* Model catalog */}
       <div className="px-3 pt-2 pb-1">
-        <span className="px-2 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+        <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
           {t("sidebar.models")}
         </span>
         <div className="mt-1 grid grid-cols-2 gap-1.5">
           {modelCatalog.slice(0, 6).map((model) => (
             <div
               key={model.id}
-              className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-background/45 px-2 py-1.5"
+              className="flex min-h-10 min-w-0 items-center gap-2 rounded-lg border border-border bg-background/45 px-2.5 py-2"
               title={`${model.name} · ${model.protocol}`}
             >
               <AssistantIcon model={model} size="sm" />
               <span className="min-w-0">
-                <span className="block truncate text-[11px] text-foreground/80">{model.providerName}</span>
-                <span className="block truncate text-[9px] text-muted-foreground/50">{model.context}</span>
+                <span className="block truncate text-xs text-foreground/80">{model.providerName}</span>
+                <span className="block truncate text-[11px] text-muted-foreground/50">{model.context}</span>
               </span>
             </div>
           ))}
@@ -516,7 +516,7 @@ export function Sidebar({
       {/* Direct Messages */}
       {dmPartners.length > 0 && (
         <div className="px-3 pt-2 pb-1">
-          <span className="px-2 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+          <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
             {t("sidebar.directMessages")}
           </span>
           {dmPartners.map((partner) => (
@@ -527,7 +527,7 @@ export function Sidebar({
               }
               onContextMenu={(e) => handleContextMenu(e, `dm:${partner}`)}
               className={cn(
-                "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
+                "flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
                 currentChat.type === "dm" &&
                   currentChat.username === partner
                   ? "bg-accent text-foreground border-l-primary"
@@ -557,7 +557,7 @@ export function Sidebar({
       {/* Direct Messages: empty state */}
       {dmPartners.length === 0 && (
         <div className="px-5 py-2">
-          <span className="text-[10px] text-muted-foreground/35 italic">
+          <span className="text-xs text-muted-foreground/35 italic">
             {t("sidebar.noDMs")}
           </span>
         </div>
@@ -566,16 +566,16 @@ export function Sidebar({
       {/* Groups section */}
       <div className="mt-2 px-3 pt-2">
         <div className="flex items-center justify-between px-2">
-          <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+          <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
             {t("sidebar.groups")}
           </span>
           {onCreateGroup && (
             <button
               onClick={onCreateGroup}
               aria-label={t("sidebar.createGroup")}
-              className="rounded p-0.5 text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-4 w-4" />
             </button>
           )}
         </div>
@@ -585,7 +585,7 @@ export function Sidebar({
             onClick={() => setCurrentChat({ type: "group", name: g.name })}
             onContextMenu={(e) => handleContextMenu(e, `group:${g.name}`)}
             className={cn(
-              "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
+              "flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
               currentChat.type === "group" && currentChat.name === g.name
                 ? "bg-accent text-foreground border-l-primary"
                 : "text-foreground/70 hover:bg-accent hover:text-foreground",
@@ -627,10 +627,10 @@ export function Sidebar({
       {/* Friends section */}
       <div className="mt-2 px-3 pt-2">
         <div className="flex items-center justify-between px-2">
-          <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+          <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
             {t("sidebar.friends")}
           </span>
-          <span className="text-[10px] text-muted-foreground/40">
+          <span className="text-xs text-muted-foreground/40">
             {friends.length}
           </span>
         </div>
@@ -641,10 +641,10 @@ export function Sidebar({
                 onClick={() =>
                   setCurrentChat({ type: "dm", username: friend })
                 }
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-foreground/80 transition-all border-l-2 border-l-transparent hover:border-l-primary hover:bg-accent"
+                className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground/80 transition-all border-l-2 border-l-transparent hover:border-l-primary hover:bg-accent"
               >
                 <div
-                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
                   style={{ background: avatarGradient(friend) }}
                 >
                   {friend.charAt(0).toUpperCase()}
@@ -663,7 +663,7 @@ export function Sidebar({
                   className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-foreground/50"
                 >
                   <div
-                    className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white opacity-50"
+                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white opacity-50"
                     style={{ background: avatarGradient(friend) }}
                   >
                     {friend.charAt(0).toUpperCase()}
@@ -701,7 +701,7 @@ export function Sidebar({
               {t("sidebar.onlineUsers")}
             </span>
           </div>
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-medium text-muted-foreground">
+          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-medium text-muted-foreground">
             {onlineUsers.length}
           </span>
         </div>
@@ -768,7 +768,7 @@ export function Sidebar({
         <div className="border-t border-border px-3 pt-2 pb-1">
           <button
             onClick={() => setArchivedExpanded(!archivedExpanded)}
-            className="flex w-full items-center gap-1 px-2 py-1 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+            className="flex min-h-9 w-full items-center gap-1 px-2 py-1.5 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors"
           >
             {archivedExpanded ? (
               <ChevronDown className="h-3 w-3" />
@@ -776,7 +776,7 @@ export function Sidebar({
               <ChevronRight className="h-3 w-3" />
             )}
             {t("sidebar.archivedSection")}
-            <span className="ml-auto text-[10px] text-muted-foreground/40">
+            <span className="ml-auto text-xs text-muted-foreground/40">
               {archivedConversations.length}
             </span>
           </button>
@@ -791,7 +791,7 @@ export function Sidebar({
                 return (
                   <div
                     key={key}
-                    className="group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary"
+                    className="group flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary"
                     onContextMenu={(e) => handleContextMenu(e, key)}
                   >
                     <button
@@ -824,11 +824,11 @@ export function Sidebar({
             size="sm"
           />
           <div className="flex-1 min-w-0">
-            <span className="text-xs font-medium text-foreground/70 block truncate">
+            <span className="text-sm font-medium text-foreground/80 block truncate">
               {userProfiles[username]?.display_name || username}
             </span>
             {userProfiles[username]?.status && (
-              <span className="text-[10px] text-muted-foreground/50 block truncate">
+              <span className="text-xs text-muted-foreground/50 block truncate">
                 {userProfiles[username].status}
               </span>
             )}
@@ -837,43 +837,43 @@ export function Sidebar({
         </div>
         {/* Sound toggle */}
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground/50">{t("settings.sound")}</span>
+          <span className="text-xs text-muted-foreground/60">{t("settings.sound")}</span>
           <button
             onClick={toggleSound}
-            className="flex items-center gap-1 rounded-md p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
             aria-label={soundOn ? t("settings.soundOn") : t("settings.soundOff")}
             title={soundOn ? t("settings.soundOn") : t("settings.soundOff")}
           >
-            {soundOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+            {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
           </button>
         </div>
         {/* Invite code manager */}
         <div className="mt-1 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground/50">{t("invite.inviteCodes")}</span>
-          <div className="flex items-center gap-0.5">
+          <span className="text-xs text-muted-foreground/60">{t("invite.inviteCodes")}</span>
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setSettingsOpen(true)}
-              className="flex items-center gap-1 rounded-md p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
               aria-label={t("settings.openSettings")}
               title={t("settings.openSettings")}
             >
-              <Settings className="h-3.5 w-3.5" />
+              <Settings className="h-4 w-4" />
             </button>
             <button
               onClick={() => setInviteOpen(true)}
-              className="flex items-center gap-1 rounded-md p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
               aria-label={t("invite.inviteCodes")}
               title={t("invite.inviteCodes")}
             >
-              <Key className="h-3.5 w-3.5" />
+              <Key className="h-4 w-4" />
             </button>
             <button
               onClick={() => setAdminOpen(true)}
-              className="flex items-center gap-1 rounded-md p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
               aria-label="Admin Dashboard"
               title="Admin Dashboard"
             >
-              <Activity className="h-3.5 w-3.5" />
+              <Activity className="h-4 w-4" />
             </button>
           </div>
         </div>

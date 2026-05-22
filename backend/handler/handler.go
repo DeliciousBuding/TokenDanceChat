@@ -218,7 +218,7 @@ func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
 		"messages_total":   messagesTotal,
 		"uptime_seconds":   int64(uptime.Seconds()),
 		"dropped_messages": droppedMessages,
-		"started_at":     h.hub.StartTime.UTC().Format("2006-01-02T15:04:05Z"),
+		"started_at":       h.hub.StartTime.UTC().Format("2006-01-02T15:04:05Z"),
 	})
 }
 
@@ -278,12 +278,12 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 // --- Link Preview ---
 
 var (
-	ogTitleRegex        = regexp.MustCompile(`<meta[^>]+property="og:title"[^>]+content="([^"]*)"`)
-	ogDescriptionRegex  = regexp.MustCompile(`<meta[^>]+property="og:description"[^>]+content="([^"]*)"`)
-	ogImageRegex        = regexp.MustCompile(`<meta[^>]+property="og:image"[^>]+content="([^"]*)"`)
-	ogSiteNameRegex     = regexp.MustCompile(`<meta[^>]+property="og:site_name"[^>]+content="([^"]*)"`)
+	ogTitleRegex         = regexp.MustCompile(`<meta[^>]+property="og:title"[^>]+content="([^"]*)"`)
+	ogDescriptionRegex   = regexp.MustCompile(`<meta[^>]+property="og:description"[^>]+content="([^"]*)"`)
+	ogImageRegex         = regexp.MustCompile(`<meta[^>]+property="og:image"[^>]+content="([^"]*)"`)
+	ogSiteNameRegex      = regexp.MustCompile(`<meta[^>]+property="og:site_name"[^>]+content="([^"]*)"`)
 	metaDescriptionRegex = regexp.MustCompile(`<meta[^>]+name="description"[^>]+content="([^"]*)"`)
-	htmlTagRe           = regexp.MustCompile(`<[^>]*>`)
+	htmlTagRe            = regexp.MustCompile(`<[^>]*>`)
 )
 
 // LinkPreview handles GET /api/link-preview?url=...
@@ -407,7 +407,7 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 
 // --- Image Upload ---
 
-const maxUploadSize = 50 << 20 // 50 MB
+const maxUploadSize = 50 << 20       // 50 MB
 const maxEmojiUploadSize = 128 << 10 // 128 KB
 const maxLinkPreviewCacheSize = 1000
 
@@ -436,13 +436,13 @@ func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
 
 	// Validate file type.
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-		allowedExts := map[string]bool{
-			".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
-			".pdf": true, ".doc": true, ".docx": true, ".txt": true, ".md": true,
-			".csv": true, ".json": true, ".xml": true,
-			".zip": true, ".tar": true, ".gz": true, ".7z": true, ".rar": true,
-			".webm": true, ".ogg": true, ".mp3": true, ".wav": true, ".m4a": true,
-		}
+	allowedExts := map[string]bool{
+		".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
+		".pdf": true, ".doc": true, ".docx": true, ".txt": true, ".md": true,
+		".csv": true, ".json": true, ".xml": true,
+		".zip": true, ".tar": true, ".gz": true, ".7z": true, ".rar": true,
+		".webm": true, ".ogg": true, ".mp3": true, ".wav": true, ".m4a": true,
+	}
 	if !allowedExts[ext] {
 		writeJSONError(w, http.StatusBadRequest, "unsupported file type", "INVALID_FILE_TYPE", requestID)
 		return
@@ -490,7 +490,6 @@ func (h *Handler) ServeUpload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 // --- Custom Emoji Upload ---
 
 // validEmojiExts are the allowed image extensions for custom emojis.
@@ -526,27 +525,12 @@ func (h *Handler) UploadEmoji(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save to uploads/emojis/ subdirectory.
-	emojiDir := filepath.Join(h.uploadsDir, "emojis")
-	if err := os.MkdirAll(emojiDir, 0755); err != nil {
-		log.Printf("emoji upload: failed to create emoji dir: %v", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to save file", "SERVER_ERROR", requestID)
-		return
-	}
-
 	filename := uuid.New().String() + ext
-	filePath := filepath.Join(emojiDir, filename)
+	mediaKey := "emojis/" + filename
+	contentType := contentTypeForFilename(filename)
 
-	dst, err := os.Create(filePath)
-	if err != nil {
-		log.Printf("emoji upload: failed to create file: %v", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to save file", "SERVER_ERROR", requestID)
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		log.Printf("emoji upload: failed to write file: %v", err)
+	if err := h.mediaStore.Save(r.Context(), mediaKey, contentType, file); err != nil {
+		log.Printf("emoji upload: failed to save %s: %v", mediaKey, err)
 		writeJSONError(w, http.StatusInternalServerError, "failed to save file", "SERVER_ERROR", requestID)
 		return
 	}
@@ -560,7 +544,6 @@ func (h *Handler) UploadEmoji(w http.ResponseWriter, r *http.Request) {
 
 // ServeEmoji handles GET /uploads/emojis/{filename}
 func (h *Handler) ServeEmoji(w http.ResponseWriter, r *http.Request) {
-	// Extract the sub-path after /uploads/emojis/
 	trimmed := strings.TrimPrefix(r.URL.Path, "/uploads/emojis/")
 	filename := filepath.Base(trimmed)
 	if filename == "." || filename == "/" || filename == "" {
@@ -568,38 +551,21 @@ func (h *Handler) ServeEmoji(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := filepath.Join(h.uploadsDir, "emojis", filename)
-
-	// Path traversal guard.
-	absBase, _ := filepath.Abs(filepath.Join(h.uploadsDir, "emojis"))
-	absFile, err := filepath.Abs(filePath)
-	if err != nil || !strings.HasPrefix(absFile, absBase+string(filepath.Separator)) {
-		http.NotFound(w, r)
-		return
-	}
-
-	f, err := os.Open(filePath)
+	mediaKey := "emojis/" + filename
+	media, err := h.mediaStore.Open(r.Context(), mediaKey)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	defer f.Close()
+	defer media.Body.Close()
 
-	ext := strings.ToLower(filepath.Ext(filename))
-	contentType := "application/octet-stream"
-	switch ext {
-	case ".png":
-		contentType = "image/png"
-	case ".jpg", ".jpeg":
-		contentType = "image/jpeg"
-	case ".gif":
-		contentType = "image/gif"
-	case ".webp":
-		contentType = "image/webp"
+	if media.ContentType != "" {
+		w.Header().Set("Content-Type", media.ContentType)
 	}
-	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	io.Copy(w, f)
+	if _, err := io.Copy(w, media.Body); err != nil {
+		log.Printf("failed to stream emoji %s: %v", filename, err)
+	}
 }
 
 // --- GIPHY Proxy ---
@@ -614,7 +580,7 @@ var giphyAPIKey = func() string {
 
 // giphyResponse mirrors the GIPHY API response shape we expose to the client.
 type giphyResponse struct {
-	Data       []giphyItem    `json:"data"`
+	Data       []giphyItem     `json:"data"`
 	Pagination giphyPagination `json:"pagination"`
 }
 
@@ -1070,7 +1036,7 @@ func (h *Handler) InviteGenerate(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code": code,
 	})
-	}
+}
 
 // WebhookHandler handles incoming webhook POST requests.
 // POST /api/webhook/{url}
@@ -1098,7 +1064,7 @@ func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Parse JSON body
 	var body struct {
-		Content string `json:"content"`
+		Content  string `json:"content"`
 		Username string `json:"username"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Content == "" {
@@ -1111,10 +1077,10 @@ func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Broadcast to group via hub
 	msg := hub.Message{
-		Type:     "group_message",
-		Group:    webhook.GroupName,
-		Username: sender,
-		Content:  body.Content,
+		Type:      "group_message",
+		Group:     webhook.GroupName,
+		Username:  sender,
+		Content:   body.Content,
 		Timestamp: time.Now().UnixMilli(),
 	}
 	h.hub.BroadcastJSON(msg)
@@ -1130,7 +1096,7 @@ func (h *Handler) AdminStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stats := map[string]interface{}{
-		"total_messages":    h.store.TotalMessages(),
+		"total_messages":     h.store.TotalMessages(),
 		"active_connections": h.hub.ConnectionCount(),
 		"rooms":              len(h.store.ListRooms()),
 		"groups":             len(h.store.GetAllGroups()),

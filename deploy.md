@@ -66,7 +66,30 @@ setTimeout(() => process.exit(1), 10000);
 "
 ```
 
-## 4. Nginx 参考
+## 4. production-server/S3-compatible 媒体存储
+
+production-server 部署不要把上传文件绑死在容器本地盘。生产形态优先使用 S3-compatible 对象存储，后端继续通过同源 `/uploads/...` 代理读取，前端不需要知道真实 bucket 或对象存储域名。
+
+S3 配置存在时优先于 WebDAV；未配置 S3 时才回退到 WebDAV；两者都未配置时使用 `CHAT_DB_PATH` 同级的本地 `uploads/` 目录。
+
+```bash
+CHAT_MEDIA_S3_ENDPOINT=https://s3.example.com
+CHAT_MEDIA_S3_REGION=auto
+CHAT_MEDIA_S3_BUCKET=tokendancechat-media
+CHAT_MEDIA_S3_ACCESS_KEY_ID=...
+CHAT_MEDIA_S3_SECRET_ACCESS_KEY=...
+CHAT_MEDIA_S3_PREFIX=uploads
+CHAT_MEDIA_S3_FORCE_PATH_STYLE=false
+```
+
+约束：
+
+- 不在公开文档提交 production-server 真实端点、bucket、Access Key、Secret Key、容器名、内网端口或部署日志。
+- `CHAT_MEDIA_S3_PREFIX` 下同时承载普通上传和 `emojis/` 自定义表情子路径。
+- 对象 key 会拒绝 `..`、空段和路径穿越；同源 URL 仍保持 `/uploads/{file}` 与 `/uploads/emojis/{file}`。
+- 如对象存储要求 path-style URL，将 `CHAT_MEDIA_S3_FORCE_PATH_STYLE=true`。
+
+## 5. Nginx 参考
 
 ```nginx
 server {
@@ -101,3 +124,14 @@ server {
 | `CHAT_LLM_API_KEY` | — | LLM API 密钥 |
 | `CHAT_PICOCLAW_URL` | — | PicoClaw WS 地址 |
 | `CHAT_PICOCLAW_TOKEN` | — | PicoClaw Token |
+| `CHAT_MEDIA_S3_ENDPOINT` | — | S3-compatible 媒体存储端点，配置后优先 |
+| `CHAT_MEDIA_S3_REGION` | — | S3 签名 region |
+| `CHAT_MEDIA_S3_BUCKET` | — | 媒体 bucket |
+| `CHAT_MEDIA_S3_ACCESS_KEY_ID` | — | S3 Access Key |
+| `CHAT_MEDIA_S3_SECRET_ACCESS_KEY` | — | S3 Secret Key |
+| `CHAT_MEDIA_S3_SESSION_TOKEN` | — | 可选临时凭证 token |
+| `CHAT_MEDIA_S3_PREFIX` | `uploads` | 对象 key 前缀 |
+| `CHAT_MEDIA_S3_FORCE_PATH_STYLE` | `false` | 是否强制 path-style URL |
+| `CHAT_MEDIA_WEBDAV_ENDPOINT` | — | WebDAV fallback endpoint |
+| `CHAT_MEDIA_WEBDAV_USER` | — | WebDAV 用户 |
+| `CHAT_MEDIA_WEBDAV_PASS` | — | WebDAV 密码 |

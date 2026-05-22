@@ -46,7 +46,7 @@ func (m *mockStore) GetRoomMessages(roomID string, limit int, before int64) []hu
 }
 
 func (m *mockStore) MarkDeleted(msgID string) error { return nil }
-func (m *mockStore) TotalUsers() int64 { return 0 }
+func (m *mockStore) TotalUsers() int64              { return 0 }
 func (m *mockStore) TotalMessages() int64 {
 	return int64(len(m.messages))
 }
@@ -89,29 +89,29 @@ func (m *mockStore) GetMessageByID(messageID string) (hub.StoredMessage, error) 
 func (m *mockStore) SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error) {
 	return nil, nil
 }
-func (m *mockStore) AddFriend(username, friend string) error            { return nil }
-func (m *mockStore) RemoveFriend(username, friend string) error          { return nil }
-func (m *mockStore) GetAllFriends() map[string][]string                   { return nil }
-func (m *mockStore) GetFriends(username string) []string                  { return nil }
-func (m *mockStore) CreateGroup(name, creator string) error               { return nil }
-func (m *mockStore) AddGroupMember(groupName, username string) error     { return nil }
-func (m *mockStore) RemoveGroupMember(groupName, username string) error  { return nil }
-func (m *mockStore) GetGroupMembers(groupName string) []string           { return nil }
-func (m *mockStore) GetAllGroups() map[string][]string                    { return nil }
+func (m *mockStore) AddFriend(username, friend string) error                          { return nil }
+func (m *mockStore) RemoveFriend(username, friend string) error                       { return nil }
+func (m *mockStore) GetAllFriends() map[string][]string                               { return nil }
+func (m *mockStore) GetFriends(username string) []string                              { return nil }
+func (m *mockStore) CreateGroup(name, creator string) error                           { return nil }
+func (m *mockStore) AddGroupMember(groupName, username string) error                  { return nil }
+func (m *mockStore) RemoveGroupMember(groupName, username string) error               { return nil }
+func (m *mockStore) GetGroupMembers(groupName string) []string                        { return nil }
+func (m *mockStore) GetAllGroups() map[string][]string                                { return nil }
 func (m *mockStore) GetUndeliveredDMs(username string, limit int) []hub.StoredMessage { return nil }
-func (m *mockStore) MarkMessagesDelivered(ids []string) error                       { return nil }
-func (m *mockStore) BlockUser(username, blocked string) error                      { return nil }
-func (m *mockStore) UnblockUser(username, blocked string) error                    { return nil }
-func (m *mockStore) IsBlocked(username, blocked string) bool                        { return false }
-func (m *mockStore) GetBlockedUsers(username string) []string                       { return nil }
-func (m *mockStore) PinMessage(roomID, messageID, pinnedBy string) error           { return nil }
-func (m *mockStore) UnpinMessage(roomID, messageID string) error                   { return nil }
-func (m *mockStore) GetPinnedMessages(roomID string) []hub.StoredMessage               { return nil }
-func (m *mockStore) ArchiveConversation(username, key string) error { return nil }
-func (m *mockStore) UnarchiveConversation(username, key string) error { return nil }
-func (m *mockStore) ListArchivedConversations(username string) []string { return nil }
-func (m *mockStore) IsConversationArchived(username, key string) bool { return false }
-func (m *mockStore) Ping() error                                                       { return nil }
+func (m *mockStore) MarkMessagesDelivered(ids []string) error                         { return nil }
+func (m *mockStore) BlockUser(username, blocked string) error                         { return nil }
+func (m *mockStore) UnblockUser(username, blocked string) error                       { return nil }
+func (m *mockStore) IsBlocked(username, blocked string) bool                          { return false }
+func (m *mockStore) GetBlockedUsers(username string) []string                         { return nil }
+func (m *mockStore) PinMessage(roomID, messageID, pinnedBy string) error              { return nil }
+func (m *mockStore) UnpinMessage(roomID, messageID string) error                      { return nil }
+func (m *mockStore) GetPinnedMessages(roomID string) []hub.StoredMessage              { return nil }
+func (m *mockStore) ArchiveConversation(username, key string) error                   { return nil }
+func (m *mockStore) UnarchiveConversation(username, key string) error                 { return nil }
+func (m *mockStore) ListArchivedConversations(username string) []string               { return nil }
+func (m *mockStore) IsConversationArchived(username, key string) bool                 { return false }
+func (m *mockStore) Ping() error                                                      { return nil }
 func (m *mockStore) PinConversation(username, key string) error                       { return nil }
 func (m *mockStore) UnpinConversation(username, key string) error                     { return nil }
 func (m *mockStore) ListPinnedConversations(username string) []string                 { return nil }
@@ -119,8 +119,12 @@ func (m *mockStore) MuteConversation(username, key string) error                
 func (m *mockStore) UnmuteConversation(username, key string) error                    { return nil }
 func (m *mockStore) ListMutedConversations(username string) []string                  { return nil }
 func (m *mockStore) IsConversationMuted(username, key string) bool                    { return false }
-func (m *mockStore) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error { return nil }
-func (m *mockStore) GetNotificationPrefs(username, key string) (int64, bool, error) { return 0, true, nil }
+func (m *mockStore) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error {
+	return nil
+}
+func (m *mockStore) GetNotificationPrefs(username, key string) (int64, bool, error) {
+	return 0, true, nil
+}
 func (m *mockStore) ListNotificationPrefs(username string) []store.NotificationPref { return nil }
 
 func newTestHandler() *Handler {
@@ -136,55 +140,73 @@ func (m *mockStore) UpsertUserProfile(username, displayName, avatarURL, bio, sta
 func (m *mockStore) GetUserProfile(username string) (*store.UserProfile, error) {
 	return &store.UserProfile{Username: username}, nil
 }
-func (m *mockStore) UpdateUserStatus(username, status string) error { return nil }
-func (m *mockStore) UpdateUserLastSeen(username string) error { return nil }
-func (m *mockStore) GetAllUserProfiles() ([]store.UserProfile, error) { return nil, nil }
-func (m *mockStore) CreatePoll(poll *hub.Poll) error { return nil }
-func (m *mockStore) GetPoll(pollID string) (*hub.Poll, error) { return nil, nil }
+func (m *mockStore) UpdateUserStatus(username, status string) error                 { return nil }
+func (m *mockStore) UpdateUserLastSeen(username string) error                       { return nil }
+func (m *mockStore) GetAllUserProfiles() ([]store.UserProfile, error)               { return nil, nil }
+func (m *mockStore) CreatePoll(poll *hub.Poll) error                                { return nil }
+func (m *mockStore) GetPoll(pollID string) (*hub.Poll, error)                       { return nil, nil }
 func (m *mockStore) VotePoll(pollID string, username string, optionIndex int) error { return nil }
-func (m *mockStore) ClosePoll(pollID string) error { return nil }
-func (m *mockStore) ScheduleMessage(msg store.ScheduledMessage) error { return nil }
-func (m *mockStore) GetPendingScheduledMessages(ctx context.Context) ([]store.ScheduledMessage, error) { return nil, nil }
-func (m *mockStore) MarkScheduledSent(id string) error { return nil }
+func (m *mockStore) ClosePoll(pollID string) error                                  { return nil }
+func (m *mockStore) ScheduleMessage(msg store.ScheduledMessage) error               { return nil }
+func (m *mockStore) GetPendingScheduledMessages(ctx context.Context) ([]store.ScheduledMessage, error) {
+	return nil, nil
+}
+func (m *mockStore) MarkScheduledSent(id string) error                { return nil }
 func (m *mockStore) CancelScheduledMessage(id, username string) error { return nil }
-func (m *mockStore) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) { return nil, nil }
-func (m *mockStore) ExportMessages(ctx context.Context, roomID, toUser, groupName, format string, limit int) ([]hub.StoredMessage, error) { return nil, nil }
-func (m *mockStore) GetThreadMessages(parentMessageID string) []hub.StoredMessage { return nil }
-func (m *mockStore) GetThreadReplyCount(parentMessageID string) int { return 0 }
-func (m *mockStore) DeleteGroup(groupName string) error { return nil }
+func (m *mockStore) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) {
+	return nil, nil
+}
+func (m *mockStore) ExportMessages(ctx context.Context, roomID, toUser, groupName, format string, limit int) ([]hub.StoredMessage, error) {
+	return nil, nil
+}
+func (m *mockStore) GetThreadMessages(parentMessageID string) []hub.StoredMessage      { return nil }
+func (m *mockStore) GetThreadReplyCount(parentMessageID string) int                    { return 0 }
+func (m *mockStore) DeleteGroup(groupName string) error                                { return nil }
 func (m *mockStore) GetGroupMembersWithRoles(groupName string) []store.GroupMemberInfo { return nil }
-func (m *mockStore) UpdateGroupName(oldName, newName string) error { return nil }
-func (m *mockStore) SetGroupMemberRole(groupName, username, role string) error { return nil }
-func (m *mockStore) KickGroupMember(groupName, username string) error { return nil }
-func (m *mockStore) TransferGroupOwnership(groupName, newOwner string) error { return nil }
-func (m *mockStore) LeaveGroup(groupName, username string) error { return nil }
-func (m *mockStore) GetGroupInfo(groupName string) (*store.GroupInfo, error) { return &store.GroupInfo{Name: groupName}, nil }
-func (m *mockStore) GetGroupMemberRole(groupName, username string) (string, error) { return "member", nil }
-func (m *mockStore) GetGroupOwner(groupName string) (string, error) { return "", nil }
-func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error { return nil }
-func (m *mockStore) ListCustomEmojis(roomID string) ([]store.CustomEmoji, error) { return nil, nil }
-func (m *mockStore) DeleteCustomEmoji(name, username string) error { return nil }
-func (m *mockStore) SearchCustomEmojis(query string) ([]store.CustomEmoji, error) { return nil, nil }
-func (m *mockStore) LogCall(call store.CallRecord) error { return nil }
+func (m *mockStore) UpdateGroupName(oldName, newName string) error                     { return nil }
+func (m *mockStore) SetGroupMemberRole(groupName, username, role string) error         { return nil }
+func (m *mockStore) KickGroupMember(groupName, username string) error                  { return nil }
+func (m *mockStore) TransferGroupOwnership(groupName, newOwner string) error           { return nil }
+func (m *mockStore) LeaveGroup(groupName, username string) error                       { return nil }
+func (m *mockStore) GetGroupInfo(groupName string) (*store.GroupInfo, error) {
+	return &store.GroupInfo{Name: groupName}, nil
+}
+func (m *mockStore) GetGroupMemberRole(groupName, username string) (string, error) {
+	return "member", nil
+}
+func (m *mockStore) GetGroupOwner(groupName string) (string, error)                     { return "", nil }
+func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error            { return nil }
+func (m *mockStore) ListCustomEmojis(roomID string) ([]store.CustomEmoji, error)        { return nil, nil }
+func (m *mockStore) DeleteCustomEmoji(name, username string) error                      { return nil }
+func (m *mockStore) SearchCustomEmojis(query string) ([]store.CustomEmoji, error)       { return nil, nil }
+func (m *mockStore) LogCall(call store.CallRecord) error                                { return nil }
 func (m *mockStore) UpdateCallRecord(id, status string, startedAt, endedAt int64) error { return nil }
-func (m *mockStore) GetCallHistory(username string, limit int) ([]store.CallRecord, error) { return nil, nil }
+func (m *mockStore) GetCallHistory(username string, limit int) ([]store.CallRecord, error) {
+	return nil, nil
+}
 func (m *mockStore) RegisterUser(username, passwordHash, inviteCode string) error { return nil }
-func (m *mockStore) VerifyUser(username, password string) (bool, error) { return true, nil }
-func (m *mockStore) GenerateInviteCode(creator string, maxUses int) (string, error) { return "TESTCODE", nil }
-func (m *mockStore) ListInviteCodes(creator string) ([]store.InviteCodeRecord, error) { return nil, nil }
+func (m *mockStore) VerifyUser(username, password string) (bool, error)           { return true, nil }
+func (m *mockStore) GenerateInviteCode(creator string, maxUses int) (string, error) {
+	return "TESTCODE", nil
+}
+func (m *mockStore) ListInviteCodes(creator string) ([]store.InviteCodeRecord, error) {
+	return nil, nil
+}
 func (m *mockStore) ValidateInviteCode(code string) (bool, error) { return true, nil }
-func (m *mockStore) CreateChatFolder(username, name string) (*store.ChatFolder, error) { return &store.ChatFolder{ID: "f1", Name: name}, nil }
-func (m *mockStore) DeleteChatFolder(username, id string) error { return nil }
-func (m *mockStore) RenameChatFolder(username, id, newName string) error { return nil }
-func (m *mockStore) AddToFolder(folderID, key string) error { return nil }
-func (m *mockStore) RemoveFromFolder(folderID, key string) error { return nil }
+func (m *mockStore) CreateChatFolder(username, name string) (*store.ChatFolder, error) {
+	return &store.ChatFolder{ID: "f1", Name: name}, nil
+}
+func (m *mockStore) DeleteChatFolder(username, id string) error              { return nil }
+func (m *mockStore) RenameChatFolder(username, id, newName string) error     { return nil }
+func (m *mockStore) AddToFolder(folderID, key string) error                  { return nil }
+func (m *mockStore) RemoveFromFolder(folderID, key string) error             { return nil }
 func (m *mockStore) ListFolders(username string) ([]store.ChatFolder, error) { return nil, nil }
-func (m *mockStore) GetFolderItems(folderID string) ([]string, error) { return nil, nil }
+func (m *mockStore) GetFolderItems(folderID string) ([]string, error)        { return nil, nil }
 
 func (m *mockStore) CreateWebhook(id, groupName, url, secret, createdBy string) error { return nil }
-func (m *mockStore) DeleteWebhook(id, groupName string) error { return nil }
-func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error) { return nil, nil }
-func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error) { return nil, nil }
+func (m *mockStore) DeleteWebhook(id, groupName string) error                         { return nil }
+func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error)           { return nil, nil }
+func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error)               { return nil, nil }
 
 func TestHealthCheck(t *testing.T) {
 	h := newTestHandler()
@@ -571,6 +593,81 @@ func TestUploadImageStoresViaMediaStore(t *testing.T) {
 	}
 }
 
+func TestUploadEmojiStoresViaMediaStore(t *testing.T) {
+	var storedPath string
+	var storedContentType string
+	var storedBody []byte
+
+	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			storedPath = r.URL.Path
+			storedContentType = r.Header.Get("Content-Type")
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("failed to read PUT body: %v", err)
+			}
+			storedBody = body
+			w.WriteHeader(http.StatusCreated)
+		default:
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+	}))
+	defer webdav.Close()
+
+	h := newTestHandler()
+	h.mediaStore = NewWebDAVMediaStore(webdav.URL, "", "")
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "party.webp")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	if _, err := part.Write([]byte("emoji-bytes")); err != nil {
+		t.Fatalf("failed to write test upload: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/emoji/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	h.UploadEmoji(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if path.Dir(storedPath) != "/uploads/emojis" {
+		t.Fatalf("expected emoji upload under /uploads/emojis, got %s", storedPath)
+	}
+	if !strings.HasSuffix(storedPath, ".webp") {
+		t.Fatalf("expected generated .webp filename, got %s", storedPath)
+	}
+	if storedContentType != "image/webp" {
+		t.Fatalf("expected image/webp content type, got %s", storedContentType)
+	}
+	if string(storedBody) != "emoji-bytes" {
+		t.Fatalf("expected uploaded emoji bytes to be stored, got %q", string(storedBody))
+	}
+
+	var payload map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode upload response: %v", err)
+	}
+	if !strings.HasPrefix(payload["url"], "/uploads/emojis/") {
+		t.Fatalf("expected same-origin emoji URL, got %q", payload["url"])
+	}
+	if payload["filename"] == "" {
+		t.Fatal("expected generated emoji filename in response")
+	}
+}
+
 func TestServeUploadReadsViaMediaStore(t *testing.T) {
 	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -611,15 +708,163 @@ func TestServeUploadReadsViaMediaStore(t *testing.T) {
 	}
 }
 
+func TestServeEmojiReadsViaMediaStore(t *testing.T) {
+	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+		if r.URL.Path != "/uploads/emojis/spark.gif" {
+			t.Fatalf("expected /uploads/emojis/spark.gif, got %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "image/gif")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("gif-bytes"))
+	}))
+	defer webdav.Close()
+
+	h := newTestHandler()
+	h.mediaStore = NewWebDAVMediaStore(webdav.URL, "", "")
+
+	req := httptest.NewRequest(http.MethodGet, "/uploads/emojis/spark.gif", nil)
+	w := httptest.NewRecorder()
+
+	h.ServeEmoji(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "image/gif" {
+		t.Fatalf("expected image/gif content type, got %s", ct)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+	if string(body) != "gif-bytes" {
+		t.Fatalf("expected emoji bytes, got %q", string(body))
+	}
+}
+
+func TestS3MediaStoreSaveAndOpen(t *testing.T) {
+	var putSeen bool
+	var getSeen bool
+	var storedBody []byte
+	var storedContentType string
+
+	s3 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/media-bucket/chat-media/sample.png" {
+			t.Fatalf("expected S3 path /media-bucket/chat-media/sample.png, got %s", r.URL.Path)
+		}
+		auth := r.Header.Get("Authorization")
+		if !strings.HasPrefix(auth, "AWS4-HMAC-SHA256 Credential=test-access/") {
+			t.Fatalf("expected SigV4 Authorization header, got %q", auth)
+		}
+		if r.Header.Get("X-Amz-Date") == "" {
+			t.Fatal("expected X-Amz-Date header")
+		}
+		if r.Header.Get("X-Amz-Security-Token") != "session-token" {
+			t.Fatalf("expected session token header, got %q", r.Header.Get("X-Amz-Security-Token"))
+		}
+
+		switch r.Method {
+		case http.MethodPut:
+			putSeen = true
+			if got, want := r.Header.Get("X-Amz-Content-Sha256"), sha256Hex([]byte("png-bytes")); got != want {
+				t.Fatalf("expected PUT payload hash %s, got %s", want, got)
+			}
+			storedContentType = r.Header.Get("Content-Type")
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("failed to read PUT body: %v", err)
+			}
+			storedBody = body
+			w.WriteHeader(http.StatusCreated)
+		case http.MethodGet:
+			getSeen = true
+			if got, want := r.Header.Get("X-Amz-Content-Sha256"), sha256Hex(nil); got != want {
+				t.Fatalf("expected GET payload hash %s, got %s", want, got)
+			}
+			w.Header().Set("Content-Type", storedContentType)
+			w.WriteHeader(http.StatusOK)
+			w.Write(storedBody)
+		default:
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+	}))
+	defer s3.Close()
+
+	store, err := NewS3MediaStore(S3MediaStoreConfig{
+		Endpoint:        s3.URL,
+		Region:          "auto",
+		Bucket:          "media-bucket",
+		AccessKeyID:     "test-access",
+		SecretAccessKey: "test-secret",
+		SessionToken:    "session-token",
+		Prefix:          "chat-media",
+		UsePathStyle:    true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create S3 media store: %v", err)
+	}
+
+	if err := store.Save(context.Background(), "sample.png", "image/png", strings.NewReader("png-bytes")); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+	media, err := store.Open(context.Background(), "sample.png")
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer media.Body.Close()
+
+	body, err := io.ReadAll(media.Body)
+	if err != nil {
+		t.Fatalf("failed to read stored body: %v", err)
+	}
+	if string(body) != "png-bytes" {
+		t.Fatalf("expected stored png bytes, got %q", string(body))
+	}
+	if media.ContentType != "image/png" {
+		t.Fatalf("expected image/png content type, got %s", media.ContentType)
+	}
+	if !putSeen || !getSeen {
+		t.Fatalf("expected both PUT and GET to be called, put=%t get=%t", putSeen, getSeen)
+	}
+}
+
+func TestMediaStoreRejectsTraversalKeys(t *testing.T) {
+	local := NewLocalMediaStore(t.TempDir())
+	if err := local.Save(context.Background(), "../escape.png", "image/png", strings.NewReader("x")); err == nil {
+		t.Fatal("expected local media store to reject traversal key")
+	}
+
+	s3, err := NewS3MediaStore(S3MediaStoreConfig{
+		Endpoint:        "https://s3.example.test",
+		Region:          "auto",
+		Bucket:          "media-bucket",
+		AccessKeyID:     "test-access",
+		SecretAccessKey: "test-secret",
+		UsePathStyle:    true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create S3 media store: %v", err)
+	}
+	if err := s3.Save(context.Background(), "emojis/../escape.png", "image/png", strings.NewReader("x")); err == nil {
+		t.Fatal("expected S3 media store to reject traversal key")
+	}
+}
+
 // mockStoreDBError is a mockStore variant that returns an error from Ping.
 type mockStoreDBError struct {
 	mockStore
 }
 
-func (m *mockStoreDBError) ArchiveConversation(username, key string) error { return nil }
-func (m *mockStoreDBError) UnarchiveConversation(username, key string) error { return nil }
+func (m *mockStoreDBError) ArchiveConversation(username, key string) error     { return nil }
+func (m *mockStoreDBError) UnarchiveConversation(username, key string) error   { return nil }
 func (m *mockStoreDBError) ListArchivedConversations(username string) []string { return nil }
-func (m *mockStoreDBError) IsConversationArchived(username, key string) bool { return false }
+func (m *mockStoreDBError) IsConversationArchived(username, key string) bool   { return false }
 func (m *mockStoreDBError) Ping() error {
 	return errors.New("database connection lost")
 }

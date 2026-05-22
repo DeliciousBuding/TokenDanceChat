@@ -93,6 +93,7 @@ export function ChatInput({
 
   // Formatting toolbar state
   const [previewOn, setPreviewOn] = useState(false);
+  const [formatToolbarOpen, setFormatToolbarOpen] = useState(false);
   const [linkInputVisible, setLinkInputVisible] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const linkInputRef = useRef<HTMLInputElement>(null);
@@ -1212,16 +1213,21 @@ export function ChatInput({
 
       {/* Markdown formatting toolbar */}
       {!isRecording && (
-        <div className="flex items-center gap-0.5 border-b border-border bg-muted/50 px-2 py-1">
+        <div
+          className={cn(
+            "items-center gap-1 overflow-x-auto border-b border-border bg-muted/50 px-3 py-1.5 scrollbar-thin sm:flex",
+            formatToolbarOpen ? "flex" : "hidden",
+          )}
+        >
           <button
             type="button"
             onClick={handleFormatBold}
             disabled={disabled}
             aria-label={t("editor.bold")}
             title={t("editor.bold") + " (Ctrl+B)"}
-            className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <Bold className="h-3.5 w-3.5" />
+            <Bold className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -1229,9 +1235,9 @@ export function ChatInput({
             disabled={disabled}
             aria-label={t("editor.italic")}
             title={t("editor.italic") + " (Ctrl+I)"}
-            className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <Italic className="h-3.5 w-3.5" />
+            <Italic className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -1239,9 +1245,9 @@ export function ChatInput({
             disabled={disabled}
             aria-label={t("editor.strikethrough")}
             title={t("editor.strikethrough")}
-            className="h-8 w-8 hidden sm:flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="hidden h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex"
           >
-            <Strikethrough className="h-3.5 w-3.5" />
+            <Strikethrough className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -1249,9 +1255,9 @@ export function ChatInput({
             disabled={disabled}
             aria-label={t("editor.code")}
             title={t("editor.code") + " (Ctrl+E)"}
-            className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <Code className="h-3.5 w-3.5" />
+            <Code className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -1259,9 +1265,9 @@ export function ChatInput({
             disabled={disabled}
             aria-label={t("editor.quote")}
             title={t("editor.quote")}
-            className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <Quote className="h-3.5 w-3.5" />
+            <Quote className="h-4 w-4" />
           </button>
 
           {/* GIF picker button */}
@@ -1272,13 +1278,13 @@ export function ChatInput({
             aria-label="GIF"
             title="GIF & Stickers"
             className={cn(
-              "h-8 w-8 flex items-center justify-center rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed",
+              "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30",
               showGifPicker
                 ? "bg-accent text-primary"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
-            <Film className="h-3.5 w-3.5" />
+            <Film className="h-4 w-4" />
           </button>
 
           {/* Link button with inline URL input */}
@@ -1290,13 +1296,13 @@ export function ChatInput({
               aria-label={t("editor.link")}
               title={t("editor.link") + " (Ctrl+K)"}
               className={cn(
-                "h-8 w-8 hidden sm:flex items-center justify-center rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed",
+                "hidden h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex",
                 linkInputVisible
                   ? "bg-accent text-primary"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
-              <Link className="h-3.5 w-3.5" />
+              <Link className="h-4 w-4" />
             </button>
             {linkInputVisible && (
               <div className="flex items-center gap-1 animate-scale-in ml-1">
@@ -1315,23 +1321,23 @@ export function ChatInput({
                     }
                   }}
                   placeholder={t("editor.linkUrl")}
-                  className="h-8 w-44 rounded-md border border-border bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  className="h-10 w-52 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                 />
                 <button
                   type="button"
                   onClick={commitLink}
-                  className="h-8 w-8 flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:brightness-110 transition-colors"
+                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:brightness-110 transition-colors"
                   aria-label="OK"
                 >
-                  <Send className="h-3 w-3" />
+                  <Send className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={cancelLink}
-                  className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                   aria-label="Cancel"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
             )}
@@ -1348,16 +1354,16 @@ export function ChatInput({
             aria-label={t("editor.preview")}
             title={t("editor.preview")}
             className={cn(
-              "h-8 w-8 flex items-center justify-center rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed",
+              "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30",
               previewOn
                 ? "bg-accent text-primary"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
             {previewOn ? (
-              <EyeOff className="h-3.5 w-3.5" />
+              <EyeOff className="h-4 w-4" />
             ) : (
-              <Eye className="h-3.5 w-3.5" />
+              <Eye className="h-4 w-4" />
             )}
           </button>
         </div>
@@ -1452,47 +1458,67 @@ export function ChatInput({
       ) : (
         <>
           {/* Input area */}
-          <div className="flex items-end gap-2 px-4 py-3">
-            {/* Image upload button */}
-            <button
-              onClick={() => imageInputRef.current?.click()}
-              disabled={disabled}
-              aria-label="Upload image"
-              className={cn(
-                "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
-                "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
-              )}
-            >
-              <ImagePlus className="h-4 w-4" />
-            </button>
+          <div className="flex items-end gap-2 px-3 py-3 sm:px-4">
+            <div className="flex items-center gap-1.5 pb-0.5 sm:gap-2 sm:pb-0">
+              <button
+                type="button"
+                onClick={() => setFormatToolbarOpen((open) => !open)}
+                disabled={disabled}
+                aria-label="Toggle formatting toolbar"
+                title="Toggle formatting toolbar"
+                className={cn(
+                  "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200 sm:hidden",
+                  formatToolbarOpen
+                    ? "bg-accent text-primary"
+                    : "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  "disabled:cursor-not-allowed disabled:opacity-30",
+                )}
+              >
+                <Bold className="h-[18px] w-[18px]" />
+              </button>
 
-            {/* File upload button */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled}
-              aria-label="Upload file"
-              className={cn(
-                "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
-                "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
-              )}
-            >
-              <Paperclip className="h-4 w-4" />
-            </button>
+              {/* Image upload button */}
+              <button
+                onClick={() => imageInputRef.current?.click()}
+                disabled={disabled}
+                aria-label="Upload image"
+                className={cn(
+                  "hidden h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200 sm:flex sm:h-12 sm:w-12",
+                  "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+                )}
+              >
+                <ImagePlus className="h-[18px] w-[18px]" />
+              </button>
 
-            {/* Mic button */}
-            <button
-              onClick={startRecording}
-              disabled={disabled}
-              aria-label="Record voice message"
-              className={cn(
-                "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
-                "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
-              )}
-            >
-              <Mic className="h-4 w-4" />
-            </button>
+              {/* File upload button */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled}
+                aria-label="Upload file"
+                className={cn(
+                  "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200 sm:h-12 sm:w-12",
+                  "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+                )}
+              >
+                <Paperclip className="h-[18px] w-[18px]" />
+              </button>
 
-            <div className="flex-1 relative input-glow">
+              {/* Mic button */}
+              <button
+                onClick={startRecording}
+                disabled={disabled}
+                aria-label="Record voice message"
+                className={cn(
+                  "hidden h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200 sm:flex sm:h-12 sm:w-12",
+                  "bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+                )}
+              >
+                <Mic className="h-[18px] w-[18px]" />
+              </button>
+
+            </div>
+
+            <div className="relative input-glow min-w-0 flex-1">
               {/* @mention autocomplete dropdown */}
               {mentionActive && (
                 <div
@@ -1607,49 +1633,53 @@ export function ChatInput({
                 maxLength={2000}
                 disabled={disabled}
                 aria-label={placeholder}
-                className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-border bg-card px-4 py-[13px] text-sm leading-5 text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none disabled:opacity-50"
+                className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-border bg-card px-4 py-[13px] text-base leading-5 text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none disabled:opacity-50 sm:text-sm"
                 style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT }}
               />
             </div>
 
-            {/* Schedule button */}
-            <ScheduleButton
-              onSchedule={handleSchedule}
-              disabled={disabled || !hasContent}
-              scheduled={hasScheduled}
-            />
+            <div className="flex items-center justify-end gap-2">
+              {/* Schedule button */}
+              <div className="hidden sm:block">
+                <ScheduleButton
+                  onSchedule={handleSchedule}
+                  disabled={disabled || !hasContent}
+                  scheduled={hasScheduled}
+                />
+              </div>
 
-            {/* Send button */}
-            <button
-              ref={sendBtnRef}
-              onClick={handleSend}
-              disabled={disabled || !hasContent}
-              aria-label={
-                disabled ? t("join.buttonConnecting") : hasScheduled ? t("schedule.schedule") : t("input.placeholder")
-              }
-              className={cn(
-                "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-all duration-300 ease-out",
-                hasContent
-                  ? "bg-primary text-primary-foreground hover:brightness-110"
-                  : "bg-muted text-muted-foreground",
-                "disabled:cursor-not-allowed disabled:opacity-30",
-                pulseButton && "animate-pulse-once",
-              )}
-              onMouseEnter={(e) => {
-                if (hasContent) {
-                  e.currentTarget.style.transform = "scale(1.05)";
+              {/* Send button */}
+              <button
+                ref={sendBtnRef}
+                onClick={handleSend}
+                disabled={disabled || !hasContent}
+                aria-label={
+                  disabled ? t("join.buttonConnecting") : hasScheduled ? t("schedule.schedule") : t("input.placeholder")
                 }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "scale(1)";
-              }}
-            >
-              {disabled ? (
-                <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </button>
+                className={cn(
+                  "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-all duration-300 ease-out",
+                  hasContent
+                    ? "bg-primary text-primary-foreground hover:brightness-110"
+                    : "bg-muted text-muted-foreground",
+                  "disabled:cursor-not-allowed disabled:opacity-30",
+                  pulseButton && "animate-pulse-once",
+                )}
+                onMouseEnter={(e) => {
+                  if (hasContent) {
+                    e.currentTarget.style.transform = "scale(1.05)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                }}
+              >
+                {disabled ? (
+                  <Loader2 className="h-[18px] w-[18px] text-muted-foreground animate-spin" />
+                ) : (
+                  <Send className="h-[18px] w-[18px]" />
+                )}
+              </button>
+            </div>
           </div>
         </>
       )}

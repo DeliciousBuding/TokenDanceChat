@@ -27,7 +27,7 @@ const THEME_OPTIONS: { value: Theme; icon: typeof Sun; label: string }[] = [
 function getStoredTheme(): Theme {
   const stored = localStorage.getItem("tdchat-theme");
   if (stored === "light" || stored === "dark" || stored === "system") return stored;
-  return "dark";
+  return "light";
 }
 
 function applyTheme(theme: Theme) {

@@ -110,6 +110,8 @@ func TestRateLimiterSlidingWindow(t *testing.T) {
 // TestRateLimitMiddleware verifies that the HTTP middleware returns 429
 // when the rate limit is exceeded.
 func TestRateLimitMiddleware(t *testing.T) {
+	ResetRateLimiter()
+
 	// Use a handler wrapped with the middleware.
 	wrapped := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -151,8 +153,69 @@ func TestRateLimitMiddleware(t *testing.T) {
 	}
 }
 
+func TestRateLimitMiddlewareSkipsStaticAssets(t *testing.T) {
+	ResetRateLimiter()
+
+	wrapped := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+
+	ip := "198.51.100.100:12345"
+	for i := 0; i < 80; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/assets/index.js", nil)
+		req.RemoteAddr = ip
+		w := httptest.NewRecorder()
+		wrapped.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("static request %d: expected 200, got %d", i+1, w.Code)
+		}
+	}
+
+	for i := 0; i < 30; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.RemoteAddr = ip
+		w := httptest.NewRecorder()
+		wrapped.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("api request %d after static assets: expected 200, got %d", i+1, w.Code)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.RemoteAddr = ip
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("expected API request 31 to return 429, got %d", w.Code)
+	}
+}
+
+func TestShouldRateLimitAPI(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{path: "/api", want: true},
+		{path: "/api/health", want: true},
+		{path: "/api/upload", want: true},
+		{path: "/assets/index.js", want: false},
+		{path: "/manifest.json", want: false},
+		{path: "/uploads/file.png", want: false},
+		{path: "/", want: false},
+	}
+
+	for _, tt := range tests {
+		if got := shouldRateLimitAPI(tt.path); got != tt.want {
+			t.Errorf("shouldRateLimitAPI(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
+
 // TestWSAllow verifies the WSAllow function uses the package-level rate limiter.
 func TestWSAllow(t *testing.T) {
+	ResetRateLimiter()
+
 	ip := "203.0.113.42"
 
 	// First 5 calls should succeed.

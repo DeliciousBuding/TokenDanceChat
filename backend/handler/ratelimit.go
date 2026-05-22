@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -73,10 +74,19 @@ func (r *rateLimiter) getOrCreate(m *sync.Map, ip string) *rateLimitEntry {
 	return actual.(*rateLimitEntry)
 }
 
+func shouldRateLimitAPI(path string) bool {
+	return path == "/api" || strings.HasPrefix(path, "/api/")
+}
+
 // RateLimitMiddleware limits REST API requests to 30 per minute per IP.
 // Place after LoggingMiddleware so blocked requests are still logged.
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !shouldRateLimitAPI(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		ip, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
 			ip = r.RemoteAddr
