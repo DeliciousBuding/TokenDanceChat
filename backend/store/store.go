@@ -55,6 +55,10 @@ func New(dbPath string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		db.Close()
+		return nil, err
+	}
 
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
@@ -154,6 +158,9 @@ func (s *Store) migrate() error {
 	if err := s.createFTS5(); err != nil {
 		return err
 	}
+
+	// Populate FTS5 index for pre-existing messages not yet indexed.
+	s.populateFTS5()
 
 	return nil
 }
@@ -490,6 +497,20 @@ func (s *Store) createFTS5() error {
 	return err
 }
 
+// populateFTS5 backfills the FTS5 index for any messages not yet indexed.
+func (s *Store) populateFTS5() {
+	result, err := s.db.Exec(
+		"INSERT OR IGNORE INTO messages_fts(rowid, content, username, room_id) SELECT rowid, content, username, room_id FROM messages",
+	)
+	if err != nil {
+		log.Printf("store: FTS5 population warning: %v", err)
+		return
+	}
+	if n, _ := result.RowsAffected(); n > 0 {
+		log.Printf("store: FTS5 backfilled %d pre-existing messages", n)
+	}
+}
+
 // SearchResult holds a single full-text search result with snippet and rank.
 type SearchResult struct {
 	ID        string  `json:"id"`
@@ -701,12 +722,21 @@ func (s *Store) GetUndeliveredDMs(username string, limit int) []StoredMessage {
 
 // MarkMessagesDelivered marks a set of message IDs as delivered.
 func (s *Store) MarkMessagesDelivered(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, id := range ids {
-		s.db.Exec("UPDATE messages SET delivered = 1 WHERE id = ?", id)
+	// Build a single batch UPDATE with IN clause.
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
 	}
-	return nil
+	query := "UPDATE messages SET delivered = 1 WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+	_, err := s.db.Exec(query, args...)
+	return err
 }
 
 
