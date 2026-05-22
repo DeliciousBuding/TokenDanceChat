@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
-import { ArrowDown, Reply, Copy, Trash2, Forward } from "lucide-react";
+import { Reply, Copy, Trash2, Forward } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
 import { usePullDownGesture } from "@/hooks/useTouchGestures";
@@ -472,6 +472,16 @@ export function MessageTranscript({
             </div>
           )}
 
+          {hiddenCount > 0 && (
+            <div className="flex items-center gap-3 px-4 py-2">
+              <div className="h-px flex-1 bg-[oklch(71.2%_0.194_13.428_/_0.3)]" />
+              <span className="text-[10px] font-medium text-[oklch(71.2%_0.194_13.428)] whitespace-nowrap">
+                New messages
+              </span>
+              <div className="h-px flex-1 bg-[oklch(71.2%_0.194_13.428_/_0.3)]" />
+            </div>
+          )}
+
           {groups.map((group) => {
             if (group.type === "system") {
               return (
@@ -539,32 +549,21 @@ export function MessageTranscript({
         </div>
       )}
 
-      {/* Scroll-to-bottom button (when scrolled up) */}
-      {!shouldAutoScroll && effectiveMessages.length > 0 && (
+      {/* Jump-to-bottom floating button */}
+      {!shouldAutoScroll && (
         <button
           onClick={scrollToBottom}
-          className="fab animate-fade-in md:hidden"
-          style={{ background: "oklch(71.2% 0.194 13.428)", color: "#fff" }}
-          aria-label={t("transcript.scrollToBottom")}
+          className="absolute bottom-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-card border border-border shadow-lg hover:bg-accent transition-all animate-scale-in text-muted-foreground hover:text-foreground"
+          aria-label="Jump to bottom"
         >
-          <ArrowDown className="h-5 w-5" />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
           {unreadLocalCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white px-1">
+            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white px-1">
               {unreadLocalCount > 99 ? "99+" : unreadLocalCount}
             </span>
           )}
-        </button>
-      )}
-
-      {/* Desktop scroll-to-bottom */}
-      {!shouldAutoScroll && effectiveMessages.length > 0 && (
-        <button
-          onClick={scrollToBottom}
-          className="hidden md:flex absolute bottom-4 left-1/2 -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-lg hover:bg-accent hover:text-foreground transition-all animate-fade-in backdrop-blur-sm z-10"
-          aria-label={t("transcript.scrollToBottom")}
-        >
-          <ArrowDown className="h-3.5 w-3.5" />
-          {unreadLocalCount > 0 ? t("transcript.newMessages", { count: unreadLocalCount }) : t("transcript.scrollToBottom")}
         </button>
       )}
 
