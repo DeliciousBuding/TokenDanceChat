@@ -103,7 +103,7 @@ export function ChatLayout() {
   const handleUpload = useCallback(async (file: File) => {
     const url = await chatAPI.uploadImage(file);
     if (!url) {
-      setUploadError("Upload failed");
+      setUploadError(t("input.uploadFailed"));
       useChatStore.getState().setPendingImage(null);
       return;
     }

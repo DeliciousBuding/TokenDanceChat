@@ -83,6 +83,7 @@ export interface TranslationDict {
     cancel: string;
     save: string;
     fileTooLarge: string;
+    uploadFailed: string;
   };
   message: {
     edited: string;
@@ -257,6 +258,7 @@ const zhCN: TranslationDict = {
     cancel: "取消",
     save: "保存",
     fileTooLarge: "文件过大（最大 20MB）",
+    uploadFailed: "上传失败",
   },
   message: {
     edited: "（已编辑）",
@@ -432,6 +434,7 @@ const enUS: TranslationDict = {
     cancel: "Cancel",
     save: "Save",
     fileTooLarge: "File too large (max 20MB)",
+    uploadFailed: "Upload failed",
   },
   message: {
     edited: "(edited)",
