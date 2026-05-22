@@ -71,6 +71,9 @@ export function ChatInput({
   const hadContentRef = useRef(false);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
   const typingSentRef = useRef(false);
+  const dragCounter = useRef(0);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dragError, setDragError] = useState<string | null>(null);
 
   // @mention autocomplete state
   const [mentionActive, setMentionActive] = useState(false);
@@ -163,6 +166,14 @@ export function ChatInput({
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
+
+  // Auto-dismiss drag error toast
+  useEffect(() => {
+    if (dragError) {
+      const timer = setTimeout(() => setDragError(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [dragError]);
 
   useEffect(() => {
     const handleInsertAssistant = (event: Event) => {
@@ -376,7 +387,43 @@ export function ChatInput({
   }, [currentChat, t]);
 
   return (
-    <div className="relative border-t border-border bg-background">
+    <div
+      className="relative border-t border-border bg-background"
+      onDragEnter={(e) => {
+        e.preventDefault();
+        dragCounter.current += 1;
+        setIsDragOver(true);
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        dragCounter.current -= 1;
+        if (dragCounter.current === 0) {
+          setIsDragOver(false);
+        }
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        dragCounter.current = 0;
+        setIsDragOver(false);
+        const files = e.dataTransfer?.files;
+        if (!files || files.length === 0) return;
+        const file = files[0];
+        if (file.size > 20 * 1024 * 1024) {
+          setDragError("File too large (max 20MB)");
+          return;
+        }
+        if (file.type.startsWith("image/")) {
+          const reader = new FileReader();
+          reader.onload = () => setPendingImage(reader.result as string);
+          reader.readAsDataURL(file);
+        } else if (onUpload) {
+          onUpload(file);
+        }
+      }}
+    >
       {/* Gradient overlay */}
 
 
@@ -600,6 +647,22 @@ export function ChatInput({
           >
             {t("input.characters", { current: content.length, max: 2000 })}
           </span>
+        </div>
+      )}
+
+      {/* Drag-and-drop overlay */}
+      {isDragOver && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 border-2 border-dashed border-primary rounded-lg pointer-events-none">
+          <span className="text-sm font-medium text-muted-foreground">
+            Drop files here
+          </span>
+        </div>
+      )}
+
+      {/* Drag error toast */}
+      {dragError && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-medium animate-slide-up shadow-lg whitespace-nowrap">
+          {dragError}
         </div>
       )}
     </div>
