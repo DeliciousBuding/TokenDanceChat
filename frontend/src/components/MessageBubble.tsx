@@ -9,6 +9,7 @@ import { useChatStore } from "@/stores/chatStore";
 import { chatAPI } from "@/lib/api";
 import { playReactionSound } from "@/lib/sound";
 import { EmojiPicker } from "@/components/EmojiPicker";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { ChatMessage } from "@/lib/api";
 
 interface MessageBubbleProps {
@@ -167,6 +168,7 @@ export const MessageBubble = memo(function MessageBubble({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isDeleted = message.deleted === true;
 
   const handleAddReaction = useCallback(
@@ -536,7 +538,7 @@ export const MessageBubble = memo(function MessageBubble({
                 </button>
                 {onDelete && (
                   <button
-                    onClick={() => onDelete(message.id)}
+                    onClick={() => setConfirmDelete(true)}
                     aria-label="Delete message"
                     className="opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-all"
                   >
@@ -851,4 +853,13 @@ export const MessageBubble = memo(function MessageBubble({
       )}
     </div>
   );
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete message?"
+        message="This cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => { onDelete?.(message.id); setConfirmDelete(false); }}
+        onCancel={() => setConfirmDelete(false)}
+      />
 });
