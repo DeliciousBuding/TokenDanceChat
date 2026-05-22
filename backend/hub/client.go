@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"tokendancechat/backend/llm"
-	"tokendancechat/backend/picoclaw"
 
 	"github.com/gorilla/websocket"
 )
@@ -1819,166 +1818,49 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent, roomID stri
 
 // handleAgentResponsePicoClaw handles the PicoClaw agent response via gateway,
 // with automatic fallback to direct LLM API if the WebSocket gateway doesn't respond.
-func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, roomID string) {
-	agentName := c.hub.AgentName()
 
-	// Send typing indicator.
-	c.hub.BroadcastJSON(Message{
-		Type:     "typing",
-		Username: agentName,
-		Context:  "public",
+// fallbackPicoClawToLLM calls the LLM API directly when PicoClaw WebSocket fails.
+func (c *Client) fallbackPicoClawToLLM(ctx context.Context, userContent, agentName, roomID, username string) {
+	c.hub.BroadcastTyping(agentName, "typing_start", "", "")
+	var messages []llm.Message
+	if mem := c.hub.Memory(); mem != nil {
+		messages = mem.GetMessages()
+	}
+	systemPrompt := "你是一个名叫 PicoClaw 的 AI 助手，运行在 TokenDanceChat 平台上。" +
+		"你是一个 Agent 工作流机器人，可以帮用户分析问题、执行任务、搜索信息。" +
+		"请用中文回复，保持简洁友好。" +
+		"当用户说'帮我'或'分析'时，主动提供详细的帮助。"
+	client := c.hub.LLMClient()
+
+	var fullResponse strings.Builder
+	err := client.ChatStream(ctx, systemPrompt, messages, func(chunk string) error {
+		fullResponse.WriteString(chunk)
+		c.hub.BroadcastStreamChunkToRoom(agentName, chunk, false, roomID)
+		return nil
 	})
-
-	// Try PicoClaw gateway first; fall back to LLM API if it fails or times out.
-	pc := c.hub.PicoclawClient()
-	llmClient := c.hub.LLMClient()
-	useLLMFallback := pc == nil || llmClient == nil
-
-	if !useLLMFallback {
-		// Channels to collect the response from PicoClaw callbacks.
-		chunks := make(chan picoclaw.Message, 64)
-		typing := make(chan bool, 4)
-		done := make(chan struct{})
-
-		handler, err := pc.SendMessage(userContent)
-		if err != nil {
-			log.Printf("PicoClaw send error, falling back to LLM: %v", err)
-			useLLMFallback = true
-		} else {
-			handler.OnMessage = func(msg picoclaw.Message) {
-				select {
-				case chunks <- msg:
-				case <-done:
-				}
-			}
-			handler.OnTyping = func(start bool) {
-				select {
-				case typing <- start:
-				case <-done:
-				}
-			}
-
-			// Wait for first response with a short timeout; fall back to LLM if no response.
-			firstResponseCh := make(chan struct{})
-			go func() {
-				select {
-				case <-chunks:
-					close(firstResponseCh)
-				case <-typing:
-					close(firstResponseCh)
-				case <-time.After(8 * time.Second):
-					// No response from PicoClaw gateway — fall back to LLM.
-				case <-done:
-				}
-			}()
-
-			select {
-			case <-firstResponseCh:
-				// PicoClaw responded — process normally (streaming response).
-				go func() {
-					defer close(done)
-					defer c.hub.BroadcastTyping(agentName, "typing_stop", "", "")
-
-					var fullResponse strings.Builder
-					lastPicoContent := ""
-					timeout := time.After(120 * time.Second)
-				collectLoop:
-					for {
-						select {
-						case msg := <-chunks:
-							if msg.IsThought {
-								continue
-							}
-							if msg.IsPartial || msg.Type == "message.update" {
-								var delta string
-								lastPicoContent, delta = picoStreamDelta(lastPicoContent, msg.Content)
-								fullResponse.Reset()
-								fullResponse.WriteString(lastPicoContent)
-								if delta != "" {
-									c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, roomID)
-								}
-							} else {
-								var delta string
-								lastPicoContent, delta = picoStreamDelta(lastPicoContent, msg.Content)
-								fullResponse.Reset()
-								fullResponse.WriteString(lastPicoContent)
-								if delta != "" {
-									c.hub.BroadcastStreamChunkToRoom(agentName, delta, false, roomID)
-								}
-							}
-						case start := <-typing:
-							if !start {
-								break collectLoop
-							}
-						case <-timeout:
-							break collectLoop
-						case <-ctx.Done():
-							break collectLoop
-						}
-					}
-
-					response := fullResponse.String()
-					response = sanitizeBotContent(response)
-					if response != "" {
-						c.hub.BroadcastStreamChunkToRoom(agentName, "", true, roomID)
-						c.hub.SendAssistantMessageToRoom(agentName, response, roomID)
-						if mem := c.hub.Memory(); mem != nil {
-							mem.Add(llm.Message{Role: "assistant", Content: response, Username: agentName})
-						}
-					}
-				}()
-				// Store user message.
-				if mem := c.hub.Memory(); mem != nil {
-					mem.Add(llm.Message{Role: "user", Content: userContent, Username: c.username})
-				}
-				return
-			case <-time.After(8 * time.Second):
-				// No first response — fall through to LLM fallback.
-				close(done)
-				useLLMFallback = true
-			}
-		}
+	if err != nil {
+		log.Printf("PicoClaw LLM fallback error: %v", err)
 	}
 
-	if useLLMFallback {
-		// Fallback: call LLM API directly as PicoClaw.
-		c.hub.BroadcastTyping(agentName, "typing_start", "", "")
-		var messages []llm.Message
-		if mem := c.hub.Memory(); mem != nil {
-			messages = mem.GetMessages()
-		}
-		// Use a PicoClaw-specific system prompt.
-		systemPrompt := "你是一个名叫 PicoClaw 的 AI 助手，运行在 TokenDanceChat 平台上。" +
-			"你是一个 Agent 工作流机器人，可以帮用户分析问题、执行任务、搜索信息。" +
-			"请用中文回复，保持简洁友好。" +
-			"当用户说'帮我'或'分析'时，主动提供详细的帮助。"
-		client := c.hub.LLMClient()
-
-		var fullResponse strings.Builder
-		err := client.ChatStream(ctx, systemPrompt, messages, func(chunk string) error {
-			fullResponse.WriteString(chunk)
-			c.hub.BroadcastStreamChunkToRoom(agentName, chunk, false, roomID)
-			return nil
-		})
-		if err != nil {
-			log.Printf("PicoClaw LLM fallback error: %v", err)
-		}
-
-		response := fullResponse.String()
-		response = sanitizeBotContent(response)
-		if response == "" {
-			response = "PicoClaw 正在思考中，请稍后再试。"
-		}
-		c.hub.BroadcastStreamChunkToRoom(agentName, "", true, roomID)
-		c.hub.SendAssistantMessageToRoom(agentName, response, roomID)
-		c.hub.BroadcastTyping(agentName, "typing_stop", "", "")
-
-		// Store user message + response in memory.
-		if mem := c.hub.Memory(); mem != nil {
-			mem.Add(llm.Message{Role: "user", Content: userContent, Username: c.username})
-			mem.Add(llm.Message{Role: "assistant", Content: response, Username: agentName})
-		}
+	response := fullResponse.String()
+	response = sanitizeBotContent(response)
+	if response == "" {
+		response = "PicoClaw 正在思考中，请稍后再试。"
 	}
+	c.hub.BroadcastStreamChunkToRoom(agentName, "", true, roomID)
+	c.hub.SendAssistantMessageToRoom(agentName, response, roomID)
+	c.hub.BroadcastTyping(agentName, "typing_stop", "", "")
+
+	if mem := c.hub.Memory(); mem != nil {
+		mem.Add(llm.Message{Role: "user", Content: userContent, Username: username})
+		mem.Add(llm.Message{Role: "assistant", Content: response, Username: agentName})
+	}
+}
+
+func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, roomID string) {
+	// PicoClaw now responds directly via LLM API for reliability.
+	// The PicoClaw WebSocket gateway is retained for proactive notifications only.
+	c.fallbackPicoClawToLLM(ctx, userContent, c.hub.AgentName(), roomID, c.username)
 }
 
 func picoStreamDelta(previous, current string) (string, string) {
