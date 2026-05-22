@@ -20,9 +20,9 @@ interface MessageContextMenuProps {
 }
 
 type MenuItem =
-  | { type: "divider" }
+  | { kind: "divider" }
   | {
-      type?: undefined;
+      kind?: "action";
       icon: ComponentType<LucideProps>;
       label: string;
       shortcut?: string;
@@ -30,7 +30,7 @@ type MenuItem =
       className: string;
     };
 
-const divider = { type: "divider" as const } satisfies MenuItem;
+const divider = { kind: "divider" as const } satisfies MenuItem;
 
 export function MessageContextMenu({
   message: _message,
@@ -174,7 +174,7 @@ export function MessageContextMenu({
         style={menuStyle}
       >
         {menuItems.map((item, idx) => {
-          if (item.type === "divider") {
+          if (item.kind === "divider") {
             return (
               <div key={idx} className="my-1 border-t border-border/50" />
             );

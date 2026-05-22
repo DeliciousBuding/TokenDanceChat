@@ -1137,6 +1137,15 @@ export const MessageBubble = memo(function MessageBubble({
               setContextMenu({ visible: false, x: 0, y: 0 });
               onLongPress?.(message.id);
             }}
+            onEdit={isOwn ? () => {
+              setContextMenu({ visible: false, x: 0, y: 0 });
+              setIsEditing(true);
+              setEditContent(message.content);
+            } : undefined}
+            onPin={() => {
+              setContextMenu({ visible: false, x: 0, y: 0 });
+              chatAPI.sendPinMessage(message.id);
+            }}
           />
         )}
       </>

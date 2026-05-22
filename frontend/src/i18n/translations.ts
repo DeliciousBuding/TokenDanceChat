@@ -88,6 +88,7 @@ export interface TranslationDict {
     save: string;
     fileTooLarge: string;
     uploadFailed: string;
+    editingMessage: string;
   };
   message: {
     edited: string;
@@ -100,6 +101,9 @@ export interface TranslationDict {
     copied: string;
     deleteConfirm: string;
     deleteWarning: string;
+    edit: string;
+    pin: string;
+    contextMenu: string;
   };
   system: {
     userJoined: string;
@@ -277,6 +281,7 @@ const zhCN: TranslationDict = {
     save: "保存",
     fileTooLarge: "文件过大（最大 20MB）",
     uploadFailed: "上传失败",
+    editingMessage: "编辑消息",
   },
   message: {
     edited: "（已编辑）",
@@ -289,6 +294,9 @@ const zhCN: TranslationDict = {
     copied: "已复制",
     deleteConfirm: "确认删除这条消息？",
     deleteWarning: "此操作不可撤销。",
+    edit: "编辑",
+    pin: "置顶",
+    contextMenu: "消息操作",
   },
   system: {
     userJoined: "{{username}} 加入了聊天室",
@@ -467,6 +475,7 @@ const enUS: TranslationDict = {
     save: "Save",
     fileTooLarge: "File too large (max 20MB)",
     uploadFailed: "Upload failed",
+    editingMessage: "Edit message",
   },
   message: {
     edited: "(edited)",
@@ -479,6 +488,9 @@ const enUS: TranslationDict = {
     copied: "Copied",
     deleteConfirm: "Delete message?",
     deleteWarning: "This cannot be undone.",
+    edit: "Edit",
+    pin: "Pin",
+    contextMenu: "Message actions",
   },
   system: {
     userJoined: "{{username}} joined the chat",
