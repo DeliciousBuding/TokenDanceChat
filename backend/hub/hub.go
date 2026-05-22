@@ -25,9 +25,15 @@ type StoredMessage = store.StoredMessage
 // StoredRoom is an alias for store.StoredRoom.
 type StoredRoom = store.StoredRoom
 
+// Poll is an alias for store.Poll.
+type Poll = store.Poll
+
+// UserProfile is an alias for store.UserProfile.
+type UserProfile = store.UserProfile
+
 // Store defines the interface for message persistence.
 type Store interface {
-	InsertMessage(username, content, replyToID, roomID, toUser, groupName string) (StoredMessage, error)
+	InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error)
 	GetMessages(limit int, before int64) []StoredMessage
 	TotalMessages() int64
 	MarkDeleted(messageID string) error
@@ -89,6 +95,28 @@ type Store interface {
 	UnarchiveConversation(username, key string) error
 	ListArchivedConversations(username string) []string
 	IsConversationArchived(username, key string) bool
+
+	// Threaded replies
+	GetThreadMessages(parentMessageID string) []StoredMessage
+	GetThreadReplyCount(parentMessageID string) int
+
+	// Notification preferences
+	SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error
+	GetNotificationPrefs(username, key string) (mutedUntil int64, showPreview bool, err error)
+	ListNotificationPrefs(username string) []store.NotificationPref
+
+	// User profiles
+	UpsertUserProfile(username, displayName, avatarURL, bio, status string, lastSeen int64) error
+	GetUserProfile(username string) (*store.UserProfile, error)
+	UpdateUserStatus(username, status string) error
+	UpdateUserLastSeen(username string) error
+	GetAllUserProfiles() ([]store.UserProfile, error)
+
+	// Polls
+	CreatePoll(poll *Poll) error
+	GetPoll(pollID string) (*Poll, error)
+	VotePoll(pollID string, username string, optionIndex int) error
+	ClosePoll(pollID string) error
 }
 
 // Group represents a chat group.
@@ -99,9 +127,12 @@ type Group struct {
 
 // UserStatus represents a user with their online/offline status.
 type UserStatus struct {
-	Username string `json:"username"`
-	Online   bool   `json:"online"`
-	LastSeen int64  `json:"last_seen"`
+	Username    string `json:"username"`
+	Online      bool   `json:"online"`
+	LastSeen    int64  `json:"last_seen"`
+	DisplayName string `json:"display_name,omitempty"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	Status      string `json:"status,omitempty"`
 }
 
 // Message represents a WebSocket protocol message.
@@ -155,6 +186,11 @@ type Message struct {
 	// Edit system
 	Edited bool `json:"edited,omitempty"`
 
+	// Thread system
+	ThreadID         string          `json:"thread_id,omitempty"`
+	ParentMessageID  string          `json:"parent_message_id,omitempty"`
+	ThreadMessages   []StoredMessage `json:"thread_messages,omitempty"`
+
 	// Pinned
 	Pinned   bool            `json:"pinned,omitempty"`
 	PinnedBy string           `json:"pinned_by,omitempty"`
@@ -163,6 +199,21 @@ type Message struct {
 	// Conversation pinning
 	Key  string   `json:"key,omitempty"`
 	Keys []string `json:"keys,omitempty"`
+
+	// Notification preferences
+	MutedUntil  int64                    `json:"muted_until,omitempty"`
+	ShowPreview *bool                    `json:"show_preview,omitempty"`
+	NotifPrefs  []store.NotificationPref `json:"notif_prefs,omitempty"`
+
+	// User profile fields
+	DisplayName string `json:"display_name,omitempty"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	Bio         string `json:"bio,omitempty"`
+	Status      string `json:"status,omitempty"`
+
+	// Poll fields
+	Poll        *Poll `json:"poll,omitempty"`
+	OptionIndex int   `json:"option_index,omitempty"`
 }
 
 // HubCommand PicoClaw 可向 Hub 发送的命令类型。
@@ -589,27 +640,38 @@ func (h *Hub) SetLastSeen(username string, ts int64) {
 }
 
 // AllUserStatus returns all known users with their online/offline status,
-// sorted by online first, then by last seen descending.
+// sorted by online first, then by last seen descending. Profile data
+// (display_name, avatar_url, status) is merged from the store.
 func (h *Hub) AllUserStatus() []UserStatus {
 	onlineMap := make(map[string]bool)
 	h.mu.RLock()
 	for c := range h.clients {
-		if c.username != "" {
-			onlineMap[c.username] = true
-		}
+		onlineMap[c.username] = true
 	}
 	h.mu.RUnlock()
 
 	h.lastSeenMu.RLock()
 	defer h.lastSeenMu.RUnlock()
 
+	profiles, _ := h.store.GetAllUserProfiles()
+	profileMap := make(map[string]store.UserProfile, len(profiles))
+	for _, p := range profiles {
+		profileMap[p.Username] = p
+	}
+
 	users := make([]UserStatus, 0, len(h.lastSeen))
 	for username, ls := range h.lastSeen {
-		users = append(users, UserStatus{
+		us := UserStatus{
 			Username: username,
 			Online:   onlineMap[username],
 			LastSeen: ls,
-		})
+		}
+		if p, ok := profileMap[username]; ok {
+			us.DisplayName = p.DisplayName
+			us.AvatarURL = p.AvatarURL
+			us.Status = p.Status
+		}
+		users = append(users, us)
 	}
 
 	sort.Slice(users, func(i, j int) bool {
@@ -618,7 +680,6 @@ func (h *Hub) AllUserStatus() []UserStatus {
 		}
 		return users[i].LastSeen > users[j].LastSeen
 	})
-
 	return users
 }
 
@@ -758,7 +819,7 @@ func (h *Hub) SendAssistantMessage(username, content, roomID string) {
 	if username == "" {
 		username = h.botName
 	}
-	storedMsg, err := h.store.InsertMessage(username, content, "", roomID, "", "")
+	storedMsg, err := h.store.InsertMessage(username, content, "", roomID, "", "", "")
 	if err != nil {
 		log.Printf("failed to insert assistant message: %v", err)
 		return
@@ -789,7 +850,7 @@ func (h *Hub) SendAssistantMessageToRoom(username, content, roomID string) {
 	if username == "" {
 		username = h.botName
 	}
-	storedMsg, err := h.store.InsertMessage(username, content, "", roomID, "", "")
+	storedMsg, err := h.store.InsertMessage(username, content, "", roomID, "", "", "")
 	if err != nil {
 		log.Printf("failed to insert assistant message: %v", err)
 		return
@@ -1037,6 +1098,21 @@ func (h *Hub) ListArchivedConversations(username string) []string {
 // IsConversationArchived checks if a conversation is archived for a user.
 func (h *Hub) IsConversationArchived(username, key string) bool {
 	return h.store.IsConversationArchived(username, key)
+}
+
+// SetNotificationPrefs upserts notification preferences for a (username, key) pair.
+func (h *Hub) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error {
+	return h.store.SetNotificationPrefs(username, key, mutedUntil, showPreview)
+}
+
+// GetNotificationPrefs returns the notification preferences for a (username, key) pair.
+func (h *Hub) GetNotificationPrefs(username, key string) (mutedUntil int64, showPreview bool, err error) {
+	return h.store.GetNotificationPrefs(username, key)
+}
+
+// ListNotificationPrefs returns all notification preference records for a user.
+func (h *Hub) ListNotificationPrefs(username string) []store.NotificationPref {
+	return h.store.ListNotificationPrefs(username)
 }
 
 // SendToAllSessions sends marshaled data to all connected clients with the given username.
@@ -1328,7 +1404,7 @@ func (h *Hub) SendDM(fromUsername, toUsername, content string) HubCommandRespons
 	}
 
 	// 持久化到 store。
-	storedMsg, err := h.store.InsertMessage(fromUsername, content, "", "", toUsername, "")
+	storedMsg, err := h.store.InsertMessage(fromUsername, content, "", "", toUsername, "", "")
 	if err != nil {
 		log.Printf("SendDM: insert message error: %v", err)
 		return HubCommandResponse{

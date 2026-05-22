@@ -173,6 +173,20 @@ export interface TranslationDict {
     addFriend: string;
     blockUser: string;
     unblockUser: string;
+    editProfile: string;
+    displayName: string;
+    bio: string;
+    status: string;
+    save: string;
+    cancel: string;
+    avatarUpload: string;
+    online: string;
+    offline: string;
+    lastSeen: string;
+    justNow: string;
+    minutesAgo: string;
+    hoursAgo: string;
+    daysAgo: string;
   };
   search: {
     placeholder: string;
@@ -201,12 +215,29 @@ export interface TranslationDict {
     sound: string;
     soundOn: string;
     soundOff: string;
+    notificationPrefs: string;
+    showPreview: string;
+    muteFor1h: string;
+    muteFor8h: string;
+    muteFor24h: string;
+    muteForever: string;
+    unmute: string;
+    mutedConversations: string;
+    noMutedConversations: string;
+    previewOn: string;
+    previewOff: string;
   };
   slash: {
     me: string;
     topic: string;
     shrug: string;
     tableflip: string;
+  };
+  thread: {
+    replies: string;
+    replyCount: string;
+    replyPlaceholder: string;
+    close: string;
   };
 }
 
@@ -383,6 +414,20 @@ const zhCN: TranslationDict = {
     addFriend: "添加好友",
     blockUser: "屏蔽用户",
     unblockUser: "取消屏蔽",
+    editProfile: "编辑资料",
+    displayName: "显示名称",
+    bio: "个人签名",
+    status: "状态",
+    save: "保存",
+    cancel: "取消",
+    avatarUpload: "上传头像",
+    online: "在线",
+    offline: "离线",
+    lastSeen: "最后在线 {{time}}",
+    justNow: "刚刚",
+    minutesAgo: "{{n}}分钟前",
+    hoursAgo: "{{n}}小时前",
+    daysAgo: "{{n}}天前",
   },
   search: {
     placeholder: "搜索消息...",
@@ -411,12 +456,29 @@ const zhCN: TranslationDict = {
     sound: "音效",
     soundOn: "音效已开启",
     soundOff: "音效已关闭",
+    notificationPrefs: "通知偏好",
+    showPreview: "消息预览",
+    muteFor1h: "静音 1 小时",
+    muteFor8h: "静音 8 小时",
+    muteFor24h: "静音 24 小时",
+    muteForever: "永久静音",
+    unmute: "取消静音",
+    mutedConversations: "已静音会话",
+    noMutedConversations: "暂无静音会话",
+    previewOn: "预览已开启",
+    previewOff: "预览已关闭",
   },
   slash: {
     me: "以动作方式发送消息",
     topic: "修改群组话题",
     shrug: "¯\\_(ツ)_/¯",
     tableflip: "(╯°□°)╯︵ ┻━┻",
+  },
+  thread: {
+    replies: "条回复",
+    replyCount: "{count} 条回复",
+    replyPlaceholder: "回复此消息...",
+    close: "关闭",
   },
 };
 
@@ -594,6 +656,20 @@ const enUS: TranslationDict = {
     addFriend: "Add Friend",
     blockUser: "Block User",
     unblockUser: "Unblock User",
+    editProfile: "Edit Profile",
+    displayName: "Display Name",
+    bio: "Bio",
+    status: "Status",
+    save: "Save",
+    cancel: "Cancel",
+    avatarUpload: "Upload Avatar",
+    online: "Online",
+    offline: "Offline",
+    lastSeen: "Last seen {{time}}",
+    justNow: "just now",
+    minutesAgo: "{{n}}m ago",
+    hoursAgo: "{{n}}h ago",
+    daysAgo: "{{n}}d ago",
   },
   search: {
     placeholder: "Search messages...",
@@ -622,12 +698,29 @@ const enUS: TranslationDict = {
     sound: "Sound",
     soundOn: "Sound on",
     soundOff: "Sound off",
+    notificationPrefs: "Notification Prefs",
+    showPreview: "Message Preview",
+    muteFor1h: "Mute for 1 hour",
+    muteFor8h: "Mute for 8 hours",
+    muteFor24h: "Mute for 24 hours",
+    muteForever: "Mute forever",
+    unmute: "Unmute",
+    mutedConversations: "Muted Conversations",
+    noMutedConversations: "No muted conversations",
+    previewOn: "Preview on",
+    previewOff: "Preview off",
   },
   slash: {
     me: "Send as action message",
     topic: "Change group topic",
     shrug: "¯\\_(ツ)_/¯",
     tableflip: "(╯°□°)╯︵ ┻━┻",
+  },
+  thread: {
+    replies: "replies",
+    replyCount: "{count} replies",
+    replyPlaceholder: "Reply to thread...",
+    close: "Close",
   },
 };
 

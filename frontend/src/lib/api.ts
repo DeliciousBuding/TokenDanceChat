@@ -3,6 +3,20 @@ export interface WSMessage {
   [key: string]: unknown;
 }
 
+export interface PollData {
+  id: string;
+  room_id: string;
+  creator: string;
+  question: string;
+  options: string[];
+  multiple_choice: boolean;
+  is_anonymous: boolean;
+  is_closed: boolean;
+  votes: Record<number, number>;
+  voters: Record<number, string[]>;
+  created_at: number;
+}
+
 export interface ChatMessage {
   id: string;
   username: string;
@@ -19,6 +33,9 @@ export interface ChatMessage {
   from?: string;
   group?: string;
   read_by?: string[];
+  subtype?: string;
+  poll?: PollData;
+  thread_id?: string;
 }
 
 export interface WSChatMessage extends WSMessage {
@@ -68,6 +85,9 @@ export interface UserStatus {
   username: string;
   online: boolean;
   last_seen: number;
+  display_name?: string;
+  avatar_url?: string;
+  status?: string;
 }
 
 export interface WSUserStatus extends WSMessage {
@@ -219,6 +239,23 @@ export interface WSMessageEditBroadcast extends WSMessage {
   content: string;
   timestamp: number;
   edited: boolean;
+}
+
+// Profile types
+export interface WSProfileUpdated extends WSMessage {
+  type: "profile_updated" | "profile_get";
+  username: string;
+  display_name?: string;
+  avatar_url?: string;
+  bio?: string;
+  status?: string;
+  last_seen?: number;
+}
+
+export interface WSStatusUpdated extends WSMessage {
+  type: "status_updated";
+  username: string;
+  status: string;
 }
 
 export type WSEventHandler = (msg: WSMessage) => void;
@@ -381,6 +418,21 @@ class ChatAPI {
     }
   }
 
+  sendThreadReply(threadId: string, content: string): void {
+    this.send({
+      type: "message",
+      content,
+      thread_id: threadId,
+    });
+  }
+
+  requestThreadMessages(parentMessageId: string): void {
+    this.send({
+      type: "thread_messages",
+      parent_message_id: parentMessageId,
+    });
+  }
+
   sendDMMessage(to: string, content: string, replyTo?: ChatMessage): void {
     this.send({
       type: "dm_message",
@@ -527,12 +579,57 @@ class ChatAPI {
     this.send({ type: "unmute_conversation", key });
   }
 
+  sendSetNotificationPrefs(key: string, mutedUntil: number, showPreview: boolean): void {
+    this.send({ type: "notification_prefs_set", key, muted_until: mutedUntil, show_preview: showPreview });
+  }
+
+  sendGetNotificationPrefs(): void {
+    this.send({ type: "notification_prefs_get" });
+  }
+
   sendArchiveConversation(key: string): void {
     this.send({ type: "archive_conversation", key });
   }
 
   sendUnarchiveConversation(key: string): void {
     this.send({ type: "unarchive_conversation", key });
+  }
+
+  sendPollCreate(question: string, options: string[], multipleChoice: boolean, isAnonymous: boolean): void {
+    this.send({
+      type: "poll_create",
+      poll: {
+        question,
+        options,
+        multiple_choice: multipleChoice,
+        is_anonymous: isAnonymous,
+      },
+    });
+  }
+
+  sendPollVote(pollId: string, optionIndex: number): void {
+    this.send({ type: "poll_vote", id: pollId, option_index: optionIndex });
+  }
+
+  sendPollClose(pollId: string): void {
+    this.send({ type: "poll_close", id: pollId });
+  }
+
+  sendProfileUpdate(profile: {
+    display_name?: string;
+    avatar_url?: string;
+    bio?: string;
+    status?: string;
+  }): void {
+    this.send({ type: "profile_update", ...profile });
+  }
+
+  sendProfileGet(username?: string): void {
+    this.send({ type: "profile_get", username });
+  }
+
+  sendStatusUpdate(status: string): void {
+    this.send({ type: "status_update", status });
   }
 
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {

@@ -80,8 +80,19 @@ export function useWebSocket() {
     setPinnedMessages,
     setPinnedConversations,
     setMutedConversations,
+    setNotificationPrefs,
     setArchivedConversations,
   } = useChatStore();
+
+  // Check if a conversation is muted, considering both legacy mutedConversations
+  // and per-conversation notification preferences with time-based muting.
+  function isConversationMuted(key: string): boolean {
+    const state = useChatStore.getState();
+    if (state.mutedConversations.includes(key)) return true;
+    const pref = state.notificationPrefs[key];
+    if (pref && pref.mutedUntil > Date.now()) return true;
+    return false;
+  }
 
   const connect = useCallback(
     async (name: string) => {
@@ -228,8 +239,8 @@ export function useWebSocket() {
         const state = useChatStore.getState();
         if (state.currentChat.type !== "public") {
           useChatStore.getState().incrementConversationUnread("public");
-          if (!isTabActive && !state.mutedConversations.includes("public")) import("@/lib/sound").then((m) => m.playMessageSound());
-          if (!state.mutedConversations.includes("public")) notifyMessage(username, content);
+          if (!isTabActive && !isConversationMuted("public")) import("@/lib/sound").then((m) => m.playMessageSound());
+          if (!isConversationMuted("public")) notifyMessage(username, content);
         }
       }),
     );
@@ -254,8 +265,8 @@ export function useWebSocket() {
         const partner = m.username === state.username ? m.to : (m.from || m.username);
         if (partner && m.username !== state.username && !(state.currentChat.type === "dm" && state.currentChat.username === partner)) {
           useChatStore.getState().incrementConversationUnread(`dm:${partner}`);
-          if (!state.mutedConversations.includes(`dm:${partner}`)) import("@/lib/sound").then((m) => m.playMessageSound());
-          if (!state.mutedConversations.includes(`dm:${partner}`)) notifyMessage(partner, m.content);
+          if (!isConversationMuted(`dm:${partner}`)) import("@/lib/sound").then((m) => m.playMessageSound());
+          if (!isConversationMuted(`dm:${partner}`)) notifyMessage(partner, m.content);
         }
       }),
     );
@@ -278,8 +289,8 @@ export function useWebSocket() {
         const groupName = m.group || m.to;
         if (groupName && !(state.currentChat.type === "group" && state.currentChat.name === groupName)) {
           useChatStore.getState().incrementConversationUnread(`group:${groupName}`);
-          if (!state.mutedConversations.includes(`group:${groupName}`)) import("@/lib/sound").then((m) => m.playMessageSound());
-          if (!state.mutedConversations.includes(`group:${groupName}`)) notifyMessage(groupName, `${m.username}: ${m.content}`);
+          if (!isConversationMuted(`group:${groupName}`)) import("@/lib/sound").then((m) => m.playMessageSound());
+          if (!isConversationMuted(`group:${groupName}`)) notifyMessage(groupName, `${m.username}: ${m.content}`);
         }
       }),
     );
@@ -398,6 +409,70 @@ export function useWebSocket() {
           prevStatusRef.current = newMap;
 
           setUserStatusList(users);
+
+          // Also populate userProfiles from user_status data.
+          const { setUserProfile } = useChatStore.getState();
+          for (const user of users) {
+            if (user.display_name || user.avatar_url || user.status) {
+              setUserProfile({
+                username: user.username,
+                display_name: user.display_name ?? "",
+                avatar_url: user.avatar_url ?? "",
+                bio: "",
+                status: user.status ?? "",
+                last_seen: user.last_seen,
+                created_at: 0,
+              });
+            }
+          }
+        }
+      }),
+    );
+
+    // Profile updated broadcast
+    unsubs.push(
+      chatAPI.on("profile_updated", (msg: WSMessage) => {
+        const { username, display_name, avatar_url, bio, status } =
+          msg as unknown as { username: string; display_name?: string; avatar_url?: string; bio?: string; status?: string };
+        if (username) {
+          useChatStore.getState().setUserProfile({
+            username,
+            display_name: display_name ?? "",
+            avatar_url: avatar_url ?? "",
+            bio: bio ?? "",
+            status: status ?? "",
+            last_seen: Date.now(),
+            created_at: 0,
+          });
+        }
+      }),
+    );
+
+    // Profile get response
+    unsubs.push(
+      chatAPI.on("profile_get", (msg: WSMessage) => {
+        const { username, display_name, avatar_url, bio, status, last_seen } =
+          msg as unknown as { username: string; display_name?: string; avatar_url?: string; bio?: string; status?: string; last_seen?: number };
+        if (username) {
+          useChatStore.getState().setUserProfile({
+            username,
+            display_name: display_name ?? "",
+            avatar_url: avatar_url ?? "",
+            bio: bio ?? "",
+            status: status ?? "",
+            last_seen: last_seen ?? 0,
+            created_at: 0,
+          });
+        }
+      }),
+    );
+
+    // Status updated broadcast
+    unsubs.push(
+      chatAPI.on("status_updated", (msg: WSMessage) => {
+        const { username, status } = msg as unknown as { username: string; status: string };
+        if (username) {
+          useChatStore.getState().updateUserProfileStatus(username, status ?? "");
         }
       }),
     );
@@ -528,6 +603,47 @@ export function useWebSocket() {
         const { keys } = msg as { type: string; keys: string[] };
         if (keys) {
           setMutedConversations(keys);
+        }
+      }),
+    );
+
+    // Notification preferences — per-conversation mute duration + preview toggle.
+    unsubs.push(
+      chatAPI.on("notification_prefs", (msg: WSMessage) => {
+        const data = msg as {
+          type: string;
+          key?: string;
+          muted_until?: number;
+          show_preview?: boolean;
+          notif_prefs?: Array<{ key: string; muted_until: number; show_preview: boolean }>;
+        };
+        // Single conversation update (echo from notification_prefs_set)
+        if (data.key) {
+          useChatStore.getState().updateNotificationPref(data.key, {
+            mutedUntil: data.muted_until ?? 0,
+            showPreview: data.show_preview ?? true,
+          });
+          // Sync legacy muted conversations.
+          const now = Date.now();
+          if (data.muted_until && data.muted_until > now) {
+            useChatStore.getState().addMutedConversation(data.key);
+          } else {
+            useChatStore.getState().removeMutedConversation(data.key);
+          }
+        }
+        // Full list update (from notification_prefs_get or join handler)
+        if (data.notif_prefs) {
+          const prefs: Record<string, { mutedUntil: number; showPreview: boolean }> = {};
+          for (const p of data.notif_prefs) {
+            prefs[p.key] = { mutedUntil: p.muted_until, showPreview: p.show_preview };
+          }
+          setNotificationPrefs(prefs);
+          // Sync legacy muted conversations from full list.
+          const now = Date.now();
+          const mutedKeys = data.notif_prefs
+            .filter((p) => p.muted_until > now)
+            .map((p) => p.key);
+          setMutedConversations(mutedKeys);
         }
       }),
     );

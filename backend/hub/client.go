@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tokendancechat/backend/llm"
+	"tokendancechat/backend/store"
 
 	"github.com/gorilla/websocket"
 )
@@ -178,6 +179,12 @@ func (c *Client) ReadPump() {
 			c.handleUnarchiveConversation(msg)
 		case "load_history":
 			c.handleLoadHistory(msg)
+		case "thread_messages":
+			c.handleThreadMessages(msg)
+		case "notification_prefs_set":
+			c.handleNotificationPrefsSet(msg)
+		case "notification_prefs_get":
+			c.handleNotificationPrefsGet()
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -287,6 +294,17 @@ func (c *Client) handleJoin(msg Message) {
 	})
 	select {
 	case c.send <- mutedPayload:
+	default:
+	}
+
+	// Send notification preferences.
+	notifPrefs := c.hub.ListNotificationPrefs(c.username)
+	notifPrefsPayload, _ := json.Marshal(Message{
+		Type:       "notification_prefs",
+		NotifPrefs: notifPrefs,
+	})
+	select {
+	case c.send <- notifPrefsPayload:
 	default:
 	}
 
@@ -406,7 +424,7 @@ func (c *Client) handleChatMessage(msg Message) {
 	}
 
 	// Save to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID, "", "")
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID, "", "", msg.ThreadID)
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
 		errMsg, _ := json.Marshal(Message{
@@ -431,6 +449,7 @@ func (c *Client) handleChatMessage(msg Message) {
 		ReplyToID:      storedMsg.ReplyToID,
 		ReplyToContent: msg.ReplyToContent,
 		ReplyToUser:    msg.ReplyToUser,
+		ThreadID:       storedMsg.ThreadID,
 		RoomID:         c.currentRoomID,
 	})
 	select {
@@ -969,7 +988,7 @@ func (c *Client) handleGroupMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", "", "", groupName)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", "", "", groupName, "")
 	if err != nil {
 		log.Printf("failed to insert group message: %v", err)
 		errMsg, _ := json.Marshal(Message{
@@ -1085,7 +1104,7 @@ func (c *Client) handleDMMessage(msg Message) {
 	}
 
 	// Persist to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID, c.currentRoomID, msg.To, "")
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID, c.currentRoomID, msg.To, "", "")
 	if err != nil {
 		log.Printf("failed to insert DM message: %v", err)
 		errMsg, _ := json.Marshal(Message{
@@ -1395,7 +1414,7 @@ func (c *Client) handleForward(msg Message) {
 	forwardContent := "Forwarded from " + stored.Username + ":\n" + stored.Content
 
 	// Persist as a new message.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, forwardContent, messageID, c.currentRoomID, "", "")
+	storedMsg, err := c.hub.store.InsertMessage(c.username, forwardContent, messageID, c.currentRoomID, "", "", "")
 	if err != nil {
 		log.Printf("failed to insert forwarded message: %v", err)
 		errMsg, _ := json.Marshal(Message{
@@ -1609,6 +1628,65 @@ func (c *Client) handleUnarchiveConversation(msg Message) {
 		Keys: archivedKeys,
 	})
 	c.hub.SendToAllSessions(c.username, archivedPayload)
+}
+
+// handleNotificationPrefsSet stores notification preferences for a conversation and
+// also syncs the old muted_conversations table for backward compatibility.
+func (c *Client) handleNotificationPrefsSet(msg Message) {
+	if c.username == "" {
+		return
+	}
+	key := msg.Key
+	if key == "" {
+		return
+	}
+	mutedUntil := msg.MutedUntil
+	showPreview := true
+	if msg.ShowPreview != nil {
+		showPreview = *msg.ShowPreview
+	}
+	if err := c.hub.SetNotificationPrefs(c.username, key, mutedUntil, showPreview); err != nil {
+		log.Printf("notification_prefs_set error: %v", err)
+		return
+	}
+
+	// Sync with old muted_conversations for backward compatibility.
+	now := time.Now().UnixMilli()
+	if mutedUntil > 0 && mutedUntil > now {
+		_ = c.hub.MuteConversation(c.username, key)
+	} else {
+		_ = c.hub.UnmuteConversation(c.username, key)
+	}
+
+	// Echo back the updated prefs for this conversation.
+	mutedUntilVal, showPreviewVal, _ := c.hub.GetNotificationPrefs(c.username, key)
+	showPreviewBool := showPreviewVal
+	confirm, _ := json.Marshal(Message{
+		Type:        "notification_prefs",
+		Key:         key,
+		MutedUntil:  mutedUntilVal,
+		ShowPreview: &showPreviewBool,
+	})
+	select {
+	case c.send <- confirm:
+	default:
+	}
+}
+
+// handleNotificationPrefsGet returns all notification preferences for the current user.
+func (c *Client) handleNotificationPrefsGet() {
+	if c.username == "" {
+		return
+	}
+	prefs := c.hub.ListNotificationPrefs(c.username)
+	payload, _ := json.Marshal(Message{
+		Type:       "notification_prefs",
+		NotifPrefs: prefs,
+	})
+	select {
+	case c.send <- payload:
+	default:
+	}
 }
 
 // handleLoadHistory sends older messages to the requesting client for pagination.
@@ -1921,3 +1999,159 @@ func isReservedUsername(username string) bool {
 	}
 	return false
 }
+
+// --- Thread message handlers ---
+
+// handleThreadMessages returns all replies in a thread for a given parent message.
+func (c *Client) handleThreadMessages(msg Message) {
+	if c.username == "" {
+		return
+	}
+	parentMessageID := msg.ParentMessageID
+	if parentMessageID == "" {
+		parentMessageID = msg.ID
+	}
+	if parentMessageID == "" {
+		return
+	}
+	threadMessages := c.hub.store.GetThreadMessages(parentMessageID)
+	payload, _ := json.Marshal(Message{
+		Type:            "thread_messages",
+		ParentMessageID: parentMessageID,
+		Messages:        threadMessages,
+	})
+	select {
+	case c.send <- payload:
+	default:
+	}
+}
+
+// --- Profile handlers ---
+
+func (c *Client) handleProfileUpdate(msg Message) {
+	if c.username == "" {
+		return
+	}
+	if err := c.hub.store.UpsertUserProfile(c.username, msg.DisplayName, msg.AvatarURL, msg.Bio, msg.Status, time.Now().UnixMilli()); err != nil {
+		log.Printf("profile_update: upsert error: %v", err)
+		return
+	}
+	// Broadcast updated user_status to all clients.
+	statusMsg, _ := json.Marshal(Message{Type: "user_status", Users: c.hub.AllUserStatus()})
+	select { case c.hub.broadcast <- statusMsg: default: }
+}
+
+func (c *Client) handleProfileGet(msg Message) {
+	if c.username == "" {
+		return
+	}
+	target := msg.Username
+	if target == "" {
+		target = c.username
+	}
+	profile, err := c.hub.store.GetUserProfile(target)
+	if err != nil {
+		profile = &store.UserProfile{Username: target}
+	}
+	resp, _ := json.Marshal(Message{
+		Type: "profile_get", Username: profile.Username,
+		DisplayName: profile.DisplayName, AvatarURL: profile.AvatarURL,
+		Bio: profile.Bio, Status: profile.Status,
+	})
+	select { case c.send <- resp: default: }
+}
+
+func (c *Client) handleStatusUpdate(msg Message) {
+	if c.username == "" {
+		return
+	}
+	status := msg.Status
+	if len([]rune(status)) > 50 {
+		status = string([]rune(status)[:50])
+	}
+	if err := c.hub.store.UpdateUserStatus(c.username, status); err != nil {
+		log.Printf("status_update: error: %v", err)
+		return
+	}
+	statusMsg, _ := json.Marshal(Message{Type: "status_updated", Username: c.username, Status: status})
+	select { case c.hub.broadcast <- statusMsg: default: }
+	userStatusMsg, _ := json.Marshal(Message{Type: "user_status", Users: c.hub.AllUserStatus()})
+	select { case c.hub.broadcast <- userStatusMsg: default: }
+}
+
+
+// --- Poll handlers ---
+
+func (c *Client) handlePollCreate(msg Message) {
+	if c.username == "" || msg.Poll == nil || msg.Poll.Question == "" || len(msg.Poll.Options) < 2 {
+		return
+	}
+	if !c.checkRateLimit() {
+		return
+	}
+	roomID := c.getCurrentRoomID()
+	poll := &Poll{
+		ID:             msg.Poll.ID,
+		RoomID:         roomID,
+		Creator:        c.username,
+		Question:       sanitizeContent(msg.Poll.Question),
+		Options:        msg.Poll.Options,
+		MultipleChoice: msg.Poll.MultipleChoice,
+		IsAnonymous:    msg.Poll.IsAnonymous,
+		IsClosed:       false,
+		Votes:          make(map[int]int),
+		Voters:         make(map[int][]string),
+		CreatedAt:      time.Now().UnixMilli(),
+	}
+	for i := range poll.Options {
+		poll.Options[i] = sanitizeContent(poll.Options[i])
+	}
+	if err := c.hub.store.CreatePoll(poll); err != nil {
+		log.Printf("poll_create: failed: %v", err)
+		return
+	}
+	broadcastMsg, _ := json.Marshal(Message{Type: "poll_created", ID: poll.ID, Username: c.username, RoomID: roomID, Poll: poll})
+	c.hub.BroadcastToRoom(broadcastMsg, roomID)
+}
+
+func (c *Client) handlePollVote(msg Message) {
+	if c.username == "" || msg.ID == "" {
+		return
+	}
+	if !c.checkRateLimit() {
+		return
+	}
+	if err := c.hub.store.VotePoll(msg.ID, c.username, msg.OptionIndex); err != nil {
+		log.Printf("poll_vote: failed: %v", err)
+		return
+	}
+	updated, err := c.hub.store.GetPoll(msg.ID)
+	if err != nil {
+		return
+	}
+	broadcastMsg, _ := json.Marshal(Message{Type: "poll_vote_update", ID: msg.ID, Poll: updated, RoomID: updated.RoomID})
+	c.hub.BroadcastToRoom(broadcastMsg, updated.RoomID)
+}
+
+func (c *Client) handlePollClose(msg Message) {
+	if c.username == "" || msg.ID == "" {
+		return
+	}
+	poll, err := c.hub.store.GetPoll(msg.ID)
+	if err != nil {
+		return
+	}
+	if poll.Creator != c.username {
+		errMsg, _ := json.Marshal(Message{Type: "error", Content: "only the poll creator can close the poll", ErrorCode: "NOT_OWNER"})
+		select { case c.send <- errMsg: default: }
+		return
+	}
+	if err := c.hub.store.ClosePoll(msg.ID); err != nil {
+		return
+	}
+	updated, _ := c.hub.store.GetPoll(msg.ID)
+	broadcastMsg, _ := json.Marshal(Message{Type: "poll_closed", ID: msg.ID, Poll: updated, RoomID: updated.RoomID})
+	c.hub.BroadcastToRoom(broadcastMsg, updated.RoomID)
+}
+
+

@@ -25,7 +25,7 @@ type mockStore struct {
 	rooms    []hub.StoredRoom
 }
 
-func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName string) (hub.StoredMessage, error) {
+func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (hub.StoredMessage, error) {
 	msg := hub.StoredMessage{
 		ID:        "mock-id-" + username,
 		Username:  username,
@@ -117,6 +117,9 @@ func (m *mockStore) MuteConversation(username, key string) error                
 func (m *mockStore) UnmuteConversation(username, key string) error                    { return nil }
 func (m *mockStore) ListMutedConversations(username string) []string                  { return nil }
 func (m *mockStore) IsConversationMuted(username, key string) bool                    { return false }
+func (m *mockStore) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error { return nil }
+func (m *mockStore) GetNotificationPrefs(username, key string) (int64, bool, error) { return 0, true, nil }
+func (m *mockStore) ListNotificationPrefs(username string) []store.NotificationPref { return nil }
 
 func newTestHandler() *Handler {
 	ms := &mockStore{}
@@ -124,6 +127,22 @@ func newTestHandler() *Handler {
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
 }
+
+func (m *mockStore) UpsertUserProfile(username, displayName, avatarURL, bio, status string, lastSeen int64) error {
+	return nil
+}
+func (m *mockStore) GetUserProfile(username string) (*store.UserProfile, error) {
+	return &store.UserProfile{Username: username}, nil
+}
+func (m *mockStore) UpdateUserStatus(username, status string) error { return nil }
+func (m *mockStore) UpdateUserLastSeen(username string) error { return nil }
+func (m *mockStore) GetAllUserProfiles() ([]store.UserProfile, error) { return nil, nil }
+func (m *mockStore) CreatePoll(poll *hub.Poll) error { return nil }
+func (m *mockStore) GetPoll(pollID string) (*hub.Poll, error) { return nil, nil }
+func (m *mockStore) VotePoll(pollID string, username string, optionIndex int) error { return nil }
+func (m *mockStore) ClosePoll(pollID string) error { return nil }
+func (m *mockStore) GetThreadMessages(parentMessageID string) []hub.StoredMessage { return nil }
+func (m *mockStore) GetThreadReplyCount(parentMessageID string) int { return 0 }
 
 func TestHealthCheck(t *testing.T) {
 	h := newTestHandler()
@@ -190,7 +209,7 @@ func TestGetMessagesAfterInsert(t *testing.T) {
 	h := newTestHandler()
 
 	// Insert a message via the store.
-	h.store.InsertMessage("alice", "hello", "", "", "", "")
+	h.store.InsertMessage("alice", "hello", "", "", "", "", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/messages", nil)
 	w := httptest.NewRecorder()
