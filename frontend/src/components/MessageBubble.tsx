@@ -2,12 +2,11 @@ import { memo, useMemo, useCallback, useState, useRef, useEffect, lazy, Suspense
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, Check, Forward, Reply, Trash2, Mic, Play, Pause, Languages } from "lucide-react";
+import { Copy, Check, Forward, Reply, Trash2, Mic, Play, Pause, MoreHorizontal } from "lucide-react";
 import { cn, formatTime, formatFullTime, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI } from "@/lib/api";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MessageContextMenu } from "@/components/MessageContextMenu";
 import { useSwipeableMessage } from "@/hooks/useTouchGestures";
 import { Avatar } from "@/components/Avatar";
@@ -469,9 +468,7 @@ export const MessageBubble = memo(function MessageBubble({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [recentlyToggledReaction, setRecentlyToggledReaction] = useState<string | null>(null);
-  const [bubbleCopied, setBubbleCopied] = useState(false);
   const isDeleted = message.deleted === true;
   // Link previews: rendered below bubble for all detected URLs
   const hasUrls = useMemo(() => {
@@ -553,6 +550,18 @@ export const MessageBubble = memo(function MessageBubble({
     });
   }, [selectMode, isDeleted]);
 
+  const openContextMenuFromButton = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    if (selectMode || isDeleted) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setContextMenu({
+      visible: true,
+      x: rect.right - 220,
+      y: rect.bottom + 6,
+    });
+  }, [selectMode, isDeleted]);
+
   const handleBubbleClick = useCallback(
     (e: React.MouseEvent) => {
       // Close swipe actions if open
@@ -612,11 +621,6 @@ export const MessageBubble = memo(function MessageBubble({
   }, [message.content, isDeleted]);
 
   const handleAvatarClick = useCallback(() => {
-    if (selectMode) return;
-    setSelectedProfileUser(message.username);
-  }, [message.username, setSelectedProfileUser, selectMode]);
-
-  const handleNameClick = useCallback(() => {
     if (selectMode) return;
     setSelectedProfileUser(message.username);
   }, [message.username, setSelectedProfileUser, selectMode]);
@@ -805,7 +809,7 @@ export const MessageBubble = memo(function MessageBubble({
             <button
               onClick={() => { onReply(message); swipe.closeActions(); }}
               aria-label={t("input.replyTo")}
-              className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
+              className="flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
             >
               <Reply className="h-4 w-4" />
             </button>
@@ -816,7 +820,7 @@ export const MessageBubble = memo(function MessageBubble({
               swipe.closeActions();
             }}
             aria-label={t("message.copy")}
-            className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
+            className="flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
           >
             <Copy className="h-4 w-4" />
           </button>
@@ -824,7 +828,7 @@ export const MessageBubble = memo(function MessageBubble({
             <button
               onClick={() => { onForward(message); swipe.closeActions(); }}
               aria-label={t("message.forward")}
-              className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
+              className="flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
             >
               <Forward className="h-4 w-4" />
             </button>
@@ -833,7 +837,7 @@ export const MessageBubble = memo(function MessageBubble({
             <button
               onClick={() => { onDelete(message.id); swipe.closeActions(); }}
               aria-label={t("message.delete")}
-              className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive/70 hover:text-destructive hover:bg-destructive/20 transition-colors"
+              className="flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive/70 hover:text-destructive hover:bg-destructive/20 transition-colors"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -897,36 +901,6 @@ export const MessageBubble = memo(function MessageBubble({
         </div>
       )}
 
-      {/* Reply button (left side, appears on hover) */}
-      {!selectMode && !isDeleted && onReply && !hideUsername && (
-        <div
-          className={cn(
-            "flex items-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0",
-            isOwn ? "order-last" : "-mr-1",
-          )}
-        >
-          <button
-            onClick={() => onReply(message)}
-            aria-label={t("input.replyTo")}
-            className="btn-micro flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="9 17 4 12 9 7" />
-              <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-            </svg>
-          </button>
-        </div>
-      )}
-
       {/* Avatar for others */}
       {!isOwn && !hideAvatar && (
         <div className="mt-0.5 flex-shrink-0">
@@ -961,13 +935,12 @@ export const MessageBubble = memo(function MessageBubble({
             )}
           >
             {!isOwn && (
-              <button
-                onClick={handleNameClick}
-                className="text-xs font-medium hover:underline cursor-pointer"
+              <span
+                className="text-xs font-medium"
                 style={{ color: nameColor }}
               >
                 {messageDisplayName}
-              </button>
+              </span>
             )}
             {isOwn && !isGrouped && (
               <span className="text-xs text-muted-foreground/60" title={formatFullTime(message.timestamp)}>
@@ -995,53 +968,6 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             )}
 
-            {/* Edit & Delete buttons for own messages (on hover) */}
-            {!selectMode && isOwn && !isDeleted && (
-              <div className="flex items-center gap-0.5">
-                <button
-                  onClick={() => { setIsEditing(true); setEditContent(message.content); }}
-                  aria-label="Edit message"
-                  className="btn-micro flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-accent transition-all"
-                >
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                  </svg>
-                </button>
-                {onDelete && (
-                  <button
-                    onClick={() => setConfirmDelete(true)}
-                    aria-label="Delete message"
-                    className="btn-micro flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-all"
-                  >
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M3 6h18" />
-                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                      <line x1="10" y1="11" x2="10" y2="17" />
-                      <line x1="14" y1="11" x2="14" y2="17" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -1150,49 +1076,22 @@ export const MessageBubble = memo(function MessageBubble({
           {!isEditing && hasUrls && (
             <MessageLinkPreviews content={message.content} />
           )}
-                    {/* Copy & Forward buttons (appear on hover) */}
           {!selectMode && !isEditing && (
-          <div className="absolute -top-2 right-0 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div
+              className={cn(
+                "absolute -top-3 flex items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+                isOwn ? "left-0 -translate-x-full pr-1" : "right-0 translate-x-full pl-1",
+              )}
+            >
               <button
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  try {
-                    await navigator.clipboard.writeText(message.content);
-                    setBubbleCopied(true);
-                    setTimeout(() => setBubbleCopied(false), 1500);
-                  } catch { /* Clipboard API may not be available */ }
-                }}
-                className="btn-micro flex h-8 items-center gap-1 rounded-lg bg-accent border border-border px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
-                aria-label={t("message.copy")}
+                type="button"
+                onClick={openContextMenuFromButton}
+                className="flex h-[44px] w-[44px] items-center justify-center rounded-xl border border-border/70 bg-card/95 text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                aria-label={t("message.contextMenu")}
+                title={t("message.contextMenu")}
               >
-                {bubbleCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                <MoreHorizontal className="h-5 w-5" />
               </button>
-              {onForward && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onForward(message);
-                  }}
-                  className="btn-micro flex h-8 items-center gap-1 rounded-lg bg-accent border border-border px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
-                  aria-label={t("message.forward")}
-                >
-                  <Forward className="h-3.5 w-3.5" />
-                  {t("message.forward")}
-                </button>
-              )}
-              {!isOwn && message.content && message.content.length < 500 && (
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    chatAPI.sendTranslateMessage(message.id, message.content, "");
-                  }}
-                  className="flex h-8 items-center gap-1 rounded-lg bg-accent border border-border px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shadow-sm"
-                  aria-label="Translate"
-                >
-                  <Languages className="h-3.5 w-3.5" />
-                  {translatedText ? "Retranslate" : "Translate"}
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -1211,7 +1110,7 @@ export const MessageBubble = memo(function MessageBubble({
             className={cn(
               "flex flex-wrap items-center gap-1 mt-0.5 transition-opacity",
               (!message.reactions || Object.values(message.reactions).every((users) => users.length === 0)) && replyCount === 0
-                ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100"
+                ? "hidden"
                 : "opacity-100",
             )}
           >
@@ -1263,27 +1162,6 @@ export const MessageBubble = memo(function MessageBubble({
                     </button>
                   ),
               )}
-            {!selectMode && (
-              <>
-                <button
-                  onClick={() => setShowEmojiPicker(true)}
-                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm border border-transparent hover:border-border/50 hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
-                  aria-label="Add reaction"
-                >
-                  <span className="text-base leading-none">+</span>
-                </button>
-                <button
-                  onClick={() => chatAPI.sendPinMessage(message.id)}
-                  className="inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm border border-transparent hover:border-border/50 hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
-                  aria-label="Pin message"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="17" x2="12" y2="22" />
-                    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
-                  </svg>
-                </button>
-              </>
-            )}
           </div>
         )}
 
@@ -1362,15 +1240,6 @@ export const MessageBubble = memo(function MessageBubble({
     </div>
         </div>
       </div>
-        <ConfirmDialog
-          open={confirmDelete}
-          title={t("message.deleteConfirm")}
-          message={t("message.deleteWarning")}
-          confirmLabel={t("message.delete")}
-          variant="destructive"
-          onConfirm={() => { onDelete?.(message.id); setConfirmDelete(false); }}
-          onCancel={() => setConfirmDelete(false)}
-        />
         {contextMenu.visible && (
           <MessageContextMenu
             message={message}
@@ -1406,6 +1275,18 @@ export const MessageBubble = memo(function MessageBubble({
               setContextMenu({ visible: false, x: 0, y: 0 });
               chatAPI.sendPinMessage(message.id);
             }}
+            onReact={() => {
+              setContextMenu({ visible: false, x: 0, y: 0 });
+              setShowEmojiPicker(true);
+            }}
+            onTranslate={
+              !isOwn && message.content && message.content.length < 500
+                ? () => {
+                    setContextMenu({ visible: false, x: 0, y: 0 });
+                    chatAPI.sendTranslateMessage(message.id, message.content, "");
+                  }
+                : undefined
+            }
           />
         )}
       </>

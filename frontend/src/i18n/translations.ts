@@ -146,6 +146,8 @@ export interface TranslationDict {
     deleteWarning: string;
     edit: string;
     pin: string;
+    react: string;
+    translate: string;
     contextMenu: string;
   };
   system: {
@@ -551,6 +553,8 @@ const zhCN: TranslationDict = {
     deleteWarning: "此操作不可撤销。",
     edit: "编辑",
     pin: "置顶",
+    react: "添加表情",
+    translate: "翻译",
     contextMenu: "消息操作",
   },
   system: {
@@ -958,6 +962,8 @@ const enUS: TranslationDict = {
     deleteWarning: "This cannot be undone.",
     edit: "Edit",
     pin: "Pin",
+    react: "React",
+    translate: "Translate",
     contextMenu: "Message actions",
   },
   system: {

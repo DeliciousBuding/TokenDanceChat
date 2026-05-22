@@ -74,12 +74,13 @@ The script writes screenshots and `metrics.json` to a temp directory such as `C:
 
 Latest accepted screenshot pass:
 
-- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T19-36-55-386Z`
-- Desktop light/dark 1440x900: textarea 816px, composer 126px, 4 visible seeded messages, no horizontal overflow, no console errors.
-- Tablet light 768x1024: textarea 456px, 4 visible seeded messages, no horizontal overflow, no console errors.
-- Mobile light/dark 390x844: title width 202px with `公共聊天` unclipped, message font 13.5px, collapsed composer textarea 208px, composer 91px, 4 visible seeded messages, no horizontal overflow, no console errors.
-- Mobile light with formatting toolbar: composer 144px, 4 visible seeded messages, no horizontal overflow, no console errors.
-- Screenshot review removed the duplicated non-own bottom timestamp; the remaining timestamp sits next to the sender name for a denser chat flow.
+- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T20-57-00-675Z`
+- Baseline: production build served by the Go backend on a clean temporary SQLite DB, so screenshots contain only the current seeded demo transcript and no repeated history from earlier runs.
+- Desktop light/dark 1440x900: textarea 816x48px, composer 130px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
+- Tablet light 768x1024: textarea 456x48px, mobile title width 580px, composer 130px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
+- Mobile light/dark 390x844: title width 202px with `公共聊天` unclipped, message font 13.5px, collapsed composer textarea 208x66px, composer 91px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
+- Mobile light with formatting toolbar: textarea 208x66px, composer 148px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
+- Screenshot review confirms the mobile title, composer buttons, message action affordance, and toolbar layout are visually stable; the desktop sidebar still needs a later density pass above the fold.
 
 Earlier screenshot passes caught two real issues:
 

@@ -393,7 +393,7 @@ export function Sidebar({
           <button
             onClick={onClose}
             aria-label="Close sidebar"
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
           >
             <X className="h-4 w-4" />
           </button>
@@ -573,7 +573,7 @@ export function Sidebar({
             <button
               onClick={onCreateGroup}
               aria-label={t("sidebar.createGroup")}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="flex h-[44px] w-[44px] items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -840,7 +840,7 @@ export function Sidebar({
           <span className="text-xs text-muted-foreground/60">{t("settings.sound")}</span>
           <button
             onClick={toggleSound}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
             aria-label={soundOn ? t("settings.soundOn") : t("settings.soundOff")}
             title={soundOn ? t("settings.soundOn") : t("settings.soundOff")}
           >
@@ -853,7 +853,7 @@ export function Sidebar({
           <div className="flex items-center gap-1">
             <button
               onClick={() => setSettingsOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="flex h-[44px] w-[44px] items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
               aria-label={t("settings.openSettings")}
               title={t("settings.openSettings")}
             >
@@ -861,7 +861,7 @@ export function Sidebar({
             </button>
             <button
               onClick={() => setInviteOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="flex h-[44px] w-[44px] items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
               aria-label={t("invite.inviteCodes")}
               title={t("invite.inviteCodes")}
             >
@@ -869,7 +869,7 @@ export function Sidebar({
             </button>
             <button
               onClick={() => setAdminOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="flex h-[44px] w-[44px] items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
               aria-label="Admin Dashboard"
               title="Admin Dashboard"
             >

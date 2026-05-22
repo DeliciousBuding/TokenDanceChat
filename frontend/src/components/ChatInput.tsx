@@ -1225,7 +1225,7 @@ export function ChatInput({
             disabled={disabled}
             aria-label={t("editor.bold")}
             title={t("editor.bold") + " (Ctrl+B)"}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
           >
             <Bold className="h-4 w-4" />
           </button>
@@ -1235,7 +1235,7 @@ export function ChatInput({
             disabled={disabled}
             aria-label={t("editor.italic")}
             title={t("editor.italic") + " (Ctrl+I)"}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
           >
             <Italic className="h-4 w-4" />
           </button>
@@ -1245,7 +1245,7 @@ export function ChatInput({
             disabled={disabled}
             aria-label={t("editor.strikethrough")}
             title={t("editor.strikethrough")}
-            className="hidden h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex"
+            className="hidden h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex"
           >
             <Strikethrough className="h-4 w-4" />
           </button>
@@ -1255,7 +1255,7 @@ export function ChatInput({
             disabled={disabled}
             aria-label={t("editor.code")}
             title={t("editor.code") + " (Ctrl+E)"}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
           >
             <Code className="h-4 w-4" />
           </button>
@@ -1265,7 +1265,7 @@ export function ChatInput({
             disabled={disabled}
             aria-label={t("editor.quote")}
             title={t("editor.quote")}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
           >
             <Quote className="h-4 w-4" />
           </button>
@@ -1278,7 +1278,7 @@ export function ChatInput({
             aria-label="GIF"
             title="GIF & Stickers"
             className={cn(
-              "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30",
+              "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30",
               showGifPicker
                 ? "bg-accent text-primary"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -1296,7 +1296,7 @@ export function ChatInput({
               aria-label={t("editor.link")}
               title={t("editor.link") + " (Ctrl+K)"}
               className={cn(
-                "hidden h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex",
+                "hidden h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex",
                 linkInputVisible
                   ? "bg-accent text-primary"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -1321,12 +1321,12 @@ export function ChatInput({
                     }
                   }}
                   placeholder={t("editor.linkUrl")}
-                  className="h-10 w-52 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  className="h-11 w-52 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                 />
                 <button
                   type="button"
                   onClick={commitLink}
-                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:brightness-110 transition-colors"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:brightness-110 transition-colors"
                   aria-label="OK"
                 >
                   <Send className="h-4 w-4" />
@@ -1334,7 +1334,7 @@ export function ChatInput({
                 <button
                   type="button"
                   onClick={cancelLink}
-                  className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                   aria-label="Cancel"
                 >
                   <X className="h-4 w-4" />
@@ -1354,7 +1354,7 @@ export function ChatInput({
             aria-label={t("editor.preview")}
             title={t("editor.preview")}
             className={cn(
-              "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30",
+              "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30",
               previewOn
                 ? "bg-accent text-primary"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -1430,7 +1430,7 @@ export function ChatInput({
                   if (!slideCancelDragging) cancelRecording();
                 }}
                 className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-xl border transition-colors",
+                  "flex h-11 w-11 items-center justify-center rounded-xl border transition-colors",
                   slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD
                     ? "border-destructive/50 bg-destructive/20 text-destructive"
                     : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-destructive",
@@ -1448,7 +1448,7 @@ export function ChatInput({
             {/* Stop / Send button */}
             <button
               onClick={stopRecording}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:brightness-110 transition-colors"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:brightness-110 transition-colors"
               aria-label="Stop recording"
             >
               <Square className="h-4 w-4" fill="currentColor" />
