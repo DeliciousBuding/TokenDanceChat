@@ -2,7 +2,7 @@ import { memo, useMemo, useCallback, useState, useRef, useEffect } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, Check, Forward } from "lucide-react";
+import { Copy, Check, Forward, Reply, Trash2 } from "lucide-react";
 import { cn, formatTime, avatarGradient, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
@@ -261,6 +261,11 @@ export const MessageBubble = memo(function MessageBubble({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
 
+  // Track pointer position for context menu placement
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    contextMenuPosRef.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (selectMode || isDeleted) return;
     contextMenuPosRef.current = { x: e.clientX, y: e.clientY };
@@ -502,13 +507,70 @@ export const MessageBubble = memo(function MessageBubble({
 
   return (
     <>
+      <div className="relative overflow-hidden">
+        {/* Swipe action buttons (revealed behind on left swipe, Telegram-style) */}
+        <div
+          className={cn(
+            "absolute inset-y-0 right-0 flex items-center gap-1 px-3 transition-opacity duration-200",
+            swipe.showActions ? "opacity-100" : "opacity-0",
+          )}
+          aria-hidden={!swipe.showActions}
+        >
+          {onReply && (
+            <button
+              onClick={() => { onReply(message); swipe.closeActions(); }}
+              aria-label={t("input.replyTo")}
+              className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Reply className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={async () => {
+              try { await navigator.clipboard.writeText(message.content); } catch { /* noop */ }
+              swipe.closeActions();
+            }}
+            aria-label={t("message.copy")}
+            className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Copy className="h-4 w-4" />
+          </button>
+          {onForward && (
+            <button
+              onClick={() => { onForward(message); swipe.closeActions(); }}
+              aria-label={t("message.forward")}
+              className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Forward className="h-4 w-4" />
+            </button>
+          )}
+          {isOwn && onDelete && (
+            <button
+              onClick={() => { onDelete(message.id); swipe.closeActions(); }}
+              aria-label={t("message.delete")}
+              className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive/70 hover:text-destructive hover:bg-destructive/20 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Sliding message content */}
+        <div
+          className="transition-transform duration-200 ease-out touch-pan-y"
+          style={{ transform: `translateX(${swipe.translateX}px)` }}
+          onTouchStart={swipe.onTouchStart}
+          onTouchMove={swipe.onTouchMove}
+          onTouchEnd={swipe.onTouchEnd}
+        >
       <div
       id={`msg-${message.id}`}
       onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={clearLongPress}
-      onContextMenu={handleContextMenu}
       onClick={handleBubbleClick}
+      onContextMenu={handleContextMenu}
       onDoubleClick={() => {
         if (!selectMode && !isDeleted && onReply) {
           onReply(message);
@@ -788,35 +850,49 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           )}
 
-          {/* Link preview card — inline OG metadata preview below message text */}
+          {/* Link preview card -- inline OG metadata preview below message text */}
           {!isEditing && linkPreview && (
             <a
               href={linkPreview.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2 block rounded-lg border border-border overflow-hidden hover:border-[hsl(220,2.5%,35%)] transition-colors no-underline"
+              className="mt-2 block rounded-lg border border-border overflow-hidden hover:border-primary/30 hover:shadow-md transition-all duration-200 no-underline group/link"
               onClick={(e) => e.stopPropagation()}
             >
               {linkPreview.image && (
-                <img
-                  src={linkPreview.image}
-                  alt={linkPreview.title || "Link preview"}
-                  loading="lazy"
-                  className="w-full h-32 object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              )}
-              <div className="p-2.5">
-                <div className="text-xs font-medium text-foreground/80 truncate">
-                  {linkPreview.title}
+                <div className="overflow-hidden">
+                  <img
+                    src={linkPreview.image}
+                    alt={linkPreview.title || "Link preview"}
+                    loading="lazy"
+                    className="w-full h-32 object-cover group-hover/link:scale-105 transition-transform duration-300"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
                 </div>
-                {linkPreview.description && (
-                  <div className="text-[10px] text-muted-foreground/60 mt-0.5 line-clamp-2">
-                    {linkPreview.description}
+              )}
+              <div className="p-3">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-foreground/85 truncate group-hover/link:text-primary/80 transition-colors">
+                      {linkPreview.title}
+                    </div>
+                    {linkPreview.description && (
+                      <div className="text-[11px] text-muted-foreground/60 mt-1 line-clamp-2 leading-relaxed">
+                        {linkPreview.description}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/35 flex-shrink-0">
+                        <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                      </svg>
+                      <span className="text-[10px] text-muted-foreground/40 truncate">
+                        {(() => { try { return new URL(linkPreview.url).hostname; } catch { return linkPreview.url; } })()}
+                      </span>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/35 flex-shrink-0 opacity-0 group-hover/link:opacity-100 transition-opacity">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                    </div>
                   </div>
-                )}
-                <div className="text-[10px] text-muted-foreground/40 mt-1 truncate">
-                  {new URL(linkPreview.url).hostname}
                 </div>
               </div>
             </a>
@@ -1023,6 +1099,8 @@ export const MessageBubble = memo(function MessageBubble({
         <div className="w-8 flex-shrink-0" aria-hidden="true" />
       )}
     </div>
+        </div>
+      </div>
         <ConfirmDialog
           open={confirmDelete}
           title={t("message.deleteConfirm")}
