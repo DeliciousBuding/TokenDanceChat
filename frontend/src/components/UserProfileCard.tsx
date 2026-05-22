@@ -214,6 +214,9 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
     // Bottom sheet overlay.
     return (
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${username}'s profile`}
         className="fixed inset-0 z-50 flex items-end justify-center"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
@@ -235,6 +238,9 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
   // Desktop modal overlay.
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${username}'s profile`}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();

@@ -25,6 +25,7 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [noResults, setNoResults] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -88,14 +89,14 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
 
   // Debounced search
   useEffect(() => {
-    if (!query.trim()) { setResults([]); setError(false); return; }
-    setLoading(true); setError(false);
+    if (!query.trim()) { setResults([]); setError(false); setNoResults(false); return; }
+    setLoading(true); setError(false); setNoResults(false);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
         const r = await chatAPI.searchMessages(query.trim(), currentRoomID);
         setResults(r);
-        if (r.length === 0) setError(true);
+        if (r.length === 0) setNoResults(true);
       } catch { setError(true); }
       finally { setLoading(false); setSelectedIndex(0); }
     }, 300);
@@ -137,7 +138,8 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
           <div className="max-h-72 overflow-y-auto">
             {!query && <div className="px-4 py-8 text-center"><p className="text-xs text-muted-foreground/50">Type to search messages</p></div>}
             {loading && <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 text-muted-foreground/40 animate-spin" /></div>}
-            {error && !loading && query && <div className="px-4 py-8 text-center"><Search className="mx-auto h-5 w-5 text-muted-foreground/30 mb-2" /><p className="text-xs text-muted-foreground/50">{conversationMessageIDs ? "No messages in this conversation" : "No messages found"}</p></div>}
+            {error && !loading && query && <div className="px-4 py-8 text-center"><Search className="mx-auto h-5 w-5 text-destructive/40 mb-2" /><p className="text-xs text-destructive/60">Search error — please try again</p></div>}
+            {noResults && !loading && !error && query && <div className="px-4 py-8 text-center"><Search className="mx-auto h-5 w-5 text-muted-foreground/30 mb-2" /><p className="text-xs text-muted-foreground/50">{conversationMessageIDs ? "No messages in this conversation" : "No messages found"}</p></div>}
             {scopedResults.length > 0 && scopedResults.map((r, i) => (
               <button key={r.id} onClick={() => handleClickResult(r)}
                 className={cn("w-full text-left px-4 py-3 border-b border-border last:border-b-0 transition-colors",
