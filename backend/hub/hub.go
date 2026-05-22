@@ -353,6 +353,16 @@ func (h *Hub) Run() {
 
 			log.Printf("client registered: %s (total: %d)", client.username, len(h.clients))
 
+			// PicoClaw proactive greeting — send a welcome DM after a short delay.
+			if agentName := h.AgentName(); agentName != "" && client.username != agentName {
+				username := client.username
+				go func() {
+					time.Sleep(2 * time.Second)
+					greeting := fmt.Sprintf("你好 @%s！我是 PicoClaw，你的 AI 助手。有什么可以帮你的？", username)
+					h.SendAssistantMessageToRoom(agentName, greeting, "dm:"+username)
+				}()
+			}
+
 		case client := <-h.unregister:
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
