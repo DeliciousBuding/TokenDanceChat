@@ -1,5 +1,7 @@
 import { useEffect, useRef, useMemo } from "react";
-import { Copy, Reply, Forward, Trash2, CheckSquare } from "lucide-react";
+import type { ComponentType } from "react";
+import { Copy, Reply, Forward, Trash2, CheckSquare, Pencil, Pin } from "lucide-react";
+import type { LucideProps } from "lucide-react";
 import { useTranslation } from "@/i18n/context";
 import type { ChatMessage } from "@/lib/api";
 
@@ -13,7 +15,22 @@ interface MessageContextMenuProps {
   onForward: () => void;
   onDelete: () => void;
   onSelect: () => void;
+  onEdit?: () => void;
+  onPin?: () => void;
 }
+
+type MenuItem =
+  | { type: "divider" }
+  | {
+      type?: undefined;
+      icon: ComponentType<LucideProps>;
+      label: string;
+      shortcut?: string;
+      onClick: () => void;
+      className: string;
+    };
+
+const divider = { type: "divider" as const } satisfies MenuItem;
 
 export function MessageContextMenu({
   message: _message,
@@ -25,6 +42,8 @@ export function MessageContextMenu({
   onForward,
   onDelete,
   onSelect,
+  onEdit,
+  onPin,
 }: MessageContextMenuProps) {
   const { t } = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -36,7 +55,6 @@ export function MessageContextMenu({
         onClose();
       }
     };
-    // Delay adding listener to avoid immediately closing from the touch that opened
     const timer = setTimeout(() => {
       document.addEventListener("mousedown", handler);
       document.addEventListener("touchstart", handler);
@@ -59,42 +77,63 @@ export function MessageContextMenu({
 
   // Calculate position to keep menu within viewport
   const menuStyle = useMemo(() => {
-    const menuWidth = 200;
-    const menuHeight = isOwn ? 228 : 184; // approximate
+    const menuWidth = 220;
+    let menuHeight = 200;
+    // Estimate height based on visible items
+    let itemCount = 4; // Reply, Copy, Forward, Select
+    if (isOwn && onEdit) itemCount += 1;
+    if (onPin) itemCount += 1;
+    if (isOwn) itemCount += 1; // Delete
+    itemCount += 2; // dividers
+    menuHeight = itemCount * 42 + 16;
     let { x, y } = position;
     if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 8;
     if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 8;
     if (x < 8) x = 8;
     if (y < 8) y = 8;
     return { left: x, top: y };
-  }, [position, isOwn]);
+  }, [position, isOwn, onEdit, onPin]);
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     {
       icon: Reply,
       label: t("input.replyTo"),
+      shortcut: "DblClick",
       onClick: onReply,
-      className: "text-foreground/80",
+      className: "text-foreground/85",
     },
     {
       icon: Copy,
       label: t("transcript.contextCopy"),
+      shortcut: "Ctrl+C",
       onClick: onCopy,
-      className: "text-foreground/80",
+      className: "text-foreground/85",
     },
     {
       icon: Forward,
       label: t("transcript.contextForward"),
       onClick: onForward,
-      className: "text-foreground/80",
+      className: "text-foreground/85",
     },
-    ...(isOwn
+    divider,
+    ...(isOwn && onEdit
       ? [
           {
-            icon: Trash2,
-            label: t("transcript.contextDelete"),
-            onClick: onDelete,
-            className: "text-destructive/80 hover:text-destructive",
+            icon: Pencil,
+            label: t("message.edit"),
+            shortcut: "↑",
+            onClick: onEdit,
+            className: "text-foreground/85",
+          },
+        ]
+      : []),
+    ...(onPin
+      ? [
+          {
+            icon: Pin,
+            label: t("message.pin"),
+            onClick: onPin,
+            className: "text-foreground/85",
           },
         ]
       : []),
@@ -102,8 +141,19 @@ export function MessageContextMenu({
       icon: CheckSquare,
       label: t("transcript.contextSelect"),
       onClick: onSelect,
-      className: "text-foreground/80",
+      className: "text-foreground/85",
     },
+    divider,
+    ...(isOwn
+      ? [
+          {
+            icon: Trash2,
+            label: t("transcript.contextDelete"),
+            onClick: onDelete,
+            className: "text-destructive/85 hover:!text-destructive hover:!bg-destructive/10",
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -119,21 +169,33 @@ export function MessageContextMenu({
       <div
         ref={menuRef}
         role="menu"
-        aria-label={t("transcript.contextSelect")}
-        className="fixed z-[101] min-w-[200px] rounded-xl border border-border bg-card shadow-2xl py-1.5 animate-scale-in overflow-hidden"
+        aria-label={t("message.contextMenu")}
+        className="fixed z-[101] min-w-[220px] rounded-xl border border-border/60 bg-card/95 backdrop-blur-xl shadow-2xl py-1 animate-scale-in overflow-hidden ring-1 ring-black/5"
         style={menuStyle}
       >
-        {menuItems.map((item) => (
-          <button
-            key={item.label}
-            role="menuitem"
-            onClick={item.onClick}
-            className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent ${item.className}`}
-          >
-            <item.icon className="h-4 w-4 flex-shrink-0" />
-            <span>{item.label}</span>
-          </button>
-        ))}
+        {menuItems.map((item, idx) => {
+          if (item.type === "divider") {
+            return (
+              <div key={idx} className="my-1 border-t border-border/50" />
+            );
+          }
+          return (
+            <button
+              key={idx}
+              role="menuitem"
+              onClick={item.onClick}
+              className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent/80 ${item.className}`}
+            >
+              <item.icon className="h-4 w-4 flex-shrink-0 opacity-70" />
+              <span className="flex-1 text-left">{item.label}</span>
+              {item.shortcut && (
+                <kbd className="text-[10px] text-muted-foreground/40 font-mono tracking-wider ml-4">
+                  {item.shortcut}
+                </kbd>
+              )}
+            </button>
+          );
+        })}
       </div>
     </>
   );
