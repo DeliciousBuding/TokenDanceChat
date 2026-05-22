@@ -6,6 +6,7 @@ import { ChatInput } from "./ChatInput";
 import { GroupCreateModal } from "./GroupCreateModal";
 import { ForwardModal } from "./ForwardModal";
 import { ThemeToggle } from "./ThemeToggle";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { SearchBar } from "./SearchBar";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -241,15 +242,17 @@ export function ChatLayout() {
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         )}
       >
-        <Sidebar
-          collapsed={false}
-          onClose={() => setSidebarOpen(false)}
-          onStartDM={handleStartDM}
-          onAddFriend={handleAddFriend}
-          onCreateGroup={() => setGroupModalOpen(true)}
-          onMentionAssistant={handleMentionAssistant}
-          pendingFriendUsers={pendingUsers}
-        />
+        <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground/50">Sidebar unavailable</div>}>
+          <Sidebar
+            collapsed={false}
+            onClose={() => setSidebarOpen(false)}
+            onStartDM={handleStartDM}
+            onAddFriend={handleAddFriend}
+            onCreateGroup={() => setGroupModalOpen(true)}
+            onMentionAssistant={handleMentionAssistant}
+            pendingFriendUsers={pendingUsers}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Main chat area */}
@@ -456,10 +459,14 @@ export function ChatLayout() {
 
         {/* Message transcript */}
         <div className="relative flex-1 overflow-hidden flex flex-col">
-          <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} />
+          <ErrorBoundary fallback={<div className="flex items-center justify-center h-full text-sm text-muted-foreground/50">Chat transcript unavailable</div>}>
+            <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} />
+          </ErrorBoundary>
 
           {/* Chat input - fixed at bottom */}
-          <ChatInput onSend={sendHandler} onUpload={handleUpload} disabled={false} />
+          <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground/50">Chat input unavailable</div>}>
+            <ChatInput onSend={sendHandler} onUpload={handleUpload} disabled={false} />
+          </ErrorBoundary>
         </div>
       </div>
 
