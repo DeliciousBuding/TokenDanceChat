@@ -92,6 +92,11 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 
 	// Connect to PicoClaw gateway if configured.
 	if picoclawCfg != nil && h.PicoclawClient() != nil {
+		// Wire proactive message callback — PicoClaw can send unsolicited
+		// messages to the room (summaries, alerts, scheduled updates).
+		h.PicoclawClient().ProactiveCallback = func(msg picoclaw.Message) {
+			h.SendAssistantMessage(agentName, msg.Content, "")
+		}
 		if err := h.PicoclawClient().Connect(context.Background()); err != nil {
 			log.Printf("warn: failed to connect PicoClaw: %v", err)
 		} else {

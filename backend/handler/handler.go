@@ -439,6 +439,7 @@ func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	contentType := contentTypeForFilename(filename)
 
 	if err := h.mediaStore.Save(r.Context(), filename, contentType, file); err != nil {
+		log.Printf("upload save failed for %s: %v", filename, err)
 		writeJSONError(w, http.StatusInternalServerError, "failed to write file", "SERVER_ERROR", requestID)
 		return
 	}

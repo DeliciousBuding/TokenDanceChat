@@ -640,7 +640,39 @@ func assistantMentionTarget(content, botName, agentName string) assistantMention
 			targets.Agent = true
 		}
 	}
+	// Auto-reply: respond to messages that clearly seek a response even
+	// without an explicit @mention.  Intent signals in priority order:
+	if !targets.TokenBot && botName != "" {
+		lower := strings.ToLower(content)
+		// Keyword trigger — always reply
+		for _, kw := range []string{"help", "帮助", "bot", "机器人"} {
+			if strings.Contains(lower, kw) {
+				targets.TokenBot = true
+				break
+			}
+		}
+		// Question trigger — 50% chance
+		if !targets.TokenBot && strings.Contains(content, "?") || strings.Contains(content, "？") {
+			if shouldTrigger(50) {
+				targets.TokenBot = true
+			}
+		}
+	}
+	if !targets.Agent && agentName != "" {
+		// PicoClaw also responds to questions at 50% rate (independent coin flip)
+		if strings.Contains(content, "?") || strings.Contains(content, "？") {
+			if shouldTrigger(50) {
+				targets.Agent = true
+			}
+		}
+	}
 	return targets
+}
+
+// shouldTrigger returns true percent% of the time.
+// Pure deterministic hash-based — no math/rand to avoid seeding races.
+func shouldTrigger(percent int) bool {
+	return percent > 0 && uint32(time.Now().UnixNano())%100 < uint32(percent)
 }
 
 func isAssistantAlias(mention, canonical string, aliases ...string) bool {
