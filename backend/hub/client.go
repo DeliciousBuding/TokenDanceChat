@@ -244,6 +244,12 @@ func (c *Client) ReadPump() {
 			c.handleFolderList()
 		case "translate_message":
 			c.handleTranslateMessage(msg)
+		case "webhook_create":
+			c.handleWebhookCreate(msg)
+		case "webhook_delete":
+			c.handleWebhookDelete(msg)
+		case "webhook_list":
+			c.handleWebhookList(msg)
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -3568,6 +3574,100 @@ func (c *Client) handleFolderList() {
 	resp, _ := json.Marshal(Message{
 		Type:    "folder_list",
 		Folders: results,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
+}
+
+// --- Webhook handlers ---
+
+func (c *Client) handleWebhookCreate(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	if groupName == "" {
+		return
+	}
+	// Check admin: user must be group owner or admin
+	role, _ := c.hub.store.GetGroupMemberRole(groupName, c.username)
+	if role != "owner" && role != "admin" {
+		return
+	}
+
+	id := uuid.New().String()
+	secret := uuid.New().String()[:12]
+	url := id + "-" + uuid.New().String()[:8]
+
+	if err := c.hub.store.CreateWebhook(id, groupName, url, secret, c.username); err != nil {
+		log.Printf("webhook_create: error: %v", err)
+		return
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type:    "webhook_created",
+		Group:   groupName,
+		ID:      id,
+		Content: url,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
+}
+
+func (c *Client) handleWebhookDelete(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	webhookID := msg.ID
+	if groupName == "" || webhookID == "" {
+		return
+	}
+
+	role, _ := c.hub.store.GetGroupMemberRole(groupName, c.username)
+	if role != "owner" && role != "admin" {
+		return
+	}
+
+	if err := c.hub.store.DeleteWebhook(webhookID, groupName); err != nil {
+		log.Printf("webhook_delete: error: %v", err)
+		return
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type:  "webhook_deleted",
+		Group: groupName,
+		ID:    webhookID,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
+}
+
+func (c *Client) handleWebhookList(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	if groupName == "" {
+		return
+	}
+
+	webhooks, err := c.hub.store.ListWebhooks(groupName)
+	if err != nil {
+		log.Printf("webhook_list: error: %v", err)
+		return
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type:     "webhook_list",
+		Group:    groupName,
+		Webhooks: webhooks,
 	})
 	select {
 	case c.send <- resp:

@@ -108,6 +108,16 @@ type GroupInfo struct {
 	AvatarURL   string `json:"avatar_url"`
 }
 
+// Webhook represents an incoming webhook integration for a group.
+type Webhook struct {
+	ID        string 
+	GroupName string 
+	URL       string 
+	Secret    string 
+	CreatedBy string 
+	CreatedAt int64  
+}
+
 // GroupMemberInfo represents a member with their role in a group.
 type GroupMemberInfo struct {
 	Username string `json:"username"`
@@ -377,6 +387,15 @@ func (s *Store) migrate() error {
 					PRIMARY KEY (folder_id, key),
 					FOREIGN KEY (folder_id) REFERENCES chat_folders(id)
 				);
+
+			CREATE TABLE IF NOT EXISTS webhooks (
+				id TEXT PRIMARY KEY,
+				group_name TEXT NOT NULL,
+				url TEXT NOT NULL,
+				secret TEXT NOT NULL,
+				created_by TEXT NOT NULL,
+				created_at INTEGER NOT NULL
+			);
 			`
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -2287,6 +2306,69 @@ func (s *Store) GetFolderItems(folderID string) ([]string, error) {
 		keys = append(keys, key)
 	}
 	return keys, rows.Err()
+}
+
+// --- Webhooks ---
+
+// CreateWebhook inserts a new webhook for a group.
+func (s *Store) CreateWebhook(id, groupName, url, secret, createdBy string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UnixMilli()
+	_, err := s.db.Exec(
+		"INSERT INTO webhooks (id, group_name, url, secret, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		id, groupName, url, secret, createdBy, now,
+	)
+	return err
+}
+
+// DeleteWebhook removes a webhook by ID and group name.
+func (s *Store) DeleteWebhook(id, groupName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM webhooks WHERE id = ? AND group_name = ?", id, groupName)
+	return err
+}
+
+// ListWebhooks returns all webhooks for a group.
+func (s *Store) ListWebhooks(groupName string) ([]Webhook, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query(
+		"SELECT id, group_name, url, secret, created_by, created_at FROM webhooks WHERE group_name = ? ORDER BY created_at",
+		groupName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []Webhook
+	for rows.Next() {
+		var w Webhook
+		if err := rows.Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, w)
+	}
+	if result == nil {
+		result = []Webhook{}
+	}
+	return result, rows.Err()
+}
+
+// GetWebhookByURL looks up a webhook by its URL path.
+func (s *Store) GetWebhookByURL(url string) (*Webhook, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var w Webhook
+	err := s.db.QueryRow(
+		"SELECT id, group_name, url, secret, created_by, created_at FROM webhooks WHERE url = ?",
+		url,
+	).Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &w, nil
 }
 
 // --- User registration and authentication ---

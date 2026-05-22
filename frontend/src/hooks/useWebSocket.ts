@@ -103,6 +103,7 @@ export function useWebSocket() {
     removeConversationFromFolder,
     setIncomingCall,
     setActiveCall,
+    setGroupInfoPanel,
     setTranslation,
   } = useChatStore();
 
@@ -1053,6 +1054,27 @@ export function useWebSocket() {
       if (message_id && content) {
         setTranslation(message_id, content);
       }
+    }),
+
+    // Webhook created
+    chatAPI.on("webhook_created", (msg: WSMessage) => {
+      const { group: grp } = msg as { type: string; group: string; id: string; content: string };
+      if (grp) {
+        setGroupInfoPanel(grp); // Refresh group info to show new webhook
+      }
+    }),
+
+    // Webhook deleted
+    chatAPI.on("webhook_deleted", (msg: WSMessage) => {
+      const { group: grp } = msg as { type: string; group: string; id: string };
+      if (grp) {
+        setGroupInfoPanel(grp);
+      }
+    }),
+
+    // Webhook list
+    chatAPI.on("webhook_list", (_msg: WSMessage) => {
+      // Handled by GroupInfoPanel's local state via direct WS response
     }),
 
     // Scheduled message confirm

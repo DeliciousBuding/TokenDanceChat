@@ -965,6 +965,18 @@ class ChatAPI {
     this.send({ type: "folder_list" });
   }
 
+  sendWebhookCreate(groupName: string): void {
+    this.send({ type: "webhook_create", group: groupName });
+  }
+
+  sendWebhookDelete(groupName: string, id: string): void {
+    this.send({ type: "webhook_delete", group: groupName, id });
+  }
+
+  sendWebhookList(groupName: string): void {
+    this.send({ type: "webhook_list", group: groupName });
+  }
+
   sendTranslateMessage(messageId: string, content: string, targetLang?: string): void {
     this.send({ type: "translate_message", message_id: messageId, content, to: targetLang || "" });
   }

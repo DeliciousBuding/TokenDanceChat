@@ -39,8 +39,13 @@ vi.mock("@/lib/sound", () => ({
   setSoundEnabled: vi.fn(),
 }));
 
+vi.mock("@/components/VideoCall", () => ({
+  VideoCall: () => <div data-testid="video-call" />,
+}));
+
 vi.mock("@/lib/api", () => ({
   chatAPI: {
+    on: vi.fn(() => vi.fn()),
     sendTypingStart: vi.fn(),
     sendTypingStop: vi.fn(),
     uploadImage: vi.fn().mockResolvedValue("https://example.com/uploads/file.png"),
@@ -58,6 +63,9 @@ vi.mock("@/lib/api", () => ({
     sendGroupInvite: vi.fn(),
     sendGroupInviteAccept: vi.fn(),
     sendGroupInviteDecline: vi.fn(),
+    sendScheduledMessagesList: vi.fn(),
+    sendCancelScheduledMessage: vi.fn(),
+    sendFolderList: vi.fn(),
     fetchLinkPreview: vi.fn(),
   },
   ChatError: class ChatError extends Error {
@@ -203,6 +211,35 @@ describe("ChatLayout", () => {
       fireEvent.click(backBtn!);
 
       expect(useChatStore.getState().currentChat.type).toBe("public");
+    });
+
+    it("群聊中点击群组通话按钮会发起视频群组通话", () => {
+      useChatStore.setState({
+        currentChat: { type: "group", name: "test-group" },
+        groups: {
+          "test-group": {
+            name: "test-group",
+            members: ["testuser", "alice", "bob"],
+            roles: { testuser: "owner", alice: "member", bob: "member" },
+            owner: "testuser",
+            created_at: 0,
+          },
+        },
+      });
+
+      renderChatLayout();
+      fireEvent.click(screen.getAllByLabelText("群组通话")[0]);
+
+      const activeCall = useChatStore.getState().activeCall;
+      expect(activeCall).toMatchObject({
+        callId: "",
+        peer: "test-group",
+        callType: "video",
+        isGroupCall: true,
+        groupName: "test-group",
+        participants: ["alice", "bob"],
+      });
+      expect(activeCall?.startTime).toEqual(expect.any(Number));
     });
   });
 

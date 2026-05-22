@@ -180,6 +180,11 @@ func (m *mockStore) RemoveFromFolder(folderID, key string) error { return nil }
 func (m *mockStore) ListFolders(username string) ([]store.ChatFolder, error) { return nil, nil }
 func (m *mockStore) GetFolderItems(folderID string) ([]string, error) { return nil, nil }
 
+func (m *mockStore) CreateWebhook(id, groupName, url, secret, createdBy string) error { return nil }
+func (m *mockStore) DeleteWebhook(id, groupName string) error { return nil }
+func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error) { return nil, nil }
+func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error) { return nil, nil }
+
 func TestHealthCheck(t *testing.T) {
 	h := newTestHandler()
 

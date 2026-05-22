@@ -185,6 +185,12 @@ type Store interface {
 	RemoveFromFolder(folderID, key string) error
 	ListFolders(username string) ([]ChatFolder, error)
 	GetFolderItems(folderID string) ([]string, error)
+
+	// Webhooks
+	CreateWebhook(id, groupName, url, secret, createdBy string) error
+	DeleteWebhook(id, groupName string) error
+	ListWebhooks(groupName string) ([]store.Webhook, error)
+	GetWebhookByURL(url string) (*store.Webhook, error)
 }
 
 // CallSession represents an active call between two users.
@@ -317,6 +323,7 @@ type Message struct {
 
 	// Chat folders
 	Folders interface{} `json:"folders,omitempty"`
+	Webhooks interface{} `json:"webhooks,omitempty"`
 
 	// Custom emoji fields
 	EmojiName string         `json:"emoji_name,omitempty"`

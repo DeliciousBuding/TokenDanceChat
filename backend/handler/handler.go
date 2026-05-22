@@ -1070,6 +1070,57 @@ func (h *Handler) InviteGenerate(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code": code,
 	})
+	}
+
+// WebhookHandler handles incoming webhook POST requests.
+// POST /api/webhook/{url}
+func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	// Extract webhook URL from path: /api/webhook/{url}
+	url := strings.TrimPrefix(r.URL.Path, "/api/webhook/")
+	if url == "" {
+		http.Error(w, "missing webhook URL", http.StatusBadRequest)
+		return
+	}
+	// Verify secret from query param
+	secret := r.URL.Query().Get("secret")
+	if secret == "" {
+		http.Error(w, "missing secret", http.StatusUnauthorized)
+		return
+	}
+	webhook, err := h.store.GetWebhookByURL(url)
+	if err != nil || webhook.Secret != secret {
+		http.Error(w, "invalid webhook URL or secret", http.StatusNotFound)
+		return
+	}
+	// Parse JSON body
+	var body struct {
+		Content string `json:"content"`
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Content == "" {
+		http.Error(w, "invalid body: content required", http.StatusBadRequest)
+		return
+	}
+	sender := body.Username
+	if sender == "" {
+		sender = "webhook"
+	}
+	// Broadcast to group via hub
+	msg := hub.Message{
+		Type:     "group_message",
+		Group:    webhook.GroupName,
+		Username: sender,
+		Content:  body.Content,
+		Timestamp: time.Now().UnixMilli(),
+	}
+	h.hub.BroadcastJSON(msg)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // InviteList handles GET /api/invite/list?username=xxx.
