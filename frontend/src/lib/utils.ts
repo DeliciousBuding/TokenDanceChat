@@ -13,11 +13,11 @@ export function formatTime(timestamp: number): string {
   const diffMin = Math.floor(diffSec / 60);
   const diffHour = Math.floor(diffMin / 60);
 
-  // Less than 1 minute: "刚刚"
-  if (diffSec < 60) return "刚刚";
+  // Less than 1 minute: "just now"
+  if (diffSec < 60) return "just now";
 
-  // Less than 1 hour: "N分钟前"
-  if (diffMin < 60) return `${diffMin}分钟前`;
+  // Less than 1 hour: "Nm ago"
+  if (diffMin < 60) return `${diffMin}m ago`;
 
   // Less than 24h and same day: "HH:mm"
   const today = new Date();
