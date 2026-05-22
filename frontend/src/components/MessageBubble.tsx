@@ -1,4 +1,4 @@
-import { memo, useMemo, useCallback, useState, useRef } from "react";
+import { memo, useMemo, useCallback, useState, useRef, useEffect } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -10,7 +10,7 @@ import { chatAPI } from "@/lib/api";
 import { playReactionSound } from "@/lib/sound";
 import { EmojiPicker } from "@/components/EmojiPicker";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import type { ChatMessage } from "@/lib/api";
+import type { ChatMessage, LinkPreviewData } from "@/lib/api";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -43,6 +43,8 @@ interface MessageBubbleProps {
 /** Helper: detect if a URL points to an audio file */
 const AUDIO_EXT_RE = /\.(webm|ogg|mp3|wav|m4a)(\?.*)?$/i;
 const isAudioUrl = (url: string): boolean => AUDIO_EXT_RE.test(url);
+/** Regex: detect image file extensions to skip link preview */
+const IMAGE_EXT_RE = /\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i;
 
 /** Markdown components with link sanitization and audio player for voice messages */
 const safeMarkdownComponents = {
@@ -170,6 +172,40 @@ export const MessageBubble = memo(function MessageBubble({
   const [editContent, setEditContent] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isDeleted = message.deleted === true;
+  // Link preview: fetch OpenGraph metadata for URLs in message content
+  const [linkPreview, setLinkPreview] = useState<LinkPreviewData | null>(null);
+  const linkPreviewCache = useRef<Map<string, LinkPreviewData | null>>(new Map());
+
+  useEffect(() => {
+    if (isDeleted) return;
+    const urlMatch = message.content.match(/https?:\/\/[^\s)]+/);
+    if (!urlMatch) {
+      setLinkPreview(null);
+      return;
+    }
+    const url = urlMatch[0];
+    // Skip image URLs
+    if (IMAGE_EXT_RE.test(url)) {
+      setLinkPreview(null);
+      return;
+    }
+
+    // Check cache first to avoid re-fetching the same URL
+    const cached = linkPreviewCache.current.get(url);
+    if (cached !== undefined) {
+      setLinkPreview(cached);
+      return;
+    }
+
+    chatAPI.fetchLinkPreview(url).then((preview) => {
+      linkPreviewCache.current.set(url, preview);
+      if (preview?.title) {
+        setLinkPreview(preview);
+      } else {
+        setLinkPreview(null);
+      }
+    });
+  }, [message.content, isDeleted]);
 
   const handleAddReaction = useCallback(
     (emoji: string) => {
@@ -668,7 +704,39 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           )}
 
-          {/* Forward button (appears on hover) */}
+          {/* Link preview card — inline OG metadata preview below message text */}
+          {!isEditing && linkPreview && (
+            <a
+              href={linkPreview.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 block rounded-lg border border-border overflow-hidden hover:border-[hsl(220,2.5%,35%)] transition-colors no-underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {linkPreview.image && (
+                <img
+                  src={linkPreview.image}
+                  alt=""
+                  className="w-full h-32 object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              )}
+              <div className="p-2.5">
+                <div className="text-xs font-medium text-foreground/80 truncate">
+                  {linkPreview.title}
+                </div>
+                {linkPreview.description && (
+                  <div className="text-[10px] text-muted-foreground/60 mt-0.5 line-clamp-2">
+                    {linkPreview.description}
+                  </div>
+                )}
+                <div className="text-[10px] text-muted-foreground/40 mt-1 truncate">
+                  {new URL(linkPreview.url).hostname}
+                </div>
+              </div>
+            </a>
+          )}
+                    {/* Forward button (appears on hover) */}
           {!selectMode && onForward && (
             <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
