@@ -109,6 +109,7 @@ export function MessageTranscript({
     historyLoaded,
     typingUsers,
     currentChat,
+    onlineUsers,
   } = useChatStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -169,6 +170,11 @@ export function MessageTranscript({
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false, x: 0, y: 0, message: null, isOwn: false,
   });
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBatchForwardPicker, setShowBatchForwardPicker] = useState(false);
+  const [batchForwardUser, setBatchForwardUser] = useState("");
 
 
   // Save scroll position on scroll + detect scroll-to-top for pagination.
@@ -300,9 +306,61 @@ export function MessageTranscript({
     closeContextMenu();
   }, [contextMenu.message, onForward, closeContextMenu]);
 
+  const enterSelectMode = useCallback((messageId: string) => {
+    setSelectMode(true);
+    setSelectedIds(new Set([messageId]));
+  }, []);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setShowBatchForwardPicker(false);
+    setBatchForwardUser("");
+  }, []);
+
+  const toggleSelect = useCallback((messageId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) {
+        next.delete(messageId);
+        if (next.size === 0) setSelectMode(false);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBatchDelete = useCallback(() => {
+    const selectedMessages = effectiveMessages.filter((m) => selectedIds.has(m.id));
+    const ownMessages = selectedMessages.filter((m) => m.username === username);
+    for (const msg of ownMessages) chatAPI.deleteMessage(msg.id);
+    exitSelectMode();
+  }, [effectiveMessages, selectedIds, username, exitSelectMode]);
+
+  const handleBatchForward = useCallback(() => {
+    if (!batchForwardUser) return;
+    const selectedMessages = effectiveMessages.filter((m) => selectedIds.has(m.id));
+    for (const msg of selectedMessages) chatAPI.sendForward(msg.id, batchForwardUser);
+    exitSelectMode();
+  }, [effectiveMessages, selectedIds, batchForwardUser, exitSelectMode]);
+
+  const handleContextSelect = useCallback(() => {
+    if (contextMenu.message) enterSelectMode(contextMenu.message.id);
+    closeContextMenu();
+  }, [contextMenu.message, enterSelectMode, closeContextMenu]);
+
+  const handleContainerClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!selectMode) return;
+      if (e.target === e.currentTarget) exitSelectMode();
+    },
+    [selectMode, exitSelectMode],
+  );
+
   const menuStyle = useMemo(() => {
     const menuWidth = 180;
-    const menuHeight = 160;
+    const menuHeight = 200;
     let { x, y } = contextMenu;
     if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 8;
     if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 8;
@@ -315,10 +373,41 @@ export function MessageTranscript({
     <div
       ref={containerRef}
       onScroll={handleScroll}
+      onClick={handleContainerClick}
       className={cn("flex-1 overflow-y-auto relative scrollbar-thin", className)}
       style={{ willChange: "transform" }}
       {...pullDownHandlers}
     >
+      {selectMode && (
+        <div className="sticky top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center gap-3 shadow-lg">
+          <span className="text-sm font-medium text-foreground">{selectedIds.size} selected</span>
+          <div className="flex-1" />
+          <button onClick={handleBatchDelete} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-destructive/80 hover:bg-destructive/10 hover:text-destructive transition-colors" aria-label="Delete selected">
+            <Trash2 className="h-4 w-4" />Delete
+          </button>
+          <button onClick={() => setShowBatchForwardPicker((prev) => !prev)} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors" aria-label="Forward selected">
+            <Forward className="h-4 w-4" />Forward
+          </button>
+          <button onClick={exitSelectMode} className="flex items-center gap-1 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" aria-label="Exit select mode">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      )}
+      {selectMode && showBatchForwardPicker && (
+        <div className="sticky top-14 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 shadow-lg">
+          <div className="flex items-center gap-3 max-w-md mx-auto">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Forward to:</span>
+            <select value={batchForwardUser} onChange={(e) => setBatchForwardUser(e.target.value)} className="flex-1 rounded-lg border border-border bg-secondary px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary/50">
+              <option value="">Select recipient...</option>
+              {onlineUsers.filter((u) => u !== username).map((u) => (<option key={u} value={u}>{u}</option>))}
+            </select>
+            <button onClick={handleBatchForward} disabled={!batchForwardUser} className="rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity" style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}>Send</button>
+            <button onClick={() => { setShowBatchForwardPicker(false); setBatchForwardUser(""); }} className="rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">Cancel</button>
+          </div>
+        </div>
+      )}
       {isLoadingMore && (
         <div className="flex justify-center py-2">
           <svg className="pull-down-spinner h-4 w-4 text-muted-foreground/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -416,6 +505,10 @@ export function MessageTranscript({
                       onDelete={onDelete}
                       onForward={onForward}
                       replyCount={replyCounts[msg.id] || 0}
+                      selectMode={selectMode}
+                      isSelected={selectedIds.has(msg.id)}
+                      onToggleSelect={() => toggleSelect(msg.id)}
+                      onLongPress={() => enterSelectMode(msg.id)}
                     />
                   );
                 })}
@@ -480,6 +573,14 @@ export function MessageTranscript({
         <>
           <div className="context-menu-backdrop" onClick={closeContextMenu} onTouchEnd={closeContextMenu} />
           <div className="context-menu border border-border bg-card shadow-2xl" style={menuStyle}>
+            <button onClick={handleContextSelect} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+                <path d="M9 11l3 3L22 4"/>
+                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+              </svg>
+              <span>Select</span>
+            </button>
+            <div className="border-t border-border mx-3" />
             <button onClick={handleContextReply} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
               <Reply className="h-4 w-4 text-muted-foreground" />
               <span>{t("input.replyTo")}</span>

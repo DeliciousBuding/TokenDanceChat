@@ -1,4 +1,4 @@
-import { memo, useMemo, useCallback, useState } from "react";
+import { memo, useMemo, useCallback, useState, useRef } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -26,6 +26,14 @@ interface MessageBubbleProps {
   onForward?: (message: ChatMessage) => void;
   /** Number of replies to this message */
   replyCount?: number;
+  /** Multi-select mode: whether the bubble is in selection mode */
+  selectMode?: boolean;
+  /** Multi-select mode: whether this message is currently selected */
+  isSelected?: boolean;
+  /** Multi-select mode: callback to toggle selection */
+  onToggleSelect?: () => void;
+  /** Long-press callback to enter select mode */
+  onLongPress?: () => void;
 }
 
 /** Simple code block renderer with syntax highlighting and copy button */
@@ -123,6 +131,10 @@ export const MessageBubble = memo(function MessageBubble({
   onDelete,
   onForward,
   replyCount = 0,
+  selectMode = false,
+  isSelected = false,
+  onToggleSelect,
+  onLongPress,
 }: MessageBubbleProps) {
   const { t } = useTranslation();
   const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
@@ -130,6 +142,50 @@ export const MessageBubble = memo(function MessageBubble({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const isDeleted = message.deleted === true;
+
+  // Long-press detection for entering select mode
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
+
+  const handlePointerDown = useCallback(() => {
+    if (selectMode || isDeleted) return;
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      onLongPress?.();
+    }, 500);
+  }, [selectMode, isDeleted, onLongPress]);
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    clearLongPress();
+  }, [clearLongPress]);
+
+  const handleBubbleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (selectMode && onToggleSelect) {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggleSelect();
+      }
+    },
+    [selectMode, onToggleSelect],
+  );
+
+  const handleCheckboxClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleSelect?.();
+    },
+    [onToggleSelect],
+  );
   const gradient = useMemo(
     () => avatarGradient(message.username),
     [message.username],
@@ -143,12 +199,14 @@ export const MessageBubble = memo(function MessageBubble({
   const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
 
   const handleAvatarClick = useCallback(() => {
+    if (selectMode) return;
     setSelectedProfileUser(message.username);
-  }, [message.username, setSelectedProfileUser]);
+  }, [message.username, setSelectedProfileUser, selectMode]);
 
   const handleNameClick = useCallback(() => {
+    if (selectMode) return;
     setSelectedProfileUser(message.username);
-  }, [message.username, setSelectedProfileUser]);
+  }, [message.username, setSelectedProfileUser, selectMode]);
 
   // Parse @mentions and render with highlighting.
   const mentionContent = useMemo(() => {
@@ -281,14 +339,47 @@ export const MessageBubble = memo(function MessageBubble({
   return (
     <div
       id={`msg-${message.id}`}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={clearLongPress}
+      onClick={handleBubbleClick}
       className={cn(
         "group flex gap-3 px-4 animate-slide-up select-none scroll-mt-16",
         isOwn ? "justify-end" : "justify-start",
         paddingY,
+        selectMode && "cursor-pointer",
+        isSelected && "bg-primary/5",
       )}
     >
+      {/* Select checkbox (visible in select mode) */}
+      {selectMode && (
+        <div
+          className={cn(
+            "flex items-center flex-shrink-0",
+            isOwn ? "order-last" : "",
+          )}
+        >
+          <button
+            onClick={handleCheckboxClick}
+            className="flex items-center justify-center"
+            aria-label={isSelected ? "Deselect message" : "Select message"}
+          >
+            {isSelected ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="oklch(71.2% 0.194 13.428)" stroke="oklch(71.2% 0.194 13.428)" strokeWidth="2" />
+                <polyline points="8 12 11 15 16 9" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/40" />
+              </svg>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Reply button (left side, appears on hover) */}
-      {!isDeleted && onReply && !hideUsername && (
+      {!selectMode && !isDeleted && onReply && !hideUsername && (
         <div
           className={cn(
             "flex items-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0",
@@ -374,7 +465,7 @@ export const MessageBubble = memo(function MessageBubble({
             )}
 
             {/* Edit & Delete buttons for own messages (on hover) */}
-            {isOwn && !isDeleted && (
+            {!selectMode && isOwn && !isDeleted && (
               <div className="flex items-center gap-0.5">
                 <button
                   onClick={() => { setIsEditing(true); setEditContent(message.content); }}
@@ -424,7 +515,7 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         {/* Reply preview (quoted message) — clickable to jump to original */}
-        {(message.reply_to_id || message.reply_to_content) && (
+        {!selectMode && (message.reply_to_id || message.reply_to_content) && (
           <div
             className="mb-1 ml-0 border-l-2 border-[hsl(220,2.5%,30%)] pl-2 py-0.5 rounded-sm bg-card cursor-pointer hover:border-[hsl(220,2.5%,45%)] transition-colors"
             role="button"
@@ -527,7 +618,7 @@ export const MessageBubble = memo(function MessageBubble({
           )}
 
           {/* Forward button (appears on hover) */}
-          {onForward && (
+          {!selectMode && onForward && (
             <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={(e) => {
@@ -556,7 +647,7 @@ export const MessageBubble = memo(function MessageBubble({
           >
             {replyCount > 0 && (
               <button
-                onClick={() => {
+                onClick={selectMode ? undefined : () => {
                   const el = document.getElementById(`msg-${message.id}`);
                   if (el) {
                     el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -582,7 +673,7 @@ export const MessageBubble = memo(function MessageBubble({
                   users.length > 0 && (
                     <button
                       key={emoji}
-                      onClick={() =>
+                      onClick={selectMode ? undefined : () =>
                         chatAPI.sendReaction(message.id, emoji)
                       }
                       className={cn(
@@ -600,23 +691,27 @@ export const MessageBubble = memo(function MessageBubble({
                     </button>
                   ),
               )}
-            <button
-              onClick={() => setShowEmojiPicker(true)}
-              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-[hsl(220,2.5%,20%)] hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
-              aria-label="Add reaction"
-            >
-              <span className="text-xs">+</span>
-            </button>
-            <button
-              onClick={() => chatAPI.sendPinMessage(message.id)}
-              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-[hsl(220,2.5%,20%)] hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
-              aria-label="Pin message"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="17" x2="12" y2="22" />
-                <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
-              </svg>
-            </button>
+            {!selectMode && (
+              <>
+                <button
+                  onClick={() => setShowEmojiPicker(true)}
+                  className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-[hsl(220,2.5%,20%)] hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
+                  aria-label="Add reaction"
+                >
+                  <span className="text-xs">+</span>
+                </button>
+                <button
+                  onClick={() => chatAPI.sendPinMessage(message.id)}
+                  className="inline-flex items-center rounded-full px-1.5 py-0.5 text-xs border border-transparent hover:border-[hsl(220,2.5%,20%)] hover:bg-card text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
+                  aria-label="Pin message"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="17" x2="12" y2="22" />
+                    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+                  </svg>
+                </button>
+              </>
+            )}
           </div>
         )}
 
