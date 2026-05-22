@@ -1,4 +1,5 @@
 import { memo, useMemo, useCallback, useState } from "react";
+import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Copy, Check, Forward } from "lucide-react";
@@ -28,6 +29,17 @@ interface MessageBubbleProps {
 }
 
 /** Simple code block renderer with syntax highlighting and copy button */
+
+/** Markdown components with link sanitization */
+const safeMarkdownComponents = {
+  a: ({ href, children, ...props }: ComponentPropsWithoutRef<'a'>) => {
+    if (href && /^(javascript|data|vbscript):/i.test(href)) {
+      return <span {...(props as ComponentPropsWithoutRef<'span'>)}>{children}</span>;
+    }
+    return <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
+  },
+};
+
 const CodeBlock = memo(function CodeBlock({
   language,
   code,
@@ -177,7 +189,7 @@ export const MessageBubble = memo(function MessageBubble({
       if (codeParts.length === 1 && codeParts[0].type === "text") {
         // No code blocks: render with ReactMarkdown.
         return (
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={safeMarkdownComponents}>{content}</ReactMarkdown>
         );
       }
 

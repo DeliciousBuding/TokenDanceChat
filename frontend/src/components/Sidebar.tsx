@@ -152,10 +152,11 @@ export function Sidebar({
   const otherUsers = onlineUsers.filter((u) => u !== username);
   const hasSelf = onlineUsers.includes(username);
 
-  // Users with DM history (derived from messages)
+  // Users with DM history (derived from recent messages)
   const dmPartners = useMemo(() => {
     const partners = new Set<string>();
-    for (const m of messages) {
+    const recent = messages.slice(-200);
+    for (const m of recent) {
       if (m.from && m.from !== username && !partners.has(m.from)) {
         partners.add(m.from);
       }
