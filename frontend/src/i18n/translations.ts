@@ -66,6 +66,8 @@ export interface TranslationDict {
     userOnline: string;
     connectionLost: string;
     typing: string;
+    typingTwo: string;
+    typingMany: string;
     friendRejected: string;
     groupInvited: string;
     friendRequest: string;
@@ -157,6 +159,8 @@ const zhCN: TranslationDict = {
     userOnline: "{{username}} 上线了",
     connectionLost: "连接已断开，正在尝试重新连接...",
     typing: "{{username}} 正在输入...",
+    typingTwo: "{{name1}} 和 {{name2}} 正在输入...",
+    typingMany: "{{name}} 和另外 {{count}} 人正在输入...",
     friendRejected: "{{username}} 拒绝了你的好友请求",
     groupInvited: "{{username}} 邀请你加入群组 {{group}}",
     friendRequest: "{{username}} 向你发送了好友请求",
@@ -249,6 +253,8 @@ const enUS: TranslationDict = {
     userOnline: "{{username}} is now online",
     connectionLost: "Connection lost, attempting to reconnect...",
     typing: "{{username}} is typing...",
+    typingTwo: "{{name1}} and {{name2}} are typing...",
+    typingMany: "{{name}} and {{count}} others are typing...",
     friendRejected: "{{username}} rejected your friend request",
     groupInvited: "{{username}} invited you to group {{group}}",
     friendRequest: "{{username}} sent you a friend request",

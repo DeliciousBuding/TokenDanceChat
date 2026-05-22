@@ -433,9 +433,9 @@ export function MessageTranscript({
                 {(() => {
                   const typingNames = typingUsers.filter(u => u !== username);
                   if (typingNames.length === 0) return '';
-                  if (typingNames.length === 1) return `${typingNames[0]} 正在输入...`;
-                  if (typingNames.length === 2) return `${typingNames[0]} 和 ${typingNames[1]} 正在输入...`;
-                  return `${typingNames[0]} 和另外 ${typingNames.length - 1} 人正在输入...`;
+                  if (typingNames.length === 1) return t("system.typing", { username: typingNames[0] });
+                  if (typingNames.length === 2) return t("system.typingTwo", { name1: typingNames[0], name2: typingNames[1] });
+                  return t("system.typingMany", { name: typingNames[0], count: typingNames.length - 1 });
                 })()}
               </span>
             </div>
