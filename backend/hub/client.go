@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"tokendancechat/backend/llm"
@@ -1551,7 +1552,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, r
 	// Collect streaming response.
 	var fullResponse strings.Builder
 	lastPicoContent := ""
-	timedOut := false
+	var timedOut atomic.Bool
 	collectDone := make(chan struct{})
 
 	go func() {
@@ -1592,7 +1593,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, r
 					return
 				}
 			case <-timeout:
-				timedOut = true
+				timedOut.Store(true)
 				return
 			case <-done:
 				return
@@ -1606,7 +1607,7 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, r
 	close(done)
 
 	response := fullResponse.String()
-	if timedOut && response == "" {
+	if timedOut.Load() && response == "" {
 		response = "PicoClaw 响应超时，请稍后重试。"
 	}
 
@@ -1615,9 +1616,6 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, r
 		c.hub.BroadcastStreamChunkToRoom(agentName, "", true, roomID)
 		// Persist to store and broadcast.
 		c.hub.SendAssistantMessageToRoom(agentName, response, roomID)
-
-		// Stop typing indicator after agent finishes responding.
-		c.hub.BroadcastTyping(agentName, "typing_stop", "", "")
 	}
 
 	// Update memory with bot response.

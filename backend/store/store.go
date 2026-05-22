@@ -259,6 +259,9 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 		}
 		messages = append(messages, m)
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
 
 	// Sort: since we query DESC (newest first) and then reverse.
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
@@ -327,6 +330,9 @@ func (s *Store) ListRooms() []StoredRoom {
 		}
 		rooms = append(rooms, r)
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
 	return rooms
 }
 
@@ -391,6 +397,9 @@ func (s *Store) getReactionsForMessageLocked(messageID string) map[string][]stri
 		}
 		result[emoji] = append(result[emoji], username)
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
 	return result
 }
 
@@ -426,6 +435,9 @@ func (s *Store) GetReactionsForMessages(messageIDs []string) map[string]map[stri
 			continue
 		}
 		result[messageID][emoji] = append(result[messageID][emoji], username)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
 	}
 	return result
 }
@@ -567,6 +579,9 @@ func (s *Store) SearchMessages(query string, roomID string, limit int) ([]Search
 		}
 		results = append(results, r)
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
 	if results == nil {
 		results = []SearchResult{}
 	}
@@ -603,6 +618,9 @@ func (s *Store) GetFriends(username string) []string {
 		if err := rows.Scan(&f); err == nil {
 			friends = append(friends, f)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
 	}
 	if friends == nil {
 		friends = []string{}
@@ -648,6 +666,9 @@ func (s *Store) GetGroupMembers(groupName string) []string {
 			members = append(members, m)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
 	if members == nil {
 		members = []string{}
 	}
@@ -669,6 +690,9 @@ func (s *Store) GetAllGroups() map[string][]string {
 			groups[g] = append(groups[g], u)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
 	return groups
 }
 
@@ -687,6 +711,9 @@ func (s *Store) GetAllFriends() map[string][]string {
 		if err := rows.Scan(&u, &f); err == nil {
 			result[u] = append(result[u], f)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
 	}
 	return result
 }
@@ -713,6 +740,9 @@ func (s *Store) GetUndeliveredDMs(username string, limit int) []StoredMessage {
 			continue
 		}
 		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
 	}
 	if msgs == nil {
 		msgs = []StoredMessage{}
@@ -779,6 +809,9 @@ func (s *Store) GetBlockedUsers(username string) []string {
 			blocked = append(blocked, b)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
 	if blocked == nil {
 		blocked = []string{}
 	}
@@ -826,6 +859,9 @@ func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
 			m.Content = ""
 		}
 		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
 	}
 	if msgs == nil {
 		msgs = []StoredMessage{}
