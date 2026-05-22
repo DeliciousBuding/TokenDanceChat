@@ -159,6 +159,13 @@ async function collectMetrics(page, scenario, errors) {
       const logRect = log?.getBoundingClientRect();
       const mobileTitle = document.querySelector("[data-visual='mobile-chat-title']");
       const mobileTitleRect = mobileTitle?.getBoundingClientRect();
+      const sidebar = document.querySelector("aside");
+      const sidebarRect = sidebar && isVisible(sidebar) ? sidebar.getBoundingClientRect() : null;
+      const sidebarModelCards = Array.from(document.querySelectorAll("[data-visual='sidebar-model-card']")).filter(isVisible);
+      const sidebarOnline = document.querySelector("[data-visual='sidebar-online-users']");
+      const sidebarOnlineRect = sidebarOnline && isVisible(sidebarOnline)
+        ? sidebarOnline.getBoundingClientRect()
+        : null;
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
 
@@ -221,6 +228,13 @@ async function collectMetrics(page, scenario, errors) {
               height: Math.round(logRect.height),
             }
           : null,
+        sidebar: sidebarRect
+          ? {
+              width: Math.round(sidebarRect.width),
+              modelCards: sidebarModelCards.length,
+              onlineUsersTop: sidebarOnlineRect ? Math.round(sidebarOnlineRect.top) : null,
+            }
+          : null,
         visibleMessages,
         consoleErrors,
       };
@@ -263,6 +277,14 @@ function scenarioIssues(metrics) {
   }
   if (metrics.viewport.width >= 768 && metrics.viewport.width < 1024 && metrics.visibleMessages < 4) {
     issues.push(`tablet visible message density too low (${metrics.visibleMessages})`);
+  }
+  if (metrics.viewport.width >= 1024 && metrics.sidebar) {
+    if (metrics.sidebar.modelCards > 4) {
+      issues.push(`desktop sidebar model preview too tall (${metrics.sidebar.modelCards} cards)`);
+    }
+    if (metrics.sidebar.onlineUsersTop !== null && metrics.sidebar.onlineUsersTop > 680) {
+      issues.push(`desktop sidebar online users too low (${metrics.sidebar.onlineUsersTop}px)`);
+    }
   }
   return issues;
 }
@@ -310,7 +332,8 @@ async function main() {
       `${result.scenarioName}: textarea=${result.textarea?.width ?? "n/a"}x${result.textarea?.height ?? "n/a"} ` +
         `composer=${result.composer?.height ?? "n/a"}px messages=${result.visibleMessages} ` +
         `title=${result.mobileTitle?.width ?? "n/a"}px msgFont=${result.messageText?.maxFontSize ?? "n/a"}px ` +
-        `smallControls=${result.smallControls.length}${issueText}`,
+        `smallControls=${result.smallControls.length} sidebarModels=${result.sidebar?.modelCards ?? "n/a"} ` +
+        `sidebarOnlineTop=${result.sidebar?.onlineUsersTop ?? "n/a"}${issueText}`,
     );
   }
   console.log(`Metrics: ${reportPath}`);

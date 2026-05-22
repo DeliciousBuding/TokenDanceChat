@@ -50,9 +50,10 @@ Webhook at-rest security, media storage, and screenshot-driven UI acceptance are
 - Message transcript density has been tightened for mobile/tablet, including removal of duplicated non-own bottom timestamps.
 - Per-message hover actions are consolidated into a single 44px message action menu; copy, forward, translate, react, pin, edit, delete, and select remain available from the menu.
 - Header actions, formatting controls, scheduled-message entry, sidebar utility buttons, and clickable avatars now meet the 44px visual acceptance target in the screenshot pass.
+- Desktop sidebar density has been tightened: four model preview cards, compact empty states, and the online-user section appears above the fold.
 - Visual acceptance is backed by `npm run visual:acceptance`, real browser screenshots, metrics, and aesthetic review.
 - Generated `gpt-image-2` references may guide art direction, but cannot replace real browser screenshots for acceptance.
-- Current accepted clean-DB screenshot pass: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T20-57-00-675Z`.
+- Current accepted clean-DB screenshot pass: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T21-19-49-947Z`.
 - Tablet and mobile use the compact top bar until `lg`; 768px must not be forced into the desktop sidebar/header layout.
 
 Remaining follow-ups:
@@ -60,7 +61,7 @@ Remaining follow-ups:
 - Add browser/e2e coverage for webhook create -> HTTP POST -> group message.
 - Add webhook secret rotation and audit logging design before production use.
 - Add group video call multi-browser smoke/e2e.
-- Continue screenshot-driven UI density work on sidebar above-the-fold content and remaining tiny passive metadata, using clean temporary DB screenshots for final evidence.
+- Continue screenshot-driven UI density work on remaining tiny passive metadata, using clean temporary DB screenshots for final evidence.
 
 ## Architecture Map
 

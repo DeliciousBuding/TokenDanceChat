@@ -74,7 +74,8 @@ Status: implemented, documented, tested, and accepted with browser screenshots.
 - [x] Raised header actions, Markdown toolbar controls, scheduled-message entry, sidebar utility buttons, clickable avatars, and message action buttons to the 44px visual acceptance target.
 - [x] Tightened visual acceptance metrics so hidden/offscreen controls and ancestor opacity are handled correctly.
 - [x] Re-ran visual acceptance on a clean temporary SQLite DB so final screenshots contain only the seeded demo transcript.
-- [ ] Continue density cleanup for sidebar above-the-fold information architecture and remaining tiny passive metadata using real browser screenshots as acceptance evidence.
+- [x] Tightened desktop sidebar above-the-fold density with four model preview cards, compact empty states, and a visual gate for online-user section position.
+- [ ] Continue density cleanup for remaining tiny passive metadata using real browser screenshots as acceptance evidence.
 
 ## Next Product Tasks
 
@@ -127,6 +128,11 @@ Record commands here when they are run for the current increment.
 | 2026-05-23 | `git diff --check` | PASS |
 | 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8092 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T20-57-00-675Z`; all six scenarios show 4 seeded messages and `smallControls=0`, mobile title 202px, mobile message font 13.5px, mobile textarea 208px, no horizontal overflow, no console errors. |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 198 tests |
+| 2026-05-23 | `cd frontend; npm test -- --run src/components/Sidebar.test.tsx` | PASS, 1 file / 36 tests |
+| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-23 | `cd frontend; npm run build` | PASS |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8093 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T21-19-49-947Z`; desktop sidebar model preview 4 cards, online-user section top 561px, all six scenarios `smallControls=0`, no horizontal overflow, no console errors. |
+| 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 199 tests |
 
 ## Review Gates
 

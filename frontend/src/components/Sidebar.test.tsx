@@ -216,6 +216,11 @@ describe("Sidebar", () => {
       const grid = container.querySelector(".grid.grid-cols-2");
       expect(grid).toBeTruthy();
     });
+
+    it("模型预览保持紧凑，只展示前四个模型", () => {
+      renderSidebar();
+      expect(screen.getAllByTestId("sidebar-model-card")).toHaveLength(4);
+    });
   });
 
   describe("标题区 (header)", () => {
