@@ -5,7 +5,7 @@ import { useTranslation } from "@/i18n/context";
 import { usePullDownGesture } from "@/hooks/useTouchGestures";
 import { MessageBubble } from "./MessageBubble";
 import { SystemMessage } from "./SystemMessage";
-import { cn } from "@/lib/utils";
+import { cn, formatFullTime } from "@/lib/utils";
 import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 
@@ -315,6 +315,23 @@ export function MessageTranscript({
     exitSelectMode();
   }, [effectiveMessages, selectedIds, batchForwardUser, exitSelectMode]);
 
+  // Select all visible non-deleted messages
+  const handleSelectAll = useCallback(() => {
+    const ids = effectiveMessages.filter((m) => m.username !== "system" && !m.deleted).map((m) => m.id);
+    setSelectedIds(new Set(ids));
+  }, [effectiveMessages]);
+
+  // Copy content of all selected messages
+  const handleCopySelected = useCallback(async () => {
+    const selectedMessages = effectiveMessages.filter((m) => selectedIds.has(m.id));
+    const text = selectedMessages
+      .map((m) => `[${m.username}] ${m.content}`)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch { /* Clipboard API may not be available */ }
+  }, [effectiveMessages, selectedIds]);
+
   const handleContextSelect = useCallback(() => {
     if (contextMenu.message) enterSelectMode(contextMenu.message.id);
     closeContextMenu();
@@ -352,6 +369,16 @@ export function MessageTranscript({
         <div className="sticky top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center gap-3 shadow-lg">
           <span className="text-sm font-medium text-foreground">{t("transcript.selected", { count: selectedIds.size })}</span>
           <div className="flex-1" />
+          <button onClick={handleSelectAll} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors" aria-label={t("transcript.selectAll")}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+            </svg>
+            {t("transcript.selectAll")}
+          </button>
+          <button onClick={handleCopySelected} disabled={selectedIds.size === 0} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed" aria-label={t("transcript.copySelected")}>
+            <Copy className="h-4 w-4" />
+            {t("transcript.copySelected")}
+          </button>
           <button onClick={handleBatchDelete} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-destructive/80 hover:bg-destructive/10 hover:text-destructive transition-colors" aria-label={t("transcript.contextDelete")}>
             <Trash2 className="h-4 w-4" />{t("transcript.contextDelete")}
           </button>

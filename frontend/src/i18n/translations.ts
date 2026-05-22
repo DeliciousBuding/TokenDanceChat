@@ -69,6 +69,9 @@ export interface TranslationDict {
     contextSelectRecipient: string;
     contextSend: string;
     contextCancel: string;
+    selectAll: string;
+    copySelected: string;
+    copiedCount: string;
   };
   input: {
     placeholder: string;
@@ -179,6 +182,11 @@ export interface TranslationDict {
     closeSelector: string;
     selected: string;
   };
+  settings: {
+    sound: string;
+    soundOn: string;
+    soundOff: string;
+  };
 }
 
 const zhCN: TranslationDict = {
@@ -250,6 +258,9 @@ const zhCN: TranslationDict = {
     contextSelectRecipient: "选择接收者...",
     contextSend: "发送",
     contextCancel: "取消",
+    selectAll: "全选",
+    copySelected: "复制选中",
+    copiedCount: "已复制 {{count}} 条消息",
   },
   input: {
     placeholder: "输入消息... (Shift+Enter 换行)",
@@ -360,6 +371,11 @@ const zhCN: TranslationDict = {
     closeSelector: "关闭",
     selected: "已选择",
   },
+  settings: {
+    sound: "音效",
+    soundOn: "音效已开启",
+    soundOff: "音效已关闭",
+  },
 };
 
 const enUS: TranslationDict = {
@@ -432,6 +448,9 @@ const enUS: TranslationDict = {
     contextSelectRecipient: "Select recipient...",
     contextSend: "Send",
     contextCancel: "Cancel",
+    selectAll: "Select All",
+    copySelected: "Copy Selected",
+    copiedCount: "Copied {{count}} messages",
   },
   input: {
     placeholder: "Type a message... (Shift+Enter for new line)",
@@ -541,6 +560,11 @@ const enUS: TranslationDict = {
     selectModel: "Select Model",
     closeSelector: "Close",
     selected: "Selected",
+  },
+  settings: {
+    sound: "Sound",
+    soundOn: "Sound on",
+    soundOff: "Sound off",
   },
 };
 
