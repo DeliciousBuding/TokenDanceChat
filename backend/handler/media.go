@@ -212,6 +212,16 @@ func contentTypeForFilename(filename string) string {
 		return "image/gif"
 	case ".webp":
 		return "image/webp"
+	case ".webm":
+		return "audio/webm"
+	case ".ogg":
+		return "audio/ogg"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".wav":
+		return "audio/wav"
+	case ".m4a":
+		return "audio/mp4"
 	default:
 		if ct := mime.TypeByExtension(filepath.Ext(filename)); ct != "" {
 			return ct

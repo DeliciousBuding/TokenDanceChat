@@ -39,13 +39,38 @@ interface MessageBubbleProps {
 
 /** Simple code block renderer with syntax highlighting and copy button */
 
-/** Markdown components with link sanitization */
+/** Helper: detect if a URL points to an audio file */
+const AUDIO_EXT_RE = /\.(webm|ogg|mp3|wav|m4a)(\?.*)?$/i;
+const isAudioUrl = (url: string): boolean => AUDIO_EXT_RE.test(url);
+
+/** Markdown components with link sanitization and audio player for voice messages */
 const safeMarkdownComponents = {
   a: ({ href, children, ...props }: ComponentPropsWithoutRef<'a'>) => {
     if (href && /^(javascript|data|vbscript):/i.test(href)) {
       return <span {...(props as ComponentPropsWithoutRef<'span'>)}>{children}</span>;
     }
+    if (href && isAudioUrl(href)) {
+      return (
+        <div className="flex items-center gap-2 my-1">
+          <audio controls src={href} className="h-8 max-w-[240px]">
+            <track kind="captions" />
+          </audio>
+        </div>
+      );
+    }
     return <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
+  },
+  img: ({ src, alt, ...props }: ComponentPropsWithoutRef<'img'>) => {
+    if (src && isAudioUrl(src)) {
+      return (
+        <div className="flex items-center gap-2 my-1">
+          <audio controls src={src} className="h-8 max-w-[240px]">
+            <track kind="captions" />
+          </audio>
+        </div>
+      );
+    }
+    return <img src={src} alt={alt} {...props} />;
   },
 };
 
@@ -227,6 +252,21 @@ export const MessageBubble = memo(function MessageBubble({
         <span className="italic text-muted-foreground/50 line-through">
           {content}
         </span>
+      );
+    }
+
+    // Detect audio URLs for voice messages
+    const audioMatch = content.match(/!?\[(?:audio|voice)\]\(([^)]+)\)/);
+    const audioUrl = audioMatch?.[1] || null;
+    const isAudio = audioUrl && /\.(webm|ogg|mp3|wav|m4a)(|$)/i.test(audioUrl);
+
+    if (isAudio && audioUrl) {
+      return (
+        <div className="flex items-center gap-2 my-1">
+          <audio controls src={audioUrl} className="h-8 max-w-[240px] audio-player-compact">
+            <track kind="captions" />
+          </audio>
+        </div>
       );
     }
 

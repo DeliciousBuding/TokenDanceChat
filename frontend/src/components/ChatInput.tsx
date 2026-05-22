@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent, type ClipboardEvent } from "react";
-import { Send, Loader2, X, ImagePlus, Paperclip } from "lucide-react";
+import { Send, Loader2, X, ImagePlus, Paperclip, Mic, Square } from "lucide-react";
 import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
@@ -72,6 +72,11 @@ export function ChatInput({
   const hadContentRef = useRef(false);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
   const typingSentRef = useRef(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dragCounter = useRef(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
@@ -308,6 +313,51 @@ export function ChatInput({
       textarea.setSelectionRange(newCursor, newCursor);
     });
   }, [content]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
+      recorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
+        onUpload?.(file);
+      };
+      recorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+    } catch {
+      // MediaRecorder not available or permission denied
+    }
+  }, [onUpload]);
+
+  const stopRecording = useCallback(() => {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    setRecordingTime(0);
+  }, []);
+
+  const cancelRecording = useCallback(() => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    mediaRecorderRef.current?.stop();
+    chunksRef.current = [];
+    setIsRecording(false);
+    setRecordingTime(0);
+  }, []);
+
+  // Auto-stop after 5 minutes
+  useEffect(() => {
+    if (recordingTime >= 300) stopRecording();
+  }, [recordingTime, stopRecording]);
 
   // Pulse send button when content goes from empty to non-empty
   useEffect(() => {
@@ -637,8 +687,53 @@ export function ChatInput({
         </button>
       </div>
 
+      {/* Recording indicator */}
+      {isRecording && (
+        <div className="flex items-center gap-3 px-4 py-3 border-t border-border bg-card">
+          <div className="flex items-center gap-2 flex-1">
+            <span className="flex h-3 w-3 rounded-full bg-destructive animate-pulse-dot" />
+            <span className="text-sm font-mono text-foreground tabular-nums">
+              {String(Math.floor(recordingTime / 60)).padStart(1, '0')}:{String(recordingTime % 60).padStart(2, '0')}
+            </span>
+            {recordingTime >= 280 && (
+              <span className="text-[10px] text-destructive/70">30s left</span>
+            )}
+          </div>
+          <button
+            onClick={cancelRecording}
+            className="flex items-center justify-center rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            aria-label="Cancel recording"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={stopRecording}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/90 transition-colors shadow-md"
+            aria-label="Stop recording"
+          >
+            <Square className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Input area */}
       <div className="flex items-end gap-2 px-4 py-3">
+        {/* Mic button */}
+        <button
+          onClick={isRecording ? stopRecording : startRecording}
+          disabled={disabled}
+          aria-label={isRecording ? "Stop recording" : "Record voice message"}
+          className={cn(
+            "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
+            isRecording
+              ? "bg-destructive/10 border-destructive/30 text-destructive"
+              : "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground",
+            "disabled:cursor-not-allowed disabled:opacity-30",
+          )}
+        >
+          <Mic className="h-4 w-4" />
+        </button>
+
         {/* Image upload button */}
         <button
           onClick={() => imageInputRef.current?.click()}
