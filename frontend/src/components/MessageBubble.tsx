@@ -33,9 +33,9 @@ interface MessageBubbleProps {
   /** Multi-select mode: whether this message is currently selected */
   isSelected?: boolean;
   /** Multi-select mode: callback to toggle selection */
-  onToggleSelect?: () => void;
+  onToggleSelect?: (id: string) => void;
   /** Long-press callback to enter select mode */
-  onLongPress?: () => void;
+  onLongPress?: (id: string) => void;
 }
 
 /** Simple code block renderer with syntax highlighting and copy button */
@@ -84,6 +84,7 @@ const CodeBlock = memo(function CodeBlock({
   language: string;
   code: string;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
@@ -109,7 +110,7 @@ const CodeBlock = memo(function CodeBlock({
           aria-label="Copy code"
         >
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-          <span>{copied ? "Copied" : "Copy"}</span>
+          <span>{copied ? t("message.copied") : t("message.copy")}</span>
         </button>
       </div>
       {/* Code content */}
@@ -198,7 +199,9 @@ export const MessageBubble = memo(function MessageBubble({
       return;
     }
 
+    let cancelled = false;
     chatAPI.fetchLinkPreview(url).then((preview) => {
+      if (cancelled) return;
       linkPreviewCache.current.set(url, preview);
       if (preview?.title) {
         setLinkPreview(preview);
@@ -206,6 +209,7 @@ export const MessageBubble = memo(function MessageBubble({
         setLinkPreview(null);
       }
     });
+    return () => { cancelled = true; };
   }, [message.content, isDeleted]);
 
   const handleAddReaction = useCallback(
@@ -227,7 +231,7 @@ export const MessageBubble = memo(function MessageBubble({
     longPressTriggeredRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
       longPressTriggeredRef.current = true;
-      onLongPress?.();
+      onLongPress?.(message.id);
     }, 500);
   }, [selectMode, isDeleted, onLongPress]);
 
@@ -247,7 +251,7 @@ export const MessageBubble = memo(function MessageBubble({
       if (selectMode && onToggleSelect) {
         e.preventDefault();
         e.stopPropagation();
-        onToggleSelect();
+        onToggleSelect(message.id);
       }
     },
     [selectMode, onToggleSelect],
@@ -257,10 +261,16 @@ export const MessageBubble = memo(function MessageBubble({
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      onToggleSelect?.();
+      onToggleSelect?.(message.id);
     },
     [onToggleSelect],
   );
+
+  // Clean up long-press timer on unmount
+  useEffect(() => {
+    return () => clearLongPress();
+  }, [clearLongPress]);
+
   const gradient = useMemo(
     () => avatarGradient(message.username),
     [message.username],
@@ -427,7 +437,8 @@ export const MessageBubble = memo(function MessageBubble({
     isGrouped && hideAvatar ? "py-0.5" : "py-1.5";
 
   return (
-    <div
+    <>
+      <div
       id={`msg-${message.id}`}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
@@ -543,7 +554,7 @@ export const MessageBubble = memo(function MessageBubble({
                 {formatTime(message.timestamp)}
                 {message.edited && (
                   <span className="text-[10px] text-muted-foreground/40 ml-1">
-                    (edited)
+                    {t("message.edited")}
                   </span>
                 )}
               </span>
@@ -679,13 +690,13 @@ export const MessageBubble = memo(function MessageBubble({
               />
               <div className="flex items-center justify-end gap-1.5">
                 <span className="text-[10px] text-muted-foreground/50 flex-1">
-                  Escape to cancel
+                  {t("input.escapeToCancel")}
                 </span>
                 <button
                   onClick={() => setIsEditing(false)}
                   className="rounded-lg px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                 >
-                  Cancel
+                  {t("input.cancel")}
                 </button>
                 <button
                   onClick={() => {
@@ -697,7 +708,7 @@ export const MessageBubble = memo(function MessageBubble({
                   className="rounded-lg px-3 py-1 text-xs font-medium text-white transition-colors"
                   style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}
                 >
-                  Save
+                  {t("input.save")}
                 </button>
               </div>
             </div>
@@ -748,10 +759,10 @@ export const MessageBubble = memo(function MessageBubble({
                   onForward(message);
                 }}
                 className="flex items-center gap-1 rounded-lg bg-accent border border-[hsl(220,2.5%,28%)] px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-[hsl(231,4%,26%)] transition-colors shadow-md"
-                aria-label="Forward message"
+                aria-label={t("message.forward")}
               >
                 <Forward className="h-3 w-3" />
-                Forward
+                {t("message.forward")}
               </button>
             </div>
           )}
@@ -859,7 +870,7 @@ export const MessageBubble = memo(function MessageBubble({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 className="text-blue-400/70"
-                aria-label="Read"
+                aria-label={t("message.read")}
               >
                 <polyline points="20 6 9 17 4 12" />
                 <polyline points="22 6 13 17 8 12" />
@@ -875,7 +886,7 @@ export const MessageBubble = memo(function MessageBubble({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 className="text-muted-foreground/40"
-                aria-label="Sent"
+                aria-label={t("message.sent")}
               >
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -924,14 +935,15 @@ export const MessageBubble = memo(function MessageBubble({
         <div className="w-8 flex-shrink-0" aria-hidden="true" />
       )}
     </div>
-  );
-      <ConfirmDialog
-        open={confirmDelete}
-        title="Delete message?"
-        message="This cannot be undone."
-        confirmLabel="Delete"
-        variant="destructive"
-        onConfirm={() => { onDelete?.(message.id); setConfirmDelete(false); }}
-        onCancel={() => setConfirmDelete(false)}
-      />
+        <ConfirmDialog
+          open={confirmDelete}
+          title={t("message.deleteConfirm")}
+          message={t("message.deleteWarning")}
+          confirmLabel={t("message.delete")}
+          variant="destructive"
+          onConfirm={() => { onDelete?.(message.id); setConfirmDelete(false); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      </>
+    );
 });

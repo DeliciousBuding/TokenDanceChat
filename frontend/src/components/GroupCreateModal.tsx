@@ -41,11 +41,11 @@ export function GroupCreateModal({
   const handleCreate = useCallback(() => {
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("Group name cannot be empty");
+      setError(t("group.nameErrorEmpty"));
       return;
     }
     if (trimmed.length > 30) {
-      setError("Group name too long (max 30 chars)");
+      setError(t("group.nameErrorTooLong"));
       return;
     }
     onCreate(trimmed, [...selected]);
@@ -145,7 +145,7 @@ export function GroupCreateModal({
 
           {availableUsers.length === 0 && (
             <p className="text-xs text-muted-foreground/50 text-center py-2">
-              No friends or online users to add
+              {t("group.noUsersAvailable")}
             </p>
           )}
         </div>

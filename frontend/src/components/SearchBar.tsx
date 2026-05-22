@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Search, X, Loader2 } from "lucide-react";
 import { chatAPI, type SearchResult } from "@/lib/api";
 import { useChatStore } from "@/stores/chatStore";
+import { useTranslation } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 
 function escapeHTML(s: string): string {
@@ -20,6 +21,7 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ currentRoomID }: SearchBarProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -130,16 +132,16 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
           <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
             <Search className="h-4 w-4 text-muted-foreground/60 flex-shrink-0" />
             <input ref={inputRef} type="text" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKeyDown}
-              placeholder="Search messages..." aria-label="Search messages" className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none" />
+              placeholder={t("search.placeholder")} aria-label={t("search.placeholder")} className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none" />
             {loading ? <Loader2 className="h-4 w-4 text-muted-foreground/60 animate-spin flex-shrink-0" />
             : query ? <button onClick={() => { setQuery(""); setResults([]); inputRef.current?.focus(); }} aria-label="Clear search" className="flex-shrink-0 rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
             : <kbd className="hidden sm:inline-flex items-center rounded border border-border bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground/60">ESC</kbd>}
           </div>
           <div className="max-h-72 overflow-y-auto">
-            {!query && <div className="px-4 py-8 text-center"><p className="text-xs text-muted-foreground/50">Type to search messages</p></div>}
+            {!query && <div className="px-4 py-8 text-center"><p className="text-xs text-muted-foreground/50">{t("search.typeToSearch")}</p></div>}
             {loading && <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 text-muted-foreground/40 animate-spin" /></div>}
-            {error && !loading && query && <div className="px-4 py-8 text-center"><Search className="mx-auto h-5 w-5 text-destructive/40 mb-2" /><p className="text-xs text-destructive/60">Search error — please try again</p></div>}
-            {noResults && !loading && !error && query && <div className="px-4 py-8 text-center"><Search className="mx-auto h-5 w-5 text-muted-foreground/30 mb-2" /><p className="text-xs text-muted-foreground/50">{conversationMessageIDs ? "No messages in this conversation" : "No messages found"}</p></div>}
+            {error && !loading && query && <div className="px-4 py-8 text-center"><Search className="mx-auto h-5 w-5 text-destructive/40 mb-2" /><p className="text-xs text-destructive/60">{t("search.searchError")}</p></div>}
+            {noResults && !loading && !error && query && <div className="px-4 py-8 text-center"><Search className="mx-auto h-5 w-5 text-muted-foreground/30 mb-2" /><p className="text-xs text-muted-foreground/50">{conversationMessageIDs ? t("search.notFoundInConversation") : t("search.notFound")}</p></div>}
             {scopedResults.length > 0 && scopedResults.map((r, i) => (
               <button key={r.id} onClick={() => handleClickResult(r)}
                 className={cn("w-full text-left px-4 py-3 border-b border-border last:border-b-0 transition-colors",
@@ -151,7 +153,7 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
           </div>
           <div className="flex items-center gap-2 px-4 py-2 border-t border-border">
             <kbd className="rounded border border-border bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground/50">Ctrl+K</kbd>
-            <span className="text-[10px] text-muted-foreground/50 ml-auto">toggle search</span>
+            <span className="text-[10px] text-muted-foreground/50 ml-auto">{t("search.toggleSearch")}</span>
           </div>
         </div>
       </div>

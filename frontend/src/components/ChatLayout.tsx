@@ -342,13 +342,13 @@ export function ChatLayout() {
                     onClick={() => handleFriendAccept(req.from)}
                     className="rounded-md px-2 py-0.5 text-[10px] font-medium text-white bg-primary"
                   >
-                    Accept
+                    {t("friend.accept")}
                   </button>
                   <button
                     onClick={() => handleFriendReject(req.from)}
                     className="rounded-md px-2 py-0.5 text-[10px] font-medium text-muted-foreground bg-muted hover:bg-secondary"
                   >
-                    Reject
+                    {t("friend.reject")}
                   </button>
                 </div>
               </div>
@@ -375,7 +375,7 @@ export function ChatLayout() {
                     }}
                     className="rounded-md px-2 py-0.5 text-[10px] font-medium text-white bg-primary"
                   >
-                    Accept
+                    {t("friend.accept")}
                   </button>
                   <button
                     onClick={() => {
@@ -384,7 +384,7 @@ export function ChatLayout() {
                     }}
                     className="rounded-md px-2 py-0.5 text-[10px] font-medium text-muted-foreground bg-muted hover:bg-secondary"
                   >
-                    Decline
+                    {t("friend.decline")}
                   </button>
                 </div>
               </div>
@@ -397,7 +397,7 @@ export function ChatLayout() {
           <div className="border-b border-[hsl(20,80%,45%)] bg-[hsl(20,80%,45%/0.08)] px-6 py-2 flex items-center gap-3 text-xs animate-slide-up">
             <AtSign className="h-3.5 w-3.5 text-[hsl(20,80%,55%)] flex-shrink-0" />
             <span className="text-foreground/80 flex-1 truncate">
-              <span className="font-medium">{latestMention.from}</span> mentioned you{latestMention.group ? ` in ${latestMention.group}` : ""}:{" "}
+              <span className="font-medium">{latestMention.from}</span> {t("friend.mentionedYou")}{latestMention.group ? ` in ${latestMention.group}` : ""}:{" "}
               <span className="text-muted-foreground/60">{latestMention.content}</span>
             </span>
             <button
@@ -419,12 +419,12 @@ export function ChatLayout() {
               }}
               className="rounded-md px-2 py-0.5 text-[10px] font-medium text-[hsl(20,80%,55%)] hover:bg-[hsl(20,80%,45%/0.15)] flex-shrink-0"
             >
-              View
+              {t("friend.view")}
             </button>
             <button
               onClick={() => setLatestMention(null)}
               className="rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground flex-shrink-0"
-              aria-label="Dismiss"
+              aria-label={t("friend.dismiss")}
             >
               <X className="h-3 w-3" />
             </button>

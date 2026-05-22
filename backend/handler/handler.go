@@ -268,6 +268,7 @@ var (
 	ogTitleRegex       = regexp.MustCompile(`<meta[^>]+property="og:title"[^>]+content="([^"]*)"`)
 	ogDescriptionRegex = regexp.MustCompile(`<meta[^>]+property="og:description"[^>]+content="([^"]*)"`)
 	ogImageRegex       = regexp.MustCompile(`<meta[^>]+property="og:image"[^>]+content="([^"]*)"`)
+	htmlTagRe          = regexp.MustCompile(`<[^>]*>`)
 )
 
 // LinkPreview handles GET /api/link-preview?url=...
@@ -349,10 +350,10 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if matches := ogTitleRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
-		result.Title = strings.TrimSpace(matches[1])
+		result.Title = htmlTagRe.ReplaceAllString(strings.TrimSpace(matches[1]), "")
 	}
 	if matches := ogDescriptionRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
-		result.Description = strings.TrimSpace(matches[1])
+		result.Description = htmlTagRe.ReplaceAllString(strings.TrimSpace(matches[1]), "")
 	}
 	if matches := ogImageRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
 		result.Image = strings.TrimSpace(matches[1])
@@ -362,12 +363,18 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 	if result.Title == "" {
 		titleRegex := regexp.MustCompile(`<title[^>]*>([^<]+)</title>`)
 		if matches := titleRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
-			result.Title = strings.TrimSpace(matches[1])
+			result.Title = htmlTagRe.ReplaceAllString(strings.TrimSpace(matches[1]), "")
 		}
 	}
 
 	// Cache the result.
 	h.mu.Lock()
+	if len(h.linkPreviewCache) >= maxLinkPreviewCacheSize {
+		for k := range h.linkPreviewCache {
+			delete(h.linkPreviewCache, k)
+			break
+		}
+	}
 	h.linkPreviewCache[rawURL] = result
 	h.mu.Unlock()
 
@@ -378,6 +385,7 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 // --- Image Upload ---
 
 const maxUploadSize = 5 << 20 // 5 MB
+const maxLinkPreviewCacheSize = 1000
 
 // UploadImage handles POST /api/upload (multipart form).
 func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {

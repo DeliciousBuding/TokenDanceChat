@@ -272,6 +272,11 @@ func main() {
 		log.Println("PicoClaw disconnected")
 	}
 
+	// Allow in-flight operations to complete before shutting down hub.
+	time.Sleep(100 * time.Millisecond)
+	h.Shutdown()
+	log.Println("hub shut down")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

@@ -1,4 +1,5 @@
 import { memo, useCallback, useState, useMemo } from "react";
+import { useTranslation } from "@/i18n/context";
 
 const RECENTS_KEY = "tdchat:recent-emojis";
 const MAX_RECENTS = 18;
@@ -35,9 +36,18 @@ export const EmojiPicker = memo(function EmojiPicker({
   onSelect,
   onClose,
 }: EmojiPickerProps) {
+  const { t } = useTranslation();
   const [activeCat, setActiveCat] = useState(0);
   const [search, setSearch] = useState("");
   const [recents] = useState(getRecents);
+
+  const categoryLabels = useMemo(() => ({
+    Smileys: t("emoji.smileys"),
+    Gestures: t("emoji.gestures"),
+    Hearts: t("emoji.hearts"),
+    Objects: t("emoji.objects"),
+    Misc: t("emoji.misc"),
+  }), [t]);
 
   const handleSelect = useCallback(
     (emoji: string) => {
@@ -75,8 +85,8 @@ export const EmojiPicker = memo(function EmojiPicker({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search emoji..."
-            aria-label="Search emoji"
+            placeholder={t("emoji.search")}
+            aria-label={t("emoji.search")}
             className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-[hsl(220,2.5%,35%)]"
           />
         </div>
@@ -84,7 +94,7 @@ export const EmojiPicker = memo(function EmojiPicker({
         {/* Recent emojis */}
         {!search && recents.length > 0 && (
           <div className="px-3 pb-2 border-b border-[hsl(220,2.5%,16%)]">
-            <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider mb-1 block">Recent</span>
+            <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider mb-1 block">{t("emoji.recent")}</span>
             <div className="flex flex-wrap gap-1">
               {recents.map((emoji) => (
                 <button key={emoji} onClick={() => handleSelect(emoji)}
@@ -104,7 +114,7 @@ export const EmojiPicker = memo(function EmojiPicker({
                 className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
                   i === activeCat ? "bg-accent text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground"
                 }`}>
-                {cat.name}
+                {categoryLabels[cat.name as keyof typeof categoryLabels] || cat.name}
               </button>
             ))}
           </div>
@@ -121,7 +131,7 @@ export const EmojiPicker = memo(function EmojiPicker({
             ))}
           </div>
           {filteredEmojis.length === 0 && (
-            <div className="text-center py-8 text-xs text-muted-foreground/50">No emojis found</div>
+            <div className="text-center py-8 text-xs text-muted-foreground/50">{t("emoji.noResults")}</div>
           )}
         </div>
       </div>

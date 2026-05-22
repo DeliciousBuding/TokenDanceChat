@@ -11,7 +11,7 @@ interface ForwardModalProps {
 }
 
 export function ForwardModal({ message, onClose, onForward }: ForwardModalProps) {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
   const { onlineUsers, username } = useChatStore();
   const [selectedUser, setSelectedUser] = useState("");
 
@@ -36,7 +36,7 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
       <div className="relative w-full max-w-md mx-4 rounded-xl border border-border bg-card shadow-2xl animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-semibold text-foreground">Forward Message</h3>
+          <h3 className="text-sm font-semibold text-foreground">{t("forward.title")}</h3>
           <button
             onClick={onClose}
             className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -61,12 +61,12 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
         <div className="px-4 py-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             <Users className="h-3 w-3" />
-            Select recipient:
+            {t("forward.selectRecipient")}
           </label>
           <div className="space-y-1 max-h-40 overflow-y-auto">
             {availableUsers.length === 0 ? (
               <p className="text-xs text-muted-foreground/50 py-2">
-                No other users online
+                {t("forward.noUsers")}
               </p>
             ) : (
               availableUsers.map((user) => (
@@ -95,7 +95,7 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
             onClick={onClose}
             className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
-            Cancel
+            {t("forward.cancel")}
           </button>
           <button
             onClick={handleForward}
@@ -109,7 +109,7 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
             }}
           >
             <Send className="h-3 w-3" />
-            Forward
+            {t("forward.forward")}
           </button>
         </div>
       </div>

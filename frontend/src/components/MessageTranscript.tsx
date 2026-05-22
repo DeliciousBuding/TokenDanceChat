@@ -69,33 +69,6 @@ function buildMessageGroups(messages: ChatMessage[], currentUsername: string): M
   return groups;
 }
 
-/**
- * Decode a system message JSON payload into a human-readable string.
- * Falls back to the raw content if parsing fails.
- */
-function decodeSystemMessage(content: string): string {
-  try {
-    const parsed = JSON.parse(content);
-    if (parsed && typeof parsed === "object" && typeof parsed.key === "string") {
-      const key = parsed.key as string;
-      const params = (parsed.params || {}) as Record<string, string>;
-      const known: Record<string, string> = {
-        "system.userJoined": "{username} joined the chat",
-        "system.userLeft": "{username} left the chat",
-        "system.connectionLost": "Connection lost. Reconnecting...",
-        "system.friendRejected": "{username} rejected your friend request",
-        "system.groupInvited": "{username} invited you to {group}",
-        "system.userOnline": "{username} is now online",
-      };
-      const template = known[key] || `[${key}]`;
-      return template.replace(/\{(\w+)\}/g, (_, k) => params[k] || `{${k}}`);
-    }
-  } catch {
-    // Not JSON, return raw content
-  }
-  return content;
-}
-
 export function MessageTranscript({
   className,
   onReply,
@@ -228,9 +201,6 @@ export function MessageTranscript({
     }
     return counts;
   }, [effectiveMessages]);
-
-  // Suppress TS6133: decodeSystemMessage is available as a fallback decoder for system messages.
-  void (decodeSystemMessage as unknown);
 
   useEffect(() => {
     const prev = prevMessageCountRef.current;
@@ -553,8 +523,8 @@ export function MessageTranscript({
                       replyCount={replyCounts[msg.id] || 0}
                       selectMode={selectMode}
                       isSelected={selectedIds.has(msg.id)}
-                      onToggleSelect={() => toggleSelect(msg.id)}
-                      onLongPress={() => enterSelectMode(msg.id)}
+                      onToggleSelect={toggleSelect}
+                      onLongPress={enterSelectMode}
                     />
                   );
                 })}
