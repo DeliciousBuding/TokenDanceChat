@@ -323,19 +323,31 @@ export function ChatInput({
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
-      recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
       recorder.onstop = () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
+        const blobType = mimeType.split(';')[0];
+        const blob = new Blob(chunksRef.current, { type: blobType });
+        const file = new File([blob], `voice-${Date.now()}.webm`, { type: blobType });
         onUpload?.(file);
       };
       recorder.start();
       setIsRecording(true);
       setRecordingTime(0);
-      timerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+      timerRef.current = setInterval(() => setRecordingTime(t => {
+        if (t + 1 >= 300) {
+          // Auto-stop at 5 minutes
+          mediaRecorderRef.current?.stop();
+          setIsRecording(false);
+          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+          return 0;
+        }
+        return t + 1;
+      }), 1000);
     } catch {
-      // MediaRecorder not available or permission denied
+      console.warn('MediaRecorder not available or microphone permission denied');
     }
   }, [onUpload]);
 
@@ -347,17 +359,16 @@ export function ChatInput({
   }, []);
 
   const cancelRecording = useCallback(() => {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    mediaRecorderRef.current?.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      // Remove onstop handler to prevent upload, then stop
+      mediaRecorderRef.current.onstop = () => {};
+      mediaRecorderRef.current.stop();
+    }
     chunksRef.current = [];
     setIsRecording(false);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setRecordingTime(0);
   }, []);
-
-  // Auto-stop after 5 minutes
-  useEffect(() => {
-    if (recordingTime >= 300) stopRecording();
-  }, [recordingTime, stopRecording]);
 
   // Pulse send button when content goes from empty to non-empty
   useEffect(() => {
@@ -687,182 +698,189 @@ export function ChatInput({
         </button>
       </div>
 
-      {/* Recording indicator */}
-      {isRecording && (
-        <div className="flex items-center gap-3 px-4 py-3 border-t border-border bg-card">
-          <div className="flex items-center gap-2 flex-1">
-            <span className="flex h-3 w-3 rounded-full bg-destructive animate-pulse-dot" />
-            <span className="text-sm font-mono text-foreground tabular-nums">
-              {String(Math.floor(recordingTime / 60)).padStart(1, '0')}:{String(recordingTime % 60).padStart(2, '0')}
+      {/* Recording indicator (replaces toolbar and input area when recording) */}
+      {isRecording ? (
+        <div className="flex items-center gap-3 px-4 py-3">
+          <div className="flex items-center gap-3 flex-1 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+            {/* Pulsing red dot */}
+            <span className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
             </span>
-            {recordingTime >= 280 && (
-              <span className="text-[10px] text-destructive/70">30s left</span>
-            )}
-          </div>
-          <button
-            onClick={cancelRecording}
-            className="flex items-center justify-center rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-            aria-label="Cancel recording"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={stopRecording}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/90 transition-colors shadow-md"
-            aria-label="Stop recording"
-          >
-            <Square className="h-4 w-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Input area */}
-      <div className="flex items-end gap-2 px-4 py-3">
-        {/* Mic button */}
-        <button
-          onClick={isRecording ? stopRecording : startRecording}
-          disabled={disabled}
-          aria-label={isRecording ? "Stop recording" : "Record voice message"}
-          className={cn(
-            "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
-            isRecording
-              ? "bg-destructive/10 border-destructive/30 text-destructive"
-              : "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground",
-            "disabled:cursor-not-allowed disabled:opacity-30",
-          )}
-        >
-          <Mic className="h-4 w-4" />
-        </button>
-
-        {/* Image upload button */}
-        <button
-          onClick={() => imageInputRef.current?.click()}
-          disabled={disabled}
-          aria-label="Upload image"
-          className={cn(
-            "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
-            "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
-          )}
-        >
-          <ImagePlus className="h-4 w-4" />
-        </button>
-
-        {/* File upload button */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={disabled}
-          aria-label="Upload file"
-          className={cn(
-            "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
-            "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
-          )}
-        >
-          <Paperclip className="h-4 w-4" />
-        </button>
-
-        <div className="flex-1 relative input-glow">
-          {/* @mention autocomplete dropdown */}
-          {mentionActive && (
-            <div
-              ref={mentionRef}
-              className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-border bg-card shadow-lg animate-scale-in z-20"
-              style={{ maxHeight: "200px", overflowY: "auto" }}
+            {/* Recording time */}
+            <span className="text-sm font-mono text-destructive/80 tabular-nums">
+              {String(Math.floor(recordingTime / 60))}:{String(recordingTime % 60).padStart(2, '0')}
+            </span>
+            <span className="flex-1 text-xs text-muted-foreground truncate">
+              Recording voice message...
+            </span>
+            {/* Cancel button */}
+            <button
+              onClick={cancelRecording}
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:bg-accent hover:text-destructive transition-colors"
+              aria-label="Cancel recording"
             >
-              {mentionFiltered.map((user, idx) => (
-                <button
-                  key={user}
-                  onClick={() => insertMention(user)}
-                  onMouseEnter={() => setMentionIndex(idx)}
-                  className={cn(
-                    "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
-                    idx === mentionIndex
-                      ? "bg-accent text-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                  )}
-                >
-                  <span
-                    className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-                    style={{
-                      background: `linear-gradient(135deg, oklch(65% 0.16 ${hashString(user) % 360}), oklch(58% 0.14 ${(hashString(user) + 45) % 360}))`,
-                    }}
-                  >
-                    {user.charAt(0).toUpperCase()}
-                  </span>
-                  <span className="truncate">{user}</span>
-                  {ASSISTANTS.some((assistant) => assistant.name === user) && (
-                    <span className="ml-auto rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
-                      {ASSISTANTS.find((assistant) => assistant.name === user)?.label}
-                    </span>
-                  )}
-                  {user === username && (
-                    <span className="ml-auto text-[10px] text-muted-foreground/50">
-                      {t("sidebar.you")}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
-            placeholder={placeholder}
-            rows={1}
-            maxLength={2000}
-            disabled={disabled}
-            aria-label={placeholder}
-            className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-border bg-card px-4 py-[13px] text-sm leading-5 text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
-            style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT }}
-          />
+              <X className="h-4 w-4" />
+            </button>
+            {/* Stop / Send button */}
+            <button
+              onClick={stopRecording}
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:brightness-110"
+              style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}
+              aria-label="Stop recording"
+            >
+              <Square className="h-4 w-4" fill="currentColor" />
+            </button>
+          </div>
         </div>
+      ) : (
+        <>
+          {/* Input area */}
+          <div className="flex items-end gap-2 px-4 py-3">
+            {/* Image upload button */}
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              disabled={disabled}
+              aria-label="Upload image"
+              className={cn(
+                "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
+                "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+              )}
+            >
+              <ImagePlus className="h-4 w-4" />
+            </button>
 
-        {/* Send button */}
-        <button
-          ref={sendBtnRef}
-          onClick={handleSend}
-          disabled={disabled || !hasContent}
-          aria-label={
-            disabled ? t("join.buttonConnecting") : t("input.placeholder")
-          }
-          className={cn(
-            "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-all duration-200",
-            "disabled:cursor-not-allowed disabled:opacity-30",
-            pulseButton && "animate-pulse-once",
-          )}
-          style={{
-            backgroundColor: hasContent
-              ? "oklch(71.2% 0.194 13.428)"
-              : "hsl(220,2.5%,20%)",
-          }}
-          onMouseEnter={(e) => {
-            if (hasContent) {
-              e.currentTarget.style.filter = "brightness(1.1)";
-              e.currentTarget.style.transform = "scale(1.05)";
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.filter = "brightness(1)";
-            e.currentTarget.style.transform = "scale(1)";
-          }}
-        >
-          {disabled ? (
-            <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
-          ) : (
-            <Send
-              className="h-4 w-4"
+            {/* File upload button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled}
+              aria-label="Upload file"
+              className={cn(
+                "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
+                "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+              )}
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+
+            {/* Mic button */}
+            <button
+              onClick={startRecording}
+              disabled={disabled}
+              aria-label="Record voice message"
+              className={cn(
+                "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-border transition-colors duration-200",
+                "bg-accent text-muted-foreground hover:bg-[hsl(220,2.5%,28%)] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+              )}
+            >
+              <Mic className="h-4 w-4" />
+            </button>
+
+            <div className="flex-1 relative input-glow">
+              {/* @mention autocomplete dropdown */}
+              {mentionActive && (
+                <div
+                  ref={mentionRef}
+                  className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-border bg-card shadow-lg animate-scale-in z-20"
+                  style={{ maxHeight: "200px", overflowY: "auto" }}
+                >
+                  {mentionFiltered.map((user, idx) => (
+                    <button
+                      key={user}
+                      onClick={() => insertMention(user)}
+                      onMouseEnter={() => setMentionIndex(idx)}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
+                        idx === mentionIndex
+                          ? "bg-accent text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <span
+                        className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                        style={{
+                          background: `linear-gradient(135deg, oklch(65% 0.16 ${hashString(user) % 360}), oklch(58% 0.14 ${(hashString(user) + 45) % 360}))`,
+                        }}
+                      >
+                        {user.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="truncate">{user}</span>
+                      {ASSISTANTS.some((assistant) => assistant.name === user) && (
+                        <span className="ml-auto rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
+                          {ASSISTANTS.find((assistant) => assistant.name === user)?.label}
+                        </span>
+                      )}
+                      {user === username && (
+                        <span className="ml-auto text-[10px] text-muted-foreground/50">
+                          {t("sidebar.you")}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
+                placeholder={placeholder}
+                rows={1}
+                maxLength={2000}
+                disabled={disabled}
+                aria-label={placeholder}
+                className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-border bg-card px-4 py-[13px] text-sm leading-5 text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
+                style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT }}
+              />
+            </div>
+
+            {/* Send button */}
+            <button
+              ref={sendBtnRef}
+              onClick={handleSend}
+              disabled={disabled || !hasContent}
+              aria-label={
+                disabled ? t("join.buttonConnecting") : t("input.placeholder")
+              }
+              className={cn(
+                "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-all duration-200",
+                "disabled:cursor-not-allowed disabled:opacity-30",
+                pulseButton && "animate-pulse-once",
+              )}
               style={{
-                color: hasContent ? "#fff" : "hsl(240,2.5%,50%)",
+                backgroundColor: hasContent
+                  ? "oklch(71.2% 0.194 13.428)"
+                  : "hsl(220,2.5%,20%)",
               }}
-            />
-          )}
-        </button>
-      </div>
+              onMouseEnter={(e) => {
+                if (hasContent) {
+                  e.currentTarget.style.filter = "brightness(1.1)";
+                  e.currentTarget.style.transform = "scale(1.05)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.filter = "brightness(1)";
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+            >
+              {disabled ? (
+                <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
+              ) : (
+                <Send
+                  className="h-4 w-4"
+                  style={{
+                    color: hasContent ? "#fff" : "hsl(240,2.5%,50%)",
+                  }}
+                />
+              )}
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Character count */}
       {content.length > 0 && (
