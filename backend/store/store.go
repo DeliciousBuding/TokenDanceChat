@@ -143,6 +143,23 @@ type InviteCodeRecord struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
+// ChatFolder represents a user-created conversation folder.
+type ChatFolder struct {
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	SortOrder int    `json:"sort_order"`
+	CreatedAt int64  `json:"created_at"`
+	ItemCount int    `json:"item_count"`
+}
+
+// ChatFolderItem represents a conversation key within a folder.
+type ChatFolderItem struct {
+	FolderID  string `json:"folder_id"`
+	Key       string `json:"key"`
+	SortOrder int    `json:"sort_order"`
+}
+
 // Store handles SQLite message persistence.
 type Store struct {
 	db            *sql.DB
@@ -342,6 +359,23 @@ func (s *Store) migrate() error {
 					max_uses INTEGER DEFAULT 5,
 					use_count INTEGER DEFAULT 0,
 					created_at INTEGER NOT NULL
+				);
+
+				CREATE TABLE IF NOT EXISTS chat_folders (
+					id TEXT PRIMARY KEY,
+					username TEXT NOT NULL,
+					name TEXT NOT NULL,
+					sort_order INTEGER DEFAULT 0,
+					created_at INTEGER NOT NULL,
+					UNIQUE(username, name)
+				);
+
+				CREATE TABLE IF NOT EXISTS chat_folder_items (
+					folder_id TEXT NOT NULL,
+					key TEXT NOT NULL,
+					sort_order INTEGER DEFAULT 0,
+					PRIMARY KEY (folder_id, key),
+					FOREIGN KEY (folder_id) REFERENCES chat_folders(id)
 				);
 			`
 	_, err := s.db.Exec(query)
@@ -2122,6 +2156,138 @@ func (s *Store) GetCallHistory(username string, limit int) ([]CallRecord, error)
 	return calls, rows.Err()
 }
 
+
+// --- Chat Folders ---
+
+// CreateChatFolder creates a new folder for a user.
+func (s *Store) CreateChatFolder(username, name string) (*ChatFolder, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	id := uuid.New().String()
+	now := time.Now().UnixMilli()
+	_, err := s.db.Exec(
+		"INSERT INTO chat_folders (id, username, name, created_at) VALUES (?, ?, ?, ?)",
+		id, username, name, now,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &ChatFolder{ID: id, Username: username, Name: name, CreatedAt: now}, nil
+}
+
+// DeleteChatFolder removes a folder and its items.
+func (s *Store) DeleteChatFolder(username, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("DELETE FROM chat_folder_items WHERE folder_id = ?", id)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("DELETE FROM chat_folders WHERE id = ? AND username = ?", id, username)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RenameChatFolder renames a folder owned by the user.
+func (s *Store) RenameChatFolder(username, id, newName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec(
+		"UPDATE chat_folders SET name = ? WHERE id = ? AND username = ?",
+		newName, id, username,
+	)
+	return err
+}
+
+// AddToFolder adds a conversation key to a folder.
+func (s *Store) AddToFolder(folderID, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec(
+		"INSERT OR IGNORE INTO chat_folder_items (folder_id, key) VALUES (?, ?)",
+		folderID, key,
+	)
+	return err
+}
+
+// RemoveFromFolder removes a conversation key from a folder.
+func (s *Store) RemoveFromFolder(folderID, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec(
+		"DELETE FROM chat_folder_items WHERE folder_id = ? AND key = ?",
+		folderID, key,
+	)
+	return err
+}
+
+// ListFolders returns all folders for a user with item counts.
+func (s *Store) ListFolders(username string) ([]ChatFolder, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query(
+		`SELECT f.id, f.username, f.name, f.sort_order, f.created_at,
+			(SELECT COUNT(*) FROM chat_folder_items WHERE folder_id = f.id) as item_count
+		FROM chat_folders f WHERE f.username = ? ORDER BY f.sort_order, f.created_at`,
+		username,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var folders []ChatFolder
+	for rows.Next() {
+		var f ChatFolder
+		if err := rows.Scan(&f.ID, &f.Username, &f.Name, &f.SortOrder, &f.CreatedAt, &f.ItemCount); err != nil {
+			return nil, err
+		}
+		folders = append(folders, f)
+	}
+	if folders == nil {
+		folders = []ChatFolder{}
+	}
+	return folders, rows.Err()
+}
+
+// GetFolderItems returns all conversation keys in a folder.
+func (s *Store) GetFolderItems(folderID string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query(
+		"SELECT key FROM chat_folder_items WHERE folder_id = ? ORDER BY sort_order",
+		folderID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
+}
 
 // --- User registration and authentication ---
 

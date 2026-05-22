@@ -159,6 +159,13 @@ func (m *mockStore) VerifyUser(username, password string) (bool, error) { return
 func (m *mockStore) GenerateInviteCode(creator string, maxUses int) (string, error) { return "TESTCODE", nil }
 func (m *mockStore) ListInviteCodes(creator string) ([]store.InviteCodeRecord, error) { return nil, nil }
 func (m *mockStore) ValidateInviteCode(code string) (bool, error) { return true, nil }
+func (m *mockStore) CreateChatFolder(username, name string) (*ChatFolder, error) { return &ChatFolder{ID: "f1", Name: name}, nil }
+func (m *mockStore) DeleteChatFolder(username, id string) error { return nil }
+func (m *mockStore) RenameChatFolder(username, id, newName string) error { return nil }
+func (m *mockStore) AddToFolder(folderID, key string) error { return nil }
+func (m *mockStore) RemoveFromFolder(folderID, key string) error { return nil }
+func (m *mockStore) ListFolders(username string) ([]ChatFolder, error) { return nil, nil }
+func (m *mockStore) GetFolderItems(folderID string) ([]string, error) { return nil, nil }
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}

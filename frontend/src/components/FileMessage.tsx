@@ -1,5 +1,5 @@
-import { memo } from "react";
-import { FileText, Image, Video, Music, Archive, File, Download, ExternalLink } from "lucide-react";
+import { memo, useState } from "react";
+import { FileText, Image, Video, Music, Archive, File, Download, ExternalLink, Eye, EyeOff } from "lucide-react";
 import { useTranslation } from "@/i18n/context";
 
 interface FileMessageProps {
@@ -109,6 +109,25 @@ export const FileMessage = memo(function FileMessage({
         </div>
       )}
 
+      {/* Video inline player */}
+      {category === "video" && (
+        <div className="mb-2 rounded-lg overflow-hidden border border-border bg-black">
+          <video
+            controls
+            className="w-full max-h-64 object-contain"
+            preload="metadata"
+            poster=""
+          >
+            <source src={fileUrl} type={mimeType || "video/mp4"} />
+          </video>
+        </div>
+      )}
+
+      {/* PDF inline preview */}
+      {category === "pdf" && (
+        <PdfPreview fileUrl={fileUrl} fileName={fileName} />
+      )}
+
       {/* File card */}
       <a
         href={fileUrl}
@@ -136,3 +155,41 @@ export const FileMessage = memo(function FileMessage({
 });
 
 export { formatFileSize, truncateFileName, getFileCategory };
+
+// ── PDF inline preview (toggleable iframe) ──
+
+function PdfPreview({ fileUrl, fileName }: { fileUrl: string; fileName: string }) {
+  const [showPreview, setShowPreview] = useState(false);
+
+  return (
+    <div className="mb-2">
+      {!showPreview ? (
+        <button
+          onClick={() => setShowPreview(true)}
+          className="flex items-center gap-2 rounded-lg bg-muted/30 hover:bg-muted/50 border border-border px-3 py-2 transition-colors"
+        >
+          <Eye className="h-4 w-4 text-red-500" />
+          <span className="text-sm text-muted-foreground">Preview PDF</span>
+        </button>
+      ) : (
+        <div className="rounded-lg overflow-hidden border border-border">
+          <div className="flex items-center justify-between bg-muted/50 px-3 py-1.5 border-b border-border">
+            <span className="text-xs text-muted-foreground truncate">{fileName}</span>
+            <button
+              onClick={() => setShowPreview(false)}
+              className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
+            >
+              <EyeOff className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <iframe
+            src={fileUrl}
+            className="w-full h-80 bg-white"
+            title={fileName}
+            sandbox="allow-scripts allow-same-origin"
+          />
+        </div>
+      )}
+    </div>
+  );
+}

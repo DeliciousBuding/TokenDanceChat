@@ -222,6 +222,18 @@ func (c *Client) ReadPump() {
 			c.handleCustomEmojiList()
 		case "custom_emoji_delete":
 			c.handleCustomEmojiDelete(msg)
+		case "folder_create":
+			c.handleFolderCreate(msg)
+		case "folder_delete":
+			c.handleFolderDelete(msg)
+		case "folder_rename":
+			c.handleFolderRename(msg)
+		case "folder_add_conversation":
+			c.handleFolderAddConversation(msg)
+		case "folder_remove_conversation":
+			c.handleFolderRemoveConversation(msg)
+		case "folder_list":
+			c.handleFolderList()
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -488,26 +500,39 @@ func (c *Client) handleChatMessage(msg Message) {
 		ReplyToUser:    msg.ReplyToUser,
 		ThreadID:       storedMsg.ThreadID,
 		RoomID:         c.currentRoomID,
+		MentionAll:     containsAllMention(content),
 	})
 	select {
 	case c.hub.broadcast <- broadcastMsg:
 	default:
 	}
 
-	// Notify @mentioned users (skip self and assistants).
-	for _, mention := range parseMentions(content) {
-		if mention == c.username || mention == c.hub.BotName() || mention == c.hub.AgentName() {
-			continue
-		}
-		notifyMsg, _ := json.Marshal(Message{
-			Type:      "mention_notify",
-			From:      c.username,
-			Content:   content,
-			MessageID: storedMsg.ID,
-			RoomID:    c.currentRoomID,
-			Timestamp: storedMsg.Timestamp,
+	// Notify @mentioned users (skip self, assistants, and reserved @all/@everyone).
+	if containsAllMention(content) {
+		c.hub.BroadcastJSON(Message{
+			Type:       "mention_all",
+			From:       c.username,
+			Content:    content,
+			MessageID:  storedMsg.ID,
+			RoomID:     c.currentRoomID,
+			Timestamp:  storedMsg.Timestamp,
+			MentionAll: true,
 		})
-		c.hub.SendToUser(mention, notifyMsg)
+	} else {
+		for _, mention := range parseMentions(content) {
+			if mention == c.username || mention == c.hub.BotName() || mention == c.hub.AgentName() {
+				continue
+			}
+			notifyMsg, _ := json.Marshal(Message{
+				Type:      "mention_notify",
+				From:      c.username,
+				Content:   content,
+				MessageID: storedMsg.ID,
+				RoomID:    c.currentRoomID,
+				Timestamp: storedMsg.Timestamp,
+			})
+			c.hub.SendToUser(mention, notifyMsg)
+		}
 	}
 
 	// Store the user message in LLM memory.
@@ -712,6 +737,9 @@ const maxContentLength = 2000
 // mentionRegex matches @username patterns in message content.
 var mentionRegex = regexp.MustCompile(`@([\p{Han}\p{L}\p{N}_]+)`)
 
+// allMentionRegex matches @all / @everyone / @here / @channel mentions.
+var allMentionRegex = regexp.MustCompile(`(?i)@(all|everyone|here|channel)\b`)
+
 // parseMentions extracts all @mentioned usernames from content.
 func parseMentions(content string) []string {
 	matches := mentionRegex.FindAllStringSubmatch(content, -1)
@@ -727,6 +755,11 @@ func parseMentions(content string) []string {
 		}
 	}
 	return mentions
+}
+
+// containsAllMention returns true if the content contains @all, @everyone, @here, or @channel.
+func containsAllMention(content string) bool {
+	return allMentionRegex.MatchString(content)
 }
 
 type assistantMentionTargets struct {
@@ -1051,23 +1084,44 @@ func (c *Client) handleGroupMessage(msg Message) {
 		ReplyToID:      msg.ReplyToID,
 		ReplyToContent: msg.ReplyToContent,
 		ReplyToUser:    msg.ReplyToUser,
+		MentionAll:     containsAllMention(content),
 	})
 	c.hub.SendToGroup(groupName, gm)
 
 	// Notify @mentioned users (skip self and assistants).
-	for _, mention := range parseMentions(content) {
-		if mention == c.username || mention == c.hub.BotName() || mention == c.hub.AgentName() {
-			continue
-		}
-		notifyMsg, _ := json.Marshal(Message{
-			Type:      "mention_notify",
-			From:      c.username,
-			Content:   content,
-			MessageID: storedMsg.ID,
-			Group:     groupName,
-			Timestamp: storedMsg.Timestamp,
+	// If @all / @everyone / @here is used, notify all group members instead.
+	if containsAllMention(content) {
+		members := c.hub.GroupMembers(groupName)
+		allNotify, _ := json.Marshal(Message{
+			Type:       "mention_all",
+			From:       c.username,
+			Content:    content,
+			MessageID:  storedMsg.ID,
+			Group:      groupName,
+			Timestamp:  storedMsg.Timestamp,
+			MentionAll: true,
 		})
-		c.hub.SendToUser(mention, notifyMsg)
+		for _, member := range members {
+			if member == c.username {
+				continue
+			}
+			c.hub.SendToUser(member, allNotify)
+		}
+	} else {
+		for _, mention := range parseMentions(content) {
+			if mention == c.username || mention == c.hub.BotName() || mention == c.hub.AgentName() {
+				continue
+			}
+			notifyMsg, _ := json.Marshal(Message{
+				Type:      "mention_notify",
+				From:      c.username,
+				Content:   content,
+				MessageID: storedMsg.ID,
+				Group:     groupName,
+				Timestamp: storedMsg.Timestamp,
+			})
+			c.hub.SendToUser(mention, notifyMsg)
+		}
 	}
 }
 
@@ -3033,5 +3087,170 @@ func (c *Client) handleCustomEmojiDelete(msg Message) {
 		Username:  c.username,
 	})
 	c.hub.broadcast <- broadcast
+}
+
+// --- Chat folder handlers ---
+
+func (c *Client) handleFolderCreate(msg Message) {
+	if c.username == "" {
+		return
+	}
+	name := strings.TrimSpace(msg.Content)
+	if name == "" {
+		return
+	}
+
+	folder, err := c.hub.store.CreateChatFolder(c.username, name)
+	if err != nil {
+		log.Printf("folder_create: error: %v", err)
+		return
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type:    "folder_created",
+		Content: folder.Name,
+		ID:      folder.ID,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
+}
+
+func (c *Client) handleFolderDelete(msg Message) {
+	if c.username == "" {
+		return
+	}
+	folderID := msg.ID
+	if folderID == "" {
+		return
+	}
+
+	if err := c.hub.store.DeleteChatFolder(c.username, folderID); err != nil {
+		log.Printf("folder_delete: error: %v", err)
+		return
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type: "folder_deleted",
+		ID:   folderID,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
+}
+
+func (c *Client) handleFolderRename(msg Message) {
+	if c.username == "" {
+		return
+	}
+	folderID := msg.ID
+	newName := strings.TrimSpace(msg.Content)
+	if folderID == "" || newName == "" {
+		return
+	}
+
+	if err := c.hub.store.RenameChatFolder(c.username, folderID, newName); err != nil {
+		log.Printf("folder_rename: error: %v", err)
+		return
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type:    "folder_renamed",
+		ID:      folderID,
+		Content: newName,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
+}
+
+func (c *Client) handleFolderAddConversation(msg Message) {
+	if c.username == "" {
+		return
+	}
+	folderID := msg.ID
+	key := msg.Key
+	if folderID == "" || key == "" {
+		return
+	}
+
+	if err := c.hub.store.AddToFolder(folderID, key); err != nil {
+		log.Printf("folder_add_conversation: error: %v", err)
+		return
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type: "folder_conversation_added",
+		ID:   folderID,
+		Key:  key,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
+}
+
+func (c *Client) handleFolderRemoveConversation(msg Message) {
+	if c.username == "" {
+		return
+	}
+	folderID := msg.ID
+	key := msg.Key
+	if folderID == "" || key == "" {
+		return
+	}
+
+	if err := c.hub.store.RemoveFromFolder(folderID, key); err != nil {
+		log.Printf("folder_remove_conversation: error: %v", err)
+		return
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type: "folder_conversation_removed",
+		ID:   folderID,
+		Key:  key,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
+}
+
+func (c *Client) handleFolderList() {
+	if c.username == "" {
+		return
+	}
+
+	folders, err := c.hub.store.ListFolders(c.username)
+	if err != nil {
+		log.Printf("folder_list: error: %v", err)
+		return
+	}
+
+	// Fetch items for each folder.
+	type folderWithItems struct {
+		store.ChatFolder
+		Items []string `json:"items"`
+	}
+	var results []folderWithItems
+	for _, f := range folders {
+		items, _ := c.hub.store.GetFolderItems(f.ID)
+		if items == nil {
+			items = []string{}
+		}
+		results = append(results, folderWithItems{ChatFolder: f, Items: items})
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type:    "folder_list",
+		Folders: results,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
 }
 
