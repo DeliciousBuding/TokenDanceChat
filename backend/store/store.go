@@ -122,6 +122,12 @@ func (s *Store) migrate() error {
 			pinned_at INTEGER NOT NULL,
 			PRIMARY KEY (room_id, message_id)
 		);
+
+		CREATE TABLE IF NOT EXISTS pinned_conversations (
+			username TEXT NOT NULL,
+			key TEXT NOT NULL,
+			PRIMARY KEY (username, key)
+		);
 	`
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -919,3 +925,43 @@ func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
 	}
 	return msgs
 }
+
+	// --- Conversation pinning ---
+
+	func (s *Store) PinConversation(username, key string) error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		_, err := s.db.Exec("INSERT OR IGNORE INTO pinned_conversations (username, key) VALUES (?, ?)", username, key)
+		return err
+	}
+
+	func (s *Store) UnpinConversation(username, key string) error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		_, err := s.db.Exec("DELETE FROM pinned_conversations WHERE username = ? AND key = ?", username, key)
+		return err
+	}
+
+	func (s *Store) ListPinnedConversations(username string) []string {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		rows, err := s.db.Query("SELECT key FROM pinned_conversations WHERE username = ? ORDER BY rowid", username)
+		if err != nil {
+			return nil
+		}
+		defer rows.Close()
+		var keys []string
+		for rows.Next() {
+			var k string
+			if err := rows.Scan(&k); err == nil {
+				keys = append(keys, k)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			log.Printf("store: rows iteration error: %v", err)
+		}
+		if keys == nil {
+			keys = []string{}
+		}
+		return keys
+	}

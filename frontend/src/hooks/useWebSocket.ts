@@ -79,6 +79,7 @@ export function useWebSocket() {
     setLatestMention,
     setBlockedUsers,
     setPinnedMessages,
+    setPinnedConversations,
   } = useChatStore();
 
   const connect = useCallback(
@@ -510,6 +511,16 @@ export function useWebSocket() {
       }),
     );
 
+    // Pinned conversations list
+    unsubs.push(
+      chatAPI.on("pinned_conversations", (msg: WSMessage) => {
+        const { keys } = msg as { type: string; keys: string[] };
+        if (keys) {
+          setPinnedConversations(keys);
+        }
+      }),
+    );
+
     // Group create
     unsubs.push(
       chatAPI.on("group_create", (msg: WSMessage) => {
@@ -732,7 +743,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

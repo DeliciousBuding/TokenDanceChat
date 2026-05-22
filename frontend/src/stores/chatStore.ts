@@ -99,6 +99,9 @@ interface ChatState {
   // Pinned messages
   pinnedMessages: ChatMessage[];
 
+  // Pinned conversations
+  pinnedConversations: string[];
+
   // Lightbox
   lightboxImage: string | null;
 
@@ -139,6 +142,9 @@ interface ChatState {
   addBlockedUser: (username: string) => void;
   removeBlockedUser: (username: string) => void;
   setPinnedMessages: (messages: ChatMessage[]) => void;
+  setPinnedConversations: (keys: string[]) => void;
+  addPinnedConversation: (key: string) => void;
+  removePinnedConversation: (key: string) => void;
   setLightboxImage: (url: string | null) => void;
   reset: () => void;
 }
@@ -168,6 +174,7 @@ export const useChatStore = create<ChatState>((set) => ({
   latestMention: null,
   blockedUsers: [],
   pinnedMessages: [],
+  pinnedConversations: [],
   lightboxImage: null,
 
   setView: (view) => set({ view }),
@@ -312,6 +319,17 @@ export const useChatStore = create<ChatState>((set) => ({
       blockedUsers: state.blockedUsers.filter((u) => u !== username),
     })),
   setPinnedMessages: (pinnedMessages) => set({ pinnedMessages }),
+  setPinnedConversations: (pinnedConversations) => set({ pinnedConversations }),
+  addPinnedConversation: (key) =>
+    set((state) => ({
+      pinnedConversations: state.pinnedConversations.includes(key)
+        ? state.pinnedConversations
+        : [...state.pinnedConversations, key],
+    })),
+  removePinnedConversation: (key) =>
+    set((state) => ({
+      pinnedConversations: state.pinnedConversations.filter((k) => k !== key),
+    })),
   setLightboxImage: (lightboxImage) => set({ lightboxImage }),
   reset: () =>
     set({
@@ -339,6 +357,7 @@ export const useChatStore = create<ChatState>((set) => ({
       latestMention: null,
       blockedUsers: [],
       pinnedMessages: [],
+      pinnedConversations: [],
       lightboxImage: null,
     }),
 }));

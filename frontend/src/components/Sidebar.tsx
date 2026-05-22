@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useCallback } from "react";
+import { memo, useMemo, useState, useCallback, useEffect } from "react";
 import {
   Users,
   MessageCircle,
@@ -9,6 +9,8 @@ import {
   Plus,
   Volume2,
   VolumeX,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -16,6 +18,7 @@ import { cn, avatarGradient, formatLastSeen } from "@/lib/utils";
 import { assistants, modelCatalog } from "@/lib/assistantRegistry";
 import { AssistantIcon } from "@/components/AssistantIcon";
 import { isSoundEnabled, setSoundEnabled } from "@/lib/sound";
+import { chatAPI } from "@/lib/api";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -154,6 +157,7 @@ export function Sidebar({
     setCurrentChat,
     unreadByConversation,
     userStatusList,
+    pinnedConversations,
   } = useChatStore();
 
   // Sound toggle state
@@ -163,6 +167,13 @@ export function Sidebar({
     setSoundOn(next);
     setSoundEnabled(next);
   }, [soundOn]);
+
+  // Right-click context menu state for conversation pinning
+  const [contextMenu, setContextMenu] = useState<{
+    key: string;
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Separate current user from others for visual grouping
   const otherUsers = onlineUsers.filter((u) => u !== username);
@@ -189,11 +200,65 @@ export function Sidebar({
   // Friend users who are online
   const onlineFriends = friends.filter((f) => onlineUsers.includes(f));
 
+  // Resolve a conversation key to a display name.
+  const resolveConversationName = useCallback(
+    (key: string): string => {
+      if (key === "public") return t("sidebar.publicChat");
+      if (key.startsWith("dm:")) return key.slice(3);
+      if (key.startsWith("group:")) return key.slice(6);
+      return key;
+    },
+    [t],
+  );
+
+  // Navigate to a conversation by key.
+  const navigateToConversation = useCallback(
+    (key: string) => {
+      if (key === "public") {
+        setCurrentChat({ type: "public" });
+      } else if (key.startsWith("dm:")) {
+        setCurrentChat({ type: "dm", username: key.slice(3) });
+      } else if (key.startsWith("group:")) {
+        setCurrentChat({ type: "group", name: key.slice(6) });
+      }
+    },
+    [setCurrentChat],
+  );
+
+  // Handle right-click context menu for conversation pinning.
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, key: string) => {
+      e.preventDefault();
+      setContextMenu({ key, x: e.clientX, y: e.clientY });
+    },
+    [],
+  );
+
+  const handlePinToggle = useCallback(
+    (key: string) => {
+      if (pinnedConversations.includes(key)) {
+        chatAPI.sendUnpinConversation(key);
+      } else {
+        chatAPI.sendPinConversation(key);
+      }
+      setContextMenu(null);
+    },
+    [pinnedConversations],
+  );
+
+  // Close context menu on any click outside.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = () => setContextMenu(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [contextMenu]);
+
   return (
     <aside
       aria-label={t("chat.roomName")}
       className={cn(
-        "flex h-full flex-col border-r border-border bg-card",
+        "flex h-full flex-col border-r border-border bg-card transition-all duration-300 ease-out",
         collapsed ? "hidden" : "flex",
         "md:flex md:w-[280px] md:min-w-[280px]",
         "w-full animate-fade-in",
@@ -231,6 +296,7 @@ export function Sidebar({
       <div className="px-3 pt-3 pb-1">
         <button
           onClick={() => setCurrentChat({ type: "public" })}
+          onContextMenu={(e) => handleContextMenu(e, "public")}
           className={cn(
             "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
             currentChat.type === "public"
@@ -242,6 +308,53 @@ export function Sidebar({
           <span>{t("sidebar.publicChat")}</span>
         </button>
       </div>
+
+      {/* Pinned conversations */}
+      {pinnedConversations.length > 0 && (
+        <div className="px-3 pt-2 pb-1">
+          <span className="px-2 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+            {t("sidebar.pinned")}
+          </span>
+          {pinnedConversations.map((key) => {
+            const name = resolveConversationName(key);
+            const isDM = key.startsWith("dm:");
+            const isGroup = key.startsWith("group:");
+            const isPublic = key === "public";
+            return (
+              <div
+                key={key}
+                className="group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors"
+              >
+                <button
+                  onClick={() => navigateToConversation(key)}
+                  className={cn(
+                    "flex flex-1 items-center gap-2 min-w-0 text-left transition-colors",
+                    (currentChat.type === "public" && isPublic) ||
+                      (currentChat.type === "dm" && isDM && currentChat.username === name) ||
+                      (currentChat.type === "group" && isGroup && currentChat.name === name)
+                      ? "text-foreground"
+                      : "text-foreground/70 hover:text-foreground",
+                  )}
+                >
+                  <Pin className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                  {isPublic && <Hash className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />}
+                  {isDM && <User className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />}
+                  {isGroup && <Hash className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />}
+                  <span className="truncate">{name}</span>
+                </button>
+                <button
+                  onClick={() => chatAPI.sendUnpinConversation(key)}
+                  className="flex-shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-muted-foreground hover:bg-accent transition-all"
+                  aria-label={t("sidebar.unpinConversation")}
+                  title={t("sidebar.unpinConversation")}
+                >
+                  <PinOff className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Assistants */}
       <div className="px-3 pt-2 pb-1">
@@ -304,6 +417,7 @@ export function Sidebar({
               onClick={() =>
                 setCurrentChat({ type: "dm", username: partner })
               }
+              onContextMenu={(e) => handleContextMenu(e, `dm:${partner}`)}
               className={cn(
                 "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
                 currentChat.type === "dm" &&
@@ -361,6 +475,7 @@ export function Sidebar({
           <button
             key={g.name}
             onClick={() => setCurrentChat({ type: "group", name: g.name })}
+            onContextMenu={(e) => handleContextMenu(e, `group:${g.name}`)}
             className={cn(
               "flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
               currentChat.type === "group" && currentChat.name === g.name
@@ -548,6 +663,32 @@ export function Sidebar({
           </button>
         </div>
       </div>
+
+      {/* Right-click context menu for conversation pinning */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 rounded-lg border border-border bg-card shadow-xl py-1 animate-scale-in"
+          style={{ left: contextMenu.x, top: contextMenu.y, minWidth: "160px" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
+            onClick={() => handlePinToggle(contextMenu.key)}
+          >
+            {pinnedConversations.includes(contextMenu.key) ? (
+              <>
+                <PinOff className="h-3 w-3" />
+                {t("sidebar.unpinConversation")}
+              </>
+            ) : (
+              <>
+                <Pin className="h-3 w-3" />
+                {t("sidebar.pinConversation")}
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

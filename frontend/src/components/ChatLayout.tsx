@@ -77,6 +77,13 @@ export function ChatLayout() {
     };
   }, []);
 
+  // Close mobile sidebar when conversation changes
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, [currentChat]);
+
   // Auto-dismiss upload error toast
   useEffect(() => {
     if (uploadError) {
@@ -263,7 +270,7 @@ export function ChatLayout() {
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden animate-fade-in"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden animate-fade-in"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />

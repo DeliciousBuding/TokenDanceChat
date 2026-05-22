@@ -567,7 +567,7 @@ export function ChatInput({
 
   return (
     <div
-      className="relative border-t border-border bg-background"
+      className="relative border-t border-border bg-background pb-safe"
       onDragEnter={(e) => {
         e.preventDefault();
         dragCounter.current += 1;

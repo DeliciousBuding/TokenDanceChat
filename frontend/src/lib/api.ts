@@ -483,6 +483,10 @@ class ChatAPI {
     this.send({ type: "message_edit", id: messageId, content });
   }
 
+  sendSetTopic(topic: string): void {
+    this.send({ type: "set_topic", topic });
+  }
+
   sendBlock(username: string): void {
     this.send({ type: "block", username });
   }
@@ -505,6 +509,14 @@ class ChatAPI {
 
   sendUnpinMessage(messageId: string): void {
     this.send({ type: "unpin_message", id: messageId });
+  }
+
+  sendPinConversation(key: string): void {
+    this.send({ type: "pin_conversation", key });
+  }
+
+  sendUnpinConversation(key: string): void {
+    this.send({ type: "unpin_conversation", key });
   }
 
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {

@@ -47,6 +47,9 @@ export interface TranslationDict {
     lastSeen: string;
     offline: string;
     requestPending: string;
+    pinned: string;
+    pinConversation: string;
+    unpinConversation: string;
   };
   transcript: {
     loading: string;
@@ -191,6 +194,12 @@ export interface TranslationDict {
     soundOn: string;
     soundOff: string;
   };
+  slash: {
+    me: string;
+    topic: string;
+    shrug: string;
+    tableflip: string;
+  };
 }
 
 const zhCN: TranslationDict = {
@@ -240,6 +249,9 @@ const zhCN: TranslationDict = {
     lastSeen: "最后在线 {{time}}",
     offline: "离线",
     requestPending: "请求待处理",
+    pinned: "置顶",
+    pinConversation: "置顶会话",
+    unpinConversation: "取消置顶",
   },
   transcript: {
     loading: "加载消息中...",
@@ -384,6 +396,12 @@ const zhCN: TranslationDict = {
     soundOn: "音效已开启",
     soundOff: "音效已关闭",
   },
+  slash: {
+    me: "以动作方式发送消息",
+    topic: "修改群组话题",
+    shrug: "¯\\_(ツ)_/¯",
+    tableflip: "(╯°□°)╯︵ ┻━┻",
+  },
 };
 
 const enUS: TranslationDict = {
@@ -434,6 +452,9 @@ const enUS: TranslationDict = {
     lastSeen: "Last seen {{time}}",
     offline: "Offline",
     requestPending: "Request pending",
+    pinned: "Pinned",
+    pinConversation: "Pin conversation",
+    unpinConversation: "Unpin conversation",
   },
   transcript: {
     loading: "Loading messages...",

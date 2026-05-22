@@ -501,7 +501,7 @@
   50% { transform: scale(1.25); }
   100% { transform: scale(1); }
 }
-.animate-pop {
+@utility animate-pop {
   animation: pop 0.2s ease-out;
 }
 
