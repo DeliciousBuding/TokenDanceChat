@@ -76,7 +76,7 @@ export const LinkPreview = memo(function LinkPreview({ url }: LinkPreviewProps) 
   }, [url]);
 
   if (state.status === "loading") {
-    return <LinkPreviewSkeleton domain={domain} />;
+    return <LinkPreviewSkeleton />;
   }
 
   if (state.status === "error") {

@@ -35,6 +35,12 @@ type UserProfile = store.UserProfile
 // ScheduledMessage is an alias for store.ScheduledMessage.
 type ScheduledMessage = store.ScheduledMessage
 
+// GroupInfo is an alias for store.GroupInfo.
+type GroupInfo = store.GroupInfo
+
+// GroupMemberInfo is an alias for store.GroupMemberInfo.
+type GroupMemberInfo = store.GroupMemberInfo
+
 // Store defines the interface for message persistence.
 type Store interface {
 	InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error)
@@ -64,6 +70,18 @@ type Store interface {
 	RemoveGroupMember(groupName, username string) error
 	GetGroupMembers(groupName string) []string
 	GetAllGroups() map[string][]string
+
+	// Group admin
+	GetGroupMembersWithRoles(groupName string) []store.GroupMemberInfo
+	GetGroupMemberRole(groupName, username string) (string, error)
+	SetGroupMemberRole(groupName, username, role string) error
+	KickGroupMember(groupName, username string) error
+	UpdateGroupName(oldName, newName string) error
+	TransferGroupOwnership(groupName, newOwner string) error
+	LeaveGroup(groupName, username string) error
+	GetGroupInfo(groupName string) (*store.GroupInfo, error)
+	GetGroupOwner(groupName string) (string, error)
+	DeleteGroup(groupName string) error
 
 	// DM delivery tracking
 	GetUndeliveredDMs(username string, limit int) []StoredMessage
@@ -172,7 +190,9 @@ type Message struct {
 
 	// Group system
 	Group   string   `json:"group,omitempty"`
-	Members []string `json:"members,omitempty"`
+	Members      []string              `json:"members,omitempty"`
+	GroupMembers []store.GroupMemberInfo `json:"group_members,omitempty"`
+	Role    string   `json:"role,omitempty"`
 
 	// Reply system
 	ReplyToID      string `json:"reply_to_id,omitempty"`
@@ -751,6 +771,12 @@ func (h *Hub) SendToGroup(groupName string, data []byte) {
 			}
 		}
 	}
+}
+
+// BroadcastToGroup sends a marshaled message to all group members who are online.
+// Same as SendToGroup — provided for consistency with the group admin API naming.
+func (h *Hub) BroadcastToGroup(groupName string, data []byte) {
+	h.SendToGroup(groupName, data)
 }
 
 // InGroup checks if a user is a member of a group.

@@ -143,6 +143,8 @@ export function ChatLayout() {
         window.dispatchEvent(new CustomEvent("tdchat:close-emoji-picker"));
         // Close mobile sidebar
         setSidebarOpen(false);
+        // Close export dropdown
+        setExportOpen(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -503,6 +505,7 @@ export function ChatLayout() {
               <Settings className="h-3.5 w-3.5" />
               {t("settings.notificationPrefs")}
             </button>
+            <ScheduledMessagesPanel roomId={currentRoomID} />
             <button
               onClick={handleDisconnect}
               aria-label={t("chat.disconnect")}

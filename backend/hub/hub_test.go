@@ -137,6 +137,16 @@ func (m *mockStore) MarkScheduledSent(id string) error { return nil }
 func (m *mockStore) CancelScheduledMessage(id, username string) error { return nil }
 func (m *mockStore) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) { return nil, nil }
 func (m *mockStore) ExportMessages(ctx context.Context, roomID, toUser, groupName, format string, limit int) ([]StoredMessage, error) { return nil, nil }
+func (m *mockStore) DeleteGroup(groupName string) error { return nil }
+func (m *mockStore) GetGroupMembersWithRoles(groupName string) []store.GroupMemberInfo { return nil }
+func (m *mockStore) UpdateGroupName(oldName, newName string) error { return nil }
+func (m *mockStore) SetGroupMemberRole(groupName, username, role string) error { return nil }
+func (m *mockStore) KickGroupMember(groupName, username string) error { return nil }
+func (m *mockStore) TransferGroupOwnership(groupName, newOwner string) error { return nil }
+func (m *mockStore) LeaveGroup(groupName, username string) error { return nil }
+func (m *mockStore) GetGroupInfo(groupName string) (*store.GroupInfo, error) { return &store.GroupInfo{Name: groupName}, nil }
+func (m *mockStore) GetGroupMemberRole(groupName, username string) (string, error) { return "member", nil }
+func (m *mockStore) GetGroupOwner(groupName string) (string, error) { return "", nil }
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}
