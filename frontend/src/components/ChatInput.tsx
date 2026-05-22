@@ -655,7 +655,7 @@ export function ChatInput({
           onClick={() => insertMarkdown('**text**', 'bold')}
           disabled={disabled}
           aria-label="Bold"
-          className="rounded-md p-1.5 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="rounded-md p-1.5 min-h-[44px] min-w-[44px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M4 2h3.5a2 2 0 0 1 0 4H4V2Zm0 4h4a2 2 0 0 1 0 4H4V6Z"/>
@@ -667,7 +667,7 @@ export function ChatInput({
           onClick={() => insertMarkdown('*text*', 'italic')}
           disabled={disabled}
           aria-label="Italic"
-          className="rounded-md p-1.5 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="rounded-md p-1.5 min-h-[44px] min-w-[44px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="5.5" y1="2" x2="9.5" y2="2"/>
@@ -681,7 +681,7 @@ export function ChatInput({
           onClick={() => insertMarkdown('~~text~~', 'strike')}
           disabled={disabled}
           aria-label="Strikethrough"
-          className="rounded-md p-1.5 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="rounded-md p-1.5 min-h-[44px] min-w-[44px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="2" y1="7" x2="12" y2="7"/>
@@ -695,7 +695,7 @@ export function ChatInput({
           onClick={() => insertMarkdown('`text`', 'code')}
           disabled={disabled}
           aria-label="Code"
-          className="rounded-md p-1.5 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="rounded-md p-1.5 min-h-[44px] min-w-[44px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="5,4 2,7 5,10"/>
@@ -709,7 +709,7 @@ export function ChatInput({
           onClick={insertQuote}
           disabled={disabled}
           aria-label="Quote"
-          className="rounded-md p-1.5 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="rounded-md p-1.5 min-h-[44px] min-w-[44px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
             <path d="M3 3.5h2V7H4.5v.75H6v2H3V3.5Zm6 0h2V7h-.5v.75H12v2H9V3.5Z"/>
