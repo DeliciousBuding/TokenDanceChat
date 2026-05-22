@@ -37,11 +37,11 @@
 ## Phase 5: Advanced IM
 - [x] Message pinning/bookmarks
 - [x] Group invite accept/decline handshake
-- [x] Message reply threading (already have reply_to, needs UI)
-- [ ] Message search within conversation scope
+- [x] Message reply threading (reply count, clickable preview, jump-to-original)
+- [x] Message search within conversation scope
 - [x] Infinite scroll / pagination for history
-- [ ] Typing indicator with message preview (like Telegram)
-- [ ] Online/offline transition sounds
+- [x] Typing indicator with message preview (like Telegram)
+- [x] Online/offline transition sounds
 - [ ] Custom emoji / sticker support
 
 ## Phase 6: Platform
