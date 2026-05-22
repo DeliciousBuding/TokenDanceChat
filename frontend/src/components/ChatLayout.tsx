@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from "react";
-import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings, Download, Info, Phone, Video } from "lucide-react";
+import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings, Download, Info, Phone, Video, Search } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
@@ -8,11 +8,9 @@ import { ForwardModal } from "./ForwardModal";
 import { ThemeToggle } from "./ThemeToggle";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { SearchBar } from "./SearchBar";
+import { ConversationSearch } from "./ConversationSearch";
 import { ScheduledMessagesPanel } from "./ScheduledMessagesPanel";
 import { SettingsPanel } from "./SettingsPanel";
-import { ThreadPanel } from "./ThreadPanel";
-import { GroupInfoPanel } from "./GroupInfoPanel";
-import { VideoCall } from "./VideoCall";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
@@ -22,6 +20,9 @@ import type { ChatMessage } from "@/lib/api";
 import type { Language } from "@/i18n/translations";
 
 const ImageLightbox = lazy(() => import("@/components/ImageLightbox").then((m) => ({ default: m.ImageLightbox })));
+const ThreadPanel = lazy(() => import("@/components/ThreadPanel").then((m) => ({ default: m.ThreadPanel })));
+const GroupInfoPanel = lazy(() => import("@/components/GroupInfoPanel").then((m) => ({ default: m.GroupInfoPanel })));
+const VideoCall = lazy(() => import("@/components/VideoCall").then((m) => ({ default: m.VideoCall })));
 
 export function ChatLayout() {
   const { t, lang, setLang } = useTranslation();
@@ -34,6 +35,8 @@ export function ChatLayout() {
   const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportToast, setExportToast] = useState<string | null>(null);
+  const [conversationSearchOpen, setConversationSearchOpen] = useState(false);
+  const [searchHighlight, setSearchHighlight] = useState("");
   const {
     reset,
     currentChat,
@@ -135,6 +138,13 @@ export function ChatLayout() {
           const searchField = document.querySelector<HTMLInputElement>('[aria-label*="search"] input');
           searchField?.focus();
         }, 100);
+      }
+      if (mod && e.key === "f") {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag !== "INPUT" && tag !== "TEXTAREA") {
+          e.preventDefault();
+          setConversationSearchOpen((prev) => !prev);
+        }
       }
       if (e.key === "Escape") {
         // Cancel reply if active
@@ -556,6 +566,15 @@ export function ChatLayout() {
               {t("lang.switchTo")}
             </button>
             <ThemeToggle />
+            {/* Search button (desktop) */}
+            <button
+              onClick={() => setConversationSearchOpen((prev) => !prev)}
+              aria-label={t("search.inConversation")}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+            >
+              <Search className="h-3.5 w-3.5" />
+              {t("search.pressCtrlF")}
+            </button>
             {/* Export button (desktop) */}
             <div className="relative">
               <button
@@ -747,10 +766,27 @@ export function ChatLayout() {
           </div>
         )}
 
+        {/* Conversation search (Ctrl+F) */}
+        <ConversationSearch
+          open={conversationSearchOpen}
+          onClose={() => setConversationSearchOpen(false)}
+          onHighlightChange={setSearchHighlight}
+        />
+
+        {/* In-conversation search bar */}
+        <ConversationSearch
+          open={conversationSearchOpen}
+          onClose={() => {
+            setConversationSearchOpen(false);
+            setSearchHighlight("");
+          }}
+          onHighlightChange={setSearchHighlight}
+        />
+
         {/* Message transcript */}
         <div className="relative flex-1 overflow-hidden flex flex-col">
           <ErrorBoundary fallback={<div className="flex items-center justify-center h-full text-sm text-muted-foreground/50">Chat transcript unavailable</div>}>
-            <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} onOpenThread={handleOpenThread} />
+            <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} onOpenThread={handleOpenThread} highlight={searchHighlight} />
           </ErrorBoundary>
 
           {/* Chat input - fixed at bottom */}
@@ -761,18 +797,22 @@ export function ChatLayout() {
       </div>
 
       {/* Thread panel */}
-      <ThreadPanel
+      <Suspense fallback={null}>
+        {threadParent && <ThreadPanel
         parentMessage={threadParent}
         threadMessages={threadMessages}
         onClose={handleCloseThread}
         onSendReply={handleSendThreadReply}
-      />
+      />}
+      </Suspense>
 
       {/* Group info panel */}
-      <GroupInfoPanel
+      <Suspense fallback={null}>
+        {groupInfoPanel && <GroupInfoPanel
         groupName={groupInfoPanel}
         onClose={() => setGroupInfoPanel(null)}
-      />
+      />}
+      </Suspense>
 
       {/* Group create modal */}
       <GroupCreateModal
@@ -823,7 +863,9 @@ export function ChatLayout() {
 
       {/* Video/voice call overlay */}
       {(incomingCall || activeCall) && (
-        <VideoCall onClose={handleCloseCall} />
+        <Suspense fallback={null}>
+          <VideoCall onClose={handleCloseCall} />
+        </Suspense>
       )}
     </div>
   );

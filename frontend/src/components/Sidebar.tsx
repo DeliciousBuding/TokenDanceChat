@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useCallback, useEffect } from "react";
+import { memo, useMemo, useState, useCallback, useEffect, lazy, Suspense } from "react";
 import {
   Users,
   MessageCircle,
@@ -29,9 +29,10 @@ import { Avatar } from "@/components/Avatar";
 import { assistants, modelCatalog } from "@/lib/assistantRegistry";
 import { AssistantIcon } from "@/components/AssistantIcon";
 import { isSoundEnabled, setSoundEnabled } from "@/lib/soundToggle";
-import { InviteCodeManager } from "@/components/InviteCodeManager";
-import { SettingsModal } from "@/components/SettingsModal";
 import { chatAPI } from "@/lib/api";
+
+const InviteCodeManager = lazy(() => import("@/components/InviteCodeManager").then((m) => ({ default: m.InviteCodeManager })));
+const SettingsModal = lazy(() => import("@/components/SettingsModal").then((m) => ({ default: m.SettingsModal })));
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -868,10 +869,14 @@ export function Sidebar({
       </div>
 
       {/* Invite code manager modal */}
-      <InviteCodeManager open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <Suspense fallback={null}>
+        {inviteOpen && <InviteCodeManager open={inviteOpen} onClose={() => setInviteOpen(false)} />}
+      </Suspense>
 
       {/* Unified settings modal */}
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <Suspense fallback={null}>
+        {settingsOpen && <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+      </Suspense>
 
       {/* Right-click context menu for conversation pinning */}
       {contextMenu && (

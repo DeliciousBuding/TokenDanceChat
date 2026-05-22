@@ -12,29 +12,17 @@ import { Avatar } from "@/components/Avatar";
 import { isSoundEnabled, setSoundEnabled } from "@/lib/soundToggle";
 import { playMessageSound } from "@/lib/sound";
 
-// ─── Types ───
-
 type Tab = "profile" | "appearance" | "notifications" | "data" | "account";
 type Theme = "dark" | "light" | "system";
 
 const TABS: Tab[] = ["profile", "appearance", "notifications", "data", "account"];
-
-const TAB_ICON: Record<Tab, typeof User> = {
-  profile: User, appearance: Palette, notifications: Bell, data: Database, account: Key,
-};
-
-const TAB_LABEL: Record<Tab, string> = {
-  profile: "settings.profile", appearance: "settings.appearance",
-  notifications: "settings.notifications", data: "settings.data", account: "settings.account",
-};
-
+const TAB_ICON: Record<Tab, typeof User> = { profile: User, appearance: Palette, notifications: Bell, data: Database, account: Key };
+const TAB_LABEL: Record<Tab, string> = { profile: "settings.profile", appearance: "settings.appearance", notifications: "settings.notifications", data: "settings.data", account: "settings.account" };
 const THEME_OPTIONS: { value: Theme; icon: typeof Sun; label: string }[] = [
   { value: "light", icon: Sun, label: "settings.themeLight" },
   { value: "dark", icon: Moon, label: "settings.themeDark" },
   { value: "system", icon: Monitor, label: "settings.themeSystem" },
 ];
-
-// ─── Theme helpers ───
 
 function getStoredTheme(): Theme {
   const stored = localStorage.getItem("tdchat-theme");
@@ -49,18 +37,13 @@ function applyTheme(theme: Theme) {
   else { root.classList.toggle("dark", window.matchMedia("(prefers-color-scheme: dark)").matches); root.classList.remove("light"); }
 }
 
-// ─── Component ───
-
 interface SettingsModalProps { open: boolean; onClose: () => void; }
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { t } = useTranslation();
   const { username, userProfiles, scheduledMessages } = useChatStore();
   const profile = username ? userProfiles[username] : null;
-
   const [tab, setTab] = useState<Tab>("profile");
-
-  // Profile state
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [status, setStatus] = useState("");
@@ -68,8 +51,15 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [theme, setTheme] = useState<Theme>(getStoredTheme);
+  const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
+  const [codes, setCodes] = useState<InviteCode[]>([]);
+  const [codesLoading, setCodesLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [maxUses, setMaxUses] = useState(5);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  // Sync profile on open
   useEffect(() => {
     if (open && profile) {
       setDisplayName(profile.display_name ?? "");
@@ -79,21 +69,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }, [open, profile]);
 
-  // Theme
-  const [theme, setTheme] = useState<Theme>(getStoredTheme);
   useEffect(() => { applyTheme(theme); localStorage.setItem("tdchat-theme", theme); }, [theme]);
-
-  // Sound
-  const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
-  const toggleSound = useCallback(() => { const n = !soundOn; setSoundOn(n); setSoundEnabled(n); }, [soundOn]);
-
-  // Invite codes
-  const [codes, setCodes] = useState<InviteCode[]>([]);
-  const [codesLoading, setCodesLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [inviteError, setInviteError] = useState("");
-  const [maxUses, setMaxUses] = useState(5);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && username && tab === "account") {
@@ -102,14 +78,14 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }, [open, username, tab]);
 
-  // Profile: save
+  const toggleSound = useCallback(() => { const n = !soundOn; setSoundOn(n); setSoundEnabled(n); }, [soundOn]);
+
   const handleSave = useCallback(() => {
     setSaving(true);
     chatAPI.sendProfileUpdate({ display_name: displayName.trim(), avatar_url: avatarUrl, bio: bio.trim(), status: status.trim() });
     setSaving(false);
   }, [displayName, avatarUrl, bio, status]);
 
-  // Profile: avatar upload
   const handleAvatar = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file?.type.startsWith("image/")) return;
@@ -117,7 +93,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     try { const url = await chatAPI.uploadImage(file); if (url) setAvatarUrl(url); } finally { setUploading(false); }
   }, []);
 
-  // Invite: generate
   const handleGenerate = useCallback(async () => {
     if (!username) return;
     setGenerating(true); setInviteError("");
@@ -128,12 +103,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     finally { setGenerating(false); }
   }, [username, maxUses]);
 
-  // Invite: copy
   const handleCopy = useCallback(async (code: string) => {
     try { await navigator.clipboard.writeText(code); setCopiedCode(code); setTimeout(() => setCopiedCode(null), 2000); } catch { /* noop */ }
   }, []);
 
-  // Export
   const handleExport = useCallback(async () => {
     try {
       const blob = await chatAPI.exportChat("public", "json");
@@ -143,7 +116,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     } catch { /* ignore */ }
   }, []);
 
-  // Esc
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -154,47 +126,33 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   if (!open) return null;
 
   const displayNameOrUser = displayName.trim() || username || "?";
+  const renderTabButton = (tabKey: Tab, mobile: boolean) => {
+    const Icon = TAB_ICON[tabKey];
+    return (
+      <button key={tabKey} onClick={() => setTab(tabKey)}
+        className={cn(mobile
+          ? "flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[10px] transition-colors flex-shrink-0"
+          : "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors text-left",
+          tab === tabKey ? "bg-accent text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-accent/50")}>
+        <Icon className={mobile ? "h-4 w-4" : "h-4 w-4 flex-shrink-0"} /><span>{t(TAB_LABEL[tabKey])}</span>
+      </button>
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center md:p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       <div className="relative z-10 flex w-full h-full md:h-auto md:max-h-[600px] md:max-w-2xl md:rounded-xl bg-card border-0 md:border border-border shadow-2xl overflow-hidden animate-scale-in">
-        {/* Close */}
         <button onClick={onClose} className="absolute top-3 right-3 z-20 rounded-full p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors" aria-label={t("friend.dismiss")}>
           <X className="h-4 w-4" />
         </button>
-
-        {/* Desktop tabs sidebar */}
         <div className="hidden sm:flex flex-col w-44 border-r border-border bg-accent/20 py-4 px-2 gap-0.5 flex-shrink-0">
-          {TABS.map(tabKey => {
-            const Icon = TAB_ICON[tabKey];
-            return (
-              <button key={tabKey} onClick={() => setTab(tabKey)}
-                className={cn("flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors text-left",
-                  tab === tabKey ? "bg-accent text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-accent/50")}>
-                <Icon className="h-4 w-4 flex-shrink-0" /><span>{t(TAB_LABEL[tabKey])}</span>
-              </button>
-            );
-          })}
+          {TABS.map(k => renderTabButton(k, false))}
         </div>
-
-        {/* Mobile tab bar */}
         <div className="sm:hidden flex border-b border-border bg-accent/20 px-2 py-2 gap-0.5 overflow-x-auto flex-shrink-0">
-          {TABS.map(tabKey => {
-            const Icon = TAB_ICON[tabKey];
-            return (
-              <button key={tabKey} onClick={() => setTab(tabKey)}
-                className={cn("flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[10px] transition-colors flex-shrink-0",
-                  tab === tabKey ? "bg-accent text-foreground font-medium" : "text-muted-foreground hover:text-foreground")}>
-                <Icon className="h-4 w-4" /><span>{t(TAB_LABEL[tabKey])}</span>
-              </button>
-            );
-          })}
+          {TABS.map(k => renderTabButton(k, true))}
         </div>
-
-        {/* Content area */}
         <div className="flex-1 overflow-y-auto px-5 py-6 md:px-8">
-          {/* ── Profile ── */}
           {tab === "profile" && (
             <div className="space-y-4">
               <div className="flex justify-center">
@@ -231,8 +189,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               </button>
             </div>
           )}
-
-          {/* ── Appearance ── */}
           {tab === "appearance" && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-foreground">{t("settings.appearance")}</h2>
@@ -249,8 +205,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               })}
             </div>
           )}
-
-          {/* ── Notifications ── */}
           {tab === "notifications" && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-foreground">{t("settings.notifications")}</h2>
@@ -270,8 +224,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               </button>
             </div>
           )}
-
-          {/* ── Data ── */}
           {tab === "data" && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-foreground">{t("settings.data")}</h2>
@@ -285,8 +237,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               </div>
             </div>
           )}
-
-          {/* ── Account ── */}
           {tab === "account" && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-foreground">{t("settings.account")}</h2>
