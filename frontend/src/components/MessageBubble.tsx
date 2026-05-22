@@ -818,6 +818,7 @@ export const MessageBubble = memo(function MessageBubble({
                         recentlyToggledReaction === emoji && "animate-pop",
                       )}
                       aria-label={`${emoji} ${users.length} reactions`}
+                      title={users.join(", ")}
                     >
                       <span className="text-sm leading-none">{emoji}</span>
                       <span className="text-[10px] text-muted-foreground/70">

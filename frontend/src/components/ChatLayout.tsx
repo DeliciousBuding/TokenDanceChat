@@ -35,6 +35,7 @@ export function ChatLayout() {
     latestMention,
     setLatestMention,
     pinnedMessages,
+    connected,
   } = useChatStore();
   const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, forwardMessage, markRead } =
     useWebSocket();
@@ -328,6 +329,22 @@ export function ChatLayout() {
             </button>
           </div>
         </div>
+
+        {/* Connection lost / reconnecting banner */}
+        {!connected && (
+          <div className="border-b border-[hsl(40,80%,45%)] bg-[hsl(40,80%,45%/0.12)] px-6 py-2 flex items-center gap-3 text-xs animate-pulse">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-[hsl(40,80%,50%)]" />
+              <span className="text-[hsl(40,80%,70%)] font-medium">{t("system.connectionLost")}</span>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="ml-auto rounded-md px-2 py-0.5 text-[10px] text-[hsl(40,80%,60%)] hover:text-[hsl(40,80%,80%)] hover:bg-[hsl(40,80%,45%/0.2)] transition-colors"
+            >
+              {t("error.reload")}
+            </button>
+          </div>
+        )}
 
         {/* Friend request notifications */}
         {pendingFriendRequests.length > 0 && currentChat.type === "public" && (
