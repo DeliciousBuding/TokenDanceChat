@@ -400,6 +400,9 @@ export const MessageBubble = memo(function MessageBubble({
         {(message.reply_to_id || message.reply_to_content) && (
           <div
             className="mb-1 ml-0 border-l-2 border-[hsl(220,2.5%,30%)] pl-2 py-0.5 rounded-sm bg-card cursor-pointer hover:border-[hsl(220,2.5%,45%)] transition-colors"
+            role="button"
+            tabIndex={0}
+            aria-label={`Jump to replied message from ${message.reply_to_user || "unknown"}`}
             onClick={() => {
               if (message.reply_to_id) {
                 const el = document.getElementById(`msg-${message.reply_to_id}`);
@@ -408,6 +411,12 @@ export const MessageBubble = memo(function MessageBubble({
                   el.classList.add("highlight-flash");
                   setTimeout(() => el.classList.remove("highlight-flash"), 2000);
                 }
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                (e.currentTarget as HTMLDivElement).click();
               }
             }}
           >

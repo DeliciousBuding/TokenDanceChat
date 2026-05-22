@@ -66,6 +66,7 @@ export const EmojiPicker = memo(function EmojiPicker({
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); onClose(); } }}
     >
       <div className="animate-scale-in rounded-xl border border-border bg-card shadow-2xl w-[340px] max-h-[440px] flex flex-col">
         {/* Search bar */}
@@ -75,6 +76,7 @@ export const EmojiPicker = memo(function EmojiPicker({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search emoji..."
+            aria-label="Search emoji"
             className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-[hsl(220,2.5%,35%)]"
           />
         </div>

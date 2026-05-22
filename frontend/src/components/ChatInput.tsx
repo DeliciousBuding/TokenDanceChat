@@ -397,7 +397,7 @@ export function ChatInput({
           </div>
           <button
             onClick={() => setReplyTo(null)}
-            aria-label={t("input.replyTo")}
+            aria-label="Cancel reply"
             className="flex-shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <X className="h-3.5 w-3.5" />

@@ -34,7 +34,7 @@
 - [x] User blocking (block list in DB)
 - [x] File sharing beyond images (documents, archives)
 
-## Phase 5: Advanced IM
+## Phase 5: Advanced IM ✅ COMPLETE
 - [x] Message pinning/bookmarks
 - [x] Group invite accept/decline handshake
 - [x] Message reply threading (reply count, clickable preview, jump-to-original)
@@ -42,11 +42,11 @@
 - [x] Infinite scroll / pagination for history
 - [x] Typing indicator with message preview (like Telegram)
 - [x] Online/offline transition sounds
-- [ ] Custom emoji / sticker support
+- [x] Custom emoji picker v2 (categories, search, recents, 150+ emojis)
 
-## Phase 6: Platform
-- [ ] PWA offline support (service worker + cache)
-- [ ] Frontend unit tests (Zustand store, hooks, components)
+## Phase 6: Platform 🔄 IN PROGRESS
+- [x] PWA offline support (service worker + cache)
+- [x] Frontend unit tests (Zustand store, 25 tests)
+- [x] Accessibility audit (keyboard nav, aria labels, focus)
 - [ ] End-to-end WebSocket tests
 - [ ] Performance profiling under load
-- [ ] Accessibility audit (screen reader, keyboard nav)

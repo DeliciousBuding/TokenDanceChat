@@ -129,9 +129,9 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
           <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
             <Search className="h-4 w-4 text-muted-foreground/60 flex-shrink-0" />
             <input ref={inputRef} type="text" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={handleKeyDown}
-              placeholder="Search messages..." className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none" />
+              placeholder="Search messages..." aria-label="Search messages" className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none" />
             {loading ? <Loader2 className="h-4 w-4 text-muted-foreground/60 animate-spin flex-shrink-0" />
-            : query ? <button onClick={() => { setQuery(""); setResults([]); inputRef.current?.focus(); }} className="flex-shrink-0 rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
+            : query ? <button onClick={() => { setQuery(""); setResults([]); inputRef.current?.focus(); }} aria-label="Clear search" className="flex-shrink-0 rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
             : <kbd className="hidden sm:inline-flex items-center rounded border border-border bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground/60">ESC</kbd>}
           </div>
           <div className="max-h-72 overflow-y-auto">
