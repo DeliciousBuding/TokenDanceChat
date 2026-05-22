@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log"
+	"os"
 	"net"
 	"net/http"
 	"net/url"
@@ -34,7 +35,19 @@ var upgrader = websocket.Upgrader{
 		if strings.EqualFold(originHost, host) || strings.EqualFold(originHost, strings.TrimPrefix(host, "www.")) {
 			return true
 		}
-		// Allow vectorcontrol.tech and subdomains.
+		// Allow origins from CHAT_ALLOWED_ORIGINS env var (comma-separated).
+		if allowed := os.Getenv("CHAT_ALLOWED_ORIGINS"); allowed != "" {
+			if allowed == "*" {
+				return true
+			}
+			for _, o := range strings.Split(allowed, ",") {
+				o = strings.TrimSpace(o)
+				if strings.EqualFold(originHost, o) || (strings.HasPrefix(o, ".") && strings.HasSuffix(originHost, o)) {
+					return true
+				}
+			}
+		}
+		// Legacy: allow vectorcontrol.tech and subdomains.
 		if strings.HasSuffix(originHost, ".vectorcontrol.tech") || originHost == "vectorcontrol.tech" {
 			return true
 		}
