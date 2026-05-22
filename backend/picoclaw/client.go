@@ -284,6 +284,7 @@ func (c *Client) SendMessageWithOpts(content string, opts SendMessageOptions) (*
 		Type:      "message.send",
 		ID:        id,
 		Timestamp: time.Now().UnixMilli(),
+			Content:   content,
 		RoomID:    opts.RoomID,
 		MediaURLs: opts.MediaURLs,
 		Metadata:  opts.Metadata,
@@ -431,7 +432,7 @@ func (c *Client) readLoop(conn *websocket.Conn) {
 			return
 		default:
 		}
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(300 * time.Second))
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
 			log.Printf("picoclaw: read error: %v", err)
