@@ -1,15 +1,46 @@
 # Contributing
 
-Contributions are welcome! This is a simple demo project, so keep changes small and focused.
+欢迎贡献！
 
-1. Fork the repo and create a feature branch.
-2. Keep the code simple — no heavy abstractions.
-3. Open a PR with a clear description of what it does.
+## 开发流程
 
-## 参与贡献
+1. Fork 仓库，创建 feature 分支
+2. 遵循现有代码风格（Go: `gofmt`，TSX: Prettier 默认）
+3. 保持改动聚焦，避免无关重构
+4. 为新功能补充测试
+5. 确保构建和测试通过后再提交 PR
 
-欢迎贡献！这是一个简单的演示项目，请保持改动小而精。
+```bash
+# 后端
+cd backend && go build ./... && go test ./...
 
-1. Fork 仓库并创建功能分支。
-2. 保持代码简洁 —— 避免过度抽象。
-3. 提交 PR 并清楚描述改动内容。
+# 前端
+cd frontend && npm run build && npx vitest run
+```
+
+## 提交规范
+
+- `feat:` 新功能
+- `fix:` 修复
+- `docs:` 文档
+- `refactor:` 重构
+- `test:` 测试
+- `chore:` 构建/工具
+
+## 安全
+
+- 不要在代码或文档中硬编码服务器 IP、内部端口、凭据
+- 敏感配置使用环境变量（参考 `.env.example`）
+- 发现安全漏洞请私下报告，不要公开提 Issue
+
+## PR 模板
+
+```markdown
+## Summary
+<简要描述改动>
+
+## Test plan
+- [ ] 后端测试通过
+- [ ] 前端测试通过
+- [ ] 手动验证（截图/描述）
+```
