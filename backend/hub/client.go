@@ -407,7 +407,11 @@ func (c *Client) handleChatMessage(msg Message) {
 	targets := assistantMentionTarget(content, c.hub.BotName(), c.hub.AgentName())
 	currentRoom := c.getCurrentRoomID()
 	if targets.TokenBot && c.username != c.hub.BotName() && c.hub.LLMClient() != nil {
-		go c.handleBotResponse(context.Background(), content, currentRoom)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		go func() {
+			defer cancel()
+			c.handleBotResponse(ctx, content, currentRoom)
+		}()
 	}
 	if targets.Agent && c.username != c.hub.AgentName() {
 		if pc := c.hub.PicoclawClient(); pc != nil {
