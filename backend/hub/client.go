@@ -46,6 +46,8 @@ type Client struct {
 	// current room
 	currentRoomID string
 	roomMu        sync.RWMutex
+	// bot concurrency guard
+	botResponding atomic.Bool
 }
 
 // getCurrentRoomID returns the client's current room ID with read locking.
@@ -408,15 +410,39 @@ func (c *Client) handleChatMessage(msg Message) {
 	targets := assistantMentionTarget(content, c.hub.BotName(), c.hub.AgentName())
 	currentRoom := c.getCurrentRoomID()
 	if targets.TokenBot && c.username != c.hub.BotName() && c.hub.LLMClient() != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		go func() {
-			defer cancel()
-			c.handleBotResponse(ctx, content, currentRoom)
-		}()
+		if c.botResponding.CompareAndSwap(false, true) {
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			go func() {
+				defer cancel()
+				defer c.botResponding.Store(false)
+				c.handleBotResponse(ctx, content, currentRoom)
+			}()
+		}
+	} else if targets.TokenBot && c.username != c.hub.BotName() && c.hub.LLMClient() == nil {
+		// Bot mentioned but not configured — send error feedback
+		c.hub.BroadcastJSON(Message{
+			Type:     "system",
+			Username: "system",
+			Content:  "TokenBot is not configured on this server.",
+			RoomID:   currentRoom,
+		})
 	}
 	if targets.Agent && c.username != c.hub.AgentName() {
 		if pc := c.hub.PicoclawClient(); pc != nil {
-			go c.handleAgentResponsePicoClaw(context.Background(), content, currentRoom)
+			if c.botResponding.CompareAndSwap(false, true) {
+				go func() {
+					defer c.botResponding.Store(false)
+					c.handleAgentResponsePicoClaw(context.Background(), content, currentRoom)
+				}()
+			}
+		} else {
+			// Agent mentioned but not configured — send error feedback
+			c.hub.BroadcastJSON(Message{
+				Type:     "system",
+				Username: "system",
+				Content:  "PicoClaw is not configured on this server.",
+				RoomID:   currentRoom,
+			})
 		}
 	}
 }

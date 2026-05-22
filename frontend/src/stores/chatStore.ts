@@ -228,7 +228,7 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
   setRooms: (rooms) => set({ rooms }),
   setCurrentRoomID: (currentRoomID) => set({ currentRoomID }),
-  setCurrentChat: (currentChat) => set({ currentChat }),
+  setCurrentChat: (currentChat) => set({ currentChat, pendingImage: null }),
   setReplyTo: (replyTo) => set({ replyTo }),
   setFriends: (friends) => set({ friends }),
   addFriendRequest: (from) =>

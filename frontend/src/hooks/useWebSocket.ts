@@ -691,7 +691,18 @@ export function useWebSocket() {
       }),
     );
 
+    // Periodic cleanup of stale stream accumulators (bot crash/disconnect).
+    const streamCleanupTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [id, acc] of streamAcc.current) {
+        if (now - acc.lastFlush > 120_000) {
+          streamAcc.current.delete(id);
+        }
+      }
+    }, 60_000);
+
     return () => {
+      clearInterval(streamCleanupTimer);
       document.removeEventListener("visibilitychange", handleVisibility);
       unsubs.forEach((unsub) => unsub());
       typingTimers.current.forEach((timer) => clearTimeout(timer));
