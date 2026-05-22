@@ -82,7 +82,7 @@ const UserListItem = memo(function UserListItem({
         >
           {user.charAt(0).toUpperCase()}
         </div>
-        <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-[hsl(231,4%,16%)] bg-online animate-pulse-dot" role="status" aria-label={onlineLabel} />
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-card bg-online animate-pulse-dot" role="status" aria-label={onlineLabel} />
       </div>
       <span className="flex-1 truncate text-sm">{user}</span>
       {isFriend && !isSelf && (
@@ -282,8 +282,7 @@ export function Sidebar({
       <div className="flex items-center gap-3 border-b border-border px-5 py-4">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
           <MessageCircle
-            className="h-5 w-5"
-            style={{ color: "oklch(71.2% 0.194 13.428)" }}
+            className="h-5 w-5 text-primary"
           />
         </div>
         <div className="flex-1 min-w-0">

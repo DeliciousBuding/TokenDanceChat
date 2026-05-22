@@ -413,7 +413,7 @@ export function MessageTranscript({
               <option value="">{t("transcript.contextSelectRecipient")}</option>
               {onlineUsers.filter((u) => u !== username).map((u) => (<option key={u} value={u}>{u}</option>))}
             </select>
-            <button onClick={handleBatchForward} disabled={!batchForwardUser} className="rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity" style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}>{t("transcript.contextSend")}</button>
+            <button onClick={handleBatchForward} disabled={!batchForwardUser} className="rounded-lg px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-opacity">{t("transcript.contextSend")}</button>
             <button onClick={() => { setShowBatchForwardPicker(false); setBatchForwardUser(""); }} className="rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">{t("transcript.contextCancel")}</button>
           </div>
         </div>
@@ -500,7 +500,7 @@ export function MessageTranscript({
             return (
               <div className="flex flex-col items-center justify-center h-full py-12 px-4">
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-border">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2% 0.194 13.428 / 0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/60">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                     <circle cx="9" cy="7" r="4" />
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -516,7 +516,7 @@ export function MessageTranscript({
           return (
             <div className="flex flex-col items-center justify-center h-full py-12 px-4">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-border animate-chat-bubble">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2% 0.194 13.428 / 0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/60">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
               </div>
@@ -547,11 +547,11 @@ export function MessageTranscript({
 
           {hiddenCount > 0 && (
             <div className="flex items-center gap-3 px-4 py-2">
-              <div className="h-px flex-1 bg-[oklch(71.2%_0.194_13.428_/_0.3)]" />
-              <span className="text-[10px] font-medium text-[oklch(71.2%_0.194_13.428)] whitespace-nowrap">
+              <div className="h-px flex-1 bg-primary/30" />
+              <span className="text-[10px] font-medium text-primary whitespace-nowrap">
                 {t("transcript.newMessagesDivider")}
               </span>
-              <div className="h-px flex-1 bg-[oklch(71.2%_0.194_13.428_/_0.3)]" />
+              <div className="h-px flex-1 bg-primary/30" />
             </div>
           )}
 

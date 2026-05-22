@@ -104,10 +104,9 @@ export function JoinScreen() {
         <div className="rounded-xl border border-border bg-card p-8 shadow-2xl transition-colors duration-300">
           {/* Logo / Icon */}
           <div className="mb-6 flex justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent ring-1 ring-[hsl(220,2.5%,28.5%)]">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent ring-1 ring-border">
               <MessageCircle
-                className="h-8 w-8"
-                style={{ color: "oklch(71.2% 0.194 13.428)" }}
+                className="h-8 w-8 text-primary"
               />
             </div>
           </div>
@@ -136,7 +135,7 @@ export function JoinScreen() {
                 maxLength={20}
                 disabled={connecting}
                 aria-label={t("join.placeholder")}
-                className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus:border-[hsl(220,2.5%,35%)] focus:ring-1 focus:ring-[hsl(220,2.5%,35%)] disabled:opacity-50"
+                className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none disabled:opacity-50"
               />
               {error && (
                 <p className="mt-2 text-xs text-destructive animate-fade-in" role="alert">
@@ -148,17 +147,7 @@ export function JoinScreen() {
             <button
               type="submit"
               disabled={connecting || !username.trim()}
-              className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 disabled:opacity-50"
-              style={{
-                backgroundColor: "oklch(71.2% 0.194 13.428)",
-                color: "#fff",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.filter = "brightness(1.1)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.filter = "brightness(1)";
-              }}
+              className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium bg-primary text-primary-foreground hover:brightness-110 transition-all duration-200 disabled:opacity-50"
             >
               {connecting ? (
                 <>

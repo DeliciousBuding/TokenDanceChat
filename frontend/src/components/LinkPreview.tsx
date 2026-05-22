@@ -42,7 +42,7 @@ export const LinkPreview = memo(function LinkPreview({ url }: LinkPreviewProps) 
   return (
     <div className="mt-2 border border-border rounded-lg overflow-hidden bg-muted max-w-sm">
       {data.image && (
-        <div className="w-full h-32 overflow-hidden bg-[hsl(220,2.5%,8%)]">
+        <div className="w-full h-32 overflow-hidden bg-secondary">
           <img
             src={data.image}
             alt=""

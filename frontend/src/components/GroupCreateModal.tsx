@@ -94,7 +94,7 @@ export function GroupCreateModal({
               placeholder={t("group.namePlaceholder")}
               maxLength={30}
               autoFocus
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-[hsl(220,2.5%,35%)] transition-colors"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none transition-colors"
             />
             {error && (
               <p className="mt-1 text-xs text-destructive">{error}</p>
@@ -123,7 +123,7 @@ export function GroupCreateModal({
                         "flex h-4 w-4 items-center justify-center rounded border transition-colors flex-shrink-0",
                         selected.has(user)
                           ? "border-accent bg-accent"
-                          : "border-[hsl(220,2.5%,28%)]",
+                          : "border-border",
                       )}
                     >
                       {selected.has(user) && (
@@ -161,8 +161,7 @@ export function GroupCreateModal({
           <button
             onClick={handleCreate}
             disabled={!name.trim()}
-            className="rounded-lg px-4 py-2 text-xs font-medium text-white transition-all duration-200 disabled:opacity-40"
-            style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}
+            className="rounded-lg px-4 py-2 text-xs font-medium bg-primary text-primary-foreground hover:brightness-110 transition-all duration-200 disabled:opacity-40"
           >
             <span className="flex items-center gap-1">
               <Plus className="h-3 w-3" />

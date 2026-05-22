@@ -105,7 +105,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
       {/* Drag handle for mobile */}
       {isMobile && (
         <div
-          className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-[hsl(220,2.5%,28.5%)] cursor-grab active:cursor-grabbing"
+          className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-border cursor-grab active:cursor-grabbing"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -162,7 +162,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
       </div>
 
       {/* Divider */}
-      <div className="h-px bg-[hsl(220,2.5%,23%)] mb-4" />
+      <div className="h-px bg-border mb-4" />
 
       {/* Quick actions */}
       <div className="space-y-2">
