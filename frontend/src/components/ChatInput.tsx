@@ -629,6 +629,7 @@ export function ChatInput({
       />
 
       {/* Markdown formatting toolbar */}
+      {!isRecording && (
       <div className="flex items-center gap-0.5 px-4 pt-2 pb-1">
         {/* Bold */}
         <button
@@ -883,7 +884,7 @@ export function ChatInput({
       )}
 
       {/* Character count */}
-      {content.length > 0 && (
+      {!isRecording && content.length > 0 && (
         <div className="flex justify-end px-4 pb-1">
           <span
             className={cn(
