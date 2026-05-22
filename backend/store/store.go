@@ -2,10 +2,14 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"sync"
 	"sync/atomic"
 	"strings"
@@ -69,6 +73,16 @@ type Poll struct {
 	CreatedAt      int64             `json:"created_at"`
 }
 
+// CustomEmoji represents a custom emoji uploaded by a user.
+type CustomEmoji struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	URL       string `json:"url"`
+	Uploader  string `json:"uploader"`
+	RoomID    string `json:"room_id"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 // ScheduledMessage represents a message scheduled for future delivery.
 type ScheduledMessage struct {
 	ID        string `json:"id"`
@@ -98,6 +112,35 @@ type GroupInfo struct {
 type GroupMemberInfo struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`
+}
+
+// CallRecord represents a completed call history entry.
+type CallRecord struct {
+	ID        string `json:"id"`
+	Caller    string `json:"caller"`
+	Callee    string `json:"callee"`
+	CallType  string `json:"call_type"`
+	Status    string `json:"status"`
+	StartedAt int64  `json:"started_at"`
+	EndedAt   int64  `json:"ended_at"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// User represents a registered user account.
+type User struct {
+	Username     string `json:"username"`
+	PasswordHash string `json:"-"`
+	InvitedBy    string `json:"invited_by"`
+	CreatedAt    int64  `json:"created_at"`
+}
+
+// InviteCodeRecord represents an invitation code for new user registration.
+type InviteCodeRecord struct {
+	Code      string `json:"code"`
+	Creator   string `json:"creator"`
+	MaxUses   int    `json:"max_uses"`
+	UseCount  int    `json:"use_count"`
+	CreatedAt int64  `json:"created_at"`
 }
 
 // Store handles SQLite message persistence.
@@ -262,6 +305,44 @@ func (s *Store) migrate() error {
 					sent INTEGER DEFAULT 0
 				);
 				CREATE INDEX IF NOT EXISTS idx_scheduled_send_at ON scheduled_messages(send_at, sent);
+
+				CREATE TABLE IF NOT EXISTS call_history (
+					id TEXT PRIMARY KEY,
+					caller TEXT NOT NULL,
+					callee TEXT NOT NULL,
+					call_type TEXT DEFAULT 'video',
+					status TEXT DEFAULT 'missed',
+					started_at INTEGER,
+					ended_at INTEGER,
+					created_at INTEGER NOT NULL
+				);
+				CREATE INDEX IF NOT EXISTS idx_call_history_caller ON call_history(caller, created_at DESC);
+				CREATE INDEX IF NOT EXISTS idx_call_history_callee ON call_history(callee, created_at DESC);
+
+				CREATE TABLE IF NOT EXISTS custom_emojis (
+					id TEXT PRIMARY KEY,
+					name TEXT NOT NULL UNIQUE,
+					url TEXT NOT NULL,
+					uploader TEXT NOT NULL,
+					room_id TEXT DEFAULT '',
+					created_at INTEGER NOT NULL
+				);
+				CREATE INDEX IF NOT EXISTS idx_custom_emojis_name ON custom_emojis(name);
+
+				CREATE TABLE IF NOT EXISTS users (
+					username TEXT PRIMARY KEY,
+					password_hash TEXT NOT NULL,
+					invited_by TEXT DEFAULT '',
+					created_at INTEGER NOT NULL
+				);
+
+				CREATE TABLE IF NOT EXISTS invite_codes (
+					code TEXT PRIMARY KEY,
+					creator TEXT NOT NULL,
+					max_uses INTEGER DEFAULT 5,
+					use_count INTEGER DEFAULT 0,
+					created_at INTEGER NOT NULL
+				);
 			`
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -1895,4 +1976,373 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// --- Custom Emoji ---
+
+// AddCustomEmoji adds a new custom emoji.
+func (s *Store) AddCustomEmoji(name, url, uploader, roomID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	id := uuid.New().String()
+	now := time.Now().UnixMilli()
+	_, err := s.db.Exec(
+		"INSERT INTO custom_emojis (id, name, url, uploader, room_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		id, name, url, uploader, roomID, now,
+	)
+	return err
+}
+
+// ListCustomEmojis returns all custom emojis, optionally filtered by room.
+func (s *Store) ListCustomEmojis(roomID string) ([]CustomEmoji, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var rows *sql.Rows
+	var err error
+	if roomID != "" {
+		rows, err = s.db.Query(
+			"SELECT id, name, url, uploader, room_id, created_at FROM custom_emojis WHERE room_id = ? OR room_id = '' ORDER BY created_at DESC",
+			roomID,
+		)
+	} else {
+		rows, err = s.db.Query(
+			"SELECT id, name, url, uploader, room_id, created_at FROM custom_emojis ORDER BY created_at DESC",
+		)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []CustomEmoji
+	for rows.Next() {
+		var e CustomEmoji
+		if err := rows.Scan(&e.ID, &e.Name, &e.URL, &e.Uploader, &e.RoomID, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, e)
+	}
+	return result, rows.Err()
+}
+
+// DeleteCustomEmoji removes a custom emoji by name (only the uploader can delete).
+func (s *Store) DeleteCustomEmoji(name, username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec(
+		"DELETE FROM custom_emojis WHERE name = ? AND uploader = ?",
+		name, username,
+	)
+	return err
+}
+
+// SearchCustomEmojis searches custom emojis by name prefix.
+func (s *Store) SearchCustomEmojis(query string) ([]CustomEmoji, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query(
+		"SELECT id, name, url, uploader, room_id, created_at FROM custom_emojis WHERE name LIKE ? ORDER BY created_at DESC LIMIT 20",
+		query+"%",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []CustomEmoji
+	for rows.Next() {
+		var e CustomEmoji
+		if err := rows.Scan(&e.ID, &e.Name, &e.URL, &e.Uploader, &e.RoomID, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, e)
+	}
+	return result, rows.Err()
+}
+
+// LogCall inserts a new call history record.
+func (s *Store) LogCall(call CallRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(
+		"INSERT INTO call_history (id, caller, callee, call_type, status, started_at, ended_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		call.ID, call.Caller, call.Callee, call.CallType, call.Status, call.StartedAt, call.EndedAt, call.CreatedAt,
+	)
+	return err
+}
+
+// UpdateCallRecord updates the status and timestamps of an existing call record.
+func (s *Store) UpdateCallRecord(id, status string, startedAt, endedAt int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(
+		"UPDATE call_history SET status = ?, started_at = ?, ended_at = ? WHERE id = ?",
+		status, startedAt, endedAt, id,
+	)
+	return err
+}
+
+// GetCallHistory returns recent call history for a user (as caller or callee).
+func (s *Store) GetCallHistory(username string, limit int) ([]CallRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.db.Query(
+		"SELECT id, caller, callee, call_type, status, started_at, ended_at, created_at FROM call_history WHERE caller = ? OR callee = ? ORDER BY created_at DESC LIMIT ?",
+		username, username, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var calls []CallRecord
+	for rows.Next() {
+		var c CallRecord
+		var startedAt, endedAt sql.NullInt64
+		if err := rows.Scan(&c.ID, &c.Caller, &c.Callee, &c.CallType, &c.Status, &startedAt, &endedAt, &c.CreatedAt); err != nil {
+			continue
+		}
+		if startedAt.Valid {
+			c.StartedAt = startedAt.Int64
+		}
+		if endedAt.Valid {
+			c.EndedAt = endedAt.Int64
+		}
+		calls = append(calls, c)
+	}
+	if calls == nil {
+		calls = []CallRecord{}
+	}
+	return calls, rows.Err()
+}
+
+
+// --- User registration and authentication ---
+
+const inviteCodeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const inviteCodeLength = 8
+
+// hashPassword hashes a password using SHA-256 with a random salt.
+// NOTE: For production deployment with network access, prefer bcrypt
+// (golang.org/x/crypto/bcrypt) which provides adaptive cost and built-in salting.
+func hashPassword(password string) string {
+	salt := make([]byte, 16)
+	rand.Read(salt)
+	h := sha256.Sum256(append(salt, []byte(password)...))
+	return hex.EncodeToString(salt) + ":" + hex.EncodeToString(h[:])
+}
+
+// checkPassword verifies a plaintext password against a salted SHA-256 hash.
+func checkPassword(hash, password string) bool {
+	parts := strings.SplitN(hash, ":", 2)
+	if len(parts) != 2 {
+		return false
+	}
+	salt, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return false
+	}
+	h := sha256.Sum256(append(salt, []byte(password)...))
+	return hex.EncodeToString(h[:]) == parts[1]
+}
+
+// RegisterUser validates the invite code, hashes the password, creates the user,
+// and increments the invite code use count. All operations are transactional.
+func (s *Store) RegisterUser(username, passwordHash, inviteCode string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Normalize invite code: uppercase, trim whitespace.
+	code := strings.TrimSpace(strings.ToUpper(inviteCode))
+	if code == "" {
+		return fmt.Errorf("invite code is required")
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Check that the invite code exists and has remaining uses.
+	var creator string
+	var maxUses, useCount int
+	err = tx.QueryRow(
+		"SELECT creator, max_uses, use_count FROM invite_codes WHERE code = ?",
+		code,
+	).Scan(&creator, &maxUses, &useCount)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return fmt.Errorf("invalid invite code")
+		}
+		return err
+	}
+	if useCount >= maxUses {
+		return fmt.Errorf("invite code has no remaining uses")
+	}
+
+	// Check that username does not already exist.
+	var existing int
+	err = tx.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", username).Scan(&existing)
+	if err != nil {
+		return err
+	}
+	if existing > 0 {
+		return fmt.Errorf("username already registered")
+	}
+
+	// Hash password with salted SHA-256.
+	hash := hashPassword(passwordHash)
+
+	now := time.Now().UnixMilli()
+
+	// Insert user.
+	_, err = tx.Exec(
+		"INSERT INTO users (username, password_hash, invited_by, created_at) VALUES (?, ?, ?, ?)",
+		username, hash, creator, now,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Increment use count on invite code.
+	_, err = tx.Exec("UPDATE invite_codes SET use_count = use_count + 1 WHERE code = ?", code)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// VerifyUser checks the username and password against stored credentials.
+func (s *Store) VerifyUser(username, password string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var passwordHash string
+	err := s.db.QueryRow(
+		"SELECT password_hash FROM users WHERE username = ?",
+		username,
+	).Scan(&passwordHash)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return false, nil
+		}
+		return false, err
+	}
+
+	if !checkPassword(passwordHash, password) {
+		return false, nil
+	}
+	return true, nil
+}
+
+// GenerateInviteCode creates a new random invite code for the given creator.
+func (s *Store) GenerateInviteCode(creator string, maxUses int) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if maxUses <= 0 {
+		maxUses = 5
+	}
+
+	// Generate unique random code.
+	var code string
+	for {
+		code = randomCode(inviteCodeLength)
+		var count int
+		err := s.db.QueryRow("SELECT COUNT(*) FROM invite_codes WHERE code = ?", code).Scan(&count)
+		if err != nil {
+			return "", err
+		}
+		if count == 0 {
+			break
+		}
+	}
+
+	now := time.Now().UnixMilli()
+	_, err := s.db.Exec(
+		"INSERT INTO invite_codes (code, creator, max_uses, use_count, created_at) VALUES (?, ?, ?, 0, ?)",
+		code, creator, maxUses, now,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return code, nil
+}
+
+// ListInviteCodes returns all invite codes created by a given user.
+func (s *Store) ListInviteCodes(creator string) ([]InviteCodeRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query(
+		"SELECT code, creator, max_uses, use_count, created_at FROM invite_codes WHERE creator = ? ORDER BY created_at DESC",
+		creator,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var codes []InviteCodeRecord
+	for rows.Next() {
+		var c InviteCodeRecord
+		if err := rows.Scan(&c.Code, &c.Creator, &c.MaxUses, &c.UseCount, &c.CreatedAt); err != nil {
+			continue
+		}
+		codes = append(codes, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if codes == nil {
+		codes = []InviteCodeRecord{}
+	}
+	return codes, nil
+}
+
+// ValidateInviteCode checks whether an invite code exists and has remaining uses.
+func (s *Store) ValidateInviteCode(code string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	code = strings.TrimSpace(strings.ToUpper(code))
+	if code == "" {
+		return false, nil
+	}
+
+	var maxUses, useCount int
+	err := s.db.QueryRow(
+		"SELECT max_uses, use_count FROM invite_codes WHERE code = ?",
+		code,
+	).Scan(&maxUses, &useCount)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return useCount < maxUses, nil
+}
+
+// randomCode generates a random alphanumeric string of the given length.
+func randomCode(length int) string {
+	result := make([]byte, length)
+	for i := range result {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(inviteCodeChars))))
+		if err != nil {
+			n = big.NewInt(int64(time.Now().UnixNano() % int64(len(inviteCodeChars))))
+		}
+		result[i] = inviteCodeChars[n.Int64()]
+	}
+	return string(result)
 }

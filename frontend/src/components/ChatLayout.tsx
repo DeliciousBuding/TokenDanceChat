@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from "react";
-import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings, Download } from "lucide-react";
+import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings, Download, Info, Phone, Video } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
@@ -11,6 +11,8 @@ import { SearchBar } from "./SearchBar";
 import { ScheduledMessagesPanel } from "./ScheduledMessagesPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { ThreadPanel } from "./ThreadPanel";
+import { GroupInfoPanel } from "./GroupInfoPanel";
+import { VideoCall } from "./VideoCall";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
@@ -48,6 +50,12 @@ export function ChatLayout() {
     connected,
     lightboxImage,
     username,
+    groupInfoPanel,
+    setGroupInfoPanel,
+    incomingCall,
+    activeCall,
+    setActiveCall,
+    setIncomingCall,
   } = useChatStore();
   const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, forwardMessage, markRead } =
     useWebSocket();
@@ -273,6 +281,24 @@ export function ChatLayout() {
     setSidebarOpen(false);
   }, [setCurrentChat]);
 
+  const handleStartCall = useCallback(
+    (callType: "video" | "voice") => {
+      if (currentChat.type !== "dm") return;
+      setActiveCall({
+        callId: "",
+        peer: currentChat.username,
+        callType,
+        startTime: Date.now(),
+      });
+    },
+    [currentChat, setActiveCall],
+  );
+
+  const handleCloseCall = useCallback(() => {
+    setIncomingCall(null);
+    setActiveCall(null);
+  }, [setIncomingCall, setActiveCall]);
+
   const handleCreateGroup = useCallback(
     (name: string, members: string[]) => {
       chatAPI.sendGroupCreate(name, members);
@@ -390,6 +416,35 @@ export function ChatLayout() {
               {headerTitle}
             </h1>
           </div>
+          {/* Call buttons (mobile, DM only) */}
+          {currentChat.type === "dm" && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handleStartCall("voice")}
+                className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+                aria-label={t("call.voiceCall")}
+              >
+                <Phone className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => handleStartCall("video")}
+                className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+                aria-label={t("call.videoCall")}
+              >
+                <Video className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {/* Group info button (mobile) */}
+          {currentChat.type === "group" && (
+            <button
+              onClick={() => setGroupInfoPanel(currentChat.name)}
+              className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+              aria-label={t("group.groupInfo")}
+            >
+              <Info className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={toggleLang}
             aria-label={t("lang.label")}
@@ -453,6 +508,16 @@ export function ChatLayout() {
                 <ArrowLeft className="h-3.5 w-3.5" />
               </button>
             )}
+            {/* Group info button (when in group chat) */}
+            {currentChat.type === "group" && (
+              <button
+                onClick={() => setGroupInfoPanel(currentChat.name)}
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                aria-label={t("group.groupInfo")}
+              >
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            )}
             <div>
               <h1 className="text-sm font-semibold text-foreground">
                 {headerTitle}
@@ -461,6 +526,27 @@ export function ChatLayout() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Call buttons (desktop, DM only) */}
+            {currentChat.type === "dm" && (
+              <div className="flex items-center gap-1 mr-1">
+                <button
+                  onClick={() => handleStartCall("voice")}
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+                  aria-label={t("call.voiceCall")}
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  {t("call.voiceCall")}
+                </button>
+                <button
+                  onClick={() => handleStartCall("video")}
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+                  aria-label={t("call.videoCall")}
+                >
+                  <Video className="h-3.5 w-3.5" />
+                  {t("call.videoCall")}
+                </button>
+              </div>
+            )}
             <button
               onClick={toggleLang}
               aria-label={t("lang.label")}
@@ -682,6 +768,12 @@ export function ChatLayout() {
         onSendReply={handleSendThreadReply}
       />
 
+      {/* Group info panel */}
+      <GroupInfoPanel
+        groupName={groupInfoPanel}
+        onClose={() => setGroupInfoPanel(null)}
+      />
+
       {/* Group create modal */}
       <GroupCreateModal
         open={groupModalOpen}
@@ -727,6 +819,11 @@ export function ChatLayout() {
             onClose={() => useChatStore.getState().setLightboxImage(null)}
           />
         </Suspense>
+      )}
+
+      {/* Video/voice call overlay */}
+      {(incomingCall || activeCall) && (
+        <VideoCall onClose={handleCloseCall} />
       )}
     </div>
   );

@@ -1,5 +1,8 @@
-import { memo, useCallback, useState, useMemo } from "react";
+import { memo, useCallback, useState, useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "@/i18n/context";
+import { useChatStore } from "@/stores/chatStore";
+import { chatAPI } from "@/lib/api";
+import { Upload, Trash2 } from "lucide-react";
 
 const RECENTS_KEY = "tdchat:recent-emojis";
 const MAX_RECENTS = 18;
@@ -40,6 +43,16 @@ export const EmojiPicker = memo(function EmojiPicker({
   const [activeCat, setActiveCat] = useState(0);
   const [search, setSearch] = useState("");
   const [recents] = useState(getRecents);
+  const [emojiError, setEmojiError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const customEmojis = useChatStore((s) => s.customEmojis);
+  const username = useChatStore((s) => s.username);
+
+  // Request emoji list on mount.
+  useEffect(() => {
+    chatAPI.sendCustomEmojiList();
+  }, []);
 
   const categoryLabels = useMemo(() => ({
     Smileys: t("emoji.smileys"),
@@ -47,6 +60,7 @@ export const EmojiPicker = memo(function EmojiPicker({
     Hearts: t("emoji.hearts"),
     Objects: t("emoji.objects"),
     Misc: t("emoji.misc"),
+    Custom: t("emoji.custom"),
   }), [t]);
 
   const handleSelect = useCallback(
@@ -56,6 +70,66 @@ export const EmojiPicker = memo(function EmojiPicker({
       onClose();
     },
     [onSelect, onClose],
+  );
+
+  const handleCustomSelect = useCallback(
+    (name: string) => {
+      onSelect(`:${name}:`);
+      onClose();
+    },
+    [onSelect, onClose],
+  );
+
+  const handleUploadClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const validTypes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+      if (!validTypes.includes(file.type)) {
+        setEmojiError("Invalid file type. Allowed: PNG, JPG, GIF, WebP");
+        return;
+      }
+
+      if (file.size > 128 * 1024) {
+        setEmojiError("File too large. Max 128KB");
+        return;
+      }
+
+      setUploading(true);
+      setEmojiError(null);
+
+      const baseName = file.name.replace(/\.[^.]+$/, "");
+      const emojiName = baseName.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 32) || "emoji";
+
+      try {
+        const url = await chatAPI.uploadEmoji(file, emojiName);
+        if (url) {
+          chatAPI.sendCustomEmojiAdd(emojiName, url);
+        } else {
+          setEmojiError("Upload failed");
+        }
+      } catch {
+        setEmojiError("Upload failed");
+      } finally {
+        setUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
+    },
+    [],
+  );
+
+  const handleDelete = useCallback(
+    (name: string) => {
+      chatAPI.sendCustomEmojiDelete(name);
+    },
+    [],
   );
 
   const filteredEmojis = useMemo(() => {
@@ -117,10 +191,81 @@ export const EmojiPicker = memo(function EmojiPicker({
                 {categoryLabels[cat.name as keyof typeof categoryLabels] || cat.name}
               </button>
             ))}
+            <button onClick={() => setActiveCat(-1)}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
+                -1 === activeCat ? "bg-accent text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground"
+              }`}>
+              {categoryLabels.Custom}
+            </button>
           </div>
         )}
 
-        {/* Emoji grid */}
+        {/* Emoji grid or CustomEmoji inline grid */}
+        {activeCat === -1 && !search ? (
+          <div className="overflow-y-auto flex-1 p-3 custom-scrollbar">
+            {/* Upload header */}
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] text-muted-foreground/50">{t("emoji.custom")}</span>
+              <button
+                onClick={handleUploadClick}
+                disabled={uploading}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+              >
+                <Upload className="w-3 h-3" />
+                {uploading ? "..." : t("emoji.uploadEmoji")}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </div>
+            {emojiError && (
+              <div className="mb-2 text-[10px] text-red-500">{emojiError}</div>
+            )}
+            {customEmojis.length === 0 ? (
+              <div className="text-center py-8 text-xs text-muted-foreground/50">{t("emoji.noCustomEmoji")}</div>
+            ) : (
+              <div className="grid grid-cols-5 gap-2">
+                {customEmojis.map((emoji) => (
+                  <div key={emoji.name} className="group relative">
+                    <button
+                      onClick={() => handleCustomSelect(emoji.name)}
+                      title={`:${emoji.name}:`}
+                      className="flex flex-col items-center gap-1 w-full p-1.5 rounded-lg hover:bg-accent transition-colors"
+                    >
+                      <div className="w-10 h-10 flex items-center justify-center">
+                        <img
+                          src={emoji.url}
+                          alt={emoji.name}
+                          className="max-w-full max-h-full object-contain"
+                          loading="lazy"
+                        />
+                      </div>
+                      <span className="text-[8px] text-muted-foreground/60 truncate w-full text-center leading-none">
+                        :{emoji.name}:
+                      </span>
+                    </button>
+                    {emoji.uploader === username && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(emoji.name);
+                        }}
+                        className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-full bg-destructive/90 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
+                        title={t("emoji.deleteEmoji")}
+                      >
+                        <Trash2 className="w-2 h-2" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="overflow-y-auto flex-1 p-3 custom-scrollbar">
           <div className="grid grid-cols-8 gap-0.5">
             {filteredEmojis.map((emoji) => (
@@ -134,6 +279,7 @@ export const EmojiPicker = memo(function EmojiPicker({
             <div className="text-center py-8 text-xs text-muted-foreground/50">{t("emoji.noResults")}</div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

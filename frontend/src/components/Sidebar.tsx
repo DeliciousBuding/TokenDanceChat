@@ -16,6 +16,8 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Info,
+  Key,
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -24,6 +26,7 @@ import { Avatar } from "@/components/Avatar";
 import { assistants, modelCatalog } from "@/lib/assistantRegistry";
 import { AssistantIcon } from "@/components/AssistantIcon";
 import { isSoundEnabled, setSoundEnabled } from "@/lib/soundToggle";
+import { InviteCodeManager } from "@/components/InviteCodeManager";
 import { chatAPI } from "@/lib/api";
 
 interface SidebarProps {
@@ -179,6 +182,7 @@ export function Sidebar({
     mutedConversations,
     archivedConversations,
     userProfiles,
+    setGroupInfoPanel,
   } = useChatStore();
 
   // Sound toggle state
@@ -188,6 +192,9 @@ export function Sidebar({
     setSoundOn(next);
     setSoundEnabled(next);
   }, [soundOn]);
+
+  // Invite code manager state
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   // Right-click context menu state for conversation pinning
   const [contextMenu, setContextMenu] = useState<{
@@ -787,7 +794,22 @@ export function Sidebar({
             {soundOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
           </button>
         </div>
+        {/* Invite code manager */}
+        <div className="mt-1 flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground/50">{t("invite.inviteCodes")}</span>
+          <button
+            onClick={() => setInviteOpen(true)}
+            className="flex items-center gap-1 rounded-md p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
+            aria-label={t("invite.inviteCodes")}
+            title={t("invite.inviteCodes")}
+          >
+            <Key className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
+
+      {/* Invite code manager modal */}
+      <InviteCodeManager open={inviteOpen} onClose={() => setInviteOpen(false)} />
 
       {/* Right-click context menu for conversation pinning */}
       {contextMenu && (
@@ -866,6 +888,23 @@ export function Sidebar({
               </>
             )}
           </button>
+          {/* Group info — only show for group conversations */}
+          {contextMenu.key.startsWith("group:") && (
+            <>
+              <div className="border-t border-border my-1" />
+              <button
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
+                onClick={() => {
+                  const grpName = contextMenu.key.slice(6); // Remove "group:" prefix.
+                  setGroupInfoPanel(grpName);
+                  setContextMenu(null);
+                }}
+              >
+                <Info className="h-3 w-3" />
+                {t("group.groupInfo")}
+              </button>
+            </>
+          )}
         </div>
       )}
     </aside>

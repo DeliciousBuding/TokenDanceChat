@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent, type ClipboardEvent } from "react";
-import { Send, Loader2, X, ImagePlus, Paperclip, Mic, Square, Bold, Italic, Strikethrough, Code, Quote, Link, Eye, EyeOff } from "lucide-react";
+import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense, type KeyboardEvent, type ClipboardEvent } from "react";
+import { Send, Loader2, X, ImagePlus, Paperclip, Mic, Square, Bold, Italic, Strikethrough, Code, Quote, Link, Eye, EyeOff, Film } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn, hashString } from "@/lib/utils";
@@ -8,6 +8,8 @@ import { useChatStore } from "@/stores/chatStore";
 import { chatAPI, type ChatMessage, type TypingContext } from "@/lib/api";
 import { mentionableAssistants } from "@/lib/assistantRegistry";
 import { ScheduleButton } from "./ScheduleButton";
+
+const GifPicker = lazy(() => import("@/components/GifPicker").then((m) => ({ default: m.GifPicker })));
 
 const EMOJI_MAP: Record<string, string> = {
   smile: "😄", laugh: "😆", heart: "❤️", thumbsup: "👍", thumbsdown: "👎",
@@ -100,6 +102,9 @@ export function ChatInput({
   const [slideCancelDragging, setSlideCancelDragging] = useState(false);
   const slideCancelStartX = useRef(0);
   const SLIDE_CANCEL_THRESHOLD = 60;
+
+  // Gif picker state
+  const [showGifPicker, setShowGifPicker] = useState(false);
 
   const handleCancelPointerDown = useCallback((e: React.PointerEvent) => {
     slideCancelStartX.current = e.clientX;
@@ -232,7 +237,7 @@ export function ChatInput({
     if (!textarea) return { query: "", startPos: -1 };
     const cursorPos = textarea.selectionStart;
     const textBeforeCursor = content.slice(0, cursorPos);
-    const match = textBeforeCursor.match(/:([a-z_]*)$/);
+    const match = textBeforeCursor.match(/:([a-zA-Z0-9_]*)$/);
     if (!match) return { query: "", startPos: -1 };
     return {
       query: match[1] || "",
@@ -240,13 +245,19 @@ export function ChatInput({
     };
   }, [content]);
 
-  const emojiFiltered = useMemo(() => {
+  const emojiFiltered = useMemo((): { key: string; emoji: string; custom: boolean; url?: string }[] => {
     const { query, startPos } = emojiQuery;
     if (startPos < 0 || query.length < 1) return [];
     const lower = query.toLowerCase();
-    return Object.entries(EMOJI_MAP)
+    // Built-in emojis as { key, emoji } entries.
+    const builtin = Object.entries(EMOJI_MAP)
       .filter(([key]) => key.toLowerCase().includes(lower))
-      .slice(0, 20);
+      .map(([key, emoji]) => ({ key, emoji, custom: false }));
+    // Custom emojis from store.
+    const custom = useChatStore.getState().customEmojis
+      .filter((e) => e.name.toLowerCase().includes(lower))
+      .map((e) => ({ key: e.name, emoji: "", custom: true, url: e.url }));
+    return [...builtin, ...custom].slice(0, 20);
   }, [emojiQuery]);
 
   // Active states with priority: mention > slash > emoji
@@ -545,6 +556,26 @@ export function ChatInput({
     }
   }, [content]);
 
+  const handleGifSelect = useCallback(
+    (markdown: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      // Insert the GIF/sticker markdown with a trailing space.
+      const insertion = markdown + " ";
+      const newContent = content.slice(0, start) + insertion + content.slice(end);
+      setContent(newContent);
+      setShowGifPicker(false);
+      requestAnimationFrame(() => {
+        textarea.focus();
+        const cursor = start + insertion.length;
+        textarea.setSelectionRange(cursor, cursor);
+      });
+    },
+    [content],
+  );
+
   const commitLink = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -831,13 +862,15 @@ export function ChatInput({
       const cursorPos = textarea.selectionStart;
       const before = content.slice(0, startPos);
       const after = content.slice(cursorPos);
-      const emojiChar = EMOJI_MAP[emojiKey];
-      if (!emojiChar) return;
 
-      const newContent = before + emojiChar + after;
+      // Check if this is a custom emoji (no unicode char in EMOJI_MAP)
+      const emojiChar = EMOJI_MAP[emojiKey];
+      const replacement = emojiChar || `:${emojiKey}:`;
+
+      const newContent = before + replacement + after;
       setContent(newContent);
 
-      const newCursor = startPos + emojiChar.length;
+      const newCursor = startPos + replacement.length;
       requestAnimationFrame(() => {
         textarea.focus();
         textarea.setSelectionRange(newCursor, newCursor);
@@ -921,7 +954,7 @@ export function ChatInput({
         if (e.key === "Enter" && !e.shiftKey && !isComposing) {
           e.preventDefault();
           if (emojiFiltered[emojiIndex]) {
-            insertEmoji(emojiFiltered[emojiIndex][0]);
+            insertEmoji(emojiFiltered[emojiIndex].key);
           }
           return;
         }
@@ -1219,6 +1252,23 @@ export function ChatInput({
             <Quote className="h-3.5 w-3.5" />
           </button>
 
+          {/* GIF picker button */}
+          <button
+            type="button"
+            onClick={() => setShowGifPicker((p) => !p)}
+            disabled={disabled}
+            aria-label="GIF"
+            title="GIF & Stickers"
+            className={cn(
+              "h-8 w-8 flex items-center justify-center rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed",
+              showGifPicker
+                ? "bg-accent text-primary"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+          >
+            <Film className="h-3.5 w-3.5" />
+          </button>
+
           {/* Link button with inline URL input */}
           <div className="relative flex items-center">
             <button
@@ -1507,10 +1557,10 @@ export function ChatInput({
                   className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-border bg-card shadow-lg animate-scale-in z-20"
                   style={{ maxHeight: "200px", overflowY: "auto" }}
                 >
-                  {emojiFiltered.map(([key, emoji], idx) => (
+                  {emojiFiltered.map((item, idx) => (
                     <button
-                      key={key}
-                      onClick={() => insertEmoji(key)}
+                      key={item.key}
+                      onClick={() => insertEmoji(item.key)}
                       onMouseEnter={() => setEmojiIndex(idx)}
                       className={cn(
                         "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
@@ -1519,9 +1569,13 @@ export function ChatInput({
                           : "text-muted-foreground hover:bg-accent hover:text-foreground",
                       )}
                     >
-                      <span className="text-base">{emoji}</span>
+                      {item.custom ? (
+                        <img src={(item as unknown as { url: string }).url} alt={item.key} className="w-5 h-5 object-contain" />
+                      ) : (
+                        <span className="text-base">{item.emoji}</span>
+                      )}
                       <span className="text-xs text-muted-foreground/70">
-                        :{key}:
+                        :{item.key}:
                       </span>
                     </button>
                   ))}
@@ -1654,6 +1708,16 @@ export function ChatInput({
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-medium animate-slide-up shadow-lg whitespace-nowrap">
           {dragError}
         </div>
+      )}
+
+      {/* Gif Picker */}
+      {showGifPicker && (
+        <Suspense fallback={null}>
+          <GifPicker
+            onSelect={handleGifSelect}
+            onClose={() => setShowGifPicker(false)}
+          />
+        </Suspense>
       )}
     </div>
   );

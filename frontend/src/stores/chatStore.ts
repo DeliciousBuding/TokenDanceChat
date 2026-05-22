@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, RoomInfo, UserStatus, ScheduledMessage } from "@/lib/api";
+import type { ChatMessage, RoomInfo, UserStatus, ScheduledMessage, CustomEmoji } from "@/lib/api";
 
 const MESSAGE_CAP = 500;
 
@@ -56,6 +56,20 @@ export interface UserProfile {
 export interface NotificationPref {
   mutedUntil: number;
   showPreview: boolean;
+}
+
+export interface IncomingCall {
+  callId: string;
+  from: string;
+  callType: "video" | "voice";
+  sdp: string;
+}
+
+export interface ActiveCall {
+  callId: string;
+  peer: string;
+  callType: "video" | "voice";
+  startTime: number;
 }
 
 interface ChatState {
@@ -140,6 +154,11 @@ interface ChatState {
 
   // Scheduled messages
   scheduledMessages: ScheduledMessage[];
+  customEmojis: CustomEmoji[];
+
+  // Call state
+  incomingCall: IncomingCall | null;
+  activeCall: ActiveCall | null;
 
   // Actions
   setView: (view: ViewState) => void;
@@ -199,6 +218,11 @@ interface ChatState {
   updateUserProfileStatus: (username: string, status: string) => void;
   setScheduledMessages: (messages: ScheduledMessage[]) => void;
   removeScheduledMessage: (id: string) => void;
+  setCustomEmojis: (emojis: CustomEmoji[]) => void;
+  addCustomEmoji: (emoji: CustomEmoji) => void;
+  removeCustomEmoji: (name: string) => void;
+  setIncomingCall: (call: IncomingCall | null) => void;
+  setActiveCall: (call: ActiveCall | null) => void;
   reset: () => void;
 }
 
@@ -235,6 +259,9 @@ export const useChatStore = create<ChatState>((set) => ({
   lightboxImage: null,
   userProfiles: {},
   scheduledMessages: [],
+  customEmojis: [],
+  incomingCall: null,
+  activeCall: null,
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
@@ -499,6 +526,15 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => ({
       scheduledMessages: state.scheduledMessages.filter((m) => m.id !== id),
     })),
+  setCustomEmojis: (customEmojis) => set({ customEmojis }),
+  addCustomEmoji: (emoji) =>
+    set((state) => ({ customEmojis: [...state.customEmojis, emoji] })),
+  removeCustomEmoji: (name) =>
+    set((state) => ({
+      customEmojis: state.customEmojis.filter((e) => e.name !== name),
+    })),
+  setIncomingCall: (incomingCall) => set({ incomingCall }),
+  setActiveCall: (activeCall) => set({ activeCall }),
   reset: () =>
     set({
       view: "join",
@@ -533,5 +569,8 @@ export const useChatStore = create<ChatState>((set) => ({
       lightboxImage: null,
       userProfiles: {},
       scheduledMessages: [],
+      customEmojis: [],
+      incomingCall: null,
+      activeCall: null,
     }),
 }));

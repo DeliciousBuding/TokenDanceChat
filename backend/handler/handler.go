@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"net"
+	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -407,6 +408,7 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 // --- Image Upload ---
 
 const maxUploadSize = 50 << 20 // 50 MB
+const maxEmojiUploadSize = 128 << 10 // 128 KB
 const maxLinkPreviewCacheSize = 1000
 
 // UploadImage handles POST /api/upload (multipart form).
@@ -488,6 +490,297 @@ func (h *Handler) ServeUpload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+
+// --- Custom Emoji Upload ---
+
+// validEmojiExts are the allowed image extensions for custom emojis.
+var validEmojiExts = map[string]bool{
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
+}
+
+// UploadEmoji handles POST /api/emoji/upload (multipart form, image only, max 128KB).
+func (h *Handler) UploadEmoji(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxEmojiUploadSize)
+
+	if err := r.ParseMultipartForm(maxEmojiUploadSize); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "file too large (max 128KB)", "FILE_TOO_LARGE", requestID)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing file field", "MISSING_FILE", requestID)
+		return
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if !validEmojiExts[ext] {
+		writeJSONError(w, http.StatusBadRequest, "unsupported file type (allowed: png, jpg, gif, webp)", "INVALID_FILE_TYPE", requestID)
+		return
+	}
+
+	// Save to uploads/emojis/ subdirectory.
+	emojiDir := filepath.Join(h.uploadsDir, "emojis")
+	if err := os.MkdirAll(emojiDir, 0755); err != nil {
+		log.Printf("emoji upload: failed to create emoji dir: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to save file", "SERVER_ERROR", requestID)
+		return
+	}
+
+	filename := uuid.New().String() + ext
+	filePath := filepath.Join(emojiDir, filename)
+
+	dst, err := os.Create(filePath)
+	if err != nil {
+		log.Printf("emoji upload: failed to create file: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to save file", "SERVER_ERROR", requestID)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		log.Printf("emoji upload: failed to write file: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to save file", "SERVER_ERROR", requestID)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"url":      "/uploads/emojis/" + filename,
+		"filename": filename,
+	})
+}
+
+// ServeEmoji handles GET /uploads/emojis/{filename}
+func (h *Handler) ServeEmoji(w http.ResponseWriter, r *http.Request) {
+	// Extract the sub-path after /uploads/emojis/
+	trimmed := strings.TrimPrefix(r.URL.Path, "/uploads/emojis/")
+	filename := filepath.Base(trimmed)
+	if filename == "." || filename == "/" || filename == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	filePath := filepath.Join(h.uploadsDir, "emojis", filename)
+
+	// Path traversal guard.
+	absBase, _ := filepath.Abs(filepath.Join(h.uploadsDir, "emojis"))
+	absFile, err := filepath.Abs(filePath)
+	if err != nil || !strings.HasPrefix(absFile, absBase+string(filepath.Separator)) {
+		http.NotFound(w, r)
+		return
+	}
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+
+	ext := strings.ToLower(filepath.Ext(filename))
+	contentType := "application/octet-stream"
+	switch ext {
+	case ".png":
+		contentType = "image/png"
+	case ".jpg", ".jpeg":
+		contentType = "image/jpeg"
+	case ".gif":
+		contentType = "image/gif"
+	case ".webp":
+		contentType = "image/webp"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	io.Copy(w, f)
+}
+
+// --- GIPHY Proxy ---
+
+// giphyAPIKey is loaded once from environment.
+var giphyAPIKey = func() string {
+	if k := os.Getenv("CHAT_GIPHY_API_KEY"); k != "" {
+		return k
+	}
+	return "dc6zaTOxFJmzC" // GIPHY public beta key for development
+}()
+
+// giphyResponse mirrors the GIPHY API response shape we expose to the client.
+type giphyResponse struct {
+	Data       []giphyItem    `json:"data"`
+	Pagination giphyPagination `json:"pagination"`
+}
+
+type giphyItem struct {
+	ID         string `json:"id"`
+	URL        string `json:"url"`
+	PreviewURL string `json:"preview_url"`
+	Title      string `json:"title"`
+}
+
+type giphyPagination struct {
+	TotalCount int `json:"total_count"`
+	Count      int `json:"count"`
+	Offset     int `json:"offset"`
+}
+
+// giphyAPIRaw mirrors the upstream GIPHY JSON for decoding.
+type giphyAPIRaw struct {
+	Data []struct {
+		ID     string `json:"id"`
+		Images struct {
+			FixedHeight      giphyImage `json:"fixed_height"`
+			FixedHeightSmall giphyImage `json:"fixed_height_small"`
+		} `json:"images"`
+		Title string `json:"title"`
+	} `json:"data"`
+	Pagination struct {
+		TotalCount int `json:"total_count"`
+		Count      int `json:"count"`
+		Offset     int `json:"offset"`
+	} `json:"pagination"`
+}
+
+type giphyImage struct {
+	URL    string `json:"url"`
+	Width  string `json:"width"`
+	Height string `json:"height"`
+}
+
+// fetchGiphy proxies a request to the GIPHY API and returns a unified response.
+func (h *Handler) fetchGiphy(w http.ResponseWriter, r *http.Request, endpoint string, query url.Values) {
+	requestID := requestIDFromContext(r.Context())
+
+	query.Set("api_key", giphyAPIKey)
+	apiURL := fmt.Sprintf("https://api.giphy.com/v1/%s?%s", endpoint, query.Encode())
+
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to create request", "UPSTREAM_ERROR", requestID)
+		return
+	}
+
+	client := &http.Client{Timeout: 8 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("giphy upstream error: %v", err)
+		writeJSONError(w, http.StatusBadGateway, "giphy upstream unavailable", "UPSTREAM_ERROR", requestID)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("giphy upstream returned %d", resp.StatusCode)
+		writeJSONError(w, http.StatusBadGateway, "giphy upstream error", "UPSTREAM_ERROR", requestID)
+		return
+	}
+
+	var raw giphyAPIRaw
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		log.Printf("giphy decode error: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to decode giphy response", "UPSTREAM_ERROR", requestID)
+		return
+	}
+
+	// Map to our client-facing shape.
+	result := giphyResponse{
+		Pagination: giphyPagination{
+			TotalCount: raw.Pagination.TotalCount,
+			Count:      raw.Pagination.Count,
+			Offset:     raw.Pagination.Offset,
+		},
+	}
+	for _, item := range raw.Data {
+		result.Data = append(result.Data, giphyItem{
+			ID:         item.ID,
+			URL:        item.Images.FixedHeight.URL,
+			PreviewURL: item.Images.FixedHeightSmall.URL,
+			Title:      item.Title,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// GiphySearch handles GET /api/giphy/search?q=...&limit=20&offset=0&type=gif|sticker.
+func (h *Handler) GiphySearch(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		writeJSONError(w, http.StatusBadRequest, "q parameter is required", "MISSING_QUERY", requestID)
+		return
+	}
+
+	mediaType := r.URL.Query().Get("type")
+	if mediaType == "" {
+		mediaType = "gif"
+	}
+
+	endpoint := "gifs/search"
+	if mediaType == "sticker" {
+		endpoint = "stickers/search"
+	}
+
+	params := url.Values{}
+	params.Set("q", q)
+	if limit := r.URL.Query().Get("limit"); limit != "" {
+		params.Set("limit", limit)
+	} else {
+		params.Set("limit", "20")
+	}
+	if offset := r.URL.Query().Get("offset"); offset != "" {
+		params.Set("offset", offset)
+	}
+
+	h.fetchGiphy(w, r, endpoint, params)
+}
+
+// GiphyTrending handles GET /api/giphy/trending?limit=20&offset=0&type=gif|sticker.
+func (h *Handler) GiphyTrending(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	mediaType := r.URL.Query().Get("type")
+	if mediaType == "" {
+		mediaType = "gif"
+	}
+
+	endpoint := "gifs/trending"
+	if mediaType == "sticker" {
+		endpoint = "stickers/trending"
+	}
+
+	params := url.Values{}
+	if limit := r.URL.Query().Get("limit"); limit != "" {
+		params.Set("limit", limit)
+	} else {
+		params.Set("limit", "20")
+	}
+	if offset := r.URL.Query().Get("offset"); offset != "" {
+		params.Set("offset", offset)
+	}
+
+	h.fetchGiphy(w, r, endpoint, params)
+}
 
 // isPrivateHost checks if a hostname resolves to a private/internal IP address.
 func isPrivateHost(host string) bool {
@@ -628,4 +921,180 @@ func (h *Handler) writeTextExport(w io.Writer, messages []hub.StoredMessage, con
 			fmt.Fprintf(w, "    %s\r\n", strings.Join(parts, "  "))
 		}
 	}
+}
+
+// --- User registration and authentication endpoints ---
+
+// Register handles POST /api/register.
+func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	var body struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		InviteCode string `json:"invite_code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid JSON body", "INVALID_JSON", requestID)
+		return
+	}
+
+	username := strings.TrimSpace(body.Username)
+	password := body.Password
+	inviteCode := strings.TrimSpace(body.InviteCode)
+
+	if !hub.ValidateUsername(username) {
+		writeJSONError(w, http.StatusBadRequest, "invalid username: 1-20 chars, letters, digits, underscore, or Chinese", "INVALID_USERNAME", requestID)
+		return
+	}
+
+	if len(password) < 6 {
+		writeJSONError(w, http.StatusBadRequest, "password must be at least 6 characters", "WEAK_PASSWORD", requestID)
+		return
+	}
+
+	if inviteCode == "" {
+		writeJSONError(w, http.StatusBadRequest, "invite code is required", "MISSING_INVITE_CODE", requestID)
+		return
+	}
+
+	if err := h.store.RegisterUser(username, password, inviteCode); err != nil {
+		log.Printf("register error: %v", err)
+		if strings.Contains(err.Error(), "invalid invite code") {
+			writeJSONError(w, http.StatusBadRequest, "invalid or expired invite code", "INVALID_INVITE_CODE", requestID)
+			return
+		}
+		if strings.Contains(err.Error(), "no remaining uses") {
+			writeJSONError(w, http.StatusBadRequest, "invite code has reached maximum uses", "INVITE_CODE_EXHAUSTED", requestID)
+			return
+		}
+		if strings.Contains(err.Error(), "already registered") {
+			writeJSONError(w, http.StatusConflict, "username already registered", "USERNAME_TAKEN", requestID)
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "registration failed", "SERVER_ERROR", requestID)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"username": username,
+	})
+}
+
+// Login handles POST /api/login.
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid JSON body", "INVALID_JSON", requestID)
+		return
+	}
+
+	username := strings.TrimSpace(body.Username)
+	password := body.Password
+
+	if username == "" || password == "" {
+		writeJSONError(w, http.StatusBadRequest, "username and password are required", "MISSING_FIELDS", requestID)
+		return
+	}
+
+	ok, err := h.store.VerifyUser(username, password)
+	if err != nil {
+		log.Printf("login error: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "login failed", "SERVER_ERROR", requestID)
+		return
+	}
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "invalid username or password", "INVALID_CREDENTIALS", requestID)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"username": username,
+	})
+}
+
+// InviteGenerate handles POST /api/invite/generate.
+func (h *Handler) InviteGenerate(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	var body struct {
+		Username string `json:"username"`
+		MaxUses  int    `json:"max_uses"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid JSON body", "INVALID_JSON", requestID)
+		return
+	}
+
+	username := strings.TrimSpace(body.Username)
+	if username == "" {
+		writeJSONError(w, http.StatusBadRequest, "username is required", "MISSING_USERNAME", requestID)
+		return
+	}
+
+	maxUses := body.MaxUses
+	if maxUses <= 0 {
+		maxUses = 5
+	}
+
+	code, err := h.store.GenerateInviteCode(username, maxUses)
+	if err != nil {
+		log.Printf("generate invite code error: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to generate invite code", "SERVER_ERROR", requestID)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code": code,
+	})
+}
+
+// InviteList handles GET /api/invite/list?username=xxx.
+func (h *Handler) InviteList(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	username := r.URL.Query().Get("username")
+	if username == "" {
+		writeJSONError(w, http.StatusBadRequest, "username query parameter is required", "MISSING_USERNAME", requestID)
+		return
+	}
+
+	codes, err := h.store.ListInviteCodes(username)
+	if err != nil {
+		log.Printf("list invite codes error: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to list invite codes", "SERVER_ERROR", requestID)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"codes": codes,
+	})
 }

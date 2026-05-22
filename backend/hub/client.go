@@ -204,6 +204,24 @@ func (c *Client) ReadPump() {
 			c.handleGroupLeave(msg)
 		case "group_info":
 			c.handleGroupInfo(msg)
+		case "call_start":
+			c.handleCallStart(msg)
+		case "call_accept":
+			c.handleCallAccept(msg)
+		case "call_reject":
+			c.handleCallReject(msg)
+		case "call_end":
+			c.handleCallEnd(msg)
+		case "call_ice_candidate":
+			c.handleCallIceCandidate(msg)
+		case "call_list":
+			c.handleCallList()
+		case "custom_emoji_add":
+			c.handleCustomEmojiAdd(msg)
+		case "custom_emoji_list":
+			c.handleCustomEmojiList()
+		case "custom_emoji_delete":
+			c.handleCustomEmojiDelete(msg)
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -2657,5 +2675,363 @@ func msgsToMessages(sms []ScheduledMessage) []StoredMessage {
 		})
 	}
 	return result
+}
+
+// --- Call signaling handlers ---
+
+func (c *Client) handleCallStart(msg Message) {
+	if c.username == "" {
+		return
+	}
+	to := msg.To
+	if to == "" || to == c.username {
+		return
+	}
+	callType := msg.CallType
+	if callType == "" {
+		callType = "video"
+	}
+
+	callID := uuid.New().String()
+	cs := c.hub.CreateCallSession(callID, c.username, to, callType)
+
+	// Log the call start.
+	c.hub.store.LogCall(store.CallRecord{
+		ID:        callID,
+		Caller:    c.username,
+		Callee:    to,
+		CallType:  callType,
+		Status:    "ringing",
+		CreatedAt: cs.CreatedAt,
+	})
+
+	// Forward to target user as incoming call.
+	incoming, _ := json.Marshal(Message{
+		Type:     "call_incoming",
+		CallID:   callID,
+		From:     c.username,
+		To:       to,
+		CallType: callType,
+		SDP:      msg.SDP,
+	})
+	if !c.hub.SendToUser(to, incoming) {
+		// Callee is offline — mark as missed.
+		c.hub.store.UpdateCallRecord(callID, "missed", 0, time.Now().UnixMilli())
+		c.hub.RemoveCallSession(callID)
+		missed, _ := json.Marshal(Message{
+			Type:     "call_rejected",
+			CallID:   callID,
+			Content:  "user is offline",
+			CallType: callType,
+		})
+		select {
+		case c.send <- missed:
+		default:
+		}
+	}
+}
+
+func (c *Client) handleCallAccept(msg Message) {
+	if c.username == "" {
+		return
+	}
+	callID := msg.CallID
+	if callID == "" {
+		return
+	}
+
+	cs := c.hub.GetCallSession(callID)
+	if cs == nil {
+		return
+	}
+	// Only the callee can accept.
+	if cs.Callee != c.username {
+		return
+	}
+
+	c.hub.UpdateCallSessionStatus(callID, "active")
+	c.hub.store.UpdateCallRecord(callID, "active", time.Now().UnixMilli(), 0)
+
+	// Forward answer SDP to caller.
+	accept, _ := json.Marshal(Message{
+		Type:     "call_accepted",
+		CallID:   callID,
+		From:     c.username,
+		To:       cs.Caller,
+		CallType: cs.Type,
+		SDP:      msg.SDP,
+	})
+	c.hub.SendToUser(cs.Caller, accept)
+}
+
+func (c *Client) handleCallReject(msg Message) {
+	if c.username == "" {
+		return
+	}
+	callID := msg.CallID
+	if callID == "" {
+		return
+	}
+
+	cs := c.hub.GetCallSession(callID)
+	if cs == nil {
+		return
+	}
+	// Only the callee can reject.
+	if cs.Callee != c.username {
+		return
+	}
+
+	c.hub.store.UpdateCallRecord(callID, "rejected", 0, time.Now().UnixMilli())
+	c.hub.RemoveCallSession(callID)
+
+	// Notify caller.
+	reject, _ := json.Marshal(Message{
+		Type:     "call_rejected",
+		CallID:   callID,
+		From:     c.username,
+		To:       cs.Caller,
+		CallType: cs.Type,
+		Content:  "call rejected",
+	})
+	c.hub.SendToUser(cs.Caller, reject)
+}
+
+func (c *Client) handleCallEnd(msg Message) {
+	if c.username == "" {
+		return
+	}
+	callID := msg.CallID
+	if callID == "" {
+		return
+	}
+
+	cs := c.hub.GetCallSession(callID)
+	if cs == nil {
+		return
+	}
+	// Either party can end.
+	if cs.Caller != c.username && cs.Callee != c.username {
+		return
+	}
+
+	now := time.Now().UnixMilli()
+	c.hub.store.UpdateCallRecord(callID, "completed", 0, now)
+	c.hub.RemoveCallSession(callID)
+
+	// Notify the other party.
+	other := cs.Caller
+	if other == c.username {
+		other = cs.Callee
+	}
+	end, _ := json.Marshal(Message{
+		Type:     "call_ended",
+		CallID:   callID,
+		From:     c.username,
+		To:       other,
+		CallType: cs.Type,
+	})
+	c.hub.SendToUser(other, end)
+}
+
+func (c *Client) handleCallIceCandidate(msg Message) {
+	if c.username == "" {
+		return
+	}
+	callID := msg.CallID
+	if callID == "" || msg.Candidate == "" {
+		return
+	}
+
+	cs := c.hub.GetCallSession(callID)
+	if cs == nil {
+		return
+	}
+	// Either party can send ICE candidates.
+	if cs.Caller != c.username && cs.Callee != c.username {
+		return
+	}
+
+	// Relay to the other party.
+	other := cs.Caller
+	if other == c.username {
+		other = cs.Callee
+	}
+	ice, _ := json.Marshal(Message{
+		Type:      "call_ice_candidate",
+		CallID:    callID,
+		From:      c.username,
+		To:        other,
+		Candidate: msg.Candidate,
+	})
+	c.hub.SendToUser(other, ice)
+}
+
+func (c *Client) handleCallList() {
+	if c.username == "" {
+		return
+	}
+	calls, err := c.hub.store.GetCallHistory(c.username, 50)
+	if err != nil {
+		log.Printf("call_list: error: %v", err)
+		calls = []store.CallRecord{}
+	}
+	payload, _ := json.Marshal(Message{
+		Type:  "call_list",
+		Calls: calls,
+	})
+	select {
+	case c.send <- payload:
+	default:
+	}
+}
+
+// handleCustomEmojiAdd handles uploading/registering a new custom emoji.
+func (c *Client) handleCustomEmojiAdd(msg Message) {
+	if c.username == "" {
+		return
+	}
+	if !c.checkRateLimit() {
+		return
+	}
+
+	name := strings.TrimSpace(msg.EmojiName)
+	url := strings.TrimSpace(msg.EmojiURL)
+	if name == "" || url == "" {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "emoji name and URL are required",
+			ErrorCode: "INVALID_EMOJI",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	// Validate name: alphanumeric + underscore, max 32 chars.
+	if len(name) > 32 {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "emoji name must be 32 characters or fewer",
+			ErrorCode: "INVALID_EMOJI",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+	if !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(name) {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "emoji name must contain only letters, digits, and underscores",
+			ErrorCode: "INVALID_EMOJI",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	roomID := c.getCurrentRoomID()
+	if err := c.hub.store.AddCustomEmoji(name, url, c.username, roomID); err != nil {
+		log.Printf("custom_emoji_add: error: %v", err)
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "failed to add emoji (name may already exist)",
+			ErrorCode: "EMOJI_ADD_FAILED",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	// Broadcast the new emoji to all clients.
+	broadcast, _ := json.Marshal(Message{
+		Type:      "custom_emoji_added",
+		EmojiName: name,
+		EmojiURL:  url,
+		Username:  c.username,
+	})
+	c.hub.broadcast <- broadcast
+
+	// Also send updated list to the client.
+	emojis, err := c.hub.store.ListCustomEmojis(roomID)
+	if err != nil {
+		log.Printf("custom_emoji_list: error: %v", err)
+		emojis = []store.CustomEmoji{}
+	}
+	payload2, _ := json.Marshal(Message{
+		Type:   "custom_emoji_list",
+		Emojis: emojis,
+	})
+	select {
+	case c.send <- payload2:
+	default:
+	}
+}
+
+// handleCustomEmojiList handles listing all custom emojis.
+func (c *Client) handleCustomEmojiList() {
+	if c.username == "" {
+		return
+	}
+
+	roomID := c.getCurrentRoomID()
+	emojis, err := c.hub.store.ListCustomEmojis(roomID)
+	if err != nil {
+		log.Printf("custom_emoji_list: error: %v", err)
+		emojis = []store.CustomEmoji{}
+	}
+	payload, _ := json.Marshal(Message{
+		Type:   "custom_emoji_list",
+		Emojis: emojis,
+	})
+	select {
+	case c.send <- payload:
+	default:
+	}
+}
+
+// handleCustomEmojiDelete handles deleting a custom emoji.
+func (c *Client) handleCustomEmojiDelete(msg Message) {
+	if c.username == "" {
+		return
+	}
+	if !c.checkRateLimit() {
+		return
+	}
+
+	name := strings.TrimSpace(msg.EmojiName)
+	if name == "" {
+		return
+	}
+
+	if err := c.hub.store.DeleteCustomEmoji(name, c.username); err != nil {
+		log.Printf("custom_emoji_delete: error: %v", err)
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   err.Error(),
+			ErrorCode: "EMOJI_DELETE_FAILED",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
+		return
+	}
+
+	// Broadcast deletion to all clients.
+	broadcast, _ := json.Marshal(Message{
+		Type:      "custom_emoji_deleted",
+		EmojiName: name,
+		Username:  c.username,
+	})
+	c.hub.broadcast <- broadcast
 }
 

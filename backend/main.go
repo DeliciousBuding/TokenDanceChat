@@ -206,6 +206,10 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
 		return nil, nil, nil, err
 	}
+	emojiDir := filepath.Join(uploadsDir, "emojis")
+	if err := os.MkdirAll(emojiDir, 0755); err != nil {
+		return nil, nil, nil, err
+	}
 
 	hdlr := handler.New(h, st, uploadsDir)
 	if endpoint := os.Getenv("CHAT_MEDIA_WEBDAV_ENDPOINT"); endpoint != "" {
@@ -224,8 +228,16 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	mux.HandleFunc("/api/stats", hdlr.Stats)
 	mux.HandleFunc("/api/link-preview", hdlr.LinkPreview)
 	mux.HandleFunc("/api/upload", hdlr.UploadImage)
+	mux.HandleFunc("/api/emoji/upload", hdlr.UploadEmoji)
 	mux.HandleFunc("/api/search", hdlr.Search)
 	mux.HandleFunc("/api/export", hdlr.ExportMessages)
+	mux.HandleFunc("/api/giphy/search", hdlr.GiphySearch)
+	mux.HandleFunc("/api/giphy/trending", hdlr.GiphyTrending)
+	mux.HandleFunc("/api/register", hdlr.Register)
+	mux.HandleFunc("/api/login", hdlr.Login)
+	mux.HandleFunc("/api/invite/generate", hdlr.InviteGenerate)
+	mux.HandleFunc("/api/invite/list", hdlr.InviteList)
+	mux.HandleFunc("/uploads/emojis/", hdlr.ServeEmoji)
 	mux.HandleFunc("/uploads/", hdlr.ServeUpload)
 	mux.HandleFunc("/ws", hdlr.HandleWebSocket)
 

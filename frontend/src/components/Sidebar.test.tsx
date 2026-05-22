@@ -284,7 +284,7 @@ describe("Sidebar", () => {
     it("有群组时显示群组名", () => {
       useChatStore.setState({
         groups: {
-          "test-group": { name: "test-group", members: ["testuser", "alice"] },
+          "test-group": { name: "test-group", members: ["testuser", "alice"], roles: { testuser: "owner", alice: "member" }, owner: "testuser", created_at: 0 },
         },
       });
       renderSidebar();
@@ -306,7 +306,7 @@ describe("Sidebar", () => {
     it("显示群组成员数量", () => {
       useChatStore.setState({
         groups: {
-          "test-group": { name: "test-group", members: ["testuser", "alice", "bob"] },
+          "test-group": { name: "test-group", members: ["testuser", "alice", "bob"], roles: { testuser: "owner", alice: "member", bob: "member" }, owner: "testuser", created_at: 0 },
         },
       });
       renderSidebar();
