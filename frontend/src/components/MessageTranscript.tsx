@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
 import { ArrowDown, Reply, Copy, Trash2, Forward } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -191,7 +191,8 @@ export function MessageTranscript({
   }, [conversationKey, loadingOlder, effectiveMessages]);
 
   // Restore scroll position after older messages load and DOM updates.
-  useEffect(() => {
+  // useLayoutEffect runs synchronously after DOM commits, preventing races with live messages.
+  useLayoutEffect(() => {
     if (pendingScrollRestore.current && containerRef.current) {
       const afterScroll = containerRef.current.scrollHeight;
       containerRef.current.scrollTop += afterScroll - pendingScrollRestore.current;
