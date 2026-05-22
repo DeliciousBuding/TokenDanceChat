@@ -7,6 +7,7 @@ import { cn, formatTime, avatarGradient, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI } from "@/lib/api";
+import { playReactionSound } from "@/lib/sound";
 import { EmojiPicker } from "@/components/EmojiPicker";
 import type { ChatMessage } from "@/lib/api";
 
@@ -142,6 +143,14 @@ export const MessageBubble = memo(function MessageBubble({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const isDeleted = message.deleted === true;
+
+  const handleAddReaction = useCallback(
+    (emoji: string) => {
+      playReactionSound();
+      chatAPI.sendReaction(message.id, emoji);
+    },
+    [message.id],
+  );
 
   // Long-press detection for entering select mode
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -674,7 +683,7 @@ export const MessageBubble = memo(function MessageBubble({
                     <button
                       key={emoji}
                       onClick={selectMode ? undefined : () =>
-                        chatAPI.sendReaction(message.id, emoji)
+                        handleAddReaction(emoji)
                       }
                       className={cn(
                         "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs border border-[hsl(220,2.5%,20%)] bg-card hover:bg-accent transition-colors",
@@ -717,7 +726,7 @@ export const MessageBubble = memo(function MessageBubble({
 
         {showEmojiPicker && (
           <EmojiPicker
-            onSelect={(emoji) => chatAPI.sendReaction(message.id, emoji)}
+            onSelect={(emoji) => handleAddReaction(emoji)}
             onClose={() => setShowEmojiPicker(false)}
           />
         )}

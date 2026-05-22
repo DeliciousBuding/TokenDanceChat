@@ -4,6 +4,7 @@ import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI, type ChatMessage, type TypingContext } from "@/lib/api";
+import { playSentSound } from "@/lib/sound";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
@@ -330,6 +331,7 @@ export function ChatInput({
       return;
     }
     onSend(trimmed);
+    playSentSound();
     setContent("");
     // Clear draft.
     try { localStorage.removeItem(draftStorageKey); } catch { /* ignore */ }
