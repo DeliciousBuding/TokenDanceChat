@@ -463,7 +463,7 @@ export function MessageTranscript({
       ) : (
         <div
           role="log"
-          aria-live="polite"
+          aria-relevant="additions"
           aria-label={t("chat.roomName")}
           className="mx-auto w-full max-w-5xl py-4"
         >

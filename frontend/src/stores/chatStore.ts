@@ -208,9 +208,12 @@ export const useChatStore = create<ChatState>((set) => ({
       const existingIDs = new Set(state.messages.map((m) => m.id));
       const newMessages = incoming.filter((m) => !existingIDs.has(m.id));
       if (newMessages.length === 0) return state;
-      return {
-        messages: [...newMessages, ...state.messages],
-      };
+      const merged = [...newMessages, ...state.messages];
+      // Cap total messages at 1000 to prevent unbounded growth from pagination.
+      if (merged.length > 1000) {
+        merged.length = 1000;
+      }
+      return { messages: merged };
     }),
   setOnlineUsers: (onlineUsers) => set({ onlineUsers }),
   setUserStatusList: (userStatusList) => set({ userStatusList }),

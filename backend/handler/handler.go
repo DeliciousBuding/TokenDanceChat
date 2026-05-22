@@ -125,11 +125,21 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 
 // HealthCheck handles GET /api/health.
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	dbStatus := "ok"
+	if err := h.store.Ping(); err != nil {
+		dbStatus = "error"
+		log.Printf("health check: db ping failed: %v", err)
+	}
+	statusCode := http.StatusOK
+	if dbStatus != "ok" {
+		statusCode = http.StatusServiceUnavailable
+	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "ok",
+		"status":  dbStatus,
 		"service": "tokendancechat",
+		"db":      dbStatus,
 	})
 }
 

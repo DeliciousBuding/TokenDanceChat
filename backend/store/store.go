@@ -352,6 +352,11 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// Ping verifies the database connection is alive.
+func (s *Store) Ping() error {
+	return s.db.Ping()
+}
+
 // ToggleReaction adds or removes a reaction. Returns the updated reactions map.
 func (s *Store) ToggleReaction(messageID, emoji, username string) (map[string][]string, error) {
 	s.mu.Lock()

@@ -45,6 +45,19 @@ var upgrader = websocket.Upgrader{
 
 // HandleWebSocket handles GET /ws for WebSocket upgrade.
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// Rate limit per-IP WebSocket upgrades (5 per 10s).
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ip = r.RemoteAddr
+	}
+	if !WSAllow(ip) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":"too many connections, try again later","code":"RATE_LIMITED"}`))
+		log.Printf("ws: rate limit blocked for %s", ip)
+		return
+	}
+
 	// Reject if the hub is at capacity.
 	if h.hub.IsFull() {
 		http.Error(w, "server is full, please try again later", http.StatusServiceUnavailable)

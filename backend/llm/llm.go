@@ -362,6 +362,7 @@ func (c *Client) chatOpenAIStream(ctx context.Context, systemPrompt string, mess
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" || line == "data: [DONE]" {
@@ -460,6 +461,7 @@ func (c *Client) chatAnthropicStream(ctx context.Context, systemPrompt string, m
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" || !strings.HasPrefix(line, "data: ") {
