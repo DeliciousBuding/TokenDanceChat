@@ -13,6 +13,7 @@ This is both a demo feature and an AgentHub validation slice: it exercises group
 - `webhook_list` never returns secrets.
 - `store.Webhook.Secret` is tagged `json:"-"` to prevent accidental JSON leakage.
 - Frontend state stores the one-time secret separately from the normal redacted webhook list.
+- Frontend group admin controls depend on the `group_info.group_members` role payload; clients should normalize it before deciding whether to show Webhook management.
 - Webhook secrets are persisted as versioned salted HMAC hashes in SQLite and verified with constant-time comparison.
 - Existing plaintext webhook rows are migrated to hashes when the store starts.
 - Production follow-ups: secret rotation and audit logging for create/delete events.
@@ -145,7 +146,7 @@ Focused frontend tests:
 
 ```powershell
 cd frontend
-npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx
+npm test -- --run src/lib/groupInfo.test.ts src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx
 ```
 
 Broader gates:

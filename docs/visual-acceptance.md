@@ -23,6 +23,7 @@ Required workflow:
 | Viewport | Theme | Required checks |
 |---|---|---|
 | 1440x900 | light | Header density, sidebar width, visible message count, no horizontal toolbar overflow. |
+| 1440x900 | light + group info | Right-side group admin panel width, full-height alignment, unclipped group heading, owner-only Webhook section visibility, readable admin controls. |
 | 1440x900 | dark | Contrast and spacing remain usable without becoming a black slab. |
 | 768x1024 | light | Tablet should keep chat full-width until `lg`; textarea should be wider than 360px. |
 | 390x844 | light | Composer stays usable; title is readable, textarea should be wider than 180px with controls visible. |
@@ -39,6 +40,7 @@ Collect these metrics with screenshots:
 - horizontal scroll presence;
 - number of visible messages above composer;
 - desktop sidebar model preview count and online-user section y-position;
+- group info panel width, height, right alignment, heading clipping, Webhook section visibility, member-row count, panel-local controls below 44x44, desktop title line stability, and first-run group empty-state visibility;
 - console errors.
 
 Current hard gates in `npm run visual:acceptance` include:
@@ -50,6 +52,7 @@ Current hard gates in `npm run visual:acceptance` include:
 - mobile visible message text must stay at or below 15px;
 - at least 4 visible messages in collapsed mobile and tablet seeded chat views.
 - desktop sidebar model preview at most 4 cards and online-user section no lower than 680px from the top.
+- group info scenario must show a 320-390px right-aligned full-height panel, an unclipped heading, owner/admin Webhook controls, at least one member row, no visible panel controls below 44x44, a single-line desktop title, and a visible first-run group empty state.
 
 Run the reusable Playwright acceptance script against a local production build:
 
@@ -76,20 +79,25 @@ The script writes screenshots and `metrics.json` to a temp directory such as `C:
 
 Latest accepted screenshot pass:
 
-- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T22-17-22-184Z`
+- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-29-14-410Z`
 - Baseline: production build served by the Go backend on a clean temporary SQLite DB, so screenshots contain only the current seeded demo transcript and no repeated history from earlier runs.
+- Scenarios: seven screenshots, including `desktop-light-group-info`.
 - Desktop light/dark 1440x900: textarea 816x48px, composer 130px, 4 visible seeded messages, `smallControls=0`, sidebar width 312px, sidebar model preview 4 cards, sidebar online-user section top 561px, no horizontal overflow, no console errors.
+- Desktop light group info 1440x900: right-side panel 384px wide and full height, Webhook section visible for the owner, 1 member row, `groupSmallControls=0`, desktop title 174x24 and single-line, visible group empty state, no horizontal overflow, no console errors.
 - Tablet light 768x1024: textarea 456x48px, mobile title width 580px, composer 130px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
 - Mobile light/dark 390x844: title width 202px with `公共聊天` unclipped, message font 13.5px, collapsed composer textarea 208x66px, composer 87px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
 - Mobile light with formatting toolbar: textarea 208x66px, composer 144px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
-- Screenshot review confirms the core chat surface is lighter than the prior pass: message bubbles use quieter borders, composer utility buttons are no longer heavy bordered blocks, the expanded Markdown toolbar is less dominant, and clickable avatars retain a 46px safety floor for stable 44px acceptance.
+- Screenshot review confirms the group admin panel controls are readable and no longer tiny; desktop title no longer wraps when the right panel is open; the first-run group empty state is present without decorative filler; mobile and desktop core chat remain visually stable.
 
-Earlier screenshot passes caught two real issues:
+Screenshot passes caught real implementation issues:
 
 - 768px tablet was forced into desktop layout and squeezed the textarea to 144px; the accepted layout now keeps tablet/mobile top bar until `lg`.
 - Mobile header showed `公共聊天` as `公...`; secondary mobile actions now live behind the more menu.
 - Desktop sidebar previously showed six model cards plus tall empty-state rows before online users; the accepted sidebar now keeps four model preview cards and brings online users to 561px from the top.
 - A follow-up pass caught a 43px tablet avatar button caused by pixel rounding; clickable avatars now use a 46px minimum target.
+- The group info screenshot initially hid owner-only Webhook controls because the frontend read legacy `members` instead of the backend `group_info.group_members` payload; the accepted pass verifies the typed role payload after a real WebSocket round trip.
+- Opening the group info panel squeezed desktop header icon buttons until fixed-width controls shrank to roughly 30px; header buttons now keep their 44px floor with `flex-shrink-0`.
+- Manual screenshot review then caught the desktop group title wrapping and a sparse first-run group state; the final script gates desktop title single-line stability and visible group empty-state content.
 
 ## Current Reference Prompt
 

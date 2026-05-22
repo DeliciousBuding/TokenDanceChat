@@ -20,6 +20,7 @@ if (!localURL && process.env.VISUAL_ALLOW_NONLOCAL !== "1") {
 
 const scenarios = [
   { name: "desktop-light", viewport: { width: 1440, height: 900 }, theme: "light" },
+  { name: "desktop-light-group-info", viewport: { width: 1440, height: 900 }, theme: "light", groupInfoOpen: true },
   { name: "desktop-dark", viewport: { width: 1440, height: 900 }, theme: "dark" },
   { name: "tablet-light", viewport: { width: 768, height: 1024 }, theme: "light" },
   { name: "mobile-light", viewport: { width: 390, height: 844 }, theme: "light" },
@@ -100,6 +101,31 @@ async function seedChat(browser) {
   await actorB.context.close();
 }
 
+async function openGroupInfoPanel(page) {
+  const groupName = `视觉群组_${runId()}`;
+  await page.getByLabel("创建群组").click();
+  await page.getByPlaceholder("群组名称...").fill(groupName);
+  await page.getByRole("button", { name: /^创建$/ }).click();
+  await page.getByRole("button", { name: new RegExp(groupName) }).waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
+  await page.getByRole("button", { name: "群组信息" }).last().click();
+  await page.locator("[data-visual='group-info-panel']").waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
+  await page.locator("[data-visual='group-info-panel'] h2").filter({ hasText: groupName }).waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
+  await page.locator("[data-visual='group-info-webhooks']").waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
+  await page.waitForTimeout(500);
+}
+
 async function collectMetrics(page, scenario, errors) {
   return await page.evaluate(
     ({ scenarioName, viewport, consoleErrors }) => {
@@ -159,12 +185,55 @@ async function collectMetrics(page, scenario, errors) {
       const logRect = log?.getBoundingClientRect();
       const mobileTitle = document.querySelector("[data-visual='mobile-chat-title']");
       const mobileTitleRect = mobileTitle?.getBoundingClientRect();
+      const desktopTitle = document.querySelector("[data-visual='desktop-chat-title']");
+      const desktopTitleRect = desktopTitle && isVisible(desktopTitle)
+        ? desktopTitle.getBoundingClientRect()
+        : null;
+      const desktopTitleStyle = desktopTitle ? window.getComputedStyle(desktopTitle) : null;
+      const desktopTitleFontSize = desktopTitleStyle
+        ? Number.parseFloat(desktopTitleStyle.fontSize)
+        : 0;
+      const rawDesktopTitleLineHeight = desktopTitleStyle
+        ? Number.parseFloat(desktopTitleStyle.lineHeight)
+        : 0;
+      const desktopTitleLineHeight = Number.isFinite(rawDesktopTitleLineHeight)
+        ? rawDesktopTitleLineHeight
+        : desktopTitleFontSize * 1.25;
       const sidebar = document.querySelector("aside");
       const sidebarRect = sidebar && isVisible(sidebar) ? sidebar.getBoundingClientRect() : null;
       const sidebarModelCards = Array.from(document.querySelectorAll("[data-visual='sidebar-model-card']")).filter(isVisible);
       const sidebarOnline = document.querySelector("[data-visual='sidebar-online-users']");
       const sidebarOnlineRect = sidebarOnline && isVisible(sidebarOnline)
         ? sidebarOnline.getBoundingClientRect()
+        : null;
+      const groupInfoPanel = document.querySelector("[data-visual='group-info-panel']");
+      const groupInfoPanelRect = groupInfoPanel && isVisible(groupInfoPanel)
+        ? groupInfoPanel.getBoundingClientRect()
+        : null;
+      const groupInfoHeading = groupInfoPanel?.querySelector("h2");
+      const groupInfoWebhooks = groupInfoPanel?.querySelector("[data-visual='group-info-webhooks']");
+      const groupInfoMembers = groupInfoPanel
+        ? Array.from(groupInfoPanel.querySelectorAll("button[aria-label], button, input")).filter(isVisible)
+        : [];
+      const groupInfoSmallControls = groupInfoMembers
+        .map((el) => {
+          const rect = el.getBoundingClientRect();
+          return {
+            label: labelFor(el),
+            tag: el.tagName.toLowerCase(),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+            x: Math.round(rect.left),
+            y: Math.round(rect.top),
+          };
+        })
+        .filter((item) => item.width < 44 || item.height < 44);
+      const groupInfoMemberRows = groupInfoPanel
+        ? Array.from(groupInfoPanel.querySelectorAll("[data-visual='group-info-member']")).filter(isVisible)
+        : [];
+      const groupEmptyState = document.querySelector("[data-visual='group-empty-state']");
+      const groupEmptyStateRect = groupEmptyState && isVisible(groupEmptyState)
+        ? groupEmptyState.getBoundingClientRect()
         : null;
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
@@ -216,6 +285,17 @@ async function collectMetrics(page, scenario, errors) {
               text: mobileTitle.textContent?.trim() || "",
             }
           : null,
+        desktopTitle: desktopTitleRect
+          ? {
+              width: Math.round(desktopTitleRect.width),
+              height: Math.round(desktopTitleRect.height),
+              scrollWidth: desktopTitle.scrollWidth,
+              clientWidth: desktopTitle.clientWidth,
+              lineHeight: Number(desktopTitleLineHeight.toFixed(2)),
+              multiline: desktopTitleRect.height > desktopTitleLineHeight * 1.35,
+              text: desktopTitle.textContent?.trim() || "",
+            }
+          : null,
         messageText: messageFontSizes.length
           ? {
               minFontSize: Math.min(...messageFontSizes),
@@ -233,6 +313,32 @@ async function collectMetrics(page, scenario, errors) {
               width: Math.round(sidebarRect.width),
               modelCards: sidebarModelCards.length,
               onlineUsersTop: sidebarOnlineRect ? Math.round(sidebarOnlineRect.top) : null,
+            }
+          : null,
+        groupInfoPanel: groupInfoPanelRect
+          ? {
+              visible: true,
+              width: Math.round(groupInfoPanelRect.width),
+              height: Math.round(groupInfoPanelRect.height),
+              right: Math.round(groupInfoPanelRect.right),
+              rightAligned: Math.abs(groupInfoPanelRect.right - viewportWidth) <= 2,
+              heading: groupInfoHeading
+                ? {
+                    text: groupInfoHeading.textContent?.trim() || "",
+                    clipped: groupInfoHeading.scrollWidth > groupInfoHeading.clientWidth + 1,
+                  }
+                : null,
+              webhookSectionVisible: Boolean(groupInfoWebhooks && isVisible(groupInfoWebhooks)),
+              memberRows: groupInfoMemberRows.length,
+              smallControls: groupInfoSmallControls,
+            }
+          : null,
+        groupEmptyState: groupEmptyStateRect
+          ? {
+              visible: true,
+              width: Math.round(groupEmptyStateRect.width),
+              height: Math.round(groupEmptyStateRect.height),
+              text: groupEmptyState.textContent?.replace(/\s+/g, " ").trim() || "",
             }
           : null,
         visibleMessages,
@@ -286,6 +392,39 @@ function scenarioIssues(metrics) {
       issues.push(`desktop sidebar online users too low (${metrics.sidebar.onlineUsersTop}px)`);
     }
   }
+  if (metrics.scenarioName.includes("group-info")) {
+    if (!metrics.desktopTitle || metrics.desktopTitle.multiline) {
+      issues.push("desktop group title is multiline");
+    }
+    if (!metrics.groupEmptyState?.visible) {
+      issues.push("group empty state not visible");
+    }
+    if (!metrics.groupInfoPanel?.visible) {
+      issues.push("group info panel not visible");
+    } else {
+      if (metrics.groupInfoPanel.width < 320 || metrics.groupInfoPanel.width > 390) {
+        issues.push(`group info panel width out of range (${metrics.groupInfoPanel.width}px)`);
+      }
+      if (!metrics.groupInfoPanel.rightAligned) {
+        issues.push(`group info panel not right aligned (${metrics.groupInfoPanel.right}px)`);
+      }
+      if (metrics.groupInfoPanel.height < metrics.viewport.height - 2) {
+        issues.push(`group info panel too short (${metrics.groupInfoPanel.height}px)`);
+      }
+      if (metrics.groupInfoPanel.heading?.clipped) {
+        issues.push("group info panel heading clipped");
+      }
+      if (!metrics.groupInfoPanel.webhookSectionVisible) {
+        issues.push("group info webhook section not visible");
+      }
+      if (metrics.groupInfoPanel.memberRows < 1) {
+        issues.push(`group info member density missing (${metrics.groupInfoPanel.memberRows})`);
+      }
+      if (metrics.groupInfoPanel.smallControls.length > 0) {
+        issues.push(`group info small controls (${metrics.groupInfoPanel.smallControls.length})`);
+      }
+    }
+  }
   return issues;
 }
 
@@ -307,6 +446,9 @@ async function main() {
       if (scenario.formatOpen) {
         await page.getByLabel("Toggle formatting toolbar").click();
         await page.getByLabel("加粗").waitFor({ state: "visible", timeout: 5000 });
+      }
+      if (scenario.groupInfoOpen) {
+        await openGroupInfoPanel(page);
       }
 
       await page.waitForTimeout(350);
@@ -331,10 +473,13 @@ async function main() {
     console.log(
       `${result.scenarioName}: textarea=${result.textarea?.width ?? "n/a"}x${result.textarea?.height ?? "n/a"} ` +
         `composer=${result.composer?.height ?? "n/a"}px messages=${result.visibleMessages} ` +
-        `title=${result.mobileTitle?.width ?? "n/a"}px msgFont=${result.messageText?.maxFontSize ?? "n/a"}px ` +
+        `title=${result.mobileTitle?.width ?? "n/a"}px desktopTitle=${result.desktopTitle?.width ?? "n/a"}x${result.desktopTitle?.height ?? "n/a"} ` +
+        `msgFont=${result.messageText?.maxFontSize ?? "n/a"}px ` +
         `smallControls=${result.smallControls.length} sidebarModels=${result.sidebar?.modelCards ?? "n/a"} ` +
-        `sidebarOnlineTop=${result.sidebar?.onlineUsersTop ?? "n/a"}${issueText}`,
-    );
+        `sidebarOnlineTop=${result.sidebar?.onlineUsersTop ?? "n/a"} ` +
+        `groupPanel=${result.groupInfoPanel?.width ?? "n/a"}px ` +
+        `groupSmallControls=${result.groupInfoPanel?.smallControls?.length ?? "n/a"}${issueText}`,
+      );
   }
   console.log(`Metrics: ${reportPath}`);
 
