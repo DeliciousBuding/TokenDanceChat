@@ -1,4 +1,4 @@
-import { useRef, useCallback, type TouchEvent as ReactTouchEvent } from "react";
+import { useRef, useCallback, useState, type TouchEvent as ReactTouchEvent } from "react";
 
 export interface SwipeHandlers {
   onSwipeLeft?: () => void;
@@ -166,5 +166,106 @@ export function usePullDownGesture(
     onTouchStart,
     onTouchMove,
     onTouchEnd,
+  };
+}
+
+// ─── Swipeable message hook (Telegram-style swipe-to-reveal actions) ───
+
+export interface SwipeableMessageHandlers {
+  onReply?: () => void;
+  onCopy?: () => void;
+  onForward?: () => void;
+  onDelete?: () => void;
+  isOwn?: boolean;
+  disabled?: boolean;
+}
+
+const ACTION_WIDTH = 180; // px — max reveal width for action buttons
+const SWIPE_ACTIVATE_THRESHOLD = 10; // px — minimum dx before activating horizontal swipe
+const SWIPE_SNAP_THRESHOLD = 0.4; // ratio — snap to open if past this fraction of ACTION_WIDTH
+
+export function useSwipeableMessage(handlers: SwipeableMessageHandlers) {
+  const [translateX, setTranslateX] = useState(0);
+  const [showActions, setShowActions] = useState(false);
+  const touchRef = useRef({
+    startX: 0,
+    startY: 0,
+    prevTranslateX: 0,
+    active: false,
+    swipeActive: false,
+  });
+
+  const onTouchStart = useCallback(
+    (e: ReactTouchEvent) => {
+      if (handlers.disabled) return;
+      const touch = e.touches[0];
+      touchRef.current = {
+        startX: touch.clientX,
+        startY: touch.clientY,
+        prevTranslateX: translateX,
+        active: true,
+        swipeActive: false,
+      };
+    },
+    [handlers.disabled, translateX],
+  );
+
+  const onTouchMove = useCallback(
+    (e: ReactTouchEvent) => {
+      if (!touchRef.current.active) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - touchRef.current.startX;
+      const dy = touch.clientY - touchRef.current.startY;
+
+      if (!touchRef.current.swipeActive) {
+        // Determine gesture direction
+        if (Math.abs(dx) > SWIPE_ACTIVATE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+          touchRef.current.swipeActive = true;
+        } else if (Math.abs(dy) > SWIPE_ACTIVATE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+          // Vertical scroll — deactivate, let parent scroll
+          touchRef.current.active = false;
+          return;
+        } else {
+          return; // Still undetermined
+        }
+      }
+
+      // Horizontal swipe active: translate the element
+      const rawX = touchRef.current.prevTranslateX + dx;
+      const clamped = Math.max(-ACTION_WIDTH, Math.min(0, rawX));
+      setTranslateX(clamped);
+    },
+    [],
+  );
+
+  const onTouchEnd = useCallback(() => {
+    if (!touchRef.current.active || !touchRef.current.swipeActive) {
+      touchRef.current.active = false;
+      touchRef.current.swipeActive = false;
+      return;
+    }
+    touchRef.current.active = false;
+    touchRef.current.swipeActive = false;
+
+    const shouldSnap = Math.abs(translateX) > ACTION_WIDTH * SWIPE_SNAP_THRESHOLD;
+    const targetX = shouldSnap ? -ACTION_WIDTH : 0;
+
+    setTranslateX(targetX);
+    setShowActions(targetX !== 0);
+  }, [translateX]);
+
+  const closeActions = useCallback(() => {
+    setTranslateX(0);
+    setShowActions(false);
+  }, []);
+
+  return {
+    translateX,
+    showActions,
+    actionWidth: ACTION_WIDTH,
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd,
+    closeActions,
   };
 }
