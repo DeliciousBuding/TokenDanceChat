@@ -171,7 +171,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
           className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
         >
           <Send className="h-4 w-4 text-muted-foreground" />
-          Send Message
+          {t("profile.sendMessage")}
         </button>
         <button
           onClick={() => {
@@ -181,7 +181,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
           className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
         >
           <UserPlus className="h-4 w-4 text-muted-foreground" />
-          Add Friend
+          {t("profile.addFriend")}
         </button>
         {blockedUsers.includes(username) ? (
           <button
@@ -192,7 +192,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
             className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
           >
             <ShieldOff className="h-4 w-4 text-muted-foreground" />
-            Unblock User
+            {t("profile.unblockUser")}
           </button>
         ) : (
           <button
@@ -203,7 +203,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
             className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
           >
             <Shield className="h-4 w-4 text-muted-foreground" />
-            Block User
+            {t("profile.blockUser")}
           </button>
         )}
       </div>

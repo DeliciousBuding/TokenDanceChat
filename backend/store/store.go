@@ -151,6 +151,13 @@ func (s *Store) migrate() error {
 		log.Printf("store: migrate add column delivered: %v", err)
 	}
 
+	// Add indexes for DM/group/delivery queries.
+	// These must be after all ALTER TABLE statements because the columns may
+	// have been added via ALTER TABLE (not present in original CREATE TABLE).
+	s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_to_user ON messages(to_user, timestamp DESC)")
+	s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_name, timestamp DESC)")
+	s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_delivered ON messages(delivered, to_user)")
+
 	// Seed default room if not present.
 	s.ensureDefaultRoom()
 

@@ -1642,6 +1642,11 @@ func picoStreamDelta(previous, current string) (string, string) {
 func sanitizeContent(content string) string {
 	// Strip null bytes.
 	content = strings.ReplaceAll(content, "\x00", "")
+	// Strip HTML tags to prevent stored XSS.
+	htmlTagRe := regexp.MustCompile(`<[^>]*>`)
+	content = htmlTagRe.ReplaceAllString(content, "")
+	// Strip javascript: protocol and common event handlers.
+	content = strings.ReplaceAll(content, "javascript:", "")
 	// Trim whitespace.
 	content = strings.TrimSpace(content)
 	// Enforce max length.

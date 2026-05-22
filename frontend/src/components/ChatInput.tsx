@@ -10,7 +10,6 @@ interface ChatInputProps {
   onSend: (content: string) => void;
   disabled?: boolean;
   replyTo?: ChatMessage | null;
-  onCancelReply?: () => void;
   onUpload?: (file: File) => void;
 }
 
@@ -25,7 +24,6 @@ export function ChatInput({
   onSend,
   disabled,
   replyTo,
-  onCancelReply: _onCancelReply,
   onUpload,
 }: ChatInputProps) {
   const { t } = useTranslation();
@@ -166,6 +164,10 @@ export function ChatInput({
     return base;
   }, [currentChat, content]);
 
+  // Track latest typing context for unmount cleanup
+  const typingContextRef = useRef(typingContext);
+  typingContextRef.current = typingContext;
+
   // Dispatch typing_start / typing_stop events
   useEffect(() => {
     const hasContent = content.trim().length > 0;
@@ -190,6 +192,19 @@ export function ChatInput({
       return () => clearTimeout(timer);
     }
   }, [dragError]);
+
+  // Clean up recording and typing state on unmount
+  useEffect(() => {
+    return () => {
+      mediaRecorderRef.current?.stop();
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (typingSentRef.current) {
+        chatAPI.sendTypingStop(typingContextRef.current);
+        typingSentRef.current = false;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const handleInsertAssistant = (event: Event) => {

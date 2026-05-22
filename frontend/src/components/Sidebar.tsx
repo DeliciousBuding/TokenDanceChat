@@ -35,6 +35,8 @@ const UserListItem = memo(function UserListItem({
   onAddFriend,
   isFriend,
   hasPendingRequest,
+  onlineLabel,
+  requestPendingLabel,
 }: {
   user: string;
   isSelf: boolean;
@@ -45,6 +47,8 @@ const UserListItem = memo(function UserListItem({
   onAddFriend?: (username: string) => void;
   isFriend?: boolean;
   hasPendingRequest?: boolean;
+  onlineLabel: string;
+  requestPendingLabel: string;
 }) {
   const gradient = useMemo(() => avatarGradient(user), [user]);
   const [showMenu, setShowMenu] = useState(false);
@@ -71,7 +75,7 @@ const UserListItem = memo(function UserListItem({
         >
           {user.charAt(0).toUpperCase()}
         </div>
-        <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-[hsl(231,4%,16%)] bg-online animate-pulse-dot" role="status" aria-label="Online" />
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full border-2 border-[hsl(231,4%,16%)] bg-online animate-pulse-dot" role="status" aria-label={onlineLabel} />
       </div>
       <span className="flex-1 truncate text-sm">{user}</span>
       {isFriend && !isSelf && (
@@ -118,7 +122,7 @@ const UserListItem = memo(function UserListItem({
           )}
           {hasPendingRequest && (
             <span className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground/50">
-              Request pending
+              {requestPendingLabel}
             </span>
           )}
         </div>
@@ -452,6 +456,8 @@ export function Sidebar({
                     youLabel={t("sidebar.you")}
                     sendMessageLabel={t("sidebar.sendMessage")}
                     addFriendLabel={t("sidebar.addFriend")}
+                    onlineLabel={t("sidebar.online")}
+                    requestPendingLabel={t("sidebar.requestPending")}
                   />
                   {/* Divider between you and others */}
                   {otherUsers.length > 0 && (
@@ -470,6 +476,8 @@ export function Sidebar({
                   youLabel={t("sidebar.you")}
                   sendMessageLabel={t("sidebar.sendMessage")}
                   addFriendLabel={t("sidebar.addFriend")}
+                  onlineLabel={t("sidebar.online")}
+                  requestPendingLabel={t("sidebar.requestPending")}
                   onStartDM={onStartDM}
                   onAddFriend={onAddFriend}
                   isFriend={friends.includes(user)}
