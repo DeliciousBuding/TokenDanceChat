@@ -171,6 +171,7 @@ export const MessageBubble = memo(function MessageBubble({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [recentlyToggledReaction, setRecentlyToggledReaction] = useState<string | null>(null);
   const isDeleted = message.deleted === true;
   // Link preview: fetch OpenGraph metadata for URLs in message content
   const [linkPreview, setLinkPreview] = useState<LinkPreviewData | null>(null);
@@ -211,6 +212,8 @@ export const MessageBubble = memo(function MessageBubble({
     (emoji: string) => {
       playReactionSound();
       chatAPI.sendReaction(message.id, emoji);
+      setRecentlyToggledReaction(emoji);
+      setTimeout(() => setRecentlyToggledReaction(null), 250);
     },
     [message.id],
   );
@@ -800,6 +803,7 @@ export const MessageBubble = memo(function MessageBubble({
                         currentUsername &&
                           users.includes(currentUsername) &&
                           "border-[hsl(220,2.5%,30%)] bg-[hsl(231,4%,24%)]",
+                        recentlyToggledReaction === emoji && "animate-pop",
                       )}
                       aria-label={`${emoji} ${users.length} reactions`}
                     >

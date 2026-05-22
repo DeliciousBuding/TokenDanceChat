@@ -45,6 +45,7 @@ export interface TranslationDict {
     online: string;
     lastSeen: string;
     offline: string;
+    requestPending: string;
   };
   transcript: {
     loading: string;
@@ -52,6 +53,21 @@ export interface TranslationDict {
     emptyDescription: string;
     scrollToBottom: string;
     newMessages: string;
+    loadingOlder: string;
+    newMessagesDivider: string;
+    emptyDmTitle: string;
+    emptyDmDescription: string;
+    emptyGroupTitle: string;
+    emptyGroupDescription: string;
+    selected: string;
+    contextSelect: string;
+    contextCopy: string;
+    contextDelete: string;
+    contextForward: string;
+    contextForwardTo: string;
+    contextSelectRecipient: string;
+    contextSend: string;
+    contextCancel: string;
   };
   input: {
     placeholder: string;
@@ -59,6 +75,26 @@ export interface TranslationDict {
     characters: string;
     dmPlaceholder: string;
     groupPlaceholder: string;
+    pastedImage: string;
+    sendImage: string;
+    recording: string;
+    dropFiles: string;
+    escapeToCancel: string;
+    cancel: string;
+    save: string;
+    fileTooLarge: string;
+  };
+  message: {
+    edited: string;
+    forward: string;
+    copy: string;
+    delete: string;
+    select: string;
+    read: string;
+    sent: string;
+    copied: string;
+    deleteConfirm: string;
+    deleteWarning: string;
   };
   system: {
     userJoined: string;
@@ -78,6 +114,9 @@ export interface TranslationDict {
     closed: string;
     cannotConnect: string;
     unknown: string;
+    somethingWentWrong: string;
+    reloadMessage: string;
+    reload: string;
   };
   lang: {
     switchTo: string;
@@ -90,6 +129,48 @@ export interface TranslationDict {
     create: string;
     cancel: string;
     created: string;
+    nameErrorEmpty: string;
+    nameErrorTooLong: string;
+    noUsersAvailable: string;
+  };
+  forward: {
+    title: string;
+    selectRecipient: string;
+    noUsers: string;
+    cancel: string;
+    forward: string;
+  };
+  friend: {
+    accept: string;
+    reject: string;
+    decline: string;
+    mentionedYou: string;
+    view: string;
+    dismiss: string;
+  };
+  profile: {
+    sendMessage: string;
+    addFriend: string;
+    blockUser: string;
+    unblockUser: string;
+  };
+  search: {
+    placeholder: string;
+    typeToSearch: string;
+    notFound: string;
+    notFoundInConversation: string;
+    searchError: string;
+    toggleSearch: string;
+  };
+  emoji: {
+    search: string;
+    recent: string;
+    noResults: string;
+    smileys: string;
+    gestures: string;
+    hearts: string;
+    objects: string;
+    misc: string;
   };
 }
 
@@ -138,6 +219,7 @@ const zhCN: TranslationDict = {
     online: "在线",
     lastSeen: "最后在线 {{time}}",
     offline: "离线",
+    requestPending: "请求待处理",
   },
   transcript: {
     loading: "加载消息中...",
@@ -145,6 +227,21 @@ const zhCN: TranslationDict = {
     emptyDescription: "成为第一个发送消息的人吧！",
     scrollToBottom: "回到底部",
     newMessages: "{{count}} 条新消息",
+    loadingOlder: "加载更早的消息...",
+    newMessagesDivider: "新消息",
+    emptyDmTitle: "暂无消息",
+    emptyDmDescription: "向 {{username}} 发送第一条消息吧！",
+    emptyGroupTitle: "暂无消息",
+    emptyGroupDescription: "向 {{name}} 发送第一条消息吧！",
+    selected: "已选择 {{count}} 条",
+    contextSelect: "选择",
+    contextCopy: "复制",
+    contextDelete: "删除",
+    contextForward: "转发",
+    contextForwardTo: "转发给：",
+    contextSelectRecipient: "选择接收者...",
+    contextSend: "发送",
+    contextCancel: "取消",
   },
   input: {
     placeholder: "输入消息... (Shift+Enter 换行)",
@@ -152,6 +249,26 @@ const zhCN: TranslationDict = {
     characters: "{{current}}/{{max}}",
     dmPlaceholder: "发送私信给 {{username}}...",
     groupPlaceholder: "发送消息到 {{name}}...",
+    pastedImage: "已粘贴图片",
+    sendImage: "发送图片",
+    recording: "正在录制语音消息...",
+    dropFiles: "拖拽文件到这里",
+    escapeToCancel: "按 Esc 取消",
+    cancel: "取消",
+    save: "保存",
+    fileTooLarge: "文件过大（最大 20MB）",
+  },
+  message: {
+    edited: "（已编辑）",
+    forward: "转发",
+    copy: "复制",
+    delete: "删除",
+    select: "选择",
+    read: "已读",
+    sent: "已发送",
+    copied: "已复制",
+    deleteConfirm: "确认删除这条消息？",
+    deleteWarning: "此操作不可撤销。",
   },
   system: {
     userJoined: "{{username}} 加入了聊天室",
@@ -171,6 +288,9 @@ const zhCN: TranslationDict = {
     closed: "连接已关闭",
     cannotConnect: "无法连接到聊天服务器",
     unknown: "连接服务器失败，请确保服务器正在运行",
+    somethingWentWrong: "出错了",
+    reloadMessage: "发生了意外错误，请尝试刷新页面。",
+    reload: "刷新页面",
   },
   lang: {
     switchTo: "English",
@@ -183,6 +303,48 @@ const zhCN: TranslationDict = {
     create: "创建",
     cancel: "取消",
     created: "群组 {{name}} 已创建",
+    nameErrorEmpty: "群组名称不能为空",
+    nameErrorTooLong: "群组名称过长（最多30个字符）",
+    noUsersAvailable: "没有好友或在线用户可添加",
+  },
+  forward: {
+    title: "转发消息",
+    selectRecipient: "选择接收者：",
+    noUsers: "没有其他在线用户",
+    cancel: "取消",
+    forward: "转发",
+  },
+  friend: {
+    accept: "接受",
+    reject: "拒绝",
+    decline: "拒绝",
+    mentionedYou: "提到了你",
+    view: "查看",
+    dismiss: "关闭",
+  },
+  profile: {
+    sendMessage: "发送消息",
+    addFriend: "添加好友",
+    blockUser: "屏蔽用户",
+    unblockUser: "取消屏蔽",
+  },
+  search: {
+    placeholder: "搜索消息...",
+    typeToSearch: "输入关键词搜索消息",
+    notFound: "未找到消息",
+    notFoundInConversation: "此对话中无消息",
+    searchError: "搜索出错，请重试",
+    toggleSearch: "切换搜索",
+  },
+  emoji: {
+    search: "搜索表情...",
+    recent: "最近使用",
+    noResults: "未找到表情",
+    smileys: "表情",
+    gestures: "手势",
+    hearts: "爱心",
+    objects: "物品",
+    misc: "其他",
   },
 };
 
@@ -232,6 +394,7 @@ const enUS: TranslationDict = {
     online: "Online",
     lastSeen: "Last seen {{time}}",
     offline: "Offline",
+    requestPending: "Request pending",
   },
   transcript: {
     loading: "Loading messages...",
@@ -239,6 +402,21 @@ const enUS: TranslationDict = {
     emptyDescription: "Be the first to send a message!",
     scrollToBottom: "Scroll to bottom",
     newMessages: "{{count}} new messages",
+    loadingOlder: "Loading older messages...",
+    newMessagesDivider: "New messages",
+    emptyDmTitle: "No messages yet",
+    emptyDmDescription: "Send your first message to {{username}}!",
+    emptyGroupTitle: "No messages yet",
+    emptyGroupDescription: "Send the first message to {{name}}!",
+    selected: "{{count}} selected",
+    contextSelect: "Select",
+    contextCopy: "Copy",
+    contextDelete: "Delete",
+    contextForward: "Forward",
+    contextForwardTo: "Forward to:",
+    contextSelectRecipient: "Select recipient...",
+    contextSend: "Send",
+    contextCancel: "Cancel",
   },
   input: {
     placeholder: "Type a message... (Shift+Enter for new line)",
@@ -246,6 +424,26 @@ const enUS: TranslationDict = {
     characters: "{{current}}/{{max}}",
     dmPlaceholder: "Send DM to {{username}}...",
     groupPlaceholder: "Send message to {{name}}...",
+    pastedImage: "Pasted image",
+    sendImage: "Send image",
+    recording: "Recording voice message...",
+    dropFiles: "Drop files here",
+    escapeToCancel: "Escape to cancel",
+    cancel: "Cancel",
+    save: "Save",
+    fileTooLarge: "File too large (max 20MB)",
+  },
+  message: {
+    edited: "(edited)",
+    forward: "Forward",
+    copy: "Copy",
+    delete: "Delete",
+    select: "Select",
+    read: "Read",
+    sent: "Sent",
+    copied: "Copied",
+    deleteConfirm: "Delete message?",
+    deleteWarning: "This cannot be undone.",
   },
   system: {
     userJoined: "{{username}} joined the chat",
@@ -265,6 +463,9 @@ const enUS: TranslationDict = {
     closed: "Connection closed",
     cannotConnect: "Could not connect to the chat server",
     unknown: "Failed to connect to server. Please ensure the server is running",
+    somethingWentWrong: "Something went wrong",
+    reloadMessage: "An unexpected error occurred. Please try reloading the page.",
+    reload: "Reload",
   },
   lang: {
     switchTo: "中文",
@@ -277,6 +478,48 @@ const enUS: TranslationDict = {
     create: "Create",
     cancel: "Cancel",
     created: "Group {{name}} created",
+    nameErrorEmpty: "Group name cannot be empty",
+    nameErrorTooLong: "Group name too long (max 30 chars)",
+    noUsersAvailable: "No friends or online users to add",
+  },
+  forward: {
+    title: "Forward Message",
+    selectRecipient: "Select recipient:",
+    noUsers: "No other users online",
+    cancel: "Cancel",
+    forward: "Forward",
+  },
+  friend: {
+    accept: "Accept",
+    reject: "Reject",
+    decline: "Decline",
+    mentionedYou: "mentioned you",
+    view: "View",
+    dismiss: "Dismiss",
+  },
+  profile: {
+    sendMessage: "Send Message",
+    addFriend: "Add Friend",
+    blockUser: "Block User",
+    unblockUser: "Unblock User",
+  },
+  search: {
+    placeholder: "Search messages...",
+    typeToSearch: "Type to search messages",
+    notFound: "No messages found",
+    notFoundInConversation: "No messages in this conversation",
+    searchError: "Search error — please try again",
+    toggleSearch: "toggle search",
+  },
+  emoji: {
+    search: "Search emoji...",
+    recent: "Recent",
+    noResults: "No emojis found",
+    smileys: "Smileys",
+    gestures: "Gestures",
+    hearts: "Hearts",
+    objects: "Objects",
+    misc: "Misc",
   },
 };
 

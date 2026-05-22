@@ -380,13 +380,13 @@ export function MessageTranscript({
     >
       {selectMode && (
         <div className="sticky top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center gap-3 shadow-lg">
-          <span className="text-sm font-medium text-foreground">{selectedIds.size} selected</span>
+          <span className="text-sm font-medium text-foreground">{t("transcript.selected", { count: selectedIds.size })}</span>
           <div className="flex-1" />
-          <button onClick={handleBatchDelete} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-destructive/80 hover:bg-destructive/10 hover:text-destructive transition-colors" aria-label="Delete selected">
-            <Trash2 className="h-4 w-4" />Delete
+          <button onClick={handleBatchDelete} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-destructive/80 hover:bg-destructive/10 hover:text-destructive transition-colors" aria-label={t("transcript.contextDelete")}>
+            <Trash2 className="h-4 w-4" />{t("transcript.contextDelete")}
           </button>
-          <button onClick={() => setShowBatchForwardPicker((prev) => !prev)} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors" aria-label="Forward selected">
-            <Forward className="h-4 w-4" />Forward
+          <button onClick={() => setShowBatchForwardPicker((prev) => !prev)} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors" aria-label={t("transcript.contextForward")}>
+            <Forward className="h-4 w-4" />{t("transcript.contextForward")}
           </button>
           <button onClick={exitSelectMode} className="flex items-center gap-1 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" aria-label="Exit select mode">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -398,13 +398,13 @@ export function MessageTranscript({
       {selectMode && showBatchForwardPicker && (
         <div className="sticky top-14 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 shadow-lg">
           <div className="flex items-center gap-3 max-w-md mx-auto">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">Forward to:</span>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">{t("transcript.contextForwardTo")}</span>
             <select value={batchForwardUser} onChange={(e) => setBatchForwardUser(e.target.value)} className="flex-1 rounded-lg border border-border bg-secondary px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary/50">
-              <option value="">Select recipient...</option>
+              <option value="">{t("transcript.contextSelectRecipient")}</option>
               {onlineUsers.filter((u) => u !== username).map((u) => (<option key={u} value={u}>{u}</option>))}
             </select>
-            <button onClick={handleBatchForward} disabled={!batchForwardUser} className="rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity" style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}>Send</button>
-            <button onClick={() => { setShowBatchForwardPicker(false); setBatchForwardUser(""); }} className="rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">Cancel</button>
+            <button onClick={handleBatchForward} disabled={!batchForwardUser} className="rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-opacity" style={{ backgroundColor: "oklch(71.2% 0.194 13.428)" }}>{t("transcript.contextSend")}</button>
+            <button onClick={() => { setShowBatchForwardPicker(false); setBatchForwardUser(""); }} className="rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">{t("transcript.contextCancel")}</button>
           </div>
         </div>
       )}
@@ -422,7 +422,7 @@ export function MessageTranscript({
             <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 12a9 9 0 11-6.219-8.56" />
             </svg>
-            Loading older messages...
+            {t("transcript.loadingOlder")}
           </div>
         </div>
       )}
@@ -444,16 +444,52 @@ export function MessageTranscript({
           </p>
         </div>
       ) : effectiveMessages.length === 0 ? (
-        /* Empty state with animated chat bubble */
-        <div className="flex flex-col items-center justify-center h-full py-12 px-4">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-[hsl(220,2.5%,20%)] animate-chat-bubble">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2% 0.194 13.428 / 0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-            </svg>
-          </div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("transcript.emptyTitle")}</h3>
-          <p className="text-xs text-muted-foreground/60 text-center max-w-xs">{t("transcript.emptyDescription")}</p>
-        </div>
+        /* Empty state — context-aware per conversation type */
+        (() => {
+          if (currentChat.type === "dm") {
+            const initial = currentChat.username.charAt(0).toUpperCase();
+            return (
+              <div className="flex flex-col items-center justify-center h-full py-12 px-4">
+                <div
+                  className="mb-4 flex h-16 w-16 items-center justify-center rounded-full text-lg font-semibold text-white ring-1 ring-white/10"
+                  style={{ background: `linear-gradient(135deg, oklch(65% 0.16 ${currentChat.username.charCodeAt(0) % 360}), oklch(58% 0.14 ${(currentChat.username.charCodeAt(0) + 45) % 360}))` }}
+                >
+                  {initial}
+                </div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("transcript.emptyDmTitle")}</h3>
+                <p className="text-xs text-muted-foreground/60 text-center max-w-xs">{t("transcript.emptyDmDescription", { username: currentChat.username })}</p>
+              </div>
+            );
+          }
+          if (currentChat.type === "group") {
+            return (
+              <div className="flex flex-col items-center justify-center h-full py-12 px-4">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-[hsl(220,2.5%,20%)]">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2% 0.194 13.428 / 0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                </div>
+                <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("transcript.emptyGroupTitle")}</h3>
+                <p className="text-xs text-muted-foreground/60 text-center max-w-xs">{t("transcript.emptyGroupDescription", { name: currentChat.name })}</p>
+              </div>
+            );
+          }
+          /* Public chat empty state */
+          return (
+            <div className="flex flex-col items-center justify-center h-full py-12 px-4">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary ring-1 ring-[hsl(220,2.5%,20%)] animate-chat-bubble">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(71.2% 0.194 13.428 / 0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                </svg>
+              </div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("transcript.emptyTitle")}</h3>
+              <p className="text-xs text-muted-foreground/60 text-center max-w-xs">{t("transcript.emptyDescription")}</p>
+            </div>
+          );
+        })()
       ) : (
         <div
           role="log"
@@ -476,7 +512,7 @@ export function MessageTranscript({
             <div className="flex items-center gap-3 px-4 py-2">
               <div className="h-px flex-1 bg-[oklch(71.2%_0.194_13.428_/_0.3)]" />
               <span className="text-[10px] font-medium text-[oklch(71.2%_0.194_13.428)] whitespace-nowrap">
-                New messages
+                {t("transcript.newMessagesDivider")}
               </span>
               <div className="h-px flex-1 bg-[oklch(71.2%_0.194_13.428_/_0.3)]" />
             </div>
@@ -554,7 +590,7 @@ export function MessageTranscript({
         <button
           onClick={scrollToBottom}
           className="absolute bottom-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-card border border-border shadow-lg hover:bg-accent transition-all animate-scale-in text-muted-foreground hover:text-foreground"
-          aria-label="Jump to bottom"
+          aria-label={t("transcript.scrollToBottom")}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="6 9 12 15 18 9"/>
@@ -577,7 +613,7 @@ export function MessageTranscript({
                 <path d="M9 11l3 3L22 4"/>
                 <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
-              <span>Select</span>
+              <span>{t("transcript.contextSelect")}</span>
             </button>
             <div className="border-t border-border mx-3" />
             <button onClick={handleContextReply} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
@@ -586,17 +622,17 @@ export function MessageTranscript({
             </button>
             <button onClick={handleContextCopy} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
               <Copy className="h-4 w-4 text-muted-foreground" />
-              <span>Copy</span>
+              <span>{t("transcript.contextCopy")}</span>
             </button>
             {contextMenu.isOwn && (
               <button onClick={handleContextDelete} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-destructive/80 hover:bg-destructive/20 hover:text-destructive touch-target">
                 <Trash2 className="h-4 w-4" />
-                <span>Delete</span>
+                <span>{t("transcript.contextDelete")}</span>
               </button>
             )}
             <button onClick={handleContextForward} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
               <Forward className="h-4 w-4 text-muted-foreground" />
-              <span>Forward</span>
+              <span>{t("transcript.contextForward")}</span>
             </button>
           </div>
         </>
