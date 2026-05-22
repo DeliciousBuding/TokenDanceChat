@@ -44,6 +44,7 @@ Webhook at-rest security, media storage, and screenshot-driven UI acceptance are
 - `MediaStore` supports local disk, WebDAV, and S3-compatible storage.
 - S3-compatible media config is env-driven and preferred for production-server deployment shape.
 - Ordinary uploads and custom emoji both use safe media keys and same-origin `/uploads/...` routes.
+- Docker runtime images include a same-container `/api/health` HEALTHCHECK that follows `CHAT_ADDR`, including non-default listeners such as `:3000`.
 - Frontend defaults to light mode for a Feishu/Lark-like first impression.
 - Mobile composer keeps the textarea usable by collapsing Markdown tools behind an icon.
 - Mobile secondary chat actions are behind the more menu so `公共聊天` remains readable.
@@ -97,6 +98,10 @@ go test ./handler -run "Test(UploadEmojiStoresViaMediaStore|ServeEmojiReadsViaMe
 
 # Backend full
 go test ./...
+
+# Docker healthcheck sanity
+docker build --check -f Dockerfile .
+docker build --check -f Dockerfile.runtime .
 
 # Frontend focused webhook/store regression
 cd D:\Code\Projects\TokenDanceChat\frontend

@@ -40,6 +40,8 @@ ssh user@server "
 "
 ```
 
+`Dockerfile.runtime` includes a same-container `HEALTHCHECK` for `/api/health`. It derives the probe port from `CHAT_ADDR`, so the example above checks `127.0.0.1:3000` instead of assuming the default container port.
+
 ### 仅更新前端（不动后端）
 
 ```bash
@@ -54,12 +56,12 @@ ssh user@server "
 ## 3. 验证
 
 ```bash
-curl https://chat.vectorcontrol.tech/api/health
+curl https://chat.example.com/api/health
 # → {"db":"ok","service":"tokendancechat","status":"ok"}
 
 # WebSocket 冒烟测试
 node -e "
-const ws = new WebSocket('wss://chat.vectorcontrol.tech/ws');
+const ws = new WebSocket('wss://chat.example.com/ws');
 ws.addEventListener('open', () => ws.send(JSON.stringify({type:'join', username:'smoke'+Date.now()})));
 ws.addEventListener('message', e => { const m = JSON.parse(e.data); if (m.type==='history') { console.log('OK'); ws.close(); process.exit(0); }});
 setTimeout(() => process.exit(1), 10000);
@@ -136,7 +138,7 @@ server {
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `CHAT_ADDR` | `:8080` | 监听地址 |
+| `CHAT_ADDR` | `:8080` | 监听地址；Docker HEALTHCHECK 会解析该值的端口 |
 | `CHAT_DB_PATH` | `data/chat.db` | SQLite 路径 |
 | `CHAT_FRONTEND_DIR` | `frontend/dist` | 前端静态文件目录 |
 | `CHAT_ALLOWED_ORIGINS` | — | 允许的 WS 来源 |

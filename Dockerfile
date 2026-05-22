@@ -39,4 +39,6 @@ USER appuser
 
 EXPOSE 8080
 
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD sh -ec 'port="${CHAT_ADDR:-:8080}"; port="${port##*:}"; wget -qO- "http://127.0.0.1:${port}/api/health" >/dev/null'
+
 CMD ["/app/server"]

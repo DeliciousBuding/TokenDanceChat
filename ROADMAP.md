@@ -59,6 +59,7 @@ Status: implemented, documented, tested, and accepted with browser screenshots.
 - [x] Hardened media keys to reject empty segments, `.`, `..`, and traversal before local/WebDAV/S3 access.
 - [x] Added focused backend tests for S3 PUT/GET, emoji media storage, emoji serving, and traversal rejection.
 - [x] Documented production-server/S3-compatible deployment shape without private hostnames, buckets, keys, ports, or logs.
+- [x] Added Docker runtime HEALTHCHECK probes for `/api/health` that follow `CHAT_ADDR`, including non-default deployment listeners.
 - [x] Made light mode the default first-run posture for Feishu/Lark-style acceptance.
 - [x] Reworked mobile composer so Markdown tools collapse behind an icon and the textarea stays usable.
 - [x] Added `docs/visual-acceptance.md` with screenshot metrics and a `gpt-image-2` reference prompt.
@@ -133,6 +134,13 @@ Record commands here when they are run for the current increment.
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
 | 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8093 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T21-19-49-947Z`; desktop sidebar model preview 4 cards, online-user section top 561px, all six scenarios `smallControls=0`, no horizontal overflow, no console errors. |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 199 tests |
+| 2026-05-23 | `docker build --check -f Dockerfile .` | PASS, no warnings |
+| 2026-05-23 | `docker build --check -f Dockerfile.runtime .` | PASS, no warnings |
+| 2026-05-23 | `cd backend; go test ./handler -run TestHealthCheck` | PASS |
+| 2026-05-23 | `cd backend; go test . -run TestServerStartsAndServesHealth` | PASS |
+| 2026-05-23 | `docker build -f Dockerfile.runtime -t tokendancechat:healthcheck-test <deploy-style-temp-context>` | PASS, validates runtime Dockerfile with `tokendancechat` binary and `frontend/dist` at deployment context root |
+| 2026-05-23 | `docker run -d --name tdchat-healthcheck-* -e CHAT_ADDR=:3000 tokendancechat:healthcheck-test`; poll `docker inspect .State.Health.Status` | PASS, status reached `healthy`; test container removed |
+| 2026-05-23 | `cd backend; go test ./...` | PASS |
 
 ## Review Gates
 
