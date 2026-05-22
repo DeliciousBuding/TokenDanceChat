@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased (2026-05-23)
+
+### Added
+- AgentHub 验证项目定位文档与长期工程目标文档。
+- 群组传入 Webhook 管理 UI：管理员可在群信息面板中创建、复制、列出、删除 Webhook。
+- Webhook 集成文档，覆盖 WebSocket 控制事件、HTTP 投递格式、安全契约和验证命令。
+- 前端 focused 测试覆盖 Webhook 一次性 secret 状态和群面板管理行为。
+
+### Fixed
+- `webhook_create` 现在会把 secret 只返回给创建者，避免创建后无法实际调用 HTTP Webhook。
+- `webhook_list` 现在要求群主/管理员权限，并且列表响应不再暴露 secret。
+- `store.Webhook.Secret` 加上 `json:"-"`，降低误序列化泄露风险。
+- `useWebSocket` 的 `translate_result` / `webhook_*` 事件现在进入统一退订列表，避免重复订阅泄漏。
+- `GroupInfoPanel` hooks 顺序整理到条件返回之前，避免群面板打开/关闭时的 hooks 数量变化风险。
+
+### Changed
+- `ROADMAP.md` 改为持续目标账本，明确本项目是 AgentHub 技术栈验证项目和可玩 Demo。
+- 删除根目录交接文档，改由 `AGENTS.md` 承载项目级 Agent 接手规则、架构地图和验证命令。
+
 ## v0.4.0 (2026-05-22)
 
 ### Added

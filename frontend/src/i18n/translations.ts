@@ -201,6 +201,16 @@ export interface TranslationDict {
     noPermission: string;
     renamePlaceholder: string;
     groupCreatedAt: string;
+    webhooks: string;
+    webhookDescription: string;
+    createWebhook: string;
+    webhookSecretOnce: string;
+    webhookSecretHint: string;
+    webhookCopied: string;
+    noWebhooks: string;
+    copyWebhook: string;
+    deleteWebhook: string;
+    webhookCreatedBy: string;
   };
   forward: {
     title: string;
@@ -595,6 +605,16 @@ const zhCN: TranslationDict = {
     noPermission: "你没有权限执行此操作",
     renamePlaceholder: "新群组名称...",
     groupCreatedAt: "创建时间",
+    webhooks: "传入 Webhook",
+    webhookDescription: "让外部系统向本群发送消息",
+    createWebhook: "新建",
+    webhookSecretOnce: "请立即复制，密钥只显示一次",
+    webhookSecretHint: "列表不会再次显示 secret；丢失后请重新创建。",
+    webhookCopied: "已复制",
+    noWebhooks: "暂无 webhook",
+    copyWebhook: "复制 webhook 地址",
+    deleteWebhook: "删除 webhook",
+    webhookCreatedBy: "创建者：{{name}}",
   },
   forward: {
     title: "转发消息",
@@ -992,6 +1012,16 @@ const enUS: TranslationDict = {
     noPermission: "You don't have permission to do this",
     renamePlaceholder: "New group name...",
     groupCreatedAt: "Created",
+    webhooks: "Incoming Webhooks",
+    webhookDescription: "Let external systems post into this group",
+    createWebhook: "New",
+    webhookSecretOnce: "Copy now; the secret is shown once",
+    webhookSecretHint: "The list will not show the secret again. Create a new webhook if it is lost.",
+    webhookCopied: "Copied",
+    noWebhooks: "No webhooks yet",
+    copyWebhook: "Copy webhook URL",
+    deleteWebhook: "Delete webhook",
+    webhookCreatedBy: "Created by {{name}}",
   },
   forward: {
     title: "Forward Message",

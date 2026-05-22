@@ -55,7 +55,7 @@ type Store interface {
 	InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error)
 	GetMessages(limit int, before int64) []StoredMessage
 	TotalUsers() int64
-		TotalMessages() int64
+	TotalMessages() int64
 	MarkDeleted(messageID string) error
 	GetRoomMessages(roomID string, limit int, before int64) []StoredMessage
 	CreateRoom(name string) (string, error)
@@ -199,7 +199,7 @@ type CallSession struct {
 	ID        string `json:"id"`
 	Caller    string `json:"caller"`
 	Callee    string `json:"callee"`
-	Type      string `json:"type"` // video or voice
+	Type      string `json:"type"`   // video or voice
 	Status    string `json:"status"` // ringing, active, ended
 	CreatedAt int64  `json:"created_at"`
 }
@@ -249,10 +249,10 @@ type Message struct {
 	Preview string   `json:"preview,omitempty"`
 
 	// Group system
-	Group   string   `json:"group,omitempty"`
-	Members      []string              `json:"members,omitempty"`
+	Group        string                  `json:"group,omitempty"`
+	Members      []string                `json:"members,omitempty"`
 	GroupMembers []store.GroupMemberInfo `json:"group_members,omitempty"`
-	Role    string   `json:"role,omitempty"`
+	Role         string                  `json:"role,omitempty"`
 
 	// Reply system
 	ReplyToID      string `json:"reply_to_id,omitempty"`
@@ -281,14 +281,14 @@ type Message struct {
 	Edited bool `json:"edited,omitempty"`
 
 	// Thread system
-	ThreadID         string          `json:"thread_id,omitempty"`
-	ParentMessageID  string          `json:"parent_message_id,omitempty"`
-	ThreadMessages   []StoredMessage `json:"thread_messages,omitempty"`
+	ThreadID        string          `json:"thread_id,omitempty"`
+	ParentMessageID string          `json:"parent_message_id,omitempty"`
+	ThreadMessages  []StoredMessage `json:"thread_messages,omitempty"`
 
 	// Pinned
-	Pinned   bool            `json:"pinned,omitempty"`
-	PinnedBy string           `json:"pinned_by,omitempty"`
-	PinnedAt int64            `json:"pinned_at,omitempty"`
+	Pinned   bool   `json:"pinned,omitempty"`
+	PinnedBy string `json:"pinned_by,omitempty"`
+	PinnedAt int64  `json:"pinned_at,omitempty"`
 
 	// Conversation pinning
 	Key  string   `json:"key,omitempty"`
@@ -323,13 +323,14 @@ type Message struct {
 	MentionAll bool `json:"mention_all,omitempty"`
 
 	// Chat folders
-	Folders interface{} `json:"folders,omitempty"`
+	Folders  interface{} `json:"folders,omitempty"`
 	Webhooks interface{} `json:"webhooks,omitempty"`
+	Secret   string      `json:"secret,omitempty"`
 
 	// Custom emoji fields
-	EmojiName string         `json:"emoji_name,omitempty"`
-	EmojiURL  string         `json:"emoji_url,omitempty"`
-	Emojis    []CustomEmoji  `json:"emojis,omitempty"`
+	EmojiName string        `json:"emoji_name,omitempty"`
+	EmojiURL  string        `json:"emoji_url,omitempty"`
+	Emojis    []CustomEmoji `json:"emojis,omitempty"`
 }
 
 // HubCommand PicoClaw 可向 Hub 发送的命令类型。
@@ -346,10 +347,10 @@ type HubCommand struct {
 
 // HubCommandResponse Hub 命令执行结果。
 type HubCommandResponse struct {
-	Type    string         `json:"type"`              // 回显命令类型
-	Success bool           `json:"success"`           // 是否成功
-	Data    map[string]any `json:"data,omitempty"`    // 响应数据
-	Error   string         `json:"error,omitempty"`   // 错误信息
+	Type    string         `json:"type"`            // 回显命令类型
+	Success bool           `json:"success"`         // 是否成功
+	Data    map[string]any `json:"data,omitempty"`  // 响应数据
+	Error   string         `json:"error,omitempty"` // 错误信息
 }
 type Hub struct {
 	// Registered clients.
@@ -497,6 +498,7 @@ func (h *Hub) LoadPersistedState() {
 	}
 
 }
+
 // Run starts the hub's event loop. It should be run in a goroutine.
 func (h *Hub) Run() {
 	syncTicker := time.NewTicker(30 * time.Second)

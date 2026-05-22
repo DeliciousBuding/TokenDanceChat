@@ -390,14 +390,14 @@ func (c *Client) handleJoin(msg Message) {
 		var deliveredIDs []string
 		for _, dm := range pendingDMs {
 			dmPayload, _ := json.Marshal(Message{
-				Type:           "dm_message",
-				ID:             dm.ID,
-				Username:       dm.Username,
-				Content:        dm.Content,
-				Timestamp:      dm.Timestamp,
-				To:             dm.ToUser,
-				From:           dm.Username,
-				ReplyToID:      dm.ReplyToID,
+				Type:      "dm_message",
+				ID:        dm.ID,
+				Username:  dm.Username,
+				Content:   dm.Content,
+				Timestamp: dm.Timestamp,
+				To:        dm.ToUser,
+				From:      dm.Username,
+				ReplyToID: dm.ReplyToID,
 			})
 			select {
 			case c.send <- dmPayload:
@@ -1574,12 +1574,12 @@ func (c *Client) handlePinMessage(msg Message) {
 	}
 	// Broadcast pin event.
 	pinMsg, _ := json.Marshal(Message{
-		Type:      "pinned",
-		ID:        messageID,
-		RoomID:    roomID,
-		PinnedBy:  c.username,
-		PinnedAt:  time.Now().UnixMilli(),
-		Pinned:    true,
+		Type:     "pinned",
+		ID:       messageID,
+		RoomID:   roomID,
+		PinnedBy: c.username,
+		PinnedAt: time.Now().UnixMilli(),
+		Pinned:   true,
 	})
 	c.hub.BroadcastToRoom(pinMsg, roomID)
 }
@@ -1947,6 +1947,7 @@ func (c *Client) handleMarkRead(msg Message) {
 	default:
 	}
 }
+
 // This runs in its own goroutine and streams the response.
 func (c *Client) handleBotResponse(ctx context.Context, userContent, roomID string) {
 	// Send typing indicator.
@@ -2145,7 +2146,10 @@ func (c *Client) handleProfileUpdate(msg Message) {
 	}
 	// Broadcast updated user_status to all clients.
 	statusMsg, _ := json.Marshal(Message{Type: "user_status", Users: c.hub.AllUserStatus()})
-	select { case c.hub.broadcast <- statusMsg: default: }
+	select {
+	case c.hub.broadcast <- statusMsg:
+	default:
+	}
 }
 
 func (c *Client) handleProfileGet(msg Message) {
@@ -2165,7 +2169,10 @@ func (c *Client) handleProfileGet(msg Message) {
 		DisplayName: profile.DisplayName, AvatarURL: profile.AvatarURL,
 		Bio: profile.Bio, Status: profile.Status,
 	})
-	select { case c.send <- resp: default: }
+	select {
+	case c.send <- resp:
+	default:
+	}
 }
 
 func (c *Client) handleStatusUpdate(msg Message) {
@@ -2181,11 +2188,16 @@ func (c *Client) handleStatusUpdate(msg Message) {
 		return
 	}
 	statusMsg, _ := json.Marshal(Message{Type: "status_updated", Username: c.username, Status: status})
-	select { case c.hub.broadcast <- statusMsg: default: }
+	select {
+	case c.hub.broadcast <- statusMsg:
+	default:
+	}
 	userStatusMsg, _ := json.Marshal(Message{Type: "user_status", Users: c.hub.AllUserStatus()})
-	select { case c.hub.broadcast <- userStatusMsg: default: }
+	select {
+	case c.hub.broadcast <- userStatusMsg:
+	default:
+	}
 }
-
 
 // --- Poll handlers ---
 
@@ -2250,7 +2262,10 @@ func (c *Client) handlePollClose(msg Message) {
 	}
 	if poll.Creator != c.username {
 		errMsg, _ := json.Marshal(Message{Type: "error", Content: "only the poll creator can close the poll", ErrorCode: "NOT_OWNER"})
-		select { case c.send <- errMsg: default: }
+		select {
+		case c.send <- errMsg:
+		default:
+		}
 		return
 	}
 	if err := c.hub.store.ClosePoll(msg.ID); err != nil {
@@ -2279,7 +2294,10 @@ func (c *Client) handleScheduleMessage(msg Message) {
 			Content:   "send_at must be in the future",
 			ErrorCode: "INVALID_SCHEDULE_TIME",
 		})
-		select { case c.send <- errMsg: default: }
+		select {
+		case c.send <- errMsg:
+		default:
+		}
 		return
 	}
 	if sendAt > time.Now().UnixMilli()+365*24*60*60*1000 {
@@ -2288,7 +2306,10 @@ func (c *Client) handleScheduleMessage(msg Message) {
 			Content:   "cannot schedule more than 1 year in advance",
 			ErrorCode: "SCHEDULE_TOO_FAR",
 		})
-		select { case c.send <- errMsg: default: }
+		select {
+		case c.send <- errMsg:
+		default:
+		}
 		return
 	}
 
@@ -2316,7 +2337,10 @@ func (c *Client) handleScheduleMessage(msg Message) {
 			Content:   "failed to schedule message",
 			ErrorCode: "SERVER_ERROR",
 		})
-		select { case c.send <- errMsg: default: }
+		select {
+		case c.send <- errMsg:
+		default:
+		}
 		return
 	}
 
@@ -2330,7 +2354,10 @@ func (c *Client) handleScheduleMessage(msg Message) {
 		To:        sm.ToUser,
 		Group:     sm.GroupName,
 	})
-	select { case c.send <- confirm: default: }
+	select {
+	case c.send <- confirm:
+	default:
+	}
 }
 
 // handleCancelScheduledMessage processes a cancel_scheduled_message request.
@@ -2350,7 +2377,10 @@ func (c *Client) handleCancelScheduledMessage(msg Message) {
 			Content:   "failed to cancel scheduled message or not authorized",
 			ErrorCode: "CANCEL_SCHEDULE_FAILED",
 		})
-		select { case c.send <- errMsg: default: }
+		select {
+		case c.send <- errMsg:
+		default:
+		}
 		return
 	}
 
@@ -2358,7 +2388,10 @@ func (c *Client) handleCancelScheduledMessage(msg Message) {
 		Type: "scheduled_message_cancelled",
 		ID:   id,
 	})
-	select { case c.send <- confirm: default: }
+	select {
+	case c.send <- confirm:
+	default:
+	}
 }
 
 // handleScheduledMessagesList returns the user's scheduled messages.
@@ -2377,7 +2410,10 @@ func (c *Client) handleScheduledMessagesList() {
 		Type:     "scheduled_messages_list",
 		Messages: msgsToMessages(msgs),
 	})
-	select { case c.send <- payload: default: }
+	select {
+	case c.send <- payload:
+	default:
+	}
 }
 
 // --- Group admin handlers ---
@@ -2432,8 +2468,8 @@ func (c *Client) handleGroupKick(msg Message) {
 
 	// Notify the kicked user.
 	kickedMsg, _ := json.Marshal(Message{
-		Type:  "group_member_kicked",
-		Group: groupName,
+		Type:    "group_member_kicked",
+		Group:   groupName,
 		Content: "you were kicked from the group",
 	})
 	c.hub.SendToUser(targetUser, kickedMsg)
@@ -2441,10 +2477,10 @@ func (c *Client) handleGroupKick(msg Message) {
 	// Broadcast updated member list to group.
 	members := c.hub.GroupMembers(groupName)
 	updateMsg, _ := json.Marshal(Message{
-		Type:    "group_member_kicked",
-		Group:   groupName,
+		Type:     "group_member_kicked",
+		Group:    groupName,
 		Username: targetUser,
-		Members: members,
+		Members:  members,
 	})
 	c.hub.BroadcastToGroup(groupName, updateMsg)
 }
@@ -2496,8 +2532,8 @@ func (c *Client) handleGroupSetRole(msg Message) {
 	// Also send the updated member list.
 	membersWithRoles := c.hub.store.GetGroupMembersWithRoles(groupName)
 	membersPayload, _ := json.Marshal(Message{
-		Type:    "group_info",
-		Group:   groupName,
+		Type:         "group_info",
+		Group:        groupName,
 		GroupMembers: membersWithRoles,
 	})
 	c.hub.BroadcastToGroup(groupName, membersPayload)
@@ -2601,8 +2637,8 @@ func (c *Client) handleGroupTransfer(msg Message) {
 	// Send updated member list with new roles.
 	membersWithRoles := c.hub.store.GetGroupMembersWithRoles(groupName)
 	membersPayload, _ := json.Marshal(Message{
-		Type:    "group_info",
-		Group:   groupName,
+		Type:         "group_info",
+		Group:        groupName,
 		GroupMembers: membersWithRoles,
 	})
 	c.hub.BroadcastToGroup(groupName, membersPayload)
@@ -2640,8 +2676,8 @@ func (c *Client) handleGroupLeave(msg Message) {
 
 	// Notify the leaver.
 	leaveConfirm, _ := json.Marshal(Message{
-		Type:  "group_member_left",
-		Group: groupName,
+		Type:     "group_member_left",
+		Group:    groupName,
 		Username: c.username,
 	})
 	select {
@@ -2702,11 +2738,11 @@ func (c *Client) handleGroupInfo(msg Message) {
 	membersWithRoles := c.hub.store.GetGroupMembersWithRoles(groupName)
 
 	payload, _ := json.Marshal(Message{
-		Type:    "group_info",
-		Group:   groupName,
+		Type:         "group_info",
+		Group:        groupName,
 		GroupMembers: membersWithRoles,
-		Content: info.Owner,
-		Timestamp: info.CreatedAt,
+		Content:      info.Owner,
+		Timestamp:    info.CreatedAt,
 	})
 	select {
 	case c.send <- payload:
@@ -3415,7 +3451,6 @@ func (c *Client) handleTranslateMessage(msg Message) {
 	}()
 }
 
-
 // --- Chat folder handlers ---
 
 func (c *Client) handleFolderCreate(msg Message) {
@@ -3611,6 +3646,7 @@ func (c *Client) handleWebhookCreate(msg Message) {
 		Group:   groupName,
 		ID:      id,
 		Content: url,
+		Secret:  secret,
 	})
 	select {
 	case c.send <- resp:
@@ -3658,20 +3694,40 @@ func (c *Client) handleWebhookList(msg Message) {
 		return
 	}
 
+	role, _ := c.hub.store.GetGroupMemberRole(groupName, c.username)
+	if role != "owner" && role != "admin" {
+		return
+	}
+
 	webhooks, err := c.hub.store.ListWebhooks(groupName)
 	if err != nil {
 		log.Printf("webhook_list: error: %v", err)
 		return
 	}
 
+	// Strip secrets before sending to client.
+	type safeWebhook struct {
+		ID        string `json:"id"`
+		GroupName string `json:"group_name"`
+		URL       string `json:"url"`
+		CreatedBy string `json:"created_by"`
+		CreatedAt int64  `json:"created_at"`
+	}
+	var safe []safeWebhook
+	for _, w := range webhooks {
+		safe = append(safe, safeWebhook{
+			ID: w.ID, GroupName: w.GroupName, URL: w.URL,
+			CreatedBy: w.CreatedBy, CreatedAt: w.CreatedAt,
+		})
+	}
+
 	resp, _ := json.Marshal(Message{
 		Type:     "webhook_list",
 		Group:    groupName,
-		Webhooks: webhooks,
+		Webhooks: safe,
 	})
 	select {
 	case c.send <- resp:
 	default:
 	}
 }
-

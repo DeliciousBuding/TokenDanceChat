@@ -201,6 +201,63 @@ describe("chatStore", () => {
     });
   });
 
+  describe("group webhooks", () => {
+    it("stores webhook lists without secrets", () => {
+      useChatStore.getState().setGroupWebhooks("Team", [
+        {
+          id: "wh-1",
+          group_name: "Team",
+          url: "wh-path",
+          created_by: "Alice",
+          created_at: 1000,
+        },
+      ]);
+
+      expect(useChatStore.getState().groupWebhooks.Team).toEqual([
+        {
+          id: "wh-1",
+          group_name: "Team",
+          url: "wh-path",
+          created_by: "Alice",
+          created_at: 1000,
+        },
+      ]);
+    });
+
+    it("keeps a newly created webhook secret only in the one-time field", () => {
+      useChatStore.getState().addGroupWebhook("Team", {
+        id: "wh-1",
+        group_name: "Team",
+        url: "wh-path",
+        secret: "secret-once",
+        created_by: "Alice",
+        created_at: 1000,
+      });
+
+      expect(useChatStore.getState().latestCreatedWebhook?.secret).toBe("secret-once");
+      expect(useChatStore.getState().groupWebhooks.Team[0]).not.toHaveProperty("secret");
+
+      useChatStore.getState().clearLatestCreatedWebhook();
+      expect(useChatStore.getState().latestCreatedWebhook).toBeNull();
+    });
+
+    it("removes webhooks and clears matching one-time secret", () => {
+      useChatStore.getState().addGroupWebhook("Team", {
+        id: "wh-1",
+        group_name: "Team",
+        url: "wh-path",
+        secret: "secret-once",
+        created_by: "Alice",
+        created_at: 1000,
+      });
+
+      useChatStore.getState().removeGroupWebhook("Team", "wh-1");
+
+      expect(useChatStore.getState().groupWebhooks.Team).toHaveLength(0);
+      expect(useChatStore.getState().latestCreatedWebhook).toBeNull();
+    });
+  });
+
   describe("reactions", () => {
     it("updates message reactions", () => {
       useChatStore.getState().addMessage({

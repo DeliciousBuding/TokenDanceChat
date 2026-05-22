@@ -85,7 +85,7 @@ describe("JoinScreen", () => {
 
     it("显示副标题", () => {
       renderJoinScreen();
-      expect(screen.getByText("输入用户名加入公共聊天室")).toBeTruthy();
+      expect(screen.getByText("加入公共聊天室")).toBeTruthy();
     });
 
     it("显示用户名输入框", () => {
@@ -96,7 +96,7 @@ describe("JoinScreen", () => {
 
     it("显示加入按钮", () => {
       renderJoinScreen();
-      expect(screen.getByText("加入聊天")).toBeTruthy();
+      expect(screen.getByRole("button", { name: /游客加入/ })).toBeTruthy();
     });
 
     it("显示底部版权提示", () => {
@@ -118,7 +118,7 @@ describe("JoinScreen", () => {
       renderJoinScreen();
       const input = screen.getByPlaceholderText("你的用户名...");
       fireEvent.change(input, { target: { value: "A" } });
-      const button = screen.getByText("加入聊天");
+      const button = screen.getByRole("button", { name: /游客加入/ });
       fireEvent.click(button);
       expect(screen.getByText("用户名至少需要2个字符")).toBeTruthy();
     });

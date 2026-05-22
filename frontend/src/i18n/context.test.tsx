@@ -94,8 +94,8 @@ describe("I18nContext", () => {
           <LangSwitcher />
         </I18nProvider>,
       );
-      // 中文：输入用户名加入公共聊天室
-      expect(screen.getByTestId("translated").textContent).toBe("输入用户名加入公共聊天室");
+      // 中文：加入公共聊天室
+      expect(screen.getByTestId("translated").textContent).toBe("加入公共聊天室");
 
       fireEvent.click(screen.getByTestId("switch-lang"));
 

@@ -129,10 +129,8 @@ describe("ChatInput", () => {
       const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
       typeInTextarea(textarea, "Hello world");
 
-      // Send button: aria-label matches the placeholder text
-      const sendBtn = document.querySelector('textarea[aria-label]')?.parentElement?.nextElementSibling?.querySelector('button')
-        ?? screen.getByRole("button", { name: /输入消息.*Shift\+Enter/ });
-      fireEvent.click(sendBtn!);
+      // Send button uses the current placeholder as its accessible label.
+      fireEvent.click(screen.getByRole("button", { name: "输入消息... (Shift+Enter 换行)" }));
 
       expect(onSend).toHaveBeenCalledTimes(1);
       expect(onSend).toHaveBeenCalledWith("Hello world");
@@ -229,11 +227,11 @@ describe("ChatInput", () => {
 
     it("Markdown 格式化工具栏存在", () => {
       renderChatInput();
-      expect(screen.getByLabelText("Bold")).toBeTruthy();
-      expect(screen.getByLabelText("Italic")).toBeTruthy();
-      expect(screen.getByLabelText("Strikethrough")).toBeTruthy();
-      expect(screen.getByLabelText("Code")).toBeTruthy();
-      expect(screen.getByLabelText("Quote")).toBeTruthy();
+      expect(screen.getByLabelText("加粗")).toBeTruthy();
+      expect(screen.getByLabelText("斜体")).toBeTruthy();
+      expect(screen.getByLabelText("删除线")).toBeTruthy();
+      expect(screen.getByLabelText("代码")).toBeTruthy();
+      expect(screen.getByLabelText("引用")).toBeTruthy();
     });
 
     it("字符计数器显示", () => {
@@ -337,7 +335,7 @@ describe("ChatInput", () => {
 
       fireEvent.keyDown(textarea, { key: "Enter" });
 
-      expect(textarea.value).toBe("@TokenBot ");
+      expect(textarea.value).toBe("@all ");
     });
 
     it("assistant 标签显示在 mention 列表中", () => {
@@ -359,7 +357,7 @@ describe("ChatInput", () => {
 
       fireEvent.dragEnter(container);
       // Drop overlay text should appear
-      expect(screen.getByText("拖拽文件到这里")).toBeTruthy();
+      expect(screen.getByText("拖放文件到此处")).toBeTruthy();
     });
 
     it("离开拖拽区域后 overlay 消失", () => {
@@ -369,14 +367,14 @@ describe("ChatInput", () => {
       fireEvent.dragEnter(container);
       fireEvent.dragLeave(container);
 
-      expect(screen.queryByText("拖拽文件到这里")).toBeNull();
+      expect(screen.queryByText("拖放文件到此处")).toBeNull();
     });
 
     it("拖拽超大文件显示错误提示", () => {
       renderChatInput();
       const container = document.querySelector(".relative.border-t")!;
 
-      const largeFile = new File([new ArrayBuffer(21 * 1024 * 1024)], "large.zip", {
+      const largeFile = new File([new ArrayBuffer(51 * 1024 * 1024)], "large.zip", {
         type: "application/zip",
       });
       const dataTransfer = {
@@ -387,7 +385,7 @@ describe("ChatInput", () => {
 
       fireEvent.drop(container, { dataTransfer });
 
-      expect(screen.getByText("文件过大（最大 20MB）")).toBeTruthy();
+      expect(screen.getByText("文件过大（最大 50MB）")).toBeTruthy();
     });
 
     it("dragOver 阻止默认行为", () => {

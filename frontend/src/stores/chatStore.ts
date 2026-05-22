@@ -58,6 +58,18 @@ export interface NotificationPref {
   showPreview: boolean;
 }
 
+export interface WebhookInfo {
+  id: string;
+  group_name: string;
+  url: string;
+  created_by: string;
+  created_at: number;
+}
+
+export interface CreatedWebhookInfo extends WebhookInfo {
+  secret: string;
+}
+
 export interface IncomingCall {
   callId: string;
   from: string;
@@ -161,6 +173,8 @@ interface ChatState {
   scheduledMessages: ScheduledMessage[];
   customEmojis: CustomEmoji[];
   folders: ChatFolder[];
+  groupWebhooks: Record<string, WebhookInfo[]>;
+  latestCreatedWebhook: CreatedWebhookInfo | null;
   translations: Record<string, string>; // messageId -> translated text
 
   // Call state
@@ -234,6 +248,10 @@ interface ChatState {
   updateFolder: (id: string, data: Partial<ChatFolder>) => void;
   addConversationToFolder: (folderId: string, key: string) => void;
   removeConversationFromFolder: (folderId: string, key: string) => void;
+  setGroupWebhooks: (group: string, webhooks: WebhookInfo[]) => void;
+  addGroupWebhook: (group: string, webhook: CreatedWebhookInfo) => void;
+  removeGroupWebhook: (group: string, id: string) => void;
+  clearLatestCreatedWebhook: () => void;
   setTranslation: (messageId: string, text: string) => void;
   setIncomingCall: (call: IncomingCall | null) => void;
   setActiveCall: (call: ActiveCall | null) => void;
@@ -275,6 +293,8 @@ export const useChatStore = create<ChatState>((set) => ({
   scheduledMessages: [],
   customEmojis: [],
   folders: [],
+  groupWebhooks: {},
+  latestCreatedWebhook: null,
   translations: {},
   incomingCall: null,
   activeCall: null,
@@ -574,6 +594,40 @@ export const useChatStore = create<ChatState>((set) => ({
           : f,
       ),
     })),
+  setGroupWebhooks: (group, webhooks) =>
+    set((state) => ({
+      groupWebhooks: { ...state.groupWebhooks, [group]: webhooks },
+    })),
+  addGroupWebhook: (group, webhook) =>
+    set((state) => {
+      const existing = state.groupWebhooks[group] ?? [];
+      const withoutDuplicate = existing.filter((w) => w.id !== webhook.id);
+      const redactedWebhook: WebhookInfo = {
+        id: webhook.id,
+        group_name: webhook.group_name,
+        url: webhook.url,
+        created_by: webhook.created_by,
+        created_at: webhook.created_at,
+      };
+      return {
+        groupWebhooks: {
+          ...state.groupWebhooks,
+          [group]: [redactedWebhook, ...withoutDuplicate],
+        },
+        latestCreatedWebhook: webhook,
+      };
+    }),
+  removeGroupWebhook: (group, id) =>
+    set((state) => {
+      const existing = state.groupWebhooks[group] ?? [];
+      const nextWebhooks = { ...state.groupWebhooks, [group]: existing.filter((w) => w.id !== id) };
+      const latest =
+        state.latestCreatedWebhook?.group_name === group && state.latestCreatedWebhook.id === id
+          ? null
+          : state.latestCreatedWebhook;
+      return { groupWebhooks: nextWebhooks, latestCreatedWebhook: latest };
+    }),
+  clearLatestCreatedWebhook: () => set({ latestCreatedWebhook: null }),
   setIncomingCall: (incomingCall) => set({ incomingCall }),
   setActiveCall: (activeCall) => set({ activeCall }),
   setTranslation: (messageId, text) =>
@@ -614,6 +668,8 @@ export const useChatStore = create<ChatState>((set) => ({
       scheduledMessages: [],
       customEmojis: [],
       folders: [],
+      groupWebhooks: {},
+      latestCreatedWebhook: null,
       translations: {},
       incomingCall: null,
       activeCall: null,

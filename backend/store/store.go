@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -60,17 +60,17 @@ type UserProfile struct {
 
 // Poll represents a poll.
 type Poll struct {
-	ID             string            `json:"id"`
-	RoomID         string            `json:"room_id"`
-	Creator        string            `json:"creator"`
-	Question       string            `json:"question"`
-	Options        []string          `json:"options"`
-	MultipleChoice bool              `json:"multiple_choice"`
-	IsAnonymous    bool              `json:"is_anonymous"`
-	IsClosed       bool              `json:"is_closed"`
-	Votes          map[int]int       `json:"votes"`
-	Voters         map[int][]string  `json:"voters"`
-	CreatedAt      int64             `json:"created_at"`
+	ID             string           `json:"id"`
+	RoomID         string           `json:"room_id"`
+	Creator        string           `json:"creator"`
+	Question       string           `json:"question"`
+	Options        []string         `json:"options"`
+	MultipleChoice bool             `json:"multiple_choice"`
+	IsAnonymous    bool             `json:"is_anonymous"`
+	IsClosed       bool             `json:"is_closed"`
+	Votes          map[int]int      `json:"votes"`
+	Voters         map[int][]string `json:"voters"`
+	CreatedAt      int64            `json:"created_at"`
 }
 
 // CustomEmoji represents a custom emoji uploaded by a user.
@@ -110,12 +110,12 @@ type GroupInfo struct {
 
 // Webhook represents an incoming webhook integration for a group.
 type Webhook struct {
-	ID        string 
-	GroupName string 
-	URL       string 
-	Secret    string 
-	CreatedBy string 
-	CreatedAt int64  
+	ID        string `json:"id"`
+	GroupName string `json:"group_name"`
+	URL       string `json:"url"`
+	Secret    string `json:"-"`
+	CreatedBy string `json:"created_by"`
+	CreatedAt int64  `json:"created_at"`
 }
 
 // GroupMemberInfo represents a member with their role in a group.
@@ -578,19 +578,19 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 		messages[i], messages[j] = messages[j], messages[i]
 	}
 
-		// Enrich with reactions.
-		if len(messages) > 0 {
-			messageIDs := make([]string, len(messages))
-			for i, m := range messages {
-				messageIDs[i] = m.ID
-			}
-			reactions := s.GetReactionsForMessages(messageIDs)
-			for i := range messages {
-				messages[i].Reactions = reactions[messages[i].ID]
-			}
+	// Enrich with reactions.
+	if len(messages) > 0 {
+		messageIDs := make([]string, len(messages))
+		for i, m := range messages {
+			messageIDs[i] = m.ID
 		}
+		reactions := s.GetReactionsForMessages(messageIDs)
+		for i := range messages {
+			messages[i].Reactions = reactions[messages[i].ID]
+		}
+	}
 
-		return messages
+	return messages
 }
 
 func (s *Store) TotalUsers() int64 {
@@ -1320,7 +1320,6 @@ func (s *Store) MarkMessagesDelivered(ids []string) error {
 	return err
 }
 
-
 // --- User blocking ---
 
 func (s *Store) BlockUser(username, blocked string) error {
@@ -1372,7 +1371,6 @@ func (s *Store) GetBlockedUsers(username string) []string {
 	return blocked
 }
 
-
 // --- Message pinning ---
 
 func (s *Store) PinMessage(roomID, messageID, pinnedBy string) error {
@@ -1423,278 +1421,277 @@ func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
 	return msgs
 }
 
-	// --- Conversation pinning ---
+// --- Conversation pinning ---
 
-	func (s *Store) PinConversation(username, key string) error {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		_, err := s.db.Exec("INSERT OR IGNORE INTO pinned_conversations (username, key) VALUES (?, ?)", username, key)
-		return err
+func (s *Store) PinConversation(username, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("INSERT OR IGNORE INTO pinned_conversations (username, key) VALUES (?, ?)", username, key)
+	return err
+}
+
+func (s *Store) UnpinConversation(username, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM pinned_conversations WHERE username = ? AND key = ?", username, key)
+	return err
+}
+
+func (s *Store) ListPinnedConversations(username string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query("SELECT key FROM pinned_conversations WHERE username = ? ORDER BY rowid", username)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err == nil {
+			keys = append(keys, k)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
+	if keys == nil {
+		keys = []string{}
+	}
+	return keys
+}
+
+// --- Conversation muting ---
+
+func (s *Store) MuteConversation(username, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("INSERT OR IGNORE INTO muted_conversations (username, key) VALUES (?, ?)", username, key)
+	return err
+}
+
+func (s *Store) UnmuteConversation(username, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM muted_conversations WHERE username = ? AND key = ?", username, key)
+	return err
+}
+
+func (s *Store) ListMutedConversations(username string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query("SELECT key FROM muted_conversations WHERE username = ? ORDER BY rowid", username)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err == nil {
+			keys = append(keys, k)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
+	if keys == nil {
+		keys = []string{}
+	}
+	return keys
+}
+
+func (s *Store) IsConversationMuted(username, key string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM muted_conversations WHERE username = ? AND key = ?", username, key).Scan(&count); err != nil {
+		log.Printf("store: IsConversationMuted error: %v", err)
+		return false
+	}
+	return count > 0
+}
+
+// --- Conversation archiving ---
+
+func (s *Store) ArchiveConversation(username, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("INSERT OR IGNORE INTO archived_conversations (username, key) VALUES (?, ?)", username, key)
+	return err
+}
+
+func (s *Store) UnarchiveConversation(username, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM archived_conversations WHERE username = ? AND key = ?", username, key)
+	return err
+}
+
+func (s *Store) ListArchivedConversations(username string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query("SELECT key FROM archived_conversations WHERE username = ? ORDER BY rowid", username)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err == nil {
+			keys = append(keys, k)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
+	if keys == nil {
+		keys = []string{}
+	}
+	return keys
+}
+
+func (s *Store) IsConversationArchived(username, key string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM archived_conversations WHERE username = ? AND key = ?", username, key).Scan(&count); err != nil {
+		log.Printf("store: IsConversationArchived error: %v", err)
+		return false
+	}
+	return count > 0
+}
+
+// --- Threaded replies ---
+
+// GetThreadMessages returns messages in a thread, ordered by creation time ascending.
+func (s *Store) GetThreadMessages(parentMessageID string) []StoredMessage {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query(
+		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE thread_id = ? AND deleted = 0 ORDER BY timestamp ASC",
+		parentMessageID,
+	)
+	if err != nil {
+		log.Printf("store: GetThreadMessages query error: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	messages := make([]StoredMessage, 0)
+	for rows.Next() {
+		var m StoredMessage
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
+			log.Printf("store: GetThreadMessages scan error: %v", err)
+			continue
+		}
+		messages = append(messages, m)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: GetThreadMessages iteration error: %v", err)
 	}
 
-	func (s *Store) UnpinConversation(username, key string) error {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		_, err := s.db.Exec("DELETE FROM pinned_conversations WHERE username = ? AND key = ?", username, key)
-		return err
+	// Enrich with reactions.
+	if len(messages) > 0 {
+		messageIDs := make([]string, len(messages))
+		for i, m := range messages {
+			messageIDs[i] = m.ID
+		}
+		reactions := s.GetReactionsForMessages(messageIDs)
+		for i := range messages {
+			messages[i].Reactions = reactions[messages[i].ID]
+		}
 	}
 
-	func (s *Store) ListPinnedConversations(username string) []string {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		rows, err := s.db.Query("SELECT key FROM pinned_conversations WHERE username = ? ORDER BY rowid", username)
-		if err != nil {
-			return nil
-		}
-		defer rows.Close()
-		var keys []string
-		for rows.Next() {
-			var k string
-			if err := rows.Scan(&k); err == nil {
-				keys = append(keys, k)
-			}
-		}
-		if err := rows.Err(); err != nil {
-			log.Printf("store: rows iteration error: %v", err)
-		}
-		if keys == nil {
-			keys = []string{}
-		}
-		return keys
+	return messages
+}
+
+// GetThreadReplyCount returns the number of replies in a thread.
+func (s *Store) GetThreadReplyCount(parentMessageID string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var count int
+	if err := s.db.QueryRow(
+		"SELECT COUNT(*) FROM messages WHERE thread_id = ? AND deleted = 0",
+		parentMessageID,
+	).Scan(&count); err != nil {
+		log.Printf("store: GetThreadReplyCount error: %v", err)
+		return 0
 	}
+	return count
+}
 
-	// --- Conversation muting ---
+// --- Notification preferences ---
 
-	func (s *Store) MuteConversation(username, key string) error {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		_, err := s.db.Exec("INSERT OR IGNORE INTO muted_conversations (username, key) VALUES (?, ?)", username, key)
-		return err
+// SetNotificationPrefs upserts notification preferences for a (username, key) pair.
+func (s *Store) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	showPreviewInt := 0
+	if showPreview {
+		showPreviewInt = 1
 	}
+	_, err := s.db.Exec(
+		"INSERT INTO notification_prefs (username, key, muted_until, show_preview) VALUES (?, ?, ?, ?) ON CONFLICT(username, key) DO UPDATE SET muted_until = excluded.muted_until, show_preview = excluded.show_preview",
+		username, key, mutedUntil, showPreviewInt,
+	)
+	return err
+}
 
-	func (s *Store) UnmuteConversation(username, key string) error {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		_, err := s.db.Exec("DELETE FROM muted_conversations WHERE username = ? AND key = ?", username, key)
-		return err
+// GetNotificationPrefs returns the notification preferences for a (username, key) pair.
+func (s *Store) GetNotificationPrefs(username, key string) (mutedUntil int64, showPreview bool, err error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var showPreviewInt int
+	err = s.db.QueryRow(
+		"SELECT muted_until, show_preview FROM notification_prefs WHERE username = ? AND key = ?",
+		username, key,
+	).Scan(&mutedUntil, &showPreviewInt)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return 0, true, nil
+		}
+		return 0, true, err
 	}
+	return mutedUntil, showPreviewInt != 0, nil
+}
 
-	func (s *Store) ListMutedConversations(username string) []string {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		rows, err := s.db.Query("SELECT key FROM muted_conversations WHERE username = ? ORDER BY rowid", username)
-		if err != nil {
-			return nil
-		}
-		defer rows.Close()
-		var keys []string
-		for rows.Next() {
-			var k string
-			if err := rows.Scan(&k); err == nil {
-				keys = append(keys, k)
-			}
-		}
-		if err := rows.Err(); err != nil {
-			log.Printf("store: rows iteration error: %v", err)
-		}
-		if keys == nil {
-			keys = []string{}
-		}
-		return keys
+// ListNotificationPrefs returns all notification preference records for a user.
+func (s *Store) ListNotificationPrefs(username string) []NotificationPref {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query(
+		"SELECT key, muted_until, show_preview FROM notification_prefs WHERE username = ? ORDER BY rowid",
+		username,
+	)
+	if err != nil {
+		return nil
 	}
+	defer rows.Close()
 
-	func (s *Store) IsConversationMuted(username, key string) bool {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		var count int
-		if err := s.db.QueryRow("SELECT COUNT(*) FROM muted_conversations WHERE username = ? AND key = ?", username, key).Scan(&count); err != nil {
-			log.Printf("store: IsConversationMuted error: %v", err)
-			return false
-		}
-		return count > 0
-	}
-
-	// --- Conversation archiving ---
-
-	func (s *Store) ArchiveConversation(username, key string) error {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		_, err := s.db.Exec("INSERT OR IGNORE INTO archived_conversations (username, key) VALUES (?, ?)", username, key)
-		return err
-	}
-
-	func (s *Store) UnarchiveConversation(username, key string) error {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		_, err := s.db.Exec("DELETE FROM archived_conversations WHERE username = ? AND key = ?", username, key)
-		return err
-	}
-
-	func (s *Store) ListArchivedConversations(username string) []string {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		rows, err := s.db.Query("SELECT key FROM archived_conversations WHERE username = ? ORDER BY rowid", username)
-		if err != nil {
-			return nil
-		}
-		defer rows.Close()
-		var keys []string
-		for rows.Next() {
-			var k string
-			if err := rows.Scan(&k); err == nil {
-				keys = append(keys, k)
-			}
-		}
-		if err := rows.Err(); err != nil {
-			log.Printf("store: rows iteration error: %v", err)
-		}
-		if keys == nil {
-			keys = []string{}
-		}
-		return keys
-	}
-
-	func (s *Store) IsConversationArchived(username, key string) bool {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		var count int
-		if err := s.db.QueryRow("SELECT COUNT(*) FROM archived_conversations WHERE username = ? AND key = ?", username, key).Scan(&count); err != nil {
-			log.Printf("store: IsConversationArchived error: %v", err)
-			return false
-		}
-		return count > 0
-	}
-
-	// --- Threaded replies ---
-
-	// GetThreadMessages returns messages in a thread, ordered by creation time ascending.
-	func (s *Store) GetThreadMessages(parentMessageID string) []StoredMessage {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-
-		rows, err := s.db.Query(
-			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE thread_id = ? AND deleted = 0 ORDER BY timestamp ASC",
-			parentMessageID,
-		)
-		if err != nil {
-			log.Printf("store: GetThreadMessages query error: %v", err)
-			return nil
-		}
-		defer rows.Close()
-
-		messages := make([]StoredMessage, 0)
-		for rows.Next() {
-			var m StoredMessage
-			if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
-				log.Printf("store: GetThreadMessages scan error: %v", err)
-				continue
-			}
-			messages = append(messages, m)
-		}
-		if err := rows.Err(); err != nil {
-			log.Printf("store: GetThreadMessages iteration error: %v", err)
-		}
-
-		// Enrich with reactions.
-		if len(messages) > 0 {
-			messageIDs := make([]string, len(messages))
-			for i, m := range messages {
-				messageIDs[i] = m.ID
-			}
-			reactions := s.GetReactionsForMessages(messageIDs)
-			for i := range messages {
-				messages[i].Reactions = reactions[messages[i].ID]
-			}
-		}
-
-		return messages
-	}
-
-	// GetThreadReplyCount returns the number of replies in a thread.
-	func (s *Store) GetThreadReplyCount(parentMessageID string) int {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		var count int
-		if err := s.db.QueryRow(
-			"SELECT COUNT(*) FROM messages WHERE thread_id = ? AND deleted = 0",
-			parentMessageID,
-		).Scan(&count); err != nil {
-			log.Printf("store: GetThreadReplyCount error: %v", err)
-			return 0
-		}
-		return count
-	}
-
-	// --- Notification preferences ---
-
-	// SetNotificationPrefs upserts notification preferences for a (username, key) pair.
-	func (s *Store) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		showPreviewInt := 0
-		if showPreview {
-			showPreviewInt = 1
-		}
-		_, err := s.db.Exec(
-			"INSERT INTO notification_prefs (username, key, muted_until, show_preview) VALUES (?, ?, ?, ?) ON CONFLICT(username, key) DO UPDATE SET muted_until = excluded.muted_until, show_preview = excluded.show_preview",
-			username, key, mutedUntil, showPreviewInt,
-		)
-		return err
-	}
-
-	// GetNotificationPrefs returns the notification preferences for a (username, key) pair.
-	func (s *Store) GetNotificationPrefs(username, key string) (mutedUntil int64, showPreview bool, err error) {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-
+	var prefs []NotificationPref
+	for rows.Next() {
+		var p NotificationPref
 		var showPreviewInt int
-		err = s.db.QueryRow(
-			"SELECT muted_until, show_preview FROM notification_prefs WHERE username = ? AND key = ?",
-			username, key,
-		).Scan(&mutedUntil, &showPreviewInt)
-		if err != nil {
-			if err.Error() == "sql: no rows in result set" {
-				return 0, true, nil
-			}
-			return 0, true, err
+		if err := rows.Scan(&p.Key, &p.MutedUntil, &showPreviewInt); err != nil {
+			continue
 		}
-		return mutedUntil, showPreviewInt != 0, nil
+		p.ShowPreview = showPreviewInt != 0
+		prefs = append(prefs, p)
 	}
-
-	// ListNotificationPrefs returns all notification preference records for a user.
-	func (s *Store) ListNotificationPrefs(username string) []NotificationPref {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-
-		rows, err := s.db.Query(
-			"SELECT key, muted_until, show_preview FROM notification_prefs WHERE username = ? ORDER BY rowid",
-			username,
-		)
-		if err != nil {
-			return nil
-		}
-		defer rows.Close()
-
-		var prefs []NotificationPref
-		for rows.Next() {
-			var p NotificationPref
-			var showPreviewInt int
-			if err := rows.Scan(&p.Key, &p.MutedUntil, &showPreviewInt); err != nil {
-				continue
-			}
-			p.ShowPreview = showPreviewInt != 0
-			prefs = append(prefs, p)
-		}
-		if err := rows.Err(); err != nil {
-			log.Printf("store: ListNotificationPrefs iteration error: %v", err)
-		}
-		if prefs == nil {
-			prefs = []NotificationPref{}
-		}
-		return prefs
+	if err := rows.Err(); err != nil {
+		log.Printf("store: ListNotificationPrefs iteration error: %v", err)
 	}
-
+	if prefs == nil {
+		prefs = []NotificationPref{}
+	}
+	return prefs
+}
 
 // --- User profiles ---
 
@@ -2182,7 +2179,6 @@ func (s *Store) GetCallHistory(username string, limit int) ([]CallRecord, error)
 	}
 	return calls, rows.Err()
 }
-
 
 // --- Chat Folders ---
 
