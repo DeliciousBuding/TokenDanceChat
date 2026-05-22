@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, type KeyboardEvent } from "react";
-import { Clock, X, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { Clock, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 

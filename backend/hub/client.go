@@ -192,6 +192,18 @@ func (c *Client) ReadPump() {
 			c.handleCancelScheduledMessage(msg)
 		case "scheduled_messages_list":
 			c.handleScheduledMessagesList()
+		case "group_kick":
+			c.handleGroupKick(msg)
+		case "group_set_role":
+			c.handleGroupSetRole(msg)
+		case "group_rename":
+			c.handleGroupRename(msg)
+		case "group_transfer":
+			c.handleGroupTransfer(msg)
+		case "group_leave":
+			c.handleGroupLeave(msg)
+		case "group_info":
+			c.handleGroupInfo(msg)
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -2278,6 +2290,353 @@ func (c *Client) handleScheduledMessagesList() {
 		Messages: msgsToMessages(msgs),
 	})
 	select { case c.send <- payload: default: }
+}
+
+// --- Group admin handlers ---
+
+// handleGroupKick kicks a member from a group. Only owner and admin can kick.
+// Cannot kick the owner.
+func (c *Client) handleGroupKick(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	targetUser := msg.Username
+	if groupName == "" || targetUser == "" || targetUser == c.username {
+		return
+	}
+
+	if !c.hub.InGroup(c.username, groupName) {
+		c.sendError("you are not a member of this group", "NOT_IN_GROUP")
+		return
+	}
+
+	// Permission check: must be owner or admin.
+	role, err := c.hub.store.GetGroupMemberRole(groupName, c.username)
+	if err != nil || (role != "owner" && role != "admin") {
+		c.sendError("you do not have permission to kick members", "NO_PERMISSION")
+		return
+	}
+
+	// Cannot kick the owner.
+	owner, err := c.hub.store.GetGroupOwner(groupName)
+	if err == nil && owner == targetUser {
+		c.sendError("cannot kick the group owner", "CANNOT_KICK_OWNER")
+		return
+	}
+
+	// Admins can only kick regular members.
+	if role == "admin" {
+		targetRole, err := c.hub.store.GetGroupMemberRole(groupName, targetUser)
+		if err == nil && (targetRole == "owner" || targetRole == "admin") {
+			c.sendError("admins can only kick regular members", "NO_PERMISSION")
+			return
+		}
+	}
+
+	if err := c.hub.store.KickGroupMember(groupName, targetUser); err != nil {
+		log.Printf("group_kick: failed to kick member: %v", err)
+		return
+	}
+
+	// Remove from in-memory group.
+	c.hub.RemoveGroupMember(groupName, targetUser)
+
+	// Notify the kicked user.
+	kickedMsg, _ := json.Marshal(Message{
+		Type:  "group_member_kicked",
+		Group: groupName,
+		Content: "you were kicked from the group",
+	})
+	c.hub.SendToUser(targetUser, kickedMsg)
+
+	// Broadcast updated member list to group.
+	members := c.hub.GroupMembers(groupName)
+	updateMsg, _ := json.Marshal(Message{
+		Type:    "group_member_kicked",
+		Group:   groupName,
+		Username: targetUser,
+		Members: members,
+	})
+	c.hub.BroadcastToGroup(groupName, updateMsg)
+}
+
+// handleGroupSetRole changes a member's role. Only owner can promote/demote.
+// Cannot change the owner's role.
+func (c *Client) handleGroupSetRole(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	targetUser := msg.Username
+	newRole := msg.Role
+	if groupName == "" || targetUser == "" || newRole == "" {
+		return
+	}
+	if newRole != "admin" && newRole != "member" {
+		c.sendError("invalid role: must be admin or member", "INVALID_ROLE")
+		return
+	}
+
+	// Only owner can set roles.
+	owner, err := c.hub.store.GetGroupOwner(groupName)
+	if err != nil || owner != c.username {
+		c.sendError("only the group owner can change roles", "NO_PERMISSION")
+		return
+	}
+
+	// Cannot change owner's own role.
+	if targetUser == c.username {
+		c.sendError("cannot change your own owner role", "CANNOT_CHANGE_OWNER")
+		return
+	}
+
+	if err := c.hub.store.SetGroupMemberRole(groupName, targetUser, newRole); err != nil {
+		log.Printf("group_set_role: failed: %v", err)
+		return
+	}
+
+	// Broadcast to group.
+	updateMsg, _ := json.Marshal(Message{
+		Type:     "group_role_changed",
+		Group:    groupName,
+		Username: targetUser,
+		Role:     newRole,
+	})
+	c.hub.BroadcastToGroup(groupName, updateMsg)
+
+	// Also send the updated member list.
+	membersWithRoles := c.hub.store.GetGroupMembersWithRoles(groupName)
+	membersPayload, _ := json.Marshal(Message{
+		Type:    "group_info",
+		Group:   groupName,
+		GroupMembers: membersWithRoles,
+	})
+	c.hub.BroadcastToGroup(groupName, membersPayload)
+}
+
+// handleGroupRename renames a group. Only owner can rename.
+func (c *Client) handleGroupRename(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	newName := sanitizeContent(msg.Content)
+	if groupName == "" || newName == "" || newName == groupName {
+		return
+	}
+	if !ValidateGroupName(newName) {
+		c.sendError("invalid group name: 1-30 chars, letters, digits, underscores, hyphens or Chinese", "INVALID_GROUP_NAME")
+		return
+	}
+
+	// Only owner can rename.
+	owner, err := c.hub.store.GetGroupOwner(groupName)
+	if err != nil || owner != c.username {
+		c.sendError("only the group owner can rename the group", "NO_PERMISSION")
+		return
+	}
+
+	// Check that new name doesn't collide with an existing group.
+	c.hub.groupsMu.RLock()
+	_, exists := c.hub.groups[newName]
+	c.hub.groupsMu.RUnlock()
+	if exists {
+		c.sendError("a group with that name already exists", "GROUP_EXISTS")
+		return
+	}
+
+	if err := c.hub.store.UpdateGroupName(groupName, newName); err != nil {
+		log.Printf("group_rename: failed: %v", err)
+		c.sendError("failed to rename group", "SERVER_ERROR")
+		return
+	}
+
+	// Update in-memory group key.
+	c.hub.groupsMu.Lock()
+	if g, ok := c.hub.groups[groupName]; ok {
+		g.Name = newName
+		c.hub.groups[newName] = g
+		delete(c.hub.groups, groupName)
+	}
+	c.hub.groupsMu.Unlock()
+
+	// Broadcast rename to all group members.
+	renameMsg, _ := json.Marshal(Message{
+		Type:    "group_renamed",
+		Group:   newName,
+		Content: groupName, // old name in content
+	})
+	c.hub.BroadcastToGroup(newName, renameMsg)
+}
+
+// handleGroupTransfer transfers group ownership to another member.
+// Only the current owner can transfer.
+func (c *Client) handleGroupTransfer(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	newOwner := msg.Username
+	if groupName == "" || newOwner == "" || newOwner == c.username {
+		return
+	}
+
+	// Only current owner can transfer.
+	owner, err := c.hub.store.GetGroupOwner(groupName)
+	if err != nil || owner != c.username {
+		c.sendError("only the group owner can transfer ownership", "NO_PERMISSION")
+		return
+	}
+
+	// New owner must be a group member.
+	if !c.hub.InGroup(newOwner, groupName) {
+		c.sendError("new owner must be a member of the group", "NOT_IN_GROUP")
+		return
+	}
+
+	if err := c.hub.store.TransferGroupOwnership(groupName, newOwner); err != nil {
+		log.Printf("group_transfer: failed: %v", err)
+		c.sendError("failed to transfer ownership", "SERVER_ERROR")
+		return
+	}
+
+	// Broadcast to group.
+	transferMsg, _ := json.Marshal(Message{
+		Type:     "group_owner_changed",
+		Group:    groupName,
+		Username: newOwner,
+		Content:  c.username, // old owner
+	})
+	c.hub.BroadcastToGroup(groupName, transferMsg)
+
+	// Send updated member list with new roles.
+	membersWithRoles := c.hub.store.GetGroupMembersWithRoles(groupName)
+	membersPayload, _ := json.Marshal(Message{
+		Type:    "group_info",
+		Group:   groupName,
+		GroupMembers: membersWithRoles,
+	})
+	c.hub.BroadcastToGroup(groupName, membersPayload)
+}
+
+// handleGroupLeave removes the current user from the group.
+func (c *Client) handleGroupLeave(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	if groupName == "" {
+		return
+	}
+
+	if !c.hub.InGroup(c.username, groupName) {
+		return
+	}
+
+	// Store the group members before leaving (for notification).
+	wasOwner := false
+	owner, _ := c.hub.store.GetGroupOwner(groupName)
+	if owner == c.username {
+		wasOwner = true
+	}
+
+	if err := c.hub.store.LeaveGroup(groupName, c.username); err != nil {
+		log.Printf("group_leave: failed: %v", err)
+		c.sendError("failed to leave group", "SERVER_ERROR")
+		return
+	}
+
+	// Remove from in-memory group.
+	c.hub.RemoveGroupMember(groupName, c.username)
+
+	// Notify the leaver.
+	leaveConfirm, _ := json.Marshal(Message{
+		Type:  "group_member_left",
+		Group: groupName,
+		Username: c.username,
+	})
+	select {
+	case c.send <- leaveConfirm:
+	default:
+	}
+
+	// Check if the group still exists after leaving (owner leave might have deleted it).
+	c.hub.groupsMu.RLock()
+	_, groupExists := c.hub.groups[groupName]
+	c.hub.groupsMu.RUnlock()
+
+	if groupExists {
+		// Broadcast to remaining group members.
+		if wasOwner {
+			newOwner, _ := c.hub.store.GetGroupOwner(groupName)
+			updateMsg, _ := json.Marshal(Message{
+				Type:     "group_owner_changed",
+				Group:    groupName,
+				Username: newOwner,
+				Content:  c.username, // old owner left
+			})
+			c.hub.BroadcastToGroup(groupName, updateMsg)
+		}
+
+		members := c.hub.GroupMembers(groupName)
+		updateMsg, _ := json.Marshal(Message{
+			Type:     "group_member_left",
+			Group:    groupName,
+			Username: c.username,
+			Members:  members,
+		})
+		c.hub.BroadcastToGroup(groupName, updateMsg)
+	}
+}
+
+// handleGroupInfo returns group metadata and member list with roles.
+func (c *Client) handleGroupInfo(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	if groupName == "" {
+		return
+	}
+
+	if !c.hub.InGroup(c.username, groupName) {
+		c.sendError("you are not a member of this group", "NOT_IN_GROUP")
+		return
+	}
+
+	info, err := c.hub.store.GetGroupInfo(groupName)
+	if err != nil {
+		log.Printf("group_info: failed to get group info: %v", err)
+		return
+	}
+
+	membersWithRoles := c.hub.store.GetGroupMembersWithRoles(groupName)
+
+	payload, _ := json.Marshal(Message{
+		Type:    "group_info",
+		Group:   groupName,
+		GroupMembers: membersWithRoles,
+		Content: info.Owner,
+		Timestamp: info.CreatedAt,
+	})
+	select {
+	case c.send <- payload:
+	default:
+	}
+}
+
+// sendError sends an error message to the current client.
+func (c *Client) sendError(content, errorCode string) {
+	errMsg, _ := json.Marshal(Message{
+		Type:      "error",
+		Content:   content,
+		ErrorCode: errorCode,
+	})
+	select {
+	case c.send <- errMsg:
+	default:
+	}
 }
 
 // msgsToMessages converts []ScheduledMessage to []StoredMessage for JSON serialization

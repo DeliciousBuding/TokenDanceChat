@@ -73,6 +73,9 @@ export function useWebSocket() {
     deleteMessage,
     setFriends,
     setGroupMembers,
+    setGroupMemberRole,
+    removeMemberFromGroup,
+    renameGroupInStore,
     addFriendRequest,
     clearAllConversationUnreads,
     markMessagesReadBy,
@@ -703,6 +706,140 @@ export function useWebSocket() {
       }),
     );
 
+    // Group member kicked
+    unsubs.push(
+      chatAPI.on("group_member_kicked", (msg: WSMessage) => {
+        const { group, username, members, content } = msg as {
+          type: string;
+          group: string;
+          username: string;
+          members?: string[];
+          content?: string;
+        };
+        if (!group) return;
+        const state = useChatStore.getState();
+        // If you were kicked, switch to public chat.
+        if (username === state.username && content) {
+          addSystemMessage(
+            JSON.stringify({ key: "system.groupInvited", params: { username: "system", group: `${group}: ${content}` } }),
+            Date.now(),
+          );
+          if (state.currentChat.type === "group" && state.currentChat.name === group) {
+            useChatStore.getState().setCurrentChat({ type: "public" });
+          }
+        }
+        if (members) {
+          setGroupMembers(group, members);
+        } else if (username && username !== state.username) {
+          removeMemberFromGroup(group, username);
+        }
+      }),
+    );
+
+    // Group role changed
+    unsubs.push(
+      chatAPI.on("group_role_changed", (msg: WSMessage) => {
+        const { group, username, role } = msg as {
+          type: string;
+          group: string;
+          username: string;
+          role: string;
+        };
+        if (group && username && role) {
+          setGroupMemberRole(group, username, role);
+        }
+      }),
+    );
+
+    // Group renamed
+    unsubs.push(
+      chatAPI.on("group_renamed", (msg: WSMessage) => {
+        const { group, content } = msg as {
+          type: string;
+          group: string;
+          content: string;
+        };
+        if (group && content) {
+          renameGroupInStore(content, group);
+          // Update current chat if viewing the renamed group.
+          const state = useChatStore.getState();
+          if (state.currentChat.type === "group" && state.currentChat.name === content) {
+            useChatStore.getState().setCurrentChat({ type: "group", name: group });
+          }
+        }
+      }),
+    );
+
+    // Group owner changed
+    unsubs.push(
+      chatAPI.on("group_owner_changed", (msg: WSMessage) => {
+        const { group, username, content } = msg as {
+          type: string;
+          group: string;
+          username: string;
+          content: string;
+        };
+        if (group && username) {
+          setGroupMemberRole(group, username, "owner");
+        }
+      }),
+    );
+
+    // Group member left
+    unsubs.push(
+      chatAPI.on("group_member_left", (msg: WSMessage) => {
+        const { group, username, members } = msg as {
+          type: string;
+          group: string;
+          username: string;
+          members?: string[];
+        };
+        if (!group || !username) return;
+        if (members) {
+          setGroupMembers(group, members);
+        } else {
+          removeMemberFromGroup(group, username);
+        }
+      }),
+    );
+
+    // Group info
+    unsubs.push(
+      chatAPI.on("group_info", (msg: WSMessage) => {
+        const { group, members, content, timestamp } = msg as {
+          type: string;
+          group: string;
+          members?: { username: string; role: string }[];
+          content?: string;
+          timestamp?: number;
+        };
+        if (!group || !members) return;
+        const roles: Record<string, string> = {};
+        const memberNames: string[] = [];
+        for (const m of members) {
+          memberNames.push(m.username);
+          roles[m.username] = m.role;
+        }
+        const owner = content ?? "";
+        const state = useChatStore.getState();
+        const existing = state.groups[group];
+        setGroupMembers(group, memberNames);
+        // Update roles and owner in store.
+        useChatStore.setState((s) => ({
+          groups: {
+            ...s.groups,
+            [group]: {
+              name: group,
+              members: memberNames,
+              roles,
+              owner,
+              created_at: timestamp ?? existing?.created_at ?? 0,
+            },
+          },
+        }));
+      }),
+    );
+
     // Message delete
     unsubs.push(
       chatAPI.on("message_delete", (msg: WSMessage) => {
@@ -940,7 +1077,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

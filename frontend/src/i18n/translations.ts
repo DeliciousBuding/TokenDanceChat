@@ -152,6 +152,23 @@ export interface TranslationDict {
     nameErrorEmpty: string;
     nameErrorTooLong: string;
     noUsersAvailable: string;
+    // Group admin
+    groupInfo: string;
+    members: string;
+    owner: string;
+    admin: string;
+    member: string;
+    kickMember: string;
+    promoteAdmin: string;
+    demoteMember: string;
+    transferOwnership: string;
+    renameGroup: string;
+    leaveGroup: string;
+    leaveGroupConfirm: string;
+    kickConfirm: string;
+    noPermission: string;
+    renamePlaceholder: string;
+    groupCreatedAt: string;
   };
   forward: {
     title: string;
@@ -431,6 +448,22 @@ const zhCN: TranslationDict = {
     nameErrorEmpty: "群组名称不能为空",
     nameErrorTooLong: "群组名称过长（最多30个字符）",
     noUsersAvailable: "没有好友或在线用户可添加",
+    groupInfo: "群组信息",
+    members: "成员",
+    owner: "群主",
+    admin: "管理员",
+    member: "成员",
+    kickMember: "踢出群组",
+    promoteAdmin: "设为管理员",
+    demoteMember: "降为成员",
+    transferOwnership: "转让群主",
+    renameGroup: "重命名群组",
+    leaveGroup: "退出群组",
+    leaveGroupConfirm: "确定要退出群组吗？",
+    kickConfirm: "确定要踢出 {{name}} 吗？",
+    noPermission: "你没有权限执行此操作",
+    renamePlaceholder: "新群组名称...",
+    groupCreatedAt: "创建时间",
   },
   forward: {
     title: "转发消息",
@@ -711,6 +744,22 @@ const enUS: TranslationDict = {
     nameErrorEmpty: "Group name cannot be empty",
     nameErrorTooLong: "Group name too long (max 30 chars)",
     noUsersAvailable: "No friends or online users to add",
+    groupInfo: "Group Info",
+    members: "Members",
+    owner: "Owner",
+    admin: "Admin",
+    member: "Member",
+    kickMember: "Kick from group",
+    promoteAdmin: "Promote to admin",
+    demoteMember: "Demote to member",
+    transferOwnership: "Transfer ownership",
+    renameGroup: "Rename group",
+    leaveGroup: "Leave group",
+    leaveGroupConfirm: "Are you sure you want to leave the group?",
+    kickConfirm: "Kick {{name}} from the group?",
+    noPermission: "You don't have permission to do this",
+    renamePlaceholder: "New group name...",
+    groupCreatedAt: "Created",
   },
   forward: {
     title: "Forward Message",

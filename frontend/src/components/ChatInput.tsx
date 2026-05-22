@@ -1159,7 +1159,7 @@ export function ChatInput({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.zip,.tar,.gz,.7z,.rar"
+        accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.zip,.tar,.gz,.7z,.rar,.mp3,.wav,.m4a,.webm,.ogg,.mp4,.mov"
         onChange={handleFileSelect}
         className="hidden"
         aria-hidden="true"

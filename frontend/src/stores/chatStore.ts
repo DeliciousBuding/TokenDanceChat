@@ -13,6 +13,9 @@ export interface DM {
 export interface GroupInfo {
   name: string;
   members: string[];
+  roles: Record<string, string>;
+  owner: string;
+  created_at: number;
 }
 
 export type CurrentChat =
@@ -98,6 +101,9 @@ interface ChatState {
   // Groups
   groups: Record<string, GroupInfo>;
 
+  // Group info panel
+  groupInfoPanel: string | null;
+
   // Image preview (before sending)
   pendingImage: string | null;
 
@@ -159,6 +165,10 @@ interface ChatState {
   addGroupInvite: (group: string, from: string) => void;
   removeGroupInvite: (group: string) => void;
   setGroupMembers: (group: string, members: string[]) => void;
+  setGroupMemberRole: (group: string, username: string, role: string) => void;
+  removeMemberFromGroup: (group: string, username: string) => void;
+  renameGroupInStore: (oldName: string, newName: string) => void;
+  setGroupInfoPanel: (groupName: string | null) => void;
   setPendingImage: (imageDataUrl: string | null) => void;
   setUnreadCount: (count: number) => void;
   incrementConversationUnread: (key: string) => void;
@@ -211,6 +221,7 @@ export const useChatStore = create<ChatState>((set) => ({
   pendingFriendRequests: [],
   pendingGroupInvites: [],
   groups: {},
+  groupInfoPanel: null,
   pendingImage: null,
   unreadCount: 0,
   unreadByConversation: {},
@@ -313,9 +324,65 @@ export const useChatStore = create<ChatState>((set) => ({
       pendingGroupInvites: state.pendingGroupInvites.filter((i) => i.group !== group),
     })),
   setGroupMembers: (group, members) =>
-    set((state) => ({
-      groups: { ...state.groups, [group]: { name: group, members } },
-    })),
+    set((state) => {
+      const existing = state.groups[group];
+      const roles = existing?.roles ?? {};
+      // Preserve existing roles, default new members to "member".
+      for (const m of members) {
+        if (!roles[m]) roles[m] = "member";
+      }
+      return {
+        groups: {
+          ...state.groups,
+          [group]: { name: group, members, roles, owner: existing?.owner ?? "", created_at: existing?.created_at ?? 0 },
+        },
+      };
+    }),
+  setGroupMemberRole: (group, username, role) =>
+    set((state) => {
+      const g = state.groups[group];
+      if (!g) return state;
+      return {
+        groups: {
+          ...state.groups,
+          [group]: {
+            ...g,
+            roles: { ...g.roles, [username]: role },
+            owner: role === "owner" ? username : g.owner,
+          },
+        },
+      };
+    }),
+  removeMemberFromGroup: (group, username) =>
+    set((state) => {
+      const g = state.groups[group];
+      if (!g) return state;
+      const members = g.members.filter((m) => m !== username);
+      const roles = { ...g.roles };
+      delete roles[username];
+      // If group is empty after removal, remove the group entirely.
+      if (members.length === 0) {
+        const next = { ...state.groups };
+        delete next[group];
+        return { groups: next };
+      }
+      return {
+        groups: {
+          ...state.groups,
+          [group]: { ...g, members, roles },
+        },
+      };
+    }),
+  renameGroupInStore: (oldName, newName) =>
+    set((state) => {
+      const g = state.groups[oldName];
+      if (!g) return state;
+      const next = { ...state.groups };
+      delete next[oldName];
+      next[newName] = { ...g, name: newName };
+      return { groups: next };
+    }),
+  setGroupInfoPanel: (groupName) => set({ groupInfoPanel: groupName }),
   setPendingImage: (pendingImage) => set({ pendingImage }),
   setUnreadCount: (unreadCount) => set({ unreadCount }),
   incrementConversationUnread: (key) =>
@@ -452,6 +519,7 @@ export const useChatStore = create<ChatState>((set) => ({
       pendingFriendRequests: [],
       pendingGroupInvites: [],
       groups: {},
+      groupInfoPanel: null,
       pendingImage: null,
       unreadCount: 0,
       unreadByConversation: {},

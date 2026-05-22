@@ -698,6 +698,31 @@ class ChatAPI {
     this.send({ type: "scheduled_messages_list" });
   }
 
+  // Group admin
+  sendGroupKick(group: string, username: string): void {
+    this.send({ type: "group_kick", group, username });
+  }
+
+  sendGroupSetRole(group: string, username: string, role: string): void {
+    this.send({ type: "group_set_role", group, username, role });
+  }
+
+  sendGroupRename(group: string, newName: string): void {
+    this.send({ type: "group_rename", group, content: newName });
+  }
+
+  sendGroupTransfer(group: string, newOwner: string): void {
+    this.send({ type: "group_transfer", group, username: newOwner });
+  }
+
+  sendGroupLeave(group: string): void {
+    this.send({ type: "group_leave", group });
+  }
+
+  sendGroupInfo(group: string): void {
+    this.send({ type: "group_info", group });
+  }
+
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
     try {
       const resp = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);

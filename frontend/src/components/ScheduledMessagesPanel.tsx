@@ -3,7 +3,7 @@ import { ListTodo, X, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
-import { chatAPI, type ScheduledMessage } from "@/lib/api";
+import { chatAPI } from "@/lib/api";
 
 interface ScheduledMessagesPanelProps {
   roomId: string;
