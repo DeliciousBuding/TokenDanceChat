@@ -374,7 +374,7 @@ export function Sidebar({
       )}
     >
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border px-5 py-4">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
           <MessageCircle
             className="h-5 w-5 text-primary"
@@ -401,7 +401,7 @@ export function Sidebar({
       </div>
 
       {/* Navigation: public chat */}
-      <div className="px-3 pt-3 pb-1">
+      <div className="px-3 pt-2 pb-0.5">
         <button
           onClick={() => setCurrentChat({ type: "public" })}
           onContextMenu={(e) => handleContextMenu(e, "public")}
@@ -465,7 +465,7 @@ export function Sidebar({
       )}
 
       {/* Assistants */}
-      <div className="px-3 pt-2 pb-1">
+      <div className="px-3 pt-1.5 pb-0.5">
         <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
           {t("sidebar.assistants")}
         </span>
@@ -492,21 +492,23 @@ export function Sidebar({
       </div>
 
       {/* Model catalog */}
-      <div className="px-3 pt-2 pb-1">
+      <div className="px-3 pt-1.5 pb-0.5">
         <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
           {t("sidebar.models")}
         </span>
-        <div className="mt-1 grid grid-cols-2 gap-1.5">
-          {modelCatalog.slice(0, 6).map((model) => (
+        <div className="mt-1 grid grid-cols-2 gap-1">
+          {modelCatalog.slice(0, 4).map((model) => (
             <div
               key={model.id}
-              className="flex min-h-10 min-w-0 items-center gap-2 rounded-lg border border-border bg-background/45 px-2.5 py-2"
+              data-testid="sidebar-model-card"
+              data-visual="sidebar-model-card"
+              className="flex min-h-9 min-w-0 items-center gap-1.5 rounded-lg border border-border bg-background/45 px-2 py-1.5"
               title={`${model.name} · ${model.protocol}`}
             >
               <AssistantIcon model={model} size="sm" />
               <span className="min-w-0">
                 <span className="block truncate text-xs text-foreground/80">{model.providerName}</span>
-                <span className="block truncate text-[11px] text-muted-foreground/50">{model.context}</span>
+                <span className="block truncate text-[10px] text-muted-foreground/50">{model.context}</span>
               </span>
             </div>
           ))}
@@ -515,7 +517,7 @@ export function Sidebar({
 
       {/* Direct Messages */}
       {dmPartners.length > 0 && (
-        <div className="px-3 pt-2 pb-1">
+        <div className="px-3 pt-1.5 pb-0.5">
           <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
             {t("sidebar.directMessages")}
           </span>
@@ -556,15 +558,15 @@ export function Sidebar({
 
       {/* Direct Messages: empty state */}
       {dmPartners.length === 0 && (
-        <div className="px-5 py-2">
-          <span className="text-xs text-muted-foreground/35 italic">
+        <div className="px-5 py-0.5">
+          <span className="text-[11px] text-muted-foreground/35 italic">
             {t("sidebar.noDMs")}
           </span>
         </div>
       )}
 
       {/* Groups section */}
-      <div className="mt-2 px-3 pt-2">
+      <div className="mt-1 px-3 pt-1">
         <div className="flex items-center justify-between px-2">
           <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
             {t("sidebar.groups")}
@@ -612,11 +614,7 @@ export function Sidebar({
         ))}
         {/* Groups: empty state */}
         {groupList.length === 0 && (
-          <div className="flex items-center gap-2 px-2 py-1.5">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/20 flex-shrink-0">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-            </svg>
+          <div className="px-2 py-0.5">
             <span className="text-[10px] text-muted-foreground/35 italic">
               {t("sidebar.noGroups")}
             </span>
@@ -625,7 +623,7 @@ export function Sidebar({
       </div>
 
       {/* Friends section */}
-      <div className="mt-2 px-3 pt-2">
+      <div className="mt-1 px-3 pt-1">
         <div className="flex items-center justify-between px-2">
           <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
             {t("sidebar.friends")}
@@ -680,11 +678,7 @@ export function Sidebar({
                 </div>
               )})
             : (
-              <div className="flex items-center gap-2 px-2 py-1.5">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/20 flex-shrink-0">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                </svg>
+              <div className="px-2 py-0.5">
                 <span className="text-[10px] text-muted-foreground/35 italic">
                   {t("sidebar.noFriends")}
                 </span>
@@ -693,8 +687,8 @@ export function Sidebar({
       </div>
 
       {/* Online users section */}
-      <div className="flex-1 overflow-hidden flex flex-col mt-2">
-        <div className="flex items-center justify-between px-5 py-2">
+      <div className="flex-1 overflow-hidden flex flex-col mt-1">
+        <div data-visual="sidebar-online-users" className="flex items-center justify-between px-5 py-1.5">
           <div className="flex items-center gap-2">
             <Users className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">

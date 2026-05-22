@@ -38,6 +38,7 @@ Collect these metrics with screenshots:
 - first meaningful chat content y-position;
 - horizontal scroll presence;
 - number of visible messages above composer;
+- desktop sidebar model preview count and online-user section y-position;
 - console errors.
 
 Current hard gates in `npm run visual:acceptance` include:
@@ -48,6 +49,7 @@ Current hard gates in `npm run visual:acceptance` include:
 - mobile title at least 120px wide and the public-chat title must not be clipped;
 - mobile visible message text must stay at or below 15px;
 - at least 4 visible messages in collapsed mobile and tablet seeded chat views.
+- desktop sidebar model preview at most 4 cards and online-user section no lower than 680px from the top.
 
 Run the reusable Playwright acceptance script against a local production build:
 
@@ -74,18 +76,19 @@ The script writes screenshots and `metrics.json` to a temp directory such as `C:
 
 Latest accepted screenshot pass:
 
-- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T20-57-00-675Z`
+- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T21-19-49-947Z`
 - Baseline: production build served by the Go backend on a clean temporary SQLite DB, so screenshots contain only the current seeded demo transcript and no repeated history from earlier runs.
-- Desktop light/dark 1440x900: textarea 816x48px, composer 130px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
+- Desktop light/dark 1440x900: textarea 816x48px, composer 130px, 4 visible seeded messages, `smallControls=0`, sidebar width 312px, sidebar model preview 4 cards, sidebar online-user section top 561px, no horizontal overflow, no console errors.
 - Tablet light 768x1024: textarea 456x48px, mobile title width 580px, composer 130px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
 - Mobile light/dark 390x844: title width 202px with `公共聊天` unclipped, message font 13.5px, collapsed composer textarea 208x66px, composer 91px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
 - Mobile light with formatting toolbar: textarea 208x66px, composer 148px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
-- Screenshot review confirms the mobile title, composer buttons, message action affordance, and toolbar layout are visually stable; the desktop sidebar still needs a later density pass above the fold.
+- Screenshot review confirms the mobile title, composer buttons, message action affordance, toolbar layout, and desktop sidebar above-the-fold density are visually stable.
 
 Earlier screenshot passes caught two real issues:
 
 - 768px tablet was forced into desktop layout and squeezed the textarea to 144px; the accepted layout now keeps tablet/mobile top bar until `lg`.
 - Mobile header showed `公共聊天` as `公...`; secondary mobile actions now live behind the more menu.
+- Desktop sidebar previously showed six model cards plus tall empty-state rows before online users; the accepted sidebar now keeps four model preview cards and brings online users to 561px from the top.
 
 ## Current Reference Prompt
 
