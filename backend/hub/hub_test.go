@@ -69,6 +69,11 @@ func (m *mockStore) UpdateMessage(messageID, content string) (StoredMessage, err
 	return StoredMessage{}, nil
 }
 func (m *mockStore) GetMessageByID(messageID string) (StoredMessage, error) {
+	for _, msg := range m.messages {
+		if msg.ID == messageID {
+			return msg, nil
+		}
+	}
 	return StoredMessage{}, nil
 }
 
