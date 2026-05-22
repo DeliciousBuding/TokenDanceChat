@@ -50,8 +50,8 @@ export const Avatar = memo(function Avatar({
     <Comp
       onClick={onClick}
       className={cn(
-        "relative flex-shrink-0",
-        onClick && "cursor-pointer hover:scale-110 transition-transform",
+        "relative flex flex-shrink-0 items-center justify-center",
+        onClick ? "min-h-[44px] min-w-[44px] cursor-pointer rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45" : "inline-flex",
         className,
       )}
       aria-label={name}

@@ -84,7 +84,7 @@ export function ScheduledMessagesPanel({ roomId }: ScheduledMessagesPanelProps) 
         onClick={() => { setOpen((prev) => !prev); if (!open) chatAPI.sendScheduledMessagesList(); }}
         aria-label={t("schedule.scheduledMessages")}
         className={cn(
-          "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs transition-colors",
+          "flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-3 text-xs transition-colors",
           "text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted",
           filteredMessages.length > 0 && "text-primary/70 hover:text-primary",
         )}
@@ -107,7 +107,7 @@ export function ScheduledMessagesPanel({ roomId }: ScheduledMessagesPanelProps) 
             </h3>
             <button
               onClick={() => setOpen(false)}
-              className="rounded-md p-0.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground/50 hover:text-muted-foreground transition-colors"
               aria-label={t("friend.dismiss")}
             >
               <X className="h-3 w-3" />
@@ -139,7 +139,7 @@ export function ScheduledMessagesPanel({ roomId }: ScheduledMessagesPanelProps) 
                   </div>
                   <button
                     onClick={() => handleCancel(sm.id)}
-                    className="flex-shrink-0 rounded-md p-1 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 transition-colors"
                     aria-label={t("schedule.cancelSchedule")}
                   >
                     <X className="h-3 w-3" />

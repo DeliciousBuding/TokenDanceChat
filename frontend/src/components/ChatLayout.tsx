@@ -584,7 +584,7 @@ export function ChatLayout() {
             {currentChat.type !== "public" && (
               <button
                 onClick={() => setCurrentChat({ type: "public" })}
-                className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 aria-label={t("chat.publicChat")}
               >
                 <ArrowLeft className="h-[18px] w-[18px]" />
@@ -594,7 +594,7 @@ export function ChatLayout() {
             {currentChat.type === "group" && (
               <button
                 onClick={() => setGroupInfoPanel(currentChat.name)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 aria-label={t("group.groupInfo")}
               >
                 <Info className="h-[18px] w-[18px]" />
@@ -613,7 +613,7 @@ export function ChatLayout() {
               <div className="flex items-center gap-1 mr-1">
                 <button
                   onClick={() => handleStartCall("voice")}
-                  className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+                  className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
                   aria-label={t("call.voiceCall")}
                 >
                   <Phone className="h-4 w-4" />
@@ -621,7 +621,7 @@ export function ChatLayout() {
                 </button>
                 <button
                   onClick={() => handleStartCall("video")}
-                  className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+                  className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
                   aria-label={t("call.videoCall")}
                 >
                   <Video className="h-4 w-4" />
@@ -632,7 +632,7 @@ export function ChatLayout() {
             {currentChat.type === "group" && groupCallParticipants.length > 0 && (
               <button
                 onClick={() => handleStartCall("video")}
-                className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+                className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
                 aria-label={t("call.groupCall")}
               >
                 <Video className="h-4 w-4" />
@@ -642,7 +642,7 @@ export function ChatLayout() {
             <button
               onClick={toggleLang}
               aria-label={t("lang.label")}
-              className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+              className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
             >
               <Globe className="h-4 w-4" />
               {t("lang.switchTo")}
@@ -652,7 +652,7 @@ export function ChatLayout() {
             <button
               onClick={() => setConversationSearchOpen((prev) => !prev)}
               aria-label={t("search.inConversation")}
-              className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+              className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
             >
               <Search className="h-4 w-4" />
               {t("search.pressCtrlF")}
@@ -662,7 +662,7 @@ export function ChatLayout() {
               <button
                 onClick={() => setExportOpen(!exportOpen)}
                 aria-label={t("export.exportChat")}
-                className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+                className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
               >
                 <Download className="h-4 w-4" />
                 {t("export.exportChat")}
@@ -687,7 +687,7 @@ export function ChatLayout() {
             <button
               onClick={() => setSettingsOpen(true)}
               aria-label={t("settings.notificationPrefs")}
-              className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+              className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
             >
               <Settings className="h-4 w-4" />
               {t("settings.notificationPrefs")}
@@ -696,7 +696,7 @@ export function ChatLayout() {
             <button
               onClick={handleDisconnect}
               aria-label={t("chat.disconnect")}
-              className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive/80 transition-colors"
+              className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive/80 transition-colors"
             >
               <LogOut className="h-4 w-4" />
               {t("chat.leave")}

@@ -70,7 +70,11 @@ Status: implemented, documented, tested, and accepted with browser screenshots.
 - [x] Tightened mobile message density: smaller mobile bubble text, narrower bubble padding, reduced transcript/date-separator padding, and no duplicated non-own bottom timestamp.
 - [x] Hardened `npm run visual:acceptance` so seeded messages wait past the input send guard and fail fast if fewer than 4 acceptance messages are present.
 - [x] Added visual hard gates for mobile title clipping, mobile message font size, and minimum visible message density.
-- [ ] Continue density cleanup for message action buttons, header overflow at narrower desktop widths, sidebar above-the-fold utility, and remaining tiny metadata using real browser screenshots as acceptance evidence.
+- [x] Consolidated per-message hover actions into a single 44px action menu while preserving copy, forward, translate, react, pin, edit, delete, and select flows.
+- [x] Raised header actions, Markdown toolbar controls, scheduled-message entry, sidebar utility buttons, clickable avatars, and message action buttons to the 44px visual acceptance target.
+- [x] Tightened visual acceptance metrics so hidden/offscreen controls and ancestor opacity are handled correctly.
+- [x] Re-ran visual acceptance on a clean temporary SQLite DB so final screenshots contain only the seeded demo transcript.
+- [ ] Continue density cleanup for sidebar above-the-fold information architecture and remaining tiny passive metadata using real browser screenshots as acceptance evidence.
 
 ## Next Product Tasks
 
@@ -117,6 +121,12 @@ Record commands here when they are run for the current increment.
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
 | 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8091 npm run visual:acceptance` | PASS. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T19-36-55-386Z`; final metrics: desktop/tablet/mobile all show 4 seeded messages, mobile title 202px unclipped, mobile message font 13.5px, mobile textarea 208px, no horizontal overflow, no console errors. |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 13 files / 197 tests |
+| 2026-05-23 | `cd frontend; npm test -- --run src/components/MessageContextMenu.test.tsx src/components/ChatLayout.test.tsx src/components/ChatInput.test.tsx src/components/Sidebar.test.tsx` | PASS, 4 files / 76 tests |
+| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-23 | `cd frontend; npm run build` | PASS |
+| 2026-05-23 | `git diff --check` | PASS |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8092 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T20-57-00-675Z`; all six scenarios show 4 seeded messages and `smallControls=0`, mobile title 202px, mobile message font 13.5px, mobile textarea 208px, no horizontal overflow, no console errors. |
+| 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 198 tests |
 
 ## Review Gates
 

@@ -104,14 +104,24 @@ async function collectMetrics(page, scenario, errors) {
   return await page.evaluate(
     ({ scenarioName, viewport, consoleErrors }) => {
       function isVisible(el) {
-        const style = window.getComputedStyle(el);
         const rect = el.getBoundingClientRect();
+        for (let node = el; node instanceof Element; node = node.parentElement) {
+          const style = window.getComputedStyle(node);
+          if (
+            style.display === "none" ||
+            style.visibility === "hidden" ||
+            Number(style.opacity) === 0
+          ) {
+            return false;
+          }
+        }
         return (
-          style.display !== "none" &&
-          style.visibility !== "hidden" &&
-          Number(style.opacity) !== 0 &&
           rect.width > 0 &&
-          rect.height > 0
+          rect.height > 0 &&
+          rect.right > 0 &&
+          rect.bottom > 0 &&
+          rect.left < window.innerWidth &&
+          rect.top < window.innerHeight
         );
       }
 
