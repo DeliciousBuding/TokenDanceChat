@@ -329,5 +329,6 @@ export const useChatStore = create<ChatState>((set) => ({
       unreadByConversation: {},
       latestMention: null,
       blockedUsers: [],
+      pinnedMessages: [],
     }),
 }));
