@@ -65,6 +65,7 @@ export function ChatInput({
   const [pulseButton, setPulseButton] = useState(false);
   const hadContentRef = useRef(false);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
+  const sendingRef = useRef(false);
   const typingSentRef = useRef(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);

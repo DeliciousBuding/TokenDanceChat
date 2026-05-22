@@ -18,6 +18,17 @@ data/
 # Environment
 .env
 .env.local
+.env.*
+!.env.example
+
+# Local handoff / private operations notes
+HANDOFF.md
+HANDOFF*.md
+*.handoff.md
+server-secrets/
+
+# Local git worktrees
+.worktrees/
 
 # IDE
 .idea/
