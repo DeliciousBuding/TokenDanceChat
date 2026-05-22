@@ -5,7 +5,7 @@ import { useTranslation } from "@/i18n/context";
 import { usePullDownGesture } from "@/hooks/useTouchGestures";
 import { MessageBubble } from "./MessageBubble";
 import { SystemMessage } from "./SystemMessage";
-import { cn, formatFullTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 
@@ -344,6 +344,13 @@ export function MessageTranscript({
     },
     [selectMode, exitSelectMode],
   );
+
+  // Listen for Escape key (or external exit-select-mode event)
+  useEffect(() => {
+    const handler = () => exitSelectMode();
+    window.addEventListener("tdchat:exit-select-mode", handler);
+    return () => window.removeEventListener("tdchat:exit-select-mode", handler);
+  }, [exitSelectMode]);
 
   const menuStyle = useMemo(() => {
     const menuWidth = 180;

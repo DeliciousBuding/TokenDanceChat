@@ -2,7 +2,7 @@ import { memo, useMemo, useCallback, useState, useRef, useEffect } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, Check, Forward } from "lucide-react";
+import { Copy, Check, Forward, Reply, Trash2 } from "lucide-react";
 import { cn, formatTime, avatarGradient, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
@@ -10,6 +10,8 @@ import { chatAPI } from "@/lib/api";
 import { playReactionSound } from "@/lib/sound";
 import { EmojiPicker } from "@/components/EmojiPicker";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { MessageContextMenu } from "@/components/MessageContextMenu";
+import { useSwipeableMessage } from "@/hooks/useTouchGestures";
 import type { ChatMessage, LinkPreviewData } from "@/lib/api";
 
 interface MessageBubbleProps {
@@ -235,18 +237,49 @@ export const MessageBubble = memo(function MessageBubble({
     [message.id],
   );
 
-  // Long-press detection for entering select mode
+  // ─── Swipe gestures (mobile) ───
+  const swipe = useSwipeableMessage({
+    onReply: () => onReply?.(message),
+    onCopy: async () => {
+      try { await navigator.clipboard.writeText(message.content); } catch { /* noop */ }
+    },
+    onForward: () => onForward?.(message),
+    onDelete: () => onDelete?.(message.id),
+    isOwn,
+    disabled: selectMode || isDeleted,
+  });
+
+  // ─── Context menu (long press / right click) ───
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+  }>({ visible: false, x: 0, y: 0 });
+  const contextMenuPosRef = useRef({ x: 0, y: 0 });
+
+  // Track pointer position for context menu placement
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    contextMenuPosRef.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
+  // Long-press detection for entering select mode / context menu
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
 
-  const handlePointerDown = useCallback(() => {
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (selectMode || isDeleted) return;
+    contextMenuPosRef.current = { x: e.clientX, y: e.clientY };
     longPressTriggeredRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
       longPressTriggeredRef.current = true;
-      onLongPress?.(message.id);
+      // Show context menu at pointer position (not enter select mode directly)
+      setContextMenu({
+        visible: true,
+        x: contextMenuPosRef.current.x,
+        y: contextMenuPosRef.current.y,
+      });
     }, 500);
-  }, [selectMode, isDeleted, onLongPress]);
+  }, [selectMode, isDeleted]);
 
   const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -259,15 +292,31 @@ export const MessageBubble = memo(function MessageBubble({
     clearLongPress();
   }, [clearLongPress]);
 
+  // Right-click (desktop context menu)
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    if (selectMode || isDeleted) return;
+    e.preventDefault();
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+    });
+  }, [selectMode, isDeleted]);
+
   const handleBubbleClick = useCallback(
     (e: React.MouseEvent) => {
+      // Close swipe actions if open
+      if (swipe.showActions) {
+        swipe.closeActions();
+        return;
+      }
       if (selectMode && onToggleSelect) {
         e.preventDefault();
         e.stopPropagation();
         onToggleSelect(message.id);
       }
     },
-    [selectMode, onToggleSelect],
+    [selectMode, onToggleSelect, swipe],
   );
 
   const handleCheckboxClick = useCallback(
@@ -283,6 +332,13 @@ export const MessageBubble = memo(function MessageBubble({
   useEffect(() => {
     return () => clearLongPress();
   }, [clearLongPress]);
+
+  // Listen for global Escape to close emoji picker
+  useEffect(() => {
+    const handler = () => setShowEmojiPicker(false);
+    window.addEventListener("tdchat:close-emoji-picker", handler);
+    return () => window.removeEventListener("tdchat:close-emoji-picker", handler);
+  }, []);
 
   const gradient = useMemo(
     () => avatarGradient(message.username),
