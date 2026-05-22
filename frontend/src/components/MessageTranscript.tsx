@@ -18,6 +18,7 @@ interface MessageTranscriptProps {
   onDelete?: (messageId: string) => void;
   onForward?: (message: ChatMessage) => void;
   onOpenThread?: (message: ChatMessage) => void;
+  highlight?: string;
 }
 
 interface UserMessageGroup {
@@ -76,6 +77,7 @@ export function MessageTranscript({
   onDelete,
   onForward,
   onOpenThread,
+  highlight,
 }: MessageTranscriptProps) {
   const { t } = useTranslation();
   const {
@@ -673,6 +675,7 @@ export function MessageTranscript({
                         onToggleSelect={toggleSelect}
                         onLongPress={startDragSelect}
                         staggerDelay={gi * 50}
+                        highlight={highlight}
                       />
                     );
                   })}

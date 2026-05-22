@@ -44,6 +44,8 @@ interface MessageBubbleProps {
   onLongPress?: (id: string) => void;
   /** Stagger delay in ms for cascade entrance animation */
   staggerDelay?: number;
+  /** Search highlight term — wraps matching text in <mark> */
+  highlight?: string;
 }
 
 /** Simple code block renderer with syntax highlighting and copy button */
