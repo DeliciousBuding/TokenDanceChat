@@ -184,8 +184,20 @@ export function ChatInput({
       .filter((u) => !assistantNames.has(u))
       .filter((u) => u.toLowerCase().includes(lower))
       .slice(0, Math.max(0, 10 - assistants.length));
-    return [...assistants, ...users].slice(0, 10);
-  }, [mentionQuery, onlineUsers]);
+    const results = [...assistants, ...users];
+    // Add @all in group/public chats when query matches.
+    const inGroupContext = currentChat.type === "group" || currentChat.type === "public";
+    if (inGroupContext) {
+      const allTargets = ["all", "everyone", "here"];
+      for (const target of allTargets) {
+        if (target.startsWith(lower) || lower === "") {
+          results.unshift(target);
+          break; // only add one @all variant
+        }
+      }
+    }
+    return results.slice(0, 10);
+  }, [mentionQuery, onlineUsers, currentChat]);
 
   // Sync mentionActive with whether we have matches.
   useEffect(() => {

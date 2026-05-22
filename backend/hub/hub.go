@@ -44,6 +44,12 @@ type GroupInfo = store.GroupInfo
 // GroupMemberInfo is an alias for store.GroupMemberInfo.
 type GroupMemberInfo = store.GroupMemberInfo
 
+// ChatFolder is an alias for store.ChatFolder.
+type ChatFolder = store.ChatFolder
+
+// ChatFolderItem is an alias for store.ChatFolderItem.
+type ChatFolderItem = store.ChatFolderItem
+
 // Store defines the interface for message persistence.
 type Store interface {
 	InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error)
@@ -170,6 +176,15 @@ type Store interface {
 	GenerateInviteCode(creator string, maxUses int) (string, error)
 	ListInviteCodes(creator string) ([]store.InviteCodeRecord, error)
 	ValidateInviteCode(code string) (bool, error)
+
+	// Chat folders
+	CreateChatFolder(username, name string) (*ChatFolder, error)
+	DeleteChatFolder(username, id string) error
+	RenameChatFolder(username, id, newName string) error
+	AddToFolder(folderID, key string) error
+	RemoveFromFolder(folderID, key string) error
+	ListFolders(username string) ([]ChatFolder, error)
+	GetFolderItems(folderID string) ([]string, error)
 }
 
 // CallSession represents an active call between two users.
@@ -286,6 +301,12 @@ type Message struct {
 	CallType  string             `json:"call_type,omitempty"`
 	Candidate string             `json:"candidate,omitempty"`
 	Calls     []store.CallRecord `json:"calls,omitempty"`
+
+	// @all / @everyone mention
+	MentionAll bool `json:"mention_all,omitempty"`
+
+	// Chat folders
+	Folders interface{} `json:"folders,omitempty"`
 
 	// Custom emoji fields
 	EmojiName string         `json:"emoji_name,omitempty"`

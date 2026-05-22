@@ -3,6 +3,16 @@ export interface WSMessage {
   [key: string]: unknown;
 }
 
+export interface ChatFolder {
+  id: string;
+  username: string;
+  name: string;
+  sort_order: number;
+  created_at: number;
+  item_count: number;
+  items: string[];
+}
+
 export interface PollData {
   id: string;
   room_id: string;
@@ -36,6 +46,7 @@ export interface ChatMessage {
   subtype?: string;
   poll?: PollData;
   thread_id?: string;
+  mention_all?: boolean;
 }
 
 export interface WSChatMessage extends WSMessage {
@@ -911,6 +922,30 @@ class ChatAPI {
         }
       });
     }
+  }
+
+  sendFolderCreate(name: string): void {
+    this.send({ type: "folder_create", content: name });
+  }
+
+  sendFolderDelete(id: string): void {
+    this.send({ type: "folder_delete", id });
+  }
+
+  sendFolderRename(id: string, newName: string): void {
+    this.send({ type: "folder_rename", id, content: newName });
+  }
+
+  sendFolderAddConversation(folderId: string, key: string): void {
+    this.send({ type: "folder_add_conversation", id: folderId, key });
+  }
+
+  sendFolderRemoveConversation(folderId: string, key: string): void {
+    this.send({ type: "folder_remove_conversation", id: folderId, key });
+  }
+
+  sendFolderList(): void {
+    this.send({ type: "folder_list" });
   }
 
   disconnect(): void {

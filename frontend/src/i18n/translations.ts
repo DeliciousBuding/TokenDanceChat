@@ -282,6 +282,31 @@ export interface TranslationDict {
     noMutedConversations: string;
     previewOn: string;
     previewOff: string;
+    profile: string;
+    appearance: string;
+    notifications: string;
+    data: string;
+    account: string;
+    themeLight: string;
+    themeDark: string;
+    themeSystem: string;
+    testSound: string;
+    exportData: string;
+    scheduledCount: string;
+    myAccount: string;
+    openSettings: string;
+    title: string;
+  };
+  folders: {
+    create: string;
+    delete: string;
+    rename: string;
+    addToFolder: string;
+    removeFromFolder: string;
+    newFolder: string;
+    folderName: string;
+    noFolders: string;
+    manageFolders: string;
   };
   slash: {
     me: string;
@@ -643,6 +668,31 @@ const zhCN: TranslationDict = {
     noMutedConversations: "暂无静音会话",
     previewOn: "预览已开启",
     previewOff: "预览已关闭",
+    profile: "个人资料",
+    appearance: "外观",
+    notifications: "通知",
+    data: "数据",
+    account: "账号",
+    themeLight: "浅色",
+    themeDark: "深色",
+    themeSystem: "跟随系统",
+    testSound: "测试提示音",
+    exportData: "导出聊天记录",
+    scheduledCount: "{{n}} 条定时消息",
+    myAccount: "我的账号",
+    openSettings: "打开设置",
+    title: "设置",
+  },
+  folders: {
+    create: "新建文件夹",
+    delete: "删除文件夹",
+    rename: "重命名",
+    addToFolder: "添加到文件夹",
+    removeFromFolder: "从文件夹移除",
+    newFolder: "文件夹名称",
+    folderName: "名称",
+    noFolders: "暂无文件夹",
+    manageFolders: "管理文件夹",
   },
   slash: {
     me: "以动作方式发送消息",
@@ -721,7 +771,9 @@ const zhCN: TranslationDict = {
     remoteVideoOff: "对方已关闭摄像头",
     callEnded: "通话已结束",
   },
+
 };
+
 
 const enUS: TranslationDict = {
   join: {
@@ -1005,6 +1057,31 @@ const enUS: TranslationDict = {
     noMutedConversations: "No muted conversations",
     previewOn: "Preview on",
     previewOff: "Preview off",
+    profile: "Profile",
+    appearance: "Appearance",
+    notifications: "Notifications",
+    data: "Data",
+    account: "Account",
+    themeLight: "Light",
+    themeDark: "Dark",
+    themeSystem: "System",
+    testSound: "Test sound",
+    exportData: "Export chat history",
+    scheduledCount: "{{n}} scheduled",
+    myAccount: "My Account",
+    openSettings: "Open Settings",
+    title: "Settings",
+  },
+  folders: {
+    create: "New Folder",
+    delete: "Delete Folder",
+    rename: "Rename",
+    addToFolder: "Add to Folder",
+    removeFromFolder: "Remove from Folder",
+    newFolder: "Folder name",
+    folderName: "Name",
+    noFolders: "No folders",
+    manageFolders: "Manage Folders",
   },
   slash: {
     me: "Send as action message",
@@ -1083,7 +1160,9 @@ const enUS: TranslationDict = {
     remoteVideoOff: "Camera is off",
     callEnded: "Call ended",
   },
+
 };
+
 
 export const translations: Record<Language, TranslationDict> = {
   "zh-CN": zhCN,

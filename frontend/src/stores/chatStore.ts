@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, RoomInfo, UserStatus, ScheduledMessage, CustomEmoji } from "@/lib/api";
+import type { ChatMessage, RoomInfo, UserStatus, ScheduledMessage, CustomEmoji, ChatFolder } from "@/lib/api";
 
 const MESSAGE_CAP = 500;
 
@@ -155,6 +155,7 @@ interface ChatState {
   // Scheduled messages
   scheduledMessages: ScheduledMessage[];
   customEmojis: CustomEmoji[];
+  folders: ChatFolder[];
 
   // Call state
   incomingCall: IncomingCall | null;
@@ -221,6 +222,12 @@ interface ChatState {
   setCustomEmojis: (emojis: CustomEmoji[]) => void;
   addCustomEmoji: (emoji: CustomEmoji) => void;
   removeCustomEmoji: (name: string) => void;
+  setFolders: (folders: ChatFolder[]) => void;
+  addFolder: (folder: ChatFolder) => void;
+  removeFolder: (id: string) => void;
+  updateFolder: (id: string, data: Partial<ChatFolder>) => void;
+  addConversationToFolder: (folderId: string, key: string) => void;
+  removeConversationFromFolder: (folderId: string, key: string) => void;
   setIncomingCall: (call: IncomingCall | null) => void;
   setActiveCall: (call: ActiveCall | null) => void;
   reset: () => void;
@@ -260,6 +267,7 @@ export const useChatStore = create<ChatState>((set) => ({
   userProfiles: {},
   scheduledMessages: [],
   customEmojis: [],
+  folders: [],
   incomingCall: null,
   activeCall: null,
 
@@ -533,6 +541,31 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => ({
       customEmojis: state.customEmojis.filter((e) => e.name !== name),
     })),
+  setFolders: (folders) => set({ folders }),
+  addFolder: (folder) =>
+    set((state) => ({ folders: [...state.folders, folder] })),
+  removeFolder: (id) =>
+    set((state) => ({ folders: state.folders.filter((f) => f.id !== id) })),
+  updateFolder: (id, data) =>
+    set((state) => ({
+      folders: state.folders.map((f) => (f.id === id ? { ...f, ...data } : f)),
+    })),
+  addConversationToFolder: (folderId, key) =>
+    set((state) => ({
+      folders: state.folders.map((f) =>
+        f.id === folderId
+          ? { ...f, items: f.items.includes(key) ? f.items : [...f.items, key], item_count: f.items.includes(key) ? f.item_count : f.item_count + 1 }
+          : f,
+      ),
+    })),
+  removeConversationFromFolder: (folderId, key) =>
+    set((state) => ({
+      folders: state.folders.map((f) =>
+        f.id === folderId
+          ? { ...f, items: f.items.filter((k) => k !== key), item_count: f.items.includes(key) ? f.item_count - 1 : f.item_count }
+          : f,
+      ),
+    })),
   setIncomingCall: (incomingCall) => set({ incomingCall }),
   setActiveCall: (activeCall) => set({ activeCall }),
   reset: () =>
@@ -570,6 +603,7 @@ export const useChatStore = create<ChatState>((set) => ({
       userProfiles: {},
       scheduledMessages: [],
       customEmojis: [],
+      folders: [],
       incomingCall: null,
       activeCall: null,
     }),

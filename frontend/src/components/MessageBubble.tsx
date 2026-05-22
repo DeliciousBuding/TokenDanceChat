@@ -985,11 +985,21 @@ export const MessageBubble = memo(function MessageBubble({
                     {t("message.edited")}
                   </span>
                 )}
+                {(message as ChatMessage).mention_all && (
+                  <span className="text-[10px] text-amber-500/70 ml-1 font-medium">
+                    @all
+                  </span>
+                )}
               </span>
             )}
             {!isOwn && !isGrouped && (
               <span className="text-[10px] text-muted-foreground/50" title={formatFullTime(message.timestamp)}>
                 {formatTime(message.timestamp)}
+                {(message as ChatMessage).mention_all && (
+                  <span className="text-[10px] text-amber-500/70 ml-1 font-medium">
+                    @all
+                  </span>
+                )}
               </span>
             )}
 

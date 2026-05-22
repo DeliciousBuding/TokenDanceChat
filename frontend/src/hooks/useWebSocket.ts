@@ -5,6 +5,7 @@ import {
   type WSMessage,
   type ChatMessage,
   type ScheduledMessage,
+  type ChatFolder,
   type WSChatMessage,
   type WSHistoryMessage,
   type WSUserEvent,
@@ -94,6 +95,12 @@ export function useWebSocket() {
     setCustomEmojis,
     addCustomEmoji,
     removeCustomEmoji,
+    setFolders,
+    addFolder,
+    removeFolder,
+    updateFolder,
+    addConversationToFolder,
+    removeConversationFromFolder,
     setIncomingCall,
     setActiveCall,
   } = useChatStore();
@@ -1008,6 +1015,33 @@ export function useWebSocket() {
           }
         }
       }),
+
+      // @all / @everyone mention
+      chatAPI.on("mention_all", (msg: WSMessage) => {
+        const { from, content, message_id, room_id, group: grp } = msg as {
+          type: string;
+          from: string;
+          content: string;
+          message_id: string;
+          room_id?: string;
+          group?: string;
+        };
+        if (from) {
+          setLatestMention({
+            from: `${from} (@all)`,
+            content: (content || "").slice(0, 100),
+            messageId: message_id || "",
+            roomId: room_id,
+            group: grp,
+            timestamp: Date.now(),
+          });
+          import("@/lib/sound").then((m) => m.playMentionSound());
+          if (!isTabActive) {
+            unreadTitleCount++;
+            updatePageTitle();
+          }
+        }
+      }),
     );
 
     // Scheduled message confirm
@@ -1064,6 +1098,36 @@ export function useWebSocket() {
         if (m.id) {
           removeScheduledMessage(m.id);
         }
+      }),
+    );
+
+    // Folder events
+    unsubs.push(
+      chatAPI.on("folder_created", (msg: WSMessage) => {
+        const { id, content } = msg as { type: string; id: string; content: string };
+        if (id) {
+          addFolder({ id, username: "", name: content, sort_order: 0, created_at: Date.now(), item_count: 0, items: [] });
+        }
+      }),
+      chatAPI.on("folder_deleted", (msg: WSMessage) => {
+        const { id } = msg as { type: string; id: string };
+        if (id) removeFolder(id);
+      }),
+      chatAPI.on("folder_renamed", (msg: WSMessage) => {
+        const { id, content } = msg as { type: string; id: string; content: string };
+        if (id && content) updateFolder(id, { name: content });
+      }),
+      chatAPI.on("folder_conversation_added", (msg: WSMessage) => {
+        const { id, key } = msg as { type: string; id: string; key: string };
+        if (id && key) addConversationToFolder(id, key);
+      }),
+      chatAPI.on("folder_conversation_removed", (msg: WSMessage) => {
+        const { id, key } = msg as { type: string; id: string; key: string };
+        if (id && key) removeConversationFromFolder(id, key);
+      }),
+      chatAPI.on("folder_list", (msg: WSMessage) => {
+        const { folders } = msg as { type: string; folders: ChatFolder[] };
+        if (folders) setFolders(folders);
       }),
     );
 
@@ -1158,7 +1222,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setIncomingCall, setActiveCall, setNotificationPrefs]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setIncomingCall, setActiveCall, setNotificationPrefs]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

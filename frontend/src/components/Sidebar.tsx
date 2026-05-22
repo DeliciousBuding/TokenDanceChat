@@ -18,6 +18,9 @@ import {
   Clock,
   Info,
   Key,
+  FolderOpen,
+  FolderPlus,
+  Settings,
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -27,6 +30,7 @@ import { assistants, modelCatalog } from "@/lib/assistantRegistry";
 import { AssistantIcon } from "@/components/AssistantIcon";
 import { isSoundEnabled, setSoundEnabled } from "@/lib/soundToggle";
 import { InviteCodeManager } from "@/components/InviteCodeManager";
+import { SettingsModal } from "@/components/SettingsModal";
 import { chatAPI } from "@/lib/api";
 
 interface SidebarProps {
@@ -183,6 +187,7 @@ export function Sidebar({
     archivedConversations,
     userProfiles,
     setGroupInfoPanel,
+    folders,
   } = useChatStore();
 
   // Sound toggle state
@@ -196,12 +201,17 @@ export function Sidebar({
   // Invite code manager state
   const [inviteOpen, setInviteOpen] = useState(false);
 
+  // Unified settings modal
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   // Right-click context menu state for conversation pinning
   const [contextMenu, setContextMenu] = useState<{
     key: string;
     x: number;
     y: number;
   } | null>(null);
+
+  const [folderSubmenu, setFolderSubmenu] = useState(false);
 
   // Separate current user from others for visual grouping
   const otherUsers = onlineUsers.filter((u) => u !== username);
@@ -302,10 +312,49 @@ export function Sidebar({
     [archivedConversations],
   );
 
-  // Close context menu on any click outside.
+  // Folder helpers
+  const getConvFolderId = useCallback(
+    (key: string): string | null => {
+      for (const f of folders) {
+        if (f.items.includes(key)) return f.id;
+      }
+      return null;
+    },
+    [folders],
+  );
+
+  const handleAddToFolder = useCallback(
+    (folderId: string) => {
+      if (contextMenu?.key) {
+        chatAPI.sendFolderAddConversation(folderId, contextMenu.key);
+      }
+      setContextMenu(null);
+      setFolderSubmenu(false);
+    },
+    [contextMenu],
+  );
+
+  const handleRemoveFromFolder = useCallback(
+    (key: string) => {
+      const fid = getConvFolderId(key);
+      if (fid) {
+        chatAPI.sendFolderRemoveConversation(fid, key);
+      }
+      setContextMenu(null);
+    },
+    [getConvFolderId],
+  );
+
+  // Fetch folders on mount
+  const connected = useChatStore((s) => s.connected);
   useEffect(() => {
-    if (!contextMenu) return;
-    const handler = () => setContextMenu(null);
+    if (connected) {
+      chatAPI.sendFolderList();
+    }
+  }, [connected]);
+  useEffect(() => {
+    if (!contextMenu) { setFolderSubmenu(false); return; }
+    const handler = () => { setContextMenu(null); setFolderSubmenu(false); };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, [contextMenu]);
@@ -797,19 +846,32 @@ export function Sidebar({
         {/* Invite code manager */}
         <div className="mt-1 flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground/50">{t("invite.inviteCodes")}</span>
-          <button
-            onClick={() => setInviteOpen(true)}
-            className="flex items-center gap-1 rounded-md p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
-            aria-label={t("invite.inviteCodes")}
-            title={t("invite.inviteCodes")}
-          >
-            <Key className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="flex items-center gap-1 rounded-md p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
+              aria-label={t("settings.openSettings")}
+              title={t("settings.openSettings")}
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setInviteOpen(true)}
+              className="flex items-center gap-1 rounded-md p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
+              aria-label={t("invite.inviteCodes")}
+              title={t("invite.inviteCodes")}
+            >
+              <Key className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Invite code manager modal */}
       <InviteCodeManager open={inviteOpen} onClose={() => setInviteOpen(false)} />
+
+      {/* Unified settings modal */}
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       {/* Right-click context menu for conversation pinning */}
       {contextMenu && (
@@ -888,6 +950,64 @@ export function Sidebar({
               </>
             )}
           </button>
+          {/* Folder management */}
+          <div className="border-t border-border my-1" />
+          {(() => {
+            const convKey = contextMenu.key;
+            const folderId = getConvFolderId(convKey);
+            if (folderId && !folderSubmenu) {
+              return (
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
+                  onClick={() => handleRemoveFromFolder(convKey)}
+                >
+                  <FolderOpen className="h-3 w-3" />
+                  {t("folders.removeFromFolder")}
+                </button>
+              );
+            }
+            if (!folderSubmenu) {
+              return (
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setFolderSubmenu(true); }}
+                >
+                  <FolderPlus className="h-3 w-3" />
+                  {t("folders.addToFolder")}
+                  <ChevronRight className="ml-auto h-3 w-3" />
+                </button>
+              );
+            }
+            // Folder submenu
+            return (
+              <>
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent transition-colors"
+                  onClick={(e) => { e.stopPropagation(); setFolderSubmenu(false); }}
+                >
+                  <ChevronDown className="h-3 w-3 rotate-90" />
+                  {t("folders.addToFolder")}
+                </button>
+                {folders.length === 0 ? (
+                  <span className="block px-3 py-1 text-xs text-muted-foreground/50 italic">
+                    {t("folders.noFolders")}
+                  </span>
+                ) : (
+                  folders.map((f) => (
+                    <button
+                      key={f.id}
+                      className="flex w-full items-center gap-2 pl-8 pr-3 py-1.5 text-xs text-foreground/80 hover:bg-accent transition-colors"
+                      onClick={(e) => { e.stopPropagation(); handleAddToFolder(f.id); }}
+                    >
+                      <FolderOpen className="h-3 w-3" />
+                      {f.name}
+                    </button>
+                  ))
+                )}
+              </>
+            );
+          })()}
+
           {/* Group info — only show for group conversations */}
           {contextMenu.key.startsWith("group:") && (
             <>
