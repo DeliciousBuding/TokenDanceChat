@@ -46,6 +46,7 @@ func (m *mockStore) GetRoomMessages(roomID string, limit int, before int64) []hu
 }
 
 func (m *mockStore) MarkDeleted(msgID string) error { return nil }
+func (m *mockStore) TotalUsers() int64 { return 0 }
 func (m *mockStore) TotalMessages() int64 {
 	return int64(len(m.messages))
 }

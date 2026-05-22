@@ -600,6 +600,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   // Get profile info for display name and avatar.
   const userProfiles = useChatStore((s) => s.userProfiles);
+  const onlineUsers = useChatStore((s) => s.onlineUsers);
   const userProfile = userProfiles[message.username];
   const messageDisplayName = userProfile?.display_name || message.username;
   const messageAvatarUrl = userProfile?.avatar_url || null;
@@ -1297,28 +1298,15 @@ export const MessageBubble = memo(function MessageBubble({
 
         {isOwn && (
           <div className="mt-1 flex justify-end items-center gap-1">
-            {/* Delivery status icons */}
+            {/* Delivery status icons with clickable read receipt */}
             {message.read_by && message.read_by.length > 0 ? (
-              <span
-                className="inline-flex"
-                title={`${t("message.readBy")}: ${message.read_by.join(", ")}`}
-              >
-                <svg
-                  width="16"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-blue-400/70"
-                  aria-label={t("message.read")}
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                  <polyline points="22 6 13 17 8 12" />
-                </svg>
-              </span>
+              <ReadReceipt
+                readers={message.read_by}
+                readByLabel={t("message.readBy")}
+                readLabel={t("message.read")}
+                userProfiles={userProfiles}
+                onlineUsers={onlineUsers}
+              />
             ) : (
               <svg
                 width="14"
@@ -1430,3 +1418,56 @@ export const MessageBubble = memo(function MessageBubble({
       </>
     );
 });
+
+
+
+// ── ReadReceipt: clickable tooltip showing who read a message ──
+
+function ReadReceipt({ readers, readByLabel, readLabel, userProfiles, onlineUsers }: {
+  readers: string[];
+  readByLabel: string;
+  readLabel: string;
+  userProfiles: Record<string, { display_name?: string; avatar_url?: string }>;
+  onlineUsers: string[];
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  return (
+    <span className="relative inline-flex">
+      <button
+        onClick={(e) => { e.stopPropagation(); setShowTooltip(!showTooltip); }}
+        className="inline-flex cursor-pointer hover:opacity-80 transition-opacity"
+        aria-label={readLabel}
+      >
+        <svg width="16" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400/70">
+          <polyline points="20 6 9 17 4 12" />
+          <polyline points="22 6 13 17 8 12" />
+        </svg>
+      </button>
+      {showTooltip && (
+        <div className="absolute bottom-full right-0 mb-1.5 z-50 rounded-lg border border-border bg-card shadow-xl p-2 min-w-[140px] animate-scale-in">
+          <div className="text-[10px] text-muted-foreground/60 mb-1.5 px-1">{readByLabel}</div>
+          {readers.map((r) => {
+            const profile = userProfiles[r];
+            const isOnline = onlineUsers.includes(r);
+            return (
+              <div key={r} className="flex items-center gap-2 px-1 py-0.5 text-xs text-foreground/80">
+                <span className={`relative flex-shrink-0 h-4 w-4 rounded-full ${profile?.avatar_url ? '' : 'bg-muted'} overflow-hidden`}>
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-[7px] font-medium">
+                      {(profile?.display_name || r)[0].toUpperCase()}
+                    </span>
+                  )}
+                </span>
+                <span className="truncate">{profile?.display_name || r}</span>
+                {isOnline && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-green-400 flex-shrink-0" title="Online" />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </span>
+  );
+}

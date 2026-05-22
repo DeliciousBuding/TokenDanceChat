@@ -21,6 +21,7 @@ import {
   FolderOpen,
   FolderPlus,
   Settings,
+  Activity,
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -33,6 +34,7 @@ import { chatAPI } from "@/lib/api";
 
 const InviteCodeManager = lazy(() => import("@/components/InviteCodeManager").then((m) => ({ default: m.InviteCodeManager })));
 const SettingsModal = lazy(() => import("@/components/SettingsModal").then((m) => ({ default: m.SettingsModal })));
+const AdminPanel = lazy(() => import("@/components/AdminPanel").then((m) => ({ default: m.AdminPanel })));
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -204,6 +206,7 @@ export function Sidebar({
 
   // Unified settings modal
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   // Right-click context menu state for conversation pinning
   const [contextMenu, setContextMenu] = useState<{
@@ -864,6 +867,14 @@ export function Sidebar({
             >
               <Key className="h-3.5 w-3.5" />
             </button>
+            <button
+              onClick={() => setAdminOpen(true)}
+              className="flex items-center gap-1 rounded-md p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
+              aria-label="Admin Dashboard"
+              title="Admin Dashboard"
+            >
+              <Activity className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       </div>
@@ -876,6 +887,11 @@ export function Sidebar({
       {/* Unified settings modal */}
       <Suspense fallback={null}>
         {settingsOpen && <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+      </Suspense>
+
+      {/* Admin dashboard */}
+      <Suspense fallback={null}>
+        {adminOpen && <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />}
       </Suspense>
 
       {/* Right-click context menu for conversation pinning */}
