@@ -27,20 +27,22 @@ interface Props {
 interface State {
   error: Error | null;
   hasError: boolean;
+  errorInfo: string;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { error: null, hasError: false };
+    this.state = { error: null, hasError: false, errorInfo: "" };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { error, hasError: true };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error("ErrorBoundary caught:", error, info.componentStack);
+    this.setState({ errorInfo: info.componentStack || "" });
   }
 
   handleReload = () => {
@@ -62,10 +64,19 @@ export class ErrorBoundary extends Component<Props, State> {
               {t("error.reloadMessage")}
             </p>
             {this.state.error && (
-              <pre className="max-h-24 w-full overflow-auto rounded-lg bg-muted p-3 text-left text-[11px] text-muted-foreground/60">
-                {this.state.error.message}
-              </pre>
-            )}
+              <>
+                <pre className="max-h-24 w-full overflow-auto rounded-lg bg-muted p-3 text-left text-[11px] text-muted-foreground/60">
+                  {this.state.error.message}
+                </pre>
+                {this.state.errorInfo && (
+                  <details className="w-full">
+                    <summary className="text-xs text-muted-foreground/40 cursor-pointer">Stack trace</summary>
+                    <pre className="mt-1 max-h-32 w-full overflow-auto rounded-lg bg-muted p-2 text-left text-[10px] text-muted-foreground/40 whitespace-pre-wrap">
+                      {this.state.errorInfo}
+                    </pre>
+                  </details>
+                )}
+              </>)}
             <button
               onClick={this.handleReload}
               className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
