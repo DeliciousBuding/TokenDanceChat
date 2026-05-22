@@ -61,6 +61,7 @@ interface ChatState {
 
   // Typing users
   typingUsers: string[];
+  typingPreviews: Record<string, string>;
 
   // Rooms
   rooms: RoomInfo[];
@@ -111,7 +112,7 @@ interface ChatState {
   setUserStatusList: (users: UserStatus[]) => void;
   setSelectedProfileUser: (username: string | null) => void;
   setTypingUsers: (users: string[]) => void;
-  addTypingUser: (username: string) => void;
+  addTypingUser: (username: string, preview?: string) => void;
   removeTypingUser: (username: string) => void;
   setRooms: (rooms: RoomInfo[]) => void;
   setCurrentRoomID: (roomID: string) => void;
@@ -148,6 +149,7 @@ export const useChatStore = create<ChatState>((set) => ({
   userStatusList: [],
   selectedProfileUser: null,
   typingUsers: [],
+  typingPreviews: {},
   rooms: [],
   currentRoomID: "",
   currentChat: { type: "public" },
@@ -313,6 +315,7 @@ export const useChatStore = create<ChatState>((set) => ({
       userStatusList: [],
       selectedProfileUser: null,
       typingUsers: [],
+      typingPreviews: {},
       rooms: [],
       currentRoomID: "",
       currentChat: { type: "public" },

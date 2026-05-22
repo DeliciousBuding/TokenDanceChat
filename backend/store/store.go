@@ -110,6 +110,14 @@ func (s *Store) migrate() error {
 			blocked TEXT NOT NULL,
 			PRIMARY KEY (username, blocked)
 		);
+
+		CREATE TABLE IF NOT EXISTS pinned_messages (
+			room_id TEXT NOT NULL DEFAULT "",
+			message_id TEXT NOT NULL,
+			pinned_by TEXT NOT NULL,
+			pinned_at INTEGER NOT NULL,
+			PRIMARY KEY (room_id, message_id)
+		);
 	`
 	_, err := s.db.Exec(query)
 	if err != nil {

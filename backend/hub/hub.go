@@ -100,7 +100,9 @@ type Message struct {
 	To      string   `json:"to,omitempty"`
 	From    string   `json:"from,omitempty"`
 	Friends []string `json:"friends,omitempty"`
+	Blocked []string `json:"blocked,omitempty"`
 	Context string   `json:"context,omitempty"`
+	Preview string   `json:"preview,omitempty"`
 
 	// Group system
 	Group   string   `json:"group,omitempty"`
@@ -220,7 +222,7 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 		clients:         make(map[*Client]bool),
 		broadcast:       make(chan []byte, 256),
 		register:        make(chan *Client),
-		unregister:      make(chan *Client),
+		unregister:      make(chan *Client, 256),
 		store:           store,
 		StartTime:       time.Now(),
 		llmClient:       llmClient,

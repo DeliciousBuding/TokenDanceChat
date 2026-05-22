@@ -15,7 +15,7 @@ import {
   type WSReactionUpdate,
   type WSMessageEditBroadcast,
 } from "@/lib/api";
-import { playMessageSound, playMentionSound } from "@/lib/sound";
+import { playMessageSound, playMentionSound, playOnlineSound } from "@/lib/sound";
 
 // --- Page title utilities ---
 
@@ -75,6 +75,7 @@ export function useWebSocket() {
         await chatAPI.connect(name);
         setConnected(true);
         chatAPI.sendMarkRead();
+        chatAPI.sendBlockList();
       } catch (err) {
         setConnected(false);
         throw err;
@@ -362,6 +363,7 @@ export function useWebSocket() {
                   i18nSys("system.userOnline", { username: user.username }),
                   Date.now(),
                 );
+                playOnlineSound();
               }
             }
           }
