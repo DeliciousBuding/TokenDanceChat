@@ -70,13 +70,8 @@ export function ConfirmDialog({
             onClick={onConfirm}
             className={
               variant === "destructive"
-                ? "rounded-lg px-3 py-1.5 text-xs font-medium text-white bg-destructive hover:bg-destructive/90 transition-colors"
-                : "rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors"
-            }
-            style={
-              variant !== "destructive"
-                ? { backgroundColor: "oklch(71.2% 0.194 13.428)" }
-                : undefined
+                ? "rounded-lg px-3 py-1.5 text-xs font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+                : "rounded-lg px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground hover:brightness-110 transition-colors"
             }
           >
             {confirmLabel}

@@ -87,13 +87,13 @@ export const EmojiPicker = memo(function EmojiPicker({
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("emoji.search")}
             aria-label={t("emoji.search")}
-            className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-[hsl(220,2.5%,35%)]"
+            className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
           />
         </div>
 
         {/* Recent emojis */}
         {!search && recents.length > 0 && (
-          <div className="px-3 pb-2 border-b border-[hsl(220,2.5%,16%)]">
+          <div className="px-3 pb-2 border-b border-border">
             <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider mb-1 block">{t("emoji.recent")}</span>
             <div className="flex flex-wrap gap-1">
               {recents.map((emoji) => (
@@ -108,7 +108,7 @@ export const EmojiPicker = memo(function EmojiPicker({
 
         {/* Category tabs */}
         {!search && (
-          <div className="flex gap-0.5 px-3 pb-2 border-b border-[hsl(220,2.5%,16%)]">
+          <div className="flex gap-0.5 px-3 pb-2 border-b border-border">
             {CATEGORIES.map((cat, i) => (
               <button key={cat.name} onClick={() => setActiveCat(i)}
                 className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${

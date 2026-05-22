@@ -96,9 +96,9 @@ export function ModelSelector({
         aria-haspopup="listbox"
         className={cn(
           "flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground/80 transition-all duration-200",
-          "hover:border-[hsl(220,2.5%,35%)] hover:bg-accent",
+          "hover:border-ring/50 hover:bg-accent",
           "disabled:opacity-30 disabled:cursor-not-allowed",
-          open && "border-[hsl(220,2.5%,35%)] bg-accent",
+          open && "border-ring/50 bg-accent",
           pulseModelId && "animate-pulse-once ring-2 ring-primary/40",
           className,
         )}
@@ -150,7 +150,7 @@ export function ModelSelector({
                 </span>
               </div>
               {model.id === selectedModelId && (
-                <Check className="h-4 w-4 flex-shrink-0" style={{ color: "oklch(71.2% 0.194 13.428)" }} />
+                <Check className="h-4 w-4 flex-shrink-0 text-primary" />
               )}
             </button>
           ))}

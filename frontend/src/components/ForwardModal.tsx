@@ -51,7 +51,7 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
             <User className="h-3 w-3 text-muted-foreground/50" />
             <span className="text-xs text-muted-foreground/70">{message.username}</span>
           </div>
-          <p className="text-xs text-foreground/70 bg-[hsl(220,2.5%,14%)] rounded-md p-2 max-h-20 overflow-y-auto">
+          <p className="text-xs text-foreground/70 bg-secondary rounded-md p-2 max-h-20 overflow-y-auto">
             {message.content.slice(0, 200)}
             {message.content.length > 200 ? "..." : ""}
           </p>
@@ -75,7 +75,7 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
                   onClick={() => setSelectedUser(user)}
                   className={`w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-left transition-colors ${
                     selectedUser === user
-                      ? "bg-accent text-foreground ring-1 ring-[hsl(220,2.5%,35%)]"
+                      ? "bg-accent text-foreground ring-1 ring-ring"
                       : "text-foreground/70 hover:bg-accent"
                   }`}
                 >
@@ -100,13 +100,11 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
           <button
             onClick={handleForward}
             disabled={!selectedUser}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              backgroundColor: selectedUser
-                ? "oklch(71.2% 0.194 13.428)"
-                : "hsl(220,2.5%,20%)",
-              color: selectedUser ? "#fff" : "hsl(240,2.5%,50%)",
-            }}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+              selectedUser
+                ? "bg-primary text-primary-foreground hover:brightness-110"
+                : "bg-muted text-muted-foreground"
+            }`}
           >
             <Send className="h-3 w-3" />
             {t("forward.forward")}
