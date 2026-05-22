@@ -179,6 +179,170 @@ func TestGetMessagesEmpty(t *testing.T) {
 	}
 }
 
+func TestPing(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	if err := s.Ping(); err != nil {
+		t.Errorf("expected Ping to succeed on healthy DB, got error: %v", err)
+	}
+}
+
+func TestPingClosedDB(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	s.Close()
+
+	if err := s.Ping(); err == nil {
+		t.Error("expected Ping to return error on closed database")
+	}
+}
+
+func TestIsBlocked(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Initially, no user is blocked.
+	if s.IsBlocked("alice", "bob") {
+		t.Error("expected IsBlocked to return false for unblocked users")
+	}
+
+	// Block bob from alice's perspective.
+	if err := s.BlockUser("alice", "bob"); err != nil {
+		t.Fatalf("BlockUser returned error: %v", err)
+	}
+
+	// Now alice has blocked bob.
+	if !s.IsBlocked("alice", "bob") {
+		t.Error("expected IsBlocked to return true after blocking")
+	}
+
+	// bob has not blocked alice.
+	if s.IsBlocked("bob", "alice") {
+		t.Error("expected IsBlocked(bob, alice) to return false")
+	}
+
+	// Unblock and verify.
+	if err := s.UnblockUser("alice", "bob"); err != nil {
+		t.Fatalf("UnblockUser returned error: %v", err)
+	}
+	if s.IsBlocked("alice", "bob") {
+		t.Error("expected IsBlocked to return false after unblocking")
+	}
+}
+
+func TestIsBlockedErrorPath(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+
+	// Close the database to trigger an error in IsBlocked.
+	s.Close()
+
+	// Should return false on error (graceful degradation).
+	if s.IsBlocked("alice", "bob") {
+		t.Error("expected IsBlocked to return false on database error")
+	}
+}
+
+func TestSearchMessages(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Insert some messages to search.
+	s.InsertMessage("alice", "Hello world, this is a unicorn message", "", "", "", "")
+	s.InsertMessage("bob", "Another message about rainbow stuff", "", "", "", "")
+	s.InsertMessage("charlie", "Hello everyone, welcome to the chat", "", "", "", "")
+
+	// Search for "Hello" — should find 2 messages.
+	results, err := s.SearchMessages("Hello", "", 10)
+	if err != nil {
+		t.Fatalf("SearchMessages returned error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results for 'Hello', got %d", len(results))
+	}
+
+	// Search for "unicorn" — exact token match, should find 1.
+	results, err = s.SearchMessages("unicorn", "", 10)
+	if err != nil {
+		t.Fatalf("SearchMessages returned error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 result for 'unicorn', got %d", len(results))
+	}
+
+	// Search for "rainbow" — exact token match, should find 1.
+	results, err = s.SearchMessages("rainbow", "", 10)
+	if err != nil {
+		t.Fatalf("SearchMessages returned error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 result for 'rainbow', got %d", len(results))
+	}
+
+	// Search for "message" — appears in the first two messages.
+	results, err = s.SearchMessages("message", "", 10)
+	if err != nil {
+		t.Fatalf("SearchMessages returned error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results for 'message', got %d", len(results))
+	}
+
+	// Search for non-existent term.
+	results, err = s.SearchMessages("nonexistent", "", 10)
+	if err != nil {
+		t.Fatalf("SearchMessages returned error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for nonexistent term, got %d", len(results))
+	}
+}
+
+func TestSearchMessagesSpecialCharacters(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.InsertMessage("alice", "SELECT * FROM users; DROP TABLE messages;", "", "", "", "")
+	s.InsertMessage("bob", "normal message", "", "", "", "")
+
+	// FTS5 treats special characters in queries specially.
+	// A simple word search should work even alongside special-content messages.
+	results, err := s.SearchMessages("normal", "", 10)
+	if err != nil {
+		t.Fatalf("SearchMessages returned error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 result for 'normal', got %d", len(results))
+	}
+
+	// Searching for SQL-like content: FTS5 may tokenize it.
+	// The key test: this should not panic or error.
+	results, err = s.SearchMessages("SELECT", "", 10)
+	// FTS5 may or may not find results depending on tokenizer behavior;
+	// the important thing is that the call does not error.
+	if err != nil {
+		t.Errorf("SearchMessages with SQL keyword should not error: %v", err)
+	}
+	_ = results
+}
+
 func TestConcurrentInsert(t *testing.T) {
 	s, err := New(":memory:")
 	if err != nil {

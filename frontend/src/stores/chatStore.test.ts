@@ -211,6 +211,83 @@ describe("chatStore", () => {
     });
   });
 
+  describe("pendingImage", () => {
+    it("sets pendingImage", () => {
+      useChatStore.getState().setPendingImage("data:image/png;base64,abc123");
+      expect(useChatStore.getState().pendingImage).toBe("data:image/png;base64,abc123");
+    });
+
+    it("clears pendingImage when switching chats via setCurrentChat", () => {
+      useChatStore.getState().setPendingImage("data:image/png;base64,abc123");
+      expect(useChatStore.getState().pendingImage).toBe("data:image/png;base64,abc123");
+
+      useChatStore.getState().setCurrentChat({ type: "dm", username: "Alice" });
+      expect(useChatStore.getState().pendingImage).toBeNull();
+      expect(useChatStore.getState().currentChat).toEqual({ type: "dm", username: "Alice" });
+    });
+
+    it("setPendingImage(null) clears the image", () => {
+      useChatStore.getState().setPendingImage("data:image/png;base64,abc123");
+      useChatStore.getState().setPendingImage(null);
+      expect(useChatStore.getState().pendingImage).toBeNull();
+    });
+  });
+
+  describe("setCurrentChat", () => {
+    it("switches to DM chat", () => {
+      useChatStore.getState().setCurrentChat({ type: "dm", username: "Bob" });
+      expect(useChatStore.getState().currentChat).toEqual({ type: "dm", username: "Bob" });
+    });
+
+    it("switches to group chat", () => {
+      useChatStore.getState().setCurrentChat({ type: "group", name: "DevTeam" });
+      expect(useChatStore.getState().currentChat).toEqual({ type: "group", name: "DevTeam" });
+    });
+
+    it("switches to public chat", () => {
+      useChatStore.getState().setCurrentChat({ type: "dm", username: "Bob" });
+      useChatStore.getState().setCurrentChat({ type: "public" });
+      expect(useChatStore.getState().currentChat).toEqual({ type: "public" });
+    });
+  });
+
+  describe("prependHistory cap", () => {
+    it("caps prependHistory at 1000 messages", () => {
+      // Add 600 messages first
+      for (let i = 0; i < 600; i++) {
+        useChatStore.getState().addMessage({
+          id: `existing-${i}`, username: "U", content: "x", timestamp: i,
+        });
+      }
+      expect(useChatStore.getState().messages).toHaveLength(500); // addMessage caps at 500
+
+      // Prepend 600 older messages (unique IDs)
+      const oldMessages = [];
+      for (let i = 0; i < 600; i++) {
+        oldMessages.push({
+          id: `old-${i}`, username: "Archive", content: "history", timestamp: -600 + i,
+        });
+      }
+      useChatStore.getState().prependHistory(oldMessages);
+      // 500 existing + 600 new = 1100, capped at 1000
+      expect(useChatStore.getState().messages.length).toBeLessThanOrEqual(1000);
+      // First message should be an old one (prepended)
+      expect(useChatStore.getState().messages[0].id).toBe("old-0");
+    });
+
+    it("prependHistory with no new messages returns state unchanged", () => {
+      useChatStore.getState().addMessage({
+        id: "1", username: "U", content: "x", timestamp: 1,
+      });
+      const msgsBefore = useChatStore.getState().messages;
+      // Prepend same message (no new IDs)
+      useChatStore.getState().prependHistory([
+        { id: "1", username: "U", content: "x", timestamp: 1 },
+      ]);
+      expect(useChatStore.getState().messages).toBe(msgsBefore);
+    });
+  });
+
   describe("reset", () => {
     it("resets to initial state", () => {
       useChatStore.getState().setUsername("Test");
@@ -222,6 +299,39 @@ describe("chatStore", () => {
       expect(s.connected).toBe(false);
       expect(s.messages).toHaveLength(0);
       expect(s.view).toBe("join");
+    });
+
+    it("resets all state fields including pendingImage, friends, groups", () => {
+      useChatStore.getState().setUsername("Alice");
+      useChatStore.getState().setConnected(true);
+      useChatStore.getState().setView("chat");
+      useChatStore.getState().setPendingImage("data:image/png;base64,test");
+      useChatStore.getState().setFriends(["Bob", "Charlie"]);
+      useChatStore.getState().addFriendRequest("Dave");
+      useChatStore.getState().addGroupInvite("Team", "Eve");
+      useChatStore.getState().addBlockedUser("Spammer");
+      useChatStore.getState().setPinnedMessages([
+        { id: "p1", username: "Mod", content: "Rules", timestamp: 1 },
+      ]);
+      useChatStore.getState().setUnreadCount(5);
+      useChatStore.getState().incrementConversationUnread("public");
+
+      useChatStore.getState().reset();
+      const s = useChatStore.getState();
+      expect(s.view).toBe("join");
+      expect(s.username).toBe("");
+      expect(s.connected).toBe(false);
+      expect(s.messages).toHaveLength(0);
+      expect(s.pendingImage).toBeNull();
+      expect(s.friends).toHaveLength(0);
+      expect(s.pendingFriendRequests).toHaveLength(0);
+      expect(s.pendingGroupInvites).toHaveLength(0);
+      expect(s.blockedUsers).toHaveLength(0);
+      expect(s.pinnedMessages).toHaveLength(0);
+      expect(s.unreadCount).toBe(0);
+      expect(Object.keys(s.unreadByConversation)).toHaveLength(0);
+      expect(s.currentChat).toEqual({ type: "public" });
+      expect(s.replyTo).toBeNull();
     });
   });
 });
