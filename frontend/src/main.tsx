@@ -59,9 +59,7 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
 }
 
 createRoot(document.getElementById("root")!).render(
-  <ErrorBoundary>
-    <I18nProvider>
-      <App />
-    </I18nProvider>
-  </ErrorBoundary>,
+  <I18nProvider>
+    <App />
+  </I18nProvider>,
 );
