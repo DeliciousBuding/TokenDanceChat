@@ -56,8 +56,12 @@ type Client struct {
 	conn    *websocket.Conn
 	mu      sync.Mutex
 	pending *ResponseHandler
-	ctx     context.Context
-	cancel  context.CancelFunc
+	// ProactiveCallback is invoked for unsolicited messages from PicoClaw
+	// (no pending request), enabling the agent to send messages on its own
+	// initiative — e.g. summarisation, alert, scheduled update.
+	ProactiveCallback func(msg Message)
+	ctx               context.Context
+	cancel            context.CancelFunc
 }
 
 func New(cfg Config) *Client {
@@ -213,6 +217,8 @@ func (c *Client) readLoop(conn *websocket.Conn) {
 					handler.OnMessage(msg)
 				}
 			}
+		} else if c.ProactiveCallback != nil && msg.Content != "" {
+			c.ProactiveCallback(msg)
 		}
 	}
 }
