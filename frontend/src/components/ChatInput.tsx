@@ -74,6 +74,16 @@ export function ChatInput({
   const dragCounter = useRef(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  // Estimate image file size from data URL
+  const estimateImageSize = useCallback((dataUrl: string): string => {
+    const base64 = dataUrl.split(',')[1] || '';
+    const bytes = Math.round(base64.length * 0.75);
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }, []);
 
   // @mention autocomplete state
   const [mentionActive, setMentionActive] = useState(false);
@@ -265,6 +275,39 @@ export function ChatInput({
       });
   }, [pendingImage, onUpload]);
 
+  // Markdown formatting helpers
+  const insertMarkdown = useCallback((wrapper: string, placeholder: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = content.slice(start, end);
+    const replacement = selected ? wrapper.replace('text', selected) : wrapper.replace('text', placeholder);
+    const newContent = content.slice(0, start) + replacement + content.slice(end);
+    setContent(newContent);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursor = start + replacement.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  }, [content]);
+
+  const insertQuote = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const cursorPos = textarea.selectionStart;
+    const beforeCursor = content.slice(0, cursorPos);
+    const lastNewline = beforeCursor.lastIndexOf('\n');
+    const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
+    const newContent = content.slice(0, lineStart) + '> ' + content.slice(lineStart);
+    setContent(newContent);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const newCursor = cursorPos + 2;
+      textarea.setSelectionRange(newCursor, newCursor);
+    });
+  }, [content]);
+
   // Pulse send button when content goes from empty to non-empty
   useEffect(() => {
     const hasContent = content.trim().length > 0;
@@ -454,32 +497,53 @@ export function ChatInput({
 
       {/* Image preview */}
       {pendingImage && (
-        <div className="flex items-center gap-2 px-4 pt-2">
-          <div className="relative inline-block">
-            <img
-              src={pendingImage}
-              alt="Preview"
-              className="h-20 w-auto rounded-lg border border-border object-cover"
-            />
-            <button
-              onClick={handleCancelImage}
-              className="absolute -top-1 -right-1 rounded-full bg-[hsl(0,62.8%,50.6%)] p-0.5 text-white hover:bg-[hsl(0,62.8%,45%)] transition-colors"
-              aria-label="Remove image"
-            >
-              <X className="h-3 w-3" />
-            </button>
+        <div className="px-4 pt-2">
+          <div className="flex items-start gap-3 rounded-xl border border-border bg-card/50 p-3 shadow-sm">
+            <div className="relative flex-shrink-0">
+              <img
+                src={pendingImage}
+                alt="Preview"
+                className="h-24 w-auto rounded-lg border border-border object-cover shadow-sm"
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+                }}
+              />
+              <button
+                onClick={handleCancelImage}
+                className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/90 transition-colors shadow-sm"
+                aria-label="Remove image"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-foreground/80 truncate">
+                  Pasted image
+                </span>
+                {imageDimensions && (
+                  <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
+                    {imageDimensions.width} x {imageDimensions.height}
+                  </span>
+                )}
+              </div>
+              <div className="text-[10px] text-muted-foreground/50">
+                {estimateImageSize(pendingImage)}
+              </div>
+              <button
+                onClick={handleSendImage}
+                className="mt-1 flex items-center gap-1.5 self-start rounded-lg px-3 py-1.5 text-xs font-medium transition-all hover:brightness-110"
+                style={{
+                  backgroundColor: "oklch(71.2% 0.194 13.428)",
+                  color: "#fff",
+                }}
+              >
+                <Send className="h-3 w-3" />
+                Send image
+              </button>
+            </div>
           </div>
-          <button
-            onClick={handleSendImage}
-            className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
-            style={{
-              backgroundColor: "oklch(71.2% 0.194 13.428)",
-              color: "#fff",
-            }}
-          >
-            <Send className="h-3 w-3" />
-            Send
-          </button>
         </div>
       )}
 
@@ -500,6 +564,76 @@ export function ChatInput({
         className="hidden"
         aria-hidden="true"
       />
+
+      {/* Markdown formatting toolbar */}
+      <div className="flex items-center gap-0.5 px-4 pt-2 pb-1">
+        {/* Bold */}
+        <button
+          type="button"
+          onClick={() => insertMarkdown('**text**', 'bold')}
+          disabled={disabled}
+          aria-label="Bold"
+          className="rounded-md p-1.5 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 2h3.5a2 2 0 0 1 0 4H4V2Zm0 4h4a2 2 0 0 1 0 4H4V6Z"/>
+          </svg>
+        </button>
+        {/* Italic */}
+        <button
+          type="button"
+          onClick={() => insertMarkdown('*text*', 'italic')}
+          disabled={disabled}
+          aria-label="Italic"
+          className="rounded-md p-1.5 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="5.5" y1="2" x2="9.5" y2="2"/>
+            <line x1="7" y1="2" x2="4.5" y2="12"/>
+            <line x1="4" y1="12" x2="8" y2="12"/>
+          </svg>
+        </button>
+        {/* Strikethrough */}
+        <button
+          type="button"
+          onClick={() => insertMarkdown('~~text~~', 'strike')}
+          disabled={disabled}
+          aria-label="Strikethrough"
+          className="rounded-md p-1.5 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="2" y1="7" x2="12" y2="7"/>
+            <path d="M4 4a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v.5a1.5 1.5 0 0 1-1.5 1.5H4"/>
+            <path d="M5 10a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-.5"/>
+          </svg>
+        </button>
+        {/* Code */}
+        <button
+          type="button"
+          onClick={() => insertMarkdown('`text`', 'code')}
+          disabled={disabled}
+          aria-label="Code"
+          className="rounded-md p-1.5 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="5,4 2,7 5,10"/>
+            <polyline points="9,4 12,7 9,10"/>
+            <line x1="8" y1="3" x2="6" y2="11"/>
+          </svg>
+        </button>
+        {/* Quote */}
+        <button
+          type="button"
+          onClick={insertQuote}
+          disabled={disabled}
+          aria-label="Quote"
+          className="rounded-md p-1.5 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+            <path d="M3 3.5h2V7H4.5v.75H6v2H3V3.5Zm6 0h2V7h-.5v.75H12v2H9V3.5Z"/>
+          </svg>
+        </button>
+      </div>
 
       {/* Input area */}
       <div className="flex items-end gap-2 px-4 py-3">
