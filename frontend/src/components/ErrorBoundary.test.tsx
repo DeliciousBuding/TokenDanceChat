@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import React from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Mock localStorage — ErrorBoundary uses detectLanguage() which reads localStorage
@@ -47,7 +48,7 @@ function suppressError(fn: () => void) {
   }
 }
 
-function ThrowOnRender({ message }: { message?: string }) {
+function ThrowOnRender({ message }: { message?: string }): React.ReactNode {
   throw new Error(message ?? "Test error");
 }
 
