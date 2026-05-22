@@ -249,11 +249,11 @@ export function useWebSocket() {
         });
         // Increment unread for this DM if not currently viewing it.
         const state = useChatStore.getState();
-        const partner = m.from || m.username;
-        if (!(state.currentChat.type === "dm" && state.currentChat.username === partner)) {
+        const partner = m.username === state.username ? m.to : (m.from || m.username);
+        if (partner && m.username !== state.username && !(state.currentChat.type === "dm" && state.currentChat.username === partner)) {
           useChatStore.getState().incrementConversationUnread(`dm:${partner}`);
           playMessageSound();
-            notifyMessage(partner, m.content);
+          notifyMessage(partner, m.content);
         }
       }),
     );
@@ -626,6 +626,11 @@ export function useWebSocket() {
           if (done) {
             removeTypingUser(streamUser);
             streamAcc.current.delete(streamId);
+            // Remove the stream placeholder so only the persisted
+            // message card remains — otherwise the user sees two cards.
+            useChatStore.setState({
+              messages: useChatStore.getState().messages.filter((m) => m.id !== streamId),
+            });
           }
         }
       }),
