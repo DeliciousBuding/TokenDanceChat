@@ -107,6 +107,7 @@ export interface TranslationDict {
     delete: string;
     select: string;
     read: string;
+    readBy: string;
     sent: string;
     copied: string;
     deleteConfirm: string;
@@ -316,6 +317,7 @@ const zhCN: TranslationDict = {
     delete: "删除",
     select: "选择",
     read: "已读",
+    readBy: "已读用户",
     sent: "已发送",
     copied: "已复制",
     deleteConfirm: "确认删除这条消息？",
@@ -526,6 +528,7 @@ const enUS: TranslationDict = {
     delete: "Delete",
     select: "Select",
     read: "Read",
+    readBy: "Read by",
     sent: "Sent",
     copied: "Copied",
     deleteConfirm: "Delete message?",

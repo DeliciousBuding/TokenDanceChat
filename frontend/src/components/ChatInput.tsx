@@ -84,6 +84,40 @@ export function ChatInput({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onUploadRef = useRef(onUpload);
   onUploadRef.current = onUpload;
+
+  // Slide-to-cancel gesture
+  const [slideCancelOffset, setSlideCancelOffset] = useState(0);
+  const [slideCancelDragging, setSlideCancelDragging] = useState(false);
+  const slideCancelStartX = useRef(0);
+  const SLIDE_CANCEL_THRESHOLD = 60;
+
+  const handleCancelPointerDown = useCallback((e: React.PointerEvent) => {
+    slideCancelStartX.current = e.clientX;
+    setSlideCancelDragging(true);
+    setSlideCancelOffset(0);
+  }, []);
+
+  const handleCancelPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!slideCancelDragging) return;
+    const dx = slideCancelStartX.current - e.clientX;
+    setSlideCancelOffset(Math.max(0, dx));
+  }, [slideCancelDragging]);
+
+  const handleCancelPointerUp = useCallback(() => {
+    if (slideCancelOffset >= SLIDE_CANCEL_THRESHOLD) {
+      cancelRecording();
+    }
+    setSlideCancelDragging(false);
+    setSlideCancelOffset(0);
+  }, [slideCancelOffset]);
+
+  // Cleanup slide-cancel state when recording stops
+  useEffect(() => {
+    if (!isRecording) {
+      setSlideCancelDragging(false);
+      setSlideCancelOffset(0);
+    }
+  }, [isRecording]);
   const dragCounter = useRef(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
@@ -1017,28 +1051,80 @@ export function ChatInput({
 
       {/* Recording indicator (replaces toolbar and input area when recording) */}
       {isRecording ? (
-        <div className="recording-bar-enter flex items-center gap-3 px-4 py-3 transition-all duration-300 ease-out">
-          <div className="flex items-center gap-3 flex-1 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+        <div className="recording-bar-enter flex flex-col gap-2 px-4 py-3 transition-all duration-300 ease-out">
+          {/* Duration limit bar */}
+          <div className="recording-limit-bar">
+            <div
+              className="recording-limit-bar-fill"
+              style={{ width: `${Math.min((recordingTime / 300) * 100, 100)}%` }}
+            />
+          </div>
+
+          <div
+            className={cn(
+              "flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors duration-200",
+              slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD
+                ? "border-destructive/60 bg-destructive/15"
+                : "border-destructive/30 bg-destructive/5",
+            )}
+          >
             {/* Pulsing red dot */}
-            <span className="relative flex h-3 w-3">
+            <span className="relative flex h-3 w-3 flex-shrink-0">
               <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
             </span>
+
             {/* Recording time */}
-            <span className="text-sm font-mono text-destructive/80 tabular-nums">
-              {String(Math.floor(recordingTime / 60))}:{String(recordingTime % 60).padStart(2, '0')}
+            <span className="text-sm font-mono text-destructive/80 tabular-nums flex-shrink-0 min-w-[44px]">
+              {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:{String(recordingTime % 60).padStart(2, '0')}
             </span>
-            <span className="flex-1 text-xs text-muted-foreground truncate">
-              {t("input.recording")}
-            </span>
-            {/* Cancel button */}
-            <button
-              onClick={cancelRecording}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:bg-accent hover:text-destructive transition-colors"
-              aria-label="Cancel recording"
+
+            {/* Waveform visualizer */}
+            <div className="recording-waveform">
+              {[16, 24, 12, 20, 14].map((peak, i) => (
+                <div
+                  key={i}
+                  className="waveform-bar"
+                  style={{
+                    '--wv-peak': `${peak}px`,
+                    animationDelay: `${i * 0.12}s`,
+                  } as React.CSSProperties}
+                />
+              ))}
+            </div>
+
+            {/* Cancel button with slide-to-cancel gesture */}
+            <div
+              className={cn(
+                "slide-cancel-track relative flex-shrink-0",
+                slideCancelDragging && "slide-cancel-dragging",
+                slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD && "slide-cancel-threshold-reached",
+              )}
+              onPointerDown={handleCancelPointerDown}
+              onPointerMove={handleCancelPointerMove}
+              onPointerUp={handleCancelPointerUp}
+              onPointerCancel={handleCancelPointerUp}
             >
-              <X className="h-4 w-4" />
-            </button>
+              <button
+                onClick={() => {
+                  if (!slideCancelDragging) cancelRecording();
+                }}
+                className={cn(
+                  "flex h-10 w-10 items-center justify-center rounded-xl border transition-colors",
+                  slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD
+                    ? "border-destructive/50 bg-destructive/20 text-destructive"
+                    : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-destructive",
+                )}
+                style={slideCancelDragging ? { transform: `translateX(${-slideCancelOffset}px)` } : undefined}
+                aria-label="Cancel recording"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <span className="slide-cancel-hint">
+                {slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD ? "Release to cancel" : "← slide to cancel"}
+              </span>
+            </div>
+
             {/* Stop / Send button */}
             <button
               onClick={stopRecording}

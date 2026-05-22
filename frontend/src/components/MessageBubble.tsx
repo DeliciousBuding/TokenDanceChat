@@ -2,7 +2,7 @@ import { memo, useMemo, useCallback, useState, useRef, useEffect, lazy, Suspense
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, Check, Forward, Reply, Trash2 } from "lucide-react";
+import { Copy, Check, Forward, Reply, Trash2, Mic, Play, Pause } from "lucide-react";
 import { cn, formatTime, formatFullTime, avatarGradient, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
@@ -50,7 +50,7 @@ const isAudioUrl = (url: string): boolean => AUDIO_EXT_RE.test(url);
 /** Regex: detect image file extensions to skip link preview */
 const IMAGE_EXT_RE = /\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i;
 
-/** Markdown components with link sanitization and audio player for voice messages */
+/** Markdown components with link sanitization, audio player for voice messages, and message-link navigation */
 const safeMarkdownComponents = {
   a: ({ href, children, ...props }: ComponentPropsWithoutRef<'a'>) => {
     if (href && /^(javascript|data|vbscript):/i.test(href)) {
@@ -59,10 +59,35 @@ const safeMarkdownComponents = {
     if (href && isAudioUrl(href)) {
       return (
         <div className="flex items-center gap-2 my-1">
-          <audio controls src={href} className="h-8 max-w-[240px]">
-            <track kind="captions" />
-          </audio>
+          <Mic className="voice-mic-icon h-3.5 w-3.5" />
+          <VoiceMessagePlayer audioUrl={href} primaryColor="var(--primary)" />
         </div>
+      );
+    }
+    // Detect message links: href contains #msg-<id> fragment
+    const msgMatch = href?.match(/#msg-(.+)$/);
+    if (msgMatch) {
+      const targetId = msgMatch[1];
+      return (
+        <a
+          href={href}
+          onClick={(e: React.MouseEvent) => {
+            e.preventDefault();
+            window.dispatchEvent(
+              new CustomEvent("tdchat:scroll-to-message", { detail: { id: targetId } }),
+            );
+            const el = document.getElementById(`msg-${targetId}`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.classList.add("highlight-flash");
+              setTimeout(() => el.classList.remove("highlight-flash"), 2000);
+            }
+          }}
+          className="text-primary underline cursor-pointer"
+          {...props}
+        >
+          {children}
+        </a>
       );
     }
     return <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
@@ -71,9 +96,8 @@ const safeMarkdownComponents = {
     if (src && isAudioUrl(src)) {
       return (
         <div className="flex items-center gap-2 my-1">
-          <audio controls src={src} className="h-8 max-w-[240px]">
-            <track kind="captions" />
-          </audio>
+          <Mic className="voice-mic-icon h-3.5 w-3.5" />
+          <VoiceMessagePlayer audioUrl={src} primaryColor="var(--primary)" />
         </div>
       );
     }
@@ -133,6 +157,154 @@ const CodeBlock = memo(function CodeBlock({
       <pre className="!bg-muted !p-3 !m-0 overflow-x-auto text-[0.8125rem] leading-relaxed">
         <code className={`language-${language || ""}`}>{code}</code>
       </pre>
+    </div>
+  );
+});
+
+/** ─── Voice Message Player (Telegram-quality custom audio UI) ─── */
+
+/** Generate pseudo-random peak heights for waveform bars */
+const WAVEFORM_BARS = 25;
+const waveformPeaks: number[] = (() => {
+  const peaks: number[] = [];
+  for (let i = 0; i < WAVEFORM_BARS; i++) {
+    const t = Math.sin(i * 2.5 + 1.7) * 10000;
+    const raw = (t - Math.floor(t)) * 14 + 4;
+    peaks.push(Math.round(raw));
+  }
+  return peaks;
+})();
+
+function formatAudioTime(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+const VoiceMessagePlayer = memo(function VoiceMessagePlayer({
+  audioUrl,
+  primaryColor,
+}: {
+  audioUrl: string;
+  primaryColor: string;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const rafRef = useRef<number>(0);
+
+  const updateTime = useCallback(() => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+      rafRef.current = requestAnimationFrame(updateTime);
+    }
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const onLoaded = () => {
+      if (isFinite(audio.duration)) setDuration(audio.duration);
+    };
+    const onPlay = () => {
+      setPlaying(true);
+      rafRef.current = requestAnimationFrame(updateTime);
+    };
+    const onPause = () => {
+      setPlaying(false);
+      cancelAnimationFrame(rafRef.current);
+    };
+    const onEnded = () => {
+      setPlaying(false);
+      setCurrentTime(0);
+      cancelAnimationFrame(rafRef.current);
+    };
+
+    audio.addEventListener("loadedmetadata", onLoaded);
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    audio.addEventListener("ended", onEnded);
+
+    return () => {
+      audio.removeEventListener("loadedmetadata", onLoaded);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("ended", onEnded);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [updateTime]);
+
+  const togglePlay = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      audio.play().catch(() => { /* autoplay blocked */ });
+    } else {
+      audio.pause();
+    }
+  }, []);
+
+  const handleWaveformClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const audio = audioRef.current;
+      if (!audio || !isFinite(duration)) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      audio.currentTime = ratio * duration;
+      setCurrentTime(ratio * duration);
+    },
+    [duration],
+  );
+
+  return (
+    <div className="custom-audio-player">
+      <audio ref={audioRef} src={audioUrl} preload="metadata">
+        <track kind="captions" />
+      </audio>
+
+      <button
+        onClick={togglePlay}
+        className="play-pause-btn"
+        style={{ backgroundColor: primaryColor }}
+        aria-label={playing ? "Pause voice message" : "Play voice message"}
+      >
+        {playing ? (
+          <Pause className="h-4 w-4 text-white" fill="white" />
+        ) : (
+          <Play className="h-4 w-4 text-white ml-0.5" fill="white" />
+        )}
+      </button>
+
+      <div
+        className={cn("waveform-container", playing && "is-playing")}
+        onClick={handleWaveformClick}
+        role="slider"
+        aria-label="Audio seek bar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={duration > 0 ? Math.round((currentTime / duration) * 100) : 0}
+      >
+        {waveformPeaks.map((peak, i) => (
+          <div
+            key={i}
+            className="audio-waveform-bar"
+            style={{
+              "--aw-base": "4px",
+              "--aw-peak": `${peak}px`,
+              animationDelay: `${i * 0.06}s`,
+            } as React.CSSProperties}
+          />
+        ))}
+      </div>
+
+      <span className="time-display">
+        <span className="current-time">{formatAudioTime(currentTime)}</span>
+        <span className="separator"> / </span>
+        <span className="total-time">{formatAudioTime(duration)}</span>
+      </span>
     </div>
   );
 });
@@ -353,6 +525,12 @@ export const MessageBubble = memo(function MessageBubble({
   const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
   const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
 
+  // Detect if this message is a voice message (audio-only)
+  const isVoiceMessage = useMemo(() => {
+    if (isDeleted) return false;
+    return AUDIO_EXT_RE.test(message.content);
+  }, [message.content, isDeleted]);
+
   const handleAvatarClick = useCallback(() => {
     if (selectMode) return;
     setSelectedProfileUser(message.username);
@@ -377,16 +555,31 @@ export const MessageBubble = memo(function MessageBubble({
     }
 
     // Detect audio URLs for voice messages
-    const audioMatch = content.match(/!?\[(?:audio|voice)\]\(([^)]+)\)/);
-    const audioUrl = audioMatch?.[1] || null;
-    const isAudio = audioUrl && AUDIO_EXT_RE.test(audioUrl);
+    // Match patterns: ![voice](url), ![audio](url), [filename.webm](url)
+    const audioMatch = content.match(
+      /!?\[([^\]]*)\]\(([^)]+)\)/,
+    );
+    const audioUrl = audioMatch?.[2] || null;
+    const isAudioOnly =
+      audioUrl &&
+      AUDIO_EXT_RE.test(audioUrl) &&
+      content.trim() === audioMatch?.[0];
 
-    if (isAudio && audioUrl) {
+    if (isAudioOnly && audioUrl) {
+      return (
+        <div className="flex items-center gap-2">
+          <Mic className="voice-mic-icon h-4 w-4" />
+          <VoiceMessagePlayer audioUrl={audioUrl} primaryColor={isOwn ? bubbleBg : "var(--primary)"} />
+        </div>
+      );
+    }
+
+    // Legacy: bare ![voice] or ![audio] markdown (non-link-only)
+    if (audioUrl && AUDIO_EXT_RE.test(audioUrl) && content.trim() !== audioMatch?.[0]) {
       return (
         <div className="flex items-center gap-2 my-1">
-          <audio controls src={audioUrl} className="h-8 max-w-[240px] audio-player-compact">
-            <track kind="captions" />
-          </audio>
+          <Mic className="voice-mic-icon h-4 w-4" />
+          <VoiceMessagePlayer audioUrl={audioUrl} primaryColor="var(--primary)" />
         </div>
       );
     }
@@ -654,7 +847,10 @@ export const MessageBubble = memo(function MessageBubble({
 
       <div
         className={cn(
-          "flex min-w-0 max-w-[min(90%,42rem)] sm:max-w-[min(75%,42rem)] flex-col",
+          "flex min-w-0 flex-col",
+          isVoiceMessage
+            ? "max-w-[280px]"
+            : "max-w-[min(90%,42rem)] sm:max-w-[min(75%,42rem)]",
           isOwn ? "items-end" : "items-start",
         )}
       >
@@ -776,7 +972,8 @@ export const MessageBubble = memo(function MessageBubble({
 
         <div
           className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed relative",
+            "rounded-2xl text-sm leading-relaxed relative",
+            isVoiceMessage ? "px-2 py-2" : "px-4 py-2.5",
             isOwn
               ? "rounded-br-md"
               : "rounded-bl-md bg-secondary border border-border",
@@ -1016,21 +1213,26 @@ export const MessageBubble = memo(function MessageBubble({
           <div className="mt-1 flex justify-end items-center gap-1">
             {/* Delivery status icons */}
             {message.read_by && message.read_by.length > 0 ? (
-              <svg
-                width="16"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-blue-400/70"
-                aria-label={t("message.read")}
+              <span
+                className="inline-flex"
+                title={`${t("message.readBy")}: ${message.read_by.join(", ")}`}
               >
-                <polyline points="20 6 9 17 4 12" />
-                <polyline points="22 6 13 17 8 12" />
-              </svg>
+                <svg
+                  width="16"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-blue-400/70"
+                  aria-label={t("message.read")}
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                  <polyline points="22 6 13 17 8 12" />
+                </svg>
+              </span>
             ) : (
               <svg
                 width="14"
