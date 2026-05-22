@@ -569,15 +569,15 @@ export function useWebSocket() {
         const { username: streamUser, content, done } = msg as import("@/lib/api").WSStreamEvent;
         if (!streamUser || streamUser === useChatStore.getState().username) return;
         const streamId = `stream-${streamUser}`;
-        const state = useChatStore.getState();
-        const existing = state.messages.find((m) => m.id === streamId);
 
         let acc = streamAcc.current.get(streamId);
         if (!acc) {
           // New stream: clear any stale message from previous stream.
+          const freshState = useChatStore.getState();
+          const existing = freshState.messages.find((m) => m.id === streamId);
           if (existing) {
             useChatStore.setState({
-              messages: state.messages.filter((m) => m.id !== streamId),
+              messages: freshState.messages.filter((m) => m.id !== streamId),
             });
           }
           acc = { content: "", lastFlush: 0 };
@@ -589,10 +589,12 @@ export function useWebSocket() {
         // Flush to store every 80ms or when done (avoids O(n^2) string concat and excessive re-renders).
         if (done || now - acc.lastFlush > 80) {
           acc.lastFlush = now;
+          const freshState = useChatStore.getState();
+          const existing = freshState.messages.find((m) => m.id === streamId);
           if (existing) {
             const updated = { ...existing, content: acc.content };
             useChatStore.setState({
-              messages: state.messages.map((m) => (m.id === streamId ? updated : m)),
+              messages: freshState.messages.map((m) => (m.id === streamId ? updated : m)),
             });
           } else if (acc.content) {
             addMessage({
