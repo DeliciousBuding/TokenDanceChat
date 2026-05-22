@@ -180,6 +180,7 @@ export function Sidebar({
 
   return (
     <aside
+      aria-label={t("chat.roomName")}
       className={cn(
         "flex h-full flex-col border-r border-border bg-card",
         collapsed ? "hidden" : "flex",

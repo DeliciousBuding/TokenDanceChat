@@ -365,6 +365,15 @@ func (c *Client) handleChatMessage(msg Message) {
 	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID, "", "")
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "failed to save message, please try again",
+			ErrorCode: "SERVER_ERROR",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
 		return
 	}
 
@@ -857,6 +866,15 @@ func (c *Client) handleGroupMessage(msg Message) {
 	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", "", "", groupName)
 	if err != nil {
 		log.Printf("failed to insert group message: %v", err)
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "failed to save group message, please try again",
+			ErrorCode: "SERVER_ERROR",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
 		return
 	}
 
@@ -953,6 +971,15 @@ func (c *Client) handleDMMessage(msg Message) {
 	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID, c.currentRoomID, msg.To, "")
 	if err != nil {
 		log.Printf("failed to insert DM message: %v", err)
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "failed to send DM, please try again",
+			ErrorCode: "SERVER_ERROR",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
 		return
 	}
 
@@ -1254,6 +1281,15 @@ func (c *Client) handleForward(msg Message) {
 	storedMsg, err := c.hub.store.InsertMessage(c.username, forwardContent, messageID, c.currentRoomID, "", "")
 	if err != nil {
 		log.Printf("failed to insert forwarded message: %v", err)
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "failed to forward message, please try again",
+			ErrorCode: "SERVER_ERROR",
+		})
+		select {
+		case c.send <- errMsg:
+		default:
+		}
 		return
 	}
 

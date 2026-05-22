@@ -61,6 +61,9 @@ type Store interface {
 
 	// Message pinning
 	PinMessage(roomID, messageID, pinnedBy string) error
+
+	// Ping verifies the database connection is reachable.
+	Ping() error
 	UnpinMessage(roomID, messageID string) error
 	GetPinnedMessages(roomID string) []StoredMessage
 
@@ -706,7 +709,7 @@ func (h *Hub) SendAssistantMessage(username, content, roomID string) {
 		return
 	}
 
-	broadcastMsg, _ := json.Marshal(Message{
+	broadcastMsg, err := json.Marshal(Message{
 		Type:      "message",
 		ID:        storedMsg.ID,
 		Username:  storedMsg.Username,
@@ -714,6 +717,10 @@ func (h *Hub) SendAssistantMessage(username, content, roomID string) {
 		Timestamp: storedMsg.Timestamp,
 		RoomID:    roomID,
 	})
+	if err != nil {
+		log.Printf("marshal assistant message error: %v", err)
+		return
+	}
 
 	select {
 	case h.broadcast <- broadcastMsg:
@@ -733,7 +740,7 @@ func (h *Hub) SendAssistantMessageToRoom(username, content, roomID string) {
 		return
 	}
 
-	broadcastMsg, _ := json.Marshal(Message{
+	broadcastMsg, err := json.Marshal(Message{
 		Type:      "message",
 		ID:        storedMsg.ID,
 		Username:  storedMsg.Username,
@@ -741,6 +748,10 @@ func (h *Hub) SendAssistantMessageToRoom(username, content, roomID string) {
 		Timestamp: storedMsg.Timestamp,
 		RoomID:    roomID,
 	})
+	if err != nil {
+		log.Printf("marshal assistant message error: %v", err)
+		return
+	}
 
 	h.mu.RLock()
 	for c := range h.clients {

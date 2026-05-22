@@ -186,6 +186,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 
 	var srv http.Handler = mux
 	srv = handler.LoggingMiddleware(srv)
+	srv = handler.RateLimitMiddleware(srv)
 	srv = handler.SecurityHeadersMiddleware(srv)
 	srv = handler.CORSMiddleware(srv)
 
