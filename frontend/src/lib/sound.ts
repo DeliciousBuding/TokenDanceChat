@@ -8,7 +8,36 @@ function getCtx(): AudioContext {
   return audioCtx;
 }
 
+// ─── Global sound toggle ───
+
+const SOUND_STORAGE_KEY = "tokendance:soundEnabled";
+
+export function isSoundEnabled(): boolean {
+  try {
+    const stored = localStorage.getItem(SOUND_STORAGE_KEY);
+    if (stored === "false") return false;
+    return true; // default on
+  } catch {
+    return true;
+  }
+}
+
+export function setSoundEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem(SOUND_STORAGE_KEY, String(enabled));
+  } catch {
+    // ignore
+  }
+}
+
+function shouldPlay(): boolean {
+  return isSoundEnabled();
+}
+
+// ─── Sound effects ───
+
 export function playMessageSound(): void {
+  if (!shouldPlay()) return;
   try {
     const ctx = getCtx();
     const osc = ctx.createOscillator();
@@ -29,6 +58,7 @@ export function playMessageSound(): void {
 }
 
 export function playMentionSound(): void {
+  if (!shouldPlay()) return;
   try {
     const ctx = getCtx();
     const osc = ctx.createOscillator();
@@ -50,6 +80,7 @@ export function playMentionSound(): void {
 }
 
 export function playOnlineSound(): void {
+  if (!shouldPlay()) return;
   try {
     const ctx = getCtx();
     const osc = ctx.createOscillator();
@@ -67,6 +98,7 @@ export function playOnlineSound(): void {
 }
 
 export function playOfflineSound(): void {
+  if (!shouldPlay()) return;
   try {
     const ctx = getCtx();
     const osc = ctx.createOscillator();
@@ -84,6 +116,7 @@ export function playOfflineSound(): void {
 }
 
 export function playSentSound(): void {
+  if (!shouldPlay()) return;
   try {
     const ctx = getCtx();
     const osc = ctx.createOscillator();
@@ -100,6 +133,7 @@ export function playSentSound(): void {
 }
 
 export function playReactionSound(): void {
+  if (!shouldPlay()) return;
   try {
     const ctx = getCtx();
     const osc = ctx.createOscillator();

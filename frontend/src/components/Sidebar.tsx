@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useState, useCallback } from "react";
 import {
   Users,
   MessageCircle,
@@ -7,12 +7,15 @@ import {
   Hash,
   User,
   Plus,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
 import { cn, avatarGradient, formatLastSeen } from "@/lib/utils";
 import { assistants, modelCatalog } from "@/lib/assistantRegistry";
 import { AssistantIcon } from "@/components/AssistantIcon";
+import { isSoundEnabled, setSoundEnabled } from "@/lib/sound";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -152,6 +155,14 @@ export function Sidebar({
     unreadByConversation,
     userStatusList,
   } = useChatStore();
+
+  // Sound toggle state
+  const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
+  const toggleSound = useCallback(() => {
+    const next = !soundOn;
+    setSoundOn(next);
+    setSoundEnabled(next);
+  }, [soundOn]);
 
   // Separate current user from others for visual grouping
   const otherUsers = onlineUsers.filter((u) => u !== username);
@@ -523,6 +534,18 @@ export function Sidebar({
             {t("sidebar.connectedAs")}{" "}
             <span className="font-medium text-foreground/70">{username}</span>
           </span>
+        </div>
+        {/* Sound toggle */}
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground/50">{t("settings.sound")}</span>
+          <button
+            onClick={toggleSound}
+            className="flex items-center gap-1 rounded-md p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
+            aria-label={soundOn ? t("settings.soundOn") : t("settings.soundOff")}
+            title={soundOn ? t("settings.soundOn") : t("settings.soundOff")}
+          >
+            {soundOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+          </button>
         </div>
       </div>
     </aside>
