@@ -491,6 +491,26 @@ export function ChatInput({
         e.preventDefault();
         handleSend();
       }
+
+      // ↑ key with empty input → edit last sent message (Telegram-style).
+      if (e.key === "ArrowUp" && !e.shiftKey && !content && !mentionActive) {
+        e.preventDefault();
+        const msgs = useChatStore.getState().messages;
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i].username === username && !msgs[i].deleted) {
+            setContent(msgs[i].content);
+            // Place cursor at end after React re-render.
+            requestAnimationFrame(() => {
+              const ta = textareaRef.current;
+              if (ta) {
+                ta.focus();
+                ta.setSelectionRange(ta.value.length, ta.value.length);
+              }
+            });
+            break;
+          }
+        }
+      }
     },
     [
       handleSend,
@@ -499,6 +519,8 @@ export function ChatInput({
       mentionFiltered,
       mentionIndex,
       insertMention,
+      content,
+      username,
     ],
   );
 
