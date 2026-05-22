@@ -5,6 +5,7 @@ import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI, type ChatMessage, type TypingContext } from "@/lib/api";
 import { playSentSound } from "@/lib/sound";
+import { mentionableAssistants } from "@/lib/assistantRegistry";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
@@ -15,11 +16,6 @@ interface ChatInputProps {
 
 const INPUT_MIN_HEIGHT = 48;
 const INPUT_MAX_HEIGHT = 160;
-const ASSISTANTS = [
-  { name: "TokenBot", label: "Bot", aliases: ["bot", "tokenbot"] },
-  { name: "PicoClaw", label: "Agent", aliases: ["claw", "picoclaw"] },
-];
-
 export function ChatInput({
   onSend,
   disabled,
@@ -115,8 +111,8 @@ export function ChatInput({
     const { query, startPos } = mentionQuery;
     if (startPos < 0) return [];
     const lower = query.toLowerCase();
-    const assistantNames = new Set(ASSISTANTS.map((assistant) => assistant.name));
-    const assistants = ASSISTANTS.filter((assistant) => {
+    const assistantNames = new Set(mentionableAssistants.map((assistant) => assistant.name));
+    const assistants = mentionableAssistants.filter((assistant) => {
       if (lower === "") return true;
       return (
         assistant.name.toLowerCase().includes(lower) ||
@@ -825,9 +821,9 @@ export function ChatInput({
                         {user.charAt(0).toUpperCase()}
                       </span>
                       <span className="truncate">{user}</span>
-                      {ASSISTANTS.some((assistant) => assistant.name === user) && (
+                      {mentionableAssistants.some((assistant) => assistant.name === user) && (
                         <span className="ml-auto rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
-                          {ASSISTANTS.find((assistant) => assistant.name === user)?.label}
+                          {mentionableAssistants.find((assistant) => assistant.name === user)?.label}
                         </span>
                       )}
                       {user === username && (

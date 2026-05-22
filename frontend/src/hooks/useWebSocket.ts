@@ -51,6 +51,9 @@ export function useWebSocket() {
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
+  const streamAcc = useRef<Map<string, { content: string; lastFlush: number }>>(
+    new Map(),
+  );
   const prevStatusRef = useRef<Record<string, boolean>>({});
   const {
     setConnected,
@@ -580,7 +583,6 @@ export function useWebSocket() {
     );
 
     // Streaming bot response — accumulate and throttle chunks.
-    const streamAcc = useRef<Map<string, { content: string; lastFlush: number }>>(new Map());
     unsubs.push(
       chatAPI.on("stream", (msg: WSMessage) => {
         const { username: streamUser, content, done } = msg as import("@/lib/api").WSStreamEvent;
