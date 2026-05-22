@@ -21,6 +21,15 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'markdown': ['react-markdown', 'remark-gfm', 'remark-parse'],
+          'icons': ['lucide-react'],
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

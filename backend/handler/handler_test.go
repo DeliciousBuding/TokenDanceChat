@@ -105,6 +105,10 @@ func (m *mockStore) GetBlockedUsers(username string) []string                   
 func (m *mockStore) PinMessage(roomID, messageID, pinnedBy string) error           { return nil }
 func (m *mockStore) UnpinMessage(roomID, messageID string) error                   { return nil }
 func (m *mockStore) GetPinnedMessages(roomID string) []hub.StoredMessage               { return nil }
+func (m *mockStore) ArchiveConversation(username, key string) error { return nil }
+func (m *mockStore) UnarchiveConversation(username, key string) error { return nil }
+func (m *mockStore) ListArchivedConversations(username string) []string { return nil }
+func (m *mockStore) IsConversationArchived(username, key string) bool { return false }
 func (m *mockStore) Ping() error                                                       { return nil }
 func (m *mockStore) PinConversation(username, key string) error                       { return nil }
 func (m *mockStore) UnpinConversation(username, key string) error                     { return nil }
@@ -551,6 +555,10 @@ type mockStoreDBError struct {
 	mockStore
 }
 
+func (m *mockStoreDBError) ArchiveConversation(username, key string) error { return nil }
+func (m *mockStoreDBError) UnarchiveConversation(username, key string) error { return nil }
+func (m *mockStoreDBError) ListArchivedConversations(username string) []string { return nil }
+func (m *mockStoreDBError) IsConversationArchived(username, key string) bool { return false }
 func (m *mockStoreDBError) Ping() error {
 	return errors.New("database connection lost")
 }

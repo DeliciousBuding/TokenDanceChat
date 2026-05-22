@@ -159,7 +159,7 @@ export function SearchBar({ currentRoomID }: SearchBarProps) {
                   {r.snippet
                     ? parseSnippetParts(r.snippet).map((part, j) =>
                         part.highlight
-                          ? <mark key={j} className="bg-[oklch(71.2%_0.194_13.428_/_0.2)] text-foreground/90 rounded-sm px-0.5">{part.text}</mark>
+                          ? <mark key={j} className="bg-primary/20 text-foreground/90 rounded-sm px-0.5">{part.text}</mark>
                           : <span key={j}>{part.text}</span>
                       )
                     : r.content.substring(0, 120)

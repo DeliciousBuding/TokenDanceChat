@@ -1,11 +1,10 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from "react";
 import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
 import { GroupCreateModal } from "./GroupCreateModal";
 import { ForwardModal } from "./ForwardModal";
-import { ImageLightbox } from "./ImageLightbox";
 import { ThemeToggle } from "./ThemeToggle";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { SearchBar } from "./SearchBar";
@@ -16,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 import type { Language } from "@/i18n/translations";
+
+const ImageLightbox = lazy(() => import("@/components/ImageLightbox").then((m) => ({ default: m.ImageLightbox })));
 
 export function ChatLayout() {
   const { t, lang, setLang } = useTranslation();
@@ -554,10 +555,12 @@ export function ChatLayout() {
 
       {/* Image lightbox */}
       {lightboxImage && (
-        <ImageLightbox
-          imageUrl={lightboxImage}
-          onClose={() => useChatStore.getState().setLightboxImage(null)}
-        />
+        <Suspense fallback={null}>
+          <ImageLightbox
+            imageUrl={lightboxImage}
+            onClose={() => useChatStore.getState().setLightboxImage(null)}
+          />
+        </Suspense>
       )}
     </div>
   );

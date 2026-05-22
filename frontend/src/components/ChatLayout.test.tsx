@@ -23,6 +23,11 @@ vi.mock("@/hooks/useWebSocket", () => ({
   }),
 }));
 
+vi.mock("@/lib/soundToggle", () => ({
+  isSoundEnabled: vi.fn(() => true),
+  setSoundEnabled: vi.fn(),
+}));
+
 vi.mock("@/lib/sound", () => ({
   playSentSound: vi.fn(),
   playMessageSound: vi.fn(),

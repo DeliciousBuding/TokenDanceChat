@@ -1,4 +1,4 @@
-import { memo, useMemo, useCallback, useState, useRef, useEffect } from "react";
+import { memo, useMemo, useCallback, useState, useRef, useEffect, lazy, Suspense } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -7,12 +7,12 @@ import { cn, formatTime, formatFullTime, avatarGradient, usernameHue } from "@/l
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI } from "@/lib/api";
-import { playReactionSound } from "@/lib/sound";
-import { EmojiPicker } from "@/components/EmojiPicker";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MessageContextMenu } from "@/components/MessageContextMenu";
 import { useSwipeableMessage } from "@/hooks/useTouchGestures";
 import type { ChatMessage, LinkPreviewData } from "@/lib/api";
+
+const EmojiPicker = lazy(() => import("@/components/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -232,7 +232,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   const handleAddReaction = useCallback(
     (emoji: string) => {
-      playReactionSound();
+      import("@/lib/sound").then((m) => m.playReactionSound());
       chatAPI.sendReaction(message.id, emoji);
       setRecentlyToggledReaction(emoji);
       setTimeout(() => setRecentlyToggledReaction(null), 250);
@@ -275,14 +275,12 @@ export const MessageBubble = memo(function MessageBubble({
     longPressTriggeredRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
       longPressTriggeredRef.current = true;
-      // Show context menu at pointer position (not enter select mode directly)
-      setContextMenu({
-        visible: true,
-        x: contextMenuPosRef.current.x,
-        y: contextMenuPosRef.current.y,
-      });
+      // Long press → enter drag-select mode (Telegram-style).
+      if (onLongPress) {
+        onLongPress(message.id);
+      }
     }, 500);
-  }, [selectMode, isDeleted]);
+  }, [selectMode, isDeleted, onLongPress, message.id]);
 
   const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -593,9 +591,9 @@ export const MessageBubble = memo(function MessageBubble({
             aria-label={isSelected ? "Deselect message" : "Select message"}
           >
             {isSelected ? (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" fill="oklch(71.2% 0.194 13.428)" stroke="oklch(71.2% 0.194 13.428)" strokeWidth="2" />
-                <polyline points="8 12 11 15 16 9" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="text-primary">
+                <circle cx="12" cy="12" r="10" fill="currentColor" stroke="currentColor" strokeWidth="2" />
+                <polyline points="8 12 11 15 16 9" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             ) : (
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -1006,10 +1004,12 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         {showEmojiPicker && (
-          <EmojiPicker
-            onSelect={(emoji) => handleAddReaction(emoji)}
-            onClose={() => setShowEmojiPicker(false)}
-          />
+          <Suspense fallback={null}>
+            <EmojiPicker
+              onSelect={(emoji: string) => handleAddReaction(emoji)}
+              onClose={() => setShowEmojiPicker(false)}
+            />
+          </Suspense>
         )}
 
         {isOwn && (
