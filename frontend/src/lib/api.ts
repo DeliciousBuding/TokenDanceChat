@@ -519,6 +519,14 @@ class ChatAPI {
     this.send({ type: "unpin_conversation", key });
   }
 
+  sendMuteConversation(key: string): void {
+    this.send({ type: "mute_conversation", key });
+  }
+
+  sendUnmuteConversation(key: string): void {
+    this.send({ type: "unmute_conversation", key });
+  }
+
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
     try {
       const resp = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);

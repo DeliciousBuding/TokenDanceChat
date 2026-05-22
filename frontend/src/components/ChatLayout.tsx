@@ -372,14 +372,14 @@ export function ChatLayout() {
 
         {/* Connection lost / reconnecting banner */}
         {!connected && (
-          <div className="border-b border-[hsl(40,80%,45%)] bg-[hsl(40,80%,45%/0.12)] px-6 py-2 flex items-center gap-3 text-xs animate-pulse">
+          <div className="border-b border-warning/50 bg-warning/10 px-6 py-2 flex items-center gap-3 text-xs animate-pulse">
             <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-[hsl(40,80%,50%)]" />
-              <span className="text-[hsl(40,80%,70%)] font-medium">{t("system.connectionLost")}</span>
+              <span className="flex h-2 w-2 rounded-full bg-warning" />
+              <span className="text-warning-foreground font-medium">{t("system.connectionLost")}</span>
             </div>
             <button
               onClick={() => window.location.reload()}
-              className="ml-auto rounded-md px-2 py-0.5 text-[10px] text-[hsl(40,80%,60%)] hover:text-[hsl(40,80%,80%)] hover:bg-[hsl(40,80%,45%/0.2)] transition-colors"
+              className="ml-auto rounded-md px-2 py-0.5 text-[10px] text-warning hover:text-warning-foreground hover:bg-warning/20 transition-colors"
             >
               {t("error.reload")}
             </button>
@@ -418,7 +418,7 @@ export function ChatLayout() {
 
         {/* Group invite notifications */}
         {pendingGroupInvites.length > 0 && (
-          <div className="border-b border-[hsl(220,2.5%,25%)] bg-[hsl(220,40%,45%/0.06)] px-6 py-2 space-y-1">
+          <div className="border-b border-border bg-accent/30 px-6 py-2 space-y-1">
             {pendingGroupInvites.map((inv) => (
               <div
                 key={inv.group}
@@ -454,8 +454,8 @@ export function ChatLayout() {
 
         {/* Mention notification toast */}
         {latestMention && (
-          <div className="border-b border-[hsl(20,80%,45%)] bg-[hsl(20,80%,45%/0.08)] px-6 py-2 flex items-center gap-3 text-xs animate-slide-up">
-            <AtSign className="h-3.5 w-3.5 text-[hsl(20,80%,55%)] flex-shrink-0" />
+          <div className="border-b border-mention/50 bg-mention/10 px-6 py-2 flex items-center gap-3 text-xs animate-slide-up">
+            <AtSign className="h-3.5 w-3.5 text-mention flex-shrink-0" />
             <span className="text-foreground/80 flex-1 truncate">
               <span className="font-medium">{latestMention.from}</span> {t("friend.mentionedYou")}{latestMention.group ? ` in ${latestMention.group}` : ""}:{" "}
               <span className="text-muted-foreground/60">{latestMention.content}</span>
@@ -477,7 +477,7 @@ export function ChatLayout() {
                   );
                 }
               }}
-              className="rounded-md px-2 py-0.5 text-[10px] font-medium text-[hsl(20,80%,55%)] hover:bg-[hsl(20,80%,45%/0.15)] flex-shrink-0"
+              className="rounded-md px-2 py-0.5 text-[10px] font-medium text-mention hover:bg-mention/15 flex-shrink-0"
             >
               {t("friend.view")}
             </button>
@@ -493,7 +493,7 @@ export function ChatLayout() {
 
         {/* Pinned messages banner */}
         {pinnedMessages.length > 0 && currentChat.type === "public" && (
-          <div className="border-b border-[hsl(220,2.5%,25%)] bg-[hsl(220,40%,45%/0.04)] px-6 py-1.5 flex items-center gap-2 overflow-x-auto scrollbar-thin">
+          <div className="border-b border-border bg-accent/20 px-6 py-1.5 flex items-center gap-2 overflow-x-auto scrollbar-thin">
             <Pin className="h-3 w-3 text-muted-foreground/50 flex-shrink-0" />
             {pinnedMessages.map((pm) => (
               <button

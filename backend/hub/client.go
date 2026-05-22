@@ -169,6 +169,10 @@ func (c *Client) ReadPump() {
 			c.handlePinConversation(msg)
 		case "unpin_conversation":
 			c.handleUnpinConversation(msg)
+		case "mute_conversation":
+			c.handleMuteConversation(msg)
+		case "unmute_conversation":
+			c.handleUnmuteConversation(msg)
 		case "load_history":
 			c.handleLoadHistory(msg)
 		default:
@@ -269,6 +273,17 @@ func (c *Client) handleJoin(msg Message) {
 	})
 	select {
 	case c.send <- pinnedPayload:
+	default:
+	}
+
+	// Send muted conversations list.
+	mutedKeys := c.hub.ListMutedConversations(c.username)
+	mutedPayload, _ := json.Marshal(Message{
+		Type: "muted_conversations",
+		Keys: mutedKeys,
+	})
+	select {
+	case c.send <- mutedPayload:
 	default:
 	}
 
@@ -678,8 +693,22 @@ func assistantMentionTarget(content, botName, agentName string) assistantMention
 		}
 	}
 	if !targets.Agent && agentName != "" {
-		// PicoClaw also responds to questions at 50% rate (independent coin flip)
-		if strings.Contains(content, "?") || strings.Contains(content, "？") {
+		// PicoClaw keyword triggers — respond to task/agent-related intent
+		lower := strings.ToLower(content)
+		for _, kw := range []string{
+			"agent", "claw", "picoclaw", "pico",
+			"task", "workflow", "工作流", "任务",
+			"分析", "analyze", "执行", "execute", "帮我", "help me",
+			"总结", "summarize", "翻译", "translate", "搜索", "search",
+			"生成", "generate", "写", "write", "代码", "code",
+		} {
+			if strings.Contains(lower, kw) {
+				targets.Agent = true
+				break
+			}
+		}
+		// Question trigger — 50% chance (independent coin flip)
+		if !targets.Agent && (strings.Contains(content, "?") || strings.Contains(content, "？")) {
 			if shouldTrigger(50) {
 				targets.Agent = true
 			}
@@ -1455,6 +1484,50 @@ func (c *Client) handleUnpinConversation(msg Message) {
 		Keys: pinnedKeys,
 	})
 	c.hub.SendToAllSessions(c.username, pinnedPayload)
+}
+
+// handleMuteConversation mutes a conversation for the current user.
+func (c *Client) handleMuteConversation(msg Message) {
+	if c.username == "" {
+		return
+	}
+	key := msg.Key
+	if key == "" {
+		return
+	}
+	if err := c.hub.MuteConversation(c.username, key); err != nil {
+		log.Printf("mute_conversation error: %v", err)
+		return
+	}
+	// Send updated list to all sessions of this user.
+	mutedKeys := c.hub.ListMutedConversations(c.username)
+	mutedPayload, _ := json.Marshal(Message{
+		Type: "muted_conversations",
+		Keys: mutedKeys,
+	})
+	c.hub.SendToAllSessions(c.username, mutedPayload)
+}
+
+// handleUnmuteConversation unmutes a conversation for the current user.
+func (c *Client) handleUnmuteConversation(msg Message) {
+	if c.username == "" {
+		return
+	}
+	key := msg.Key
+	if key == "" {
+		return
+	}
+	if err := c.hub.UnmuteConversation(c.username, key); err != nil {
+		log.Printf("unmute_conversation error: %v", err)
+		return
+	}
+	// Send updated list to all sessions of this user.
+	mutedKeys := c.hub.ListMutedConversations(c.username)
+	mutedPayload, _ := json.Marshal(Message{
+		Type: "muted_conversations",
+		Keys: mutedKeys,
+	})
+	c.hub.SendToAllSessions(c.username, mutedPayload)
 }
 
 // handleLoadHistory sends older messages to the requesting client for pagination.

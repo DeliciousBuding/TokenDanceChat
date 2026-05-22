@@ -103,6 +103,10 @@ func (m *mockStore) Ping() error                                                
 func (m *mockStore) PinConversation(username, key string) error                       { return nil }
 func (m *mockStore) UnpinConversation(username, key string) error                     { return nil }
 func (m *mockStore) ListPinnedConversations(username string) []string                 { return nil }
+func (m *mockStore) MuteConversation(username, key string) error                      { return nil }
+func (m *mockStore) UnmuteConversation(username, key string) error                    { return nil }
+func (m *mockStore) ListMutedConversations(username string) []string                  { return nil }
+func (m *mockStore) IsConversationMuted(username, key string) bool                    { return false }
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}

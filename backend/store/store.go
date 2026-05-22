@@ -128,6 +128,12 @@ func (s *Store) migrate() error {
 			key TEXT NOT NULL,
 			PRIMARY KEY (username, key)
 		);
+
+		CREATE TABLE IF NOT EXISTS muted_conversations (
+			username TEXT NOT NULL,
+			key TEXT NOT NULL,
+			PRIMARY KEY (username, key)
+		);
 	`
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -964,4 +970,55 @@ func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
 			keys = []string{}
 		}
 		return keys
+	}
+
+	// --- Conversation muting ---
+
+	func (s *Store) MuteConversation(username, key string) error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		_, err := s.db.Exec("INSERT OR IGNORE INTO muted_conversations (username, key) VALUES (?, ?)", username, key)
+		return err
+	}
+
+	func (s *Store) UnmuteConversation(username, key string) error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		_, err := s.db.Exec("DELETE FROM muted_conversations WHERE username = ? AND key = ?", username, key)
+		return err
+	}
+
+	func (s *Store) ListMutedConversations(username string) []string {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		rows, err := s.db.Query("SELECT key FROM muted_conversations WHERE username = ? ORDER BY rowid", username)
+		if err != nil {
+			return nil
+		}
+		defer rows.Close()
+		var keys []string
+		for rows.Next() {
+			var k string
+			if err := rows.Scan(&k); err == nil {
+				keys = append(keys, k)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			log.Printf("store: rows iteration error: %v", err)
+		}
+		if keys == nil {
+			keys = []string{}
+		}
+		return keys
+	}
+
+	func (s *Store) IsConversationMuted(username, key string) bool {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		var count int
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM muted_conversations WHERE username = ? AND key = ?", username, key).Scan(&count); err != nil {
+			log.Printf("store: IsConversationMuted error: %v", err)
+			return false
+		}
+		return count > 0
 	}
