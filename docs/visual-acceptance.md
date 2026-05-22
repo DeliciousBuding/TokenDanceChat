@@ -18,7 +18,7 @@ Every meaningful UI polish increment should capture real browser screenshots bef
 | 1440x900 | light | Header density, sidebar width, visible message count, no horizontal toolbar overflow. |
 | 1440x900 | dark | Contrast and spacing remain usable without becoming a black slab. |
 | 768x1024 | light | Tablet should keep chat full-width until `lg`; textarea should be wider than 360px. |
-| 390x844 | light | Composer stays usable; textarea should be wider than 180px with controls visible. |
+| 390x844 | light | Composer stays usable; title is readable, textarea should be wider than 180px with controls visible. |
 | 390x844 | dark | Tap targets remain at least 44px where practical; no text overlap. |
 
 Collect these metrics with screenshots:
@@ -26,10 +26,21 @@ Collect these metrics with screenshots:
 - total buttons and count below 44x44;
 - minimum textarea width;
 - composer height as a percentage of viewport height;
+- mobile header title width and whether `公共聊天` is clipped;
+- visible message font size on mobile;
 - first meaningful chat content y-position;
 - horizontal scroll presence;
 - number of visible messages above composer;
 - console errors.
+
+Current hard gates in `npm run visual:acceptance` include:
+
+- no horizontal overflow and no console/page errors;
+- mobile textarea at least 180px wide, tablet textarea at least 360px wide;
+- collapsed mobile composer at most 24% of viewport height;
+- mobile title at least 120px wide and the public-chat title must not be clipped;
+- mobile visible message text must stay at or below 15px;
+- at least 4 visible messages in collapsed mobile and tablet seeded chat views.
 
 Run the reusable Playwright acceptance script against a local production build:
 
@@ -56,11 +67,17 @@ The script writes screenshots and `metrics.json` to a temp directory such as `C:
 
 Latest accepted screenshot pass:
 
-- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T18-52-21-915Z`
-- Desktop light/dark 1440x900: textarea 816px, composer 126px, no horizontal overflow, no console errors.
-- Tablet light 768x1024: textarea 456px after moving desktop layout to `lg`; earlier screenshot caught a failed 144px textarea at the `md` breakpoint.
-- Mobile light/dark 390x844: collapsed composer textarea 208px, composer 91px, no horizontal overflow, no console errors.
-- Mobile light with formatting toolbar: composer 144px, no horizontal overflow, no console errors.
+- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T19-36-55-386Z`
+- Desktop light/dark 1440x900: textarea 816px, composer 126px, 4 visible seeded messages, no horizontal overflow, no console errors.
+- Tablet light 768x1024: textarea 456px, 4 visible seeded messages, no horizontal overflow, no console errors.
+- Mobile light/dark 390x844: title width 202px with `公共聊天` unclipped, message font 13.5px, collapsed composer textarea 208px, composer 91px, 4 visible seeded messages, no horizontal overflow, no console errors.
+- Mobile light with formatting toolbar: composer 144px, 4 visible seeded messages, no horizontal overflow, no console errors.
+- Screenshot review removed the duplicated non-own bottom timestamp; the remaining timestamp sits next to the sender name for a denser chat flow.
+
+Earlier screenshot passes caught two real issues:
+
+- 768px tablet was forced into desktop layout and squeezed the textarea to 144px; the accepted layout now keeps tablet/mobile top bar until `lg`.
+- Mobile header showed `公共聊天` as `公...`; secondary mobile actions now live behind the more menu.
 
 ## Current Reference Prompt
 

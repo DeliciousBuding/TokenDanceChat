@@ -70,6 +70,15 @@ async function sendMessage(page, text) {
   await textarea.fill(text);
   await page.keyboard.press("Enter");
   await page.getByText(text, { exact: false }).first().waitFor({ state: "visible", timeout: 10000 });
+  await wait(600);
+}
+
+async function visibleSeedMessageCount(page) {
+  return await page.evaluate(() =>
+    Array.from(document.querySelectorAll("[id^='msg-'] .markdown-body")).filter((el) =>
+      /AgentHub 验证项目|PicoClaw 旁路确认|这轮重点验收|收到。截图应检查/.test(el.textContent || ""),
+    ).length,
+  );
 }
 
 async function seedChat(browser) {
@@ -81,6 +90,11 @@ async function seedChat(browser) {
   await sendMessage(actorB.page, "PicoClaw 旁路确认：群聊、DM、附件、WebHook 和媒体存储都要沉淀为 AgentHub 经验。");
   await sendMessage(actorA.page, "这轮重点验收移动端输入区、触控尺寸、信息密度和 light/dark 两套视觉稳定性。");
   await sendMessage(actorB.page, "收到。截图应检查 44px 触控、横向滚动、输入框宽度、按钮层级和空白密度。");
+
+  const seededCount = await visibleSeedMessageCount(actorA.page);
+  if (seededCount < 4) {
+    throw new Error(`visual seed expected 4 messages, saw ${seededCount}`);
+  }
 
   await actorA.context.close();
   await actorB.context.close();
@@ -133,6 +147,8 @@ async function collectMetrics(page, scenario, errors) {
       const composerRect = composer?.getBoundingClientRect();
       const log = document.querySelector("[role='log']");
       const logRect = log?.getBoundingClientRect();
+      const mobileTitle = document.querySelector("[data-visual='mobile-chat-title']");
+      const mobileTitleRect = mobileTitle?.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
 
@@ -140,6 +156,13 @@ async function collectMetrics(page, scenario, errors) {
         const rect = el.getBoundingClientRect();
         return rect.bottom > 0 && rect.top < viewportHeight;
       }).length;
+      const visibleMarkdownBodies = Array.from(document.querySelectorAll("[id^='msg-'] .markdown-body")).filter((el) => {
+        const rect = el.getBoundingClientRect();
+        return rect.bottom > 0 && rect.top < viewportHeight;
+      });
+      const messageFontSizes = visibleMarkdownBodies.map((el) =>
+        Number.parseFloat(window.getComputedStyle(el).fontSize),
+      ).filter(Number.isFinite);
 
       const horizontalOverflow =
         document.documentElement.scrollWidth > viewportWidth + 1 ||
@@ -164,6 +187,22 @@ async function collectMetrics(page, scenario, errors) {
           ? {
               height: Math.round(composerRect.height),
               viewportRatio: Number((composerRect.height / viewportHeight).toFixed(3)),
+            }
+          : null,
+        mobileTitle: mobileTitleRect
+          ? {
+              width: Math.round(mobileTitleRect.width),
+              scrollWidth: mobileTitle.scrollWidth,
+              clientWidth: mobileTitle.clientWidth,
+              fontSize: window.getComputedStyle(mobileTitle).fontSize,
+              clipped: mobileTitle.scrollWidth > mobileTitle.clientWidth + 1,
+              text: mobileTitle.textContent?.trim() || "",
+            }
+          : null,
+        messageText: messageFontSizes.length
+          ? {
+              minFontSize: Math.min(...messageFontSizes),
+              maxFontSize: Math.max(...messageFontSizes),
             }
           : null,
         transcript: logRect
@@ -197,6 +236,23 @@ function scenarioIssues(metrics) {
     metrics.composer.viewportRatio > 0.24
   ) {
     issues.push(`collapsed mobile composer too tall (${metrics.composer.viewportRatio})`);
+  }
+  if (metrics.viewport.width < 768 && metrics.mobileTitle) {
+    if (metrics.mobileTitle.width < 120) {
+      issues.push(`mobile title too narrow (${metrics.mobileTitle.width}px)`);
+    }
+    if (metrics.mobileTitle.text === "公共聊天" && metrics.mobileTitle.clipped) {
+      issues.push("mobile public title is clipped");
+    }
+  }
+  if (metrics.viewport.width < 768 && metrics.messageText?.maxFontSize > 15) {
+    issues.push(`mobile message text too large (${metrics.messageText.maxFontSize}px)`);
+  }
+  if (metrics.viewport.width < 768 && !metrics.scenarioName.includes("format") && metrics.visibleMessages < 4) {
+    issues.push(`mobile visible message density too low (${metrics.visibleMessages})`);
+  }
+  if (metrics.viewport.width >= 768 && metrics.viewport.width < 1024 && metrics.visibleMessages < 4) {
+    issues.push(`tablet visible message density too low (${metrics.visibleMessages})`);
   }
   return issues;
 }
@@ -243,6 +299,7 @@ async function main() {
     console.log(
       `${result.scenarioName}: textarea=${result.textarea?.width ?? "n/a"}x${result.textarea?.height ?? "n/a"} ` +
         `composer=${result.composer?.height ?? "n/a"}px messages=${result.visibleMessages} ` +
+        `title=${result.mobileTitle?.width ?? "n/a"}px msgFont=${result.messageText?.maxFontSize ?? "n/a"}px ` +
         `smallControls=${result.smallControls.length}${issueText}`,
     );
   }

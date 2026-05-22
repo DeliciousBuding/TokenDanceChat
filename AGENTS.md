@@ -36,14 +36,17 @@ Do not create a separate project transfer file. If takeover context is needed, f
 
 ## Current Increment
 
-Media storage and UI acceptance are the active slice in this worktree:
+Media storage and screenshot-driven UI acceptance are the active slice in this worktree:
 
 - `MediaStore` supports local disk, WebDAV, and S3-compatible storage.
 - S3-compatible media config is env-driven and preferred for production-server deployment shape.
 - Ordinary uploads and custom emoji both use safe media keys and same-origin `/uploads/...` routes.
 - Frontend defaults to light mode for a Feishu/Lark-like first impression.
 - Mobile composer keeps the textarea usable by collapsing Markdown tools behind an icon.
+- Mobile secondary chat actions are behind the more menu so `公共聊天` remains readable.
+- Message transcript density has been tightened for mobile/tablet, including removal of duplicated non-own bottom timestamps.
 - Visual acceptance is backed by `npm run visual:acceptance`, real browser screenshots, metrics, and aesthetic review.
+- Current accepted screenshot pass: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T19-36-55-386Z`.
 - Tablet and mobile use the compact top bar until `lg`; 768px must not be forced into the desktop sidebar/header layout.
 
 Remaining follow-ups:
@@ -66,6 +69,8 @@ frontend/src/lib/api.ts         typed frontend API/WebSocket helper
 frontend/src/hooks/useWebSocket.ts
 frontend/src/stores/chatStore.ts
 frontend/src/components/ChatLayout.tsx
+frontend/src/components/MessageBubble.tsx
+frontend/src/components/MessageTranscript.tsx
 frontend/src/components/GroupInfoPanel.tsx
 ```
 

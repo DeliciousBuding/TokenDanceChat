@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from "react";
-import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings, Download, Info, Phone, Video, Search } from "lucide-react";
+import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings, Download, Info, Phone, Video, Search, MoreHorizontal } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
@@ -34,6 +34,7 @@ export function ChatLayout() {
   const [threadParent, setThreadParent] = useState<ChatMessage | null>(null);
   const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [exportToast, setExportToast] = useState<string | null>(null);
   const [conversationSearchOpen, setConversationSearchOpen] = useState(false);
   const [searchHighlight, setSearchHighlight] = useState("");
@@ -122,6 +123,7 @@ export function ChatLayout() {
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
+    setMobileActionsOpen(false);
     setConversationSearchOpen(false);
     setSearchHighlight("");
   }, [currentChat]);
@@ -191,6 +193,7 @@ export function ChatLayout() {
         setSidebarOpen(false);
         // Close export dropdown
         setExportOpen(false);
+        setMobileActionsOpen(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -454,7 +457,7 @@ export function ChatLayout() {
       {/* Main chat area */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden" style={{ paddingBottom: keyboardPadding }}>
         {/* Mobile top bar */}
-        <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-2.5 lg:hidden pt-safe">
+        <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-2 lg:hidden pt-safe">
           <button
             onClick={() => setSidebarOpen(true)}
             aria-label="Open sidebar"
@@ -462,8 +465,11 @@ export function ChatLayout() {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-sm font-semibold text-foreground truncate">
+          <div className="min-w-0 flex-1 px-1">
+            <h1
+              className="truncate text-[15px] font-semibold leading-5 text-foreground"
+              data-visual="mobile-chat-title"
+            >
               {headerTitle}
             </h1>
           </div>
@@ -507,54 +513,68 @@ export function ChatLayout() {
               </button>
             </>
           )}
-          <button
-            onClick={toggleLang}
-            aria-label={t("lang.label")}
-            className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Globe className="h-3.5 w-3.5" />
-          </button>
           <ThemeToggle />
-          {/* Export button (mobile) */}
-          <div className="relative">
+          {/* Secondary actions (mobile) */}
+          <div className="relative flex-shrink-0">
             <button
-              onClick={() => setExportOpen(!exportOpen)}
-              aria-label={t("export.exportChat")}
+              onClick={() => setMobileActionsOpen((open) => !open)}
+              aria-label="More chat actions"
               className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
             >
-              <Download className="h-4 w-4" />
+              <MoreHorizontal className="h-5 w-5" />
             </button>
-            {exportOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded-xl border border-border bg-card shadow-xl py-1 animate-scale-in origin-top-right">
+            {mobileActionsOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-xl border border-border bg-card py-1 shadow-xl animate-scale-in origin-top-right">
                 <button
-                  onClick={() => handleExport("json")}
-                  className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+                  onClick={() => {
+                    toggleLang();
+                    setMobileActionsOpen(false);
+                  }}
+                  className="flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm text-foreground/80 hover:bg-muted transition-colors"
                 >
+                  <Globe className="h-4 w-4 text-muted-foreground" />
+                  {t("lang.switchTo")}
+                </button>
+                <button
+                  onClick={() => {
+                    handleExport("json");
+                    setMobileActionsOpen(false);
+                  }}
+                  className="flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm text-foreground/80 hover:bg-muted transition-colors"
+                >
+                  <Download className="h-4 w-4 text-muted-foreground" />
                   {t("export.exportJson")}
                 </button>
                 <button
-                  onClick={() => handleExport("text")}
-                  className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+                  onClick={() => {
+                    handleExport("text");
+                    setMobileActionsOpen(false);
+                  }}
+                  className="flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm text-foreground/80 hover:bg-muted transition-colors"
                 >
+                  <Download className="h-4 w-4 text-muted-foreground" />
                   {t("export.exportText")}
+                </button>
+                <button
+                  onClick={() => {
+                    setSettingsOpen(true);
+                    setMobileActionsOpen(false);
+                  }}
+                  className="flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm text-foreground/80 hover:bg-muted transition-colors"
+                >
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  {t("settings.notificationPrefs")}
+                </button>
+                <button
+                  onClick={handleDisconnect}
+                  className="flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm text-destructive/80 hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  {t("chat.disconnect")}
                 </button>
               </div>
             )}
           </div>
-          <button
-            onClick={() => setSettingsOpen(true)}
-            aria-label={t("settings.notificationPrefs")}
-            className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
-          <button
-            onClick={handleDisconnect}
-            aria-label={t("chat.disconnect")}
-            className="touch-target rounded-lg p-2 text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
         </div>
 
         {/* Desktop header */}
