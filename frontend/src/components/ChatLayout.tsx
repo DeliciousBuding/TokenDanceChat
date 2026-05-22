@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from "react";
-import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings } from "lucide-react";
+import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings, Download } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
@@ -8,6 +8,7 @@ import { ForwardModal } from "./ForwardModal";
 import { ThemeToggle } from "./ThemeToggle";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { SearchBar } from "./SearchBar";
+import { ScheduledMessagesPanel } from "./ScheduledMessagesPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { ThreadPanel } from "./ThreadPanel";
 import { useChatStore } from "@/stores/chatStore";
@@ -29,6 +30,8 @@ export function ChatLayout() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [threadParent, setThreadParent] = useState<ChatMessage | null>(null);
   const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportToast, setExportToast] = useState<string | null>(null);
   const {
     reset,
     currentChat,
@@ -44,6 +47,7 @@ export function ChatLayout() {
     pinnedMessages,
     connected,
     lightboxImage,
+    username,
   } = useChatStore();
   const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, forwardMessage, markRead } =
     useWebSocket();
@@ -97,6 +101,14 @@ export function ChatLayout() {
       return () => clearTimeout(timer);
     }
   }, [uploadError]);
+
+  // Auto-dismiss export toast
+  useEffect(() => {
+    if (exportToast) {
+      const timer = setTimeout(() => setExportToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [exportToast]);
 
   const handleDisconnect = useCallback(() => {
     disconnect();
@@ -195,6 +207,35 @@ export function ChatLayout() {
     state.setReplyTo(null);
     state.setPendingImage(null);
   }, []);
+
+  const handleExport = useCallback(async (format: 'json' | 'text') => {
+    setExportOpen(false);
+    try {
+      const conversationKey =
+        currentChat.type === "dm" ? `dm:${currentChat.username}` :
+        currentChat.type === "group" ? `group:${currentChat.name}` :
+        "public";
+      const blob = await chatAPI.exportChat(
+        conversationKey,
+        format,
+        currentChat.type === "dm" ? username : undefined,
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ext = format === "json" ? "json" : "txt";
+      const now = new Date().toISOString().slice(0, 10);
+      const name = conversationKey.replace(/^dm:|^group:/, "").replace(/[^a-zA-Z0-9一-鿿_-]/g, "_");
+      a.download = `chat_export_${name}_${now}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportToast(t("export.exportSuccess"));
+    } catch {
+      setExportToast(t("export.exportError"));
+    }
+  }, [currentChat, t, username]);
 
   const handleDelete = useCallback((messageId: string) => {
     chatAPI.deleteMessage(messageId);
@@ -355,6 +396,32 @@ export function ChatLayout() {
             <Globe className="h-3.5 w-3.5" />
           </button>
           <ThemeToggle />
+          {/* Export button (mobile) */}
+          <div className="relative">
+            <button
+              onClick={() => setExportOpen(!exportOpen)}
+              aria-label={t("export.exportChat")}
+              className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <Download className="h-4 w-4" />
+            </button>
+            {exportOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded-xl border border-border bg-card shadow-xl py-1 animate-scale-in origin-top-right">
+                <button
+                  onClick={() => handleExport("json")}
+                  className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+                >
+                  {t("export.exportJson")}
+                </button>
+                <button
+                  onClick={() => handleExport("text")}
+                  className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+                >
+                  {t("export.exportText")}
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={() => setSettingsOpen(true)}
             aria-label={t("settings.notificationPrefs")}
@@ -401,6 +468,33 @@ export function ChatLayout() {
               {t("lang.switchTo")}
             </button>
             <ThemeToggle />
+            {/* Export button (desktop) */}
+            <div className="relative">
+              <button
+                onClick={() => setExportOpen(!exportOpen)}
+                aria-label={t("export.exportChat")}
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t("export.exportChat")}
+              </button>
+              {exportOpen && (
+                <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded-xl border border-border bg-card shadow-xl py-1 animate-scale-in origin-top-right">
+                  <button
+                    onClick={() => handleExport("json")}
+                    className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+                  >
+                    {t("export.exportJson")}
+                  </button>
+                  <button
+                    onClick={() => handleExport("text")}
+                    className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+                  >
+                    {t("export.exportText")}
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               onClick={() => setSettingsOpen(true)}
               aria-label={t("settings.notificationPrefs")}
@@ -612,6 +706,13 @@ export function ChatLayout() {
       {uploadError && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-destructive text-destructive-foreground text-sm font-medium shadow-lg animate-slide-up whitespace-nowrap">
           {uploadError}
+        </div>
+      )}
+
+      {/* Export toast */}
+      {exportToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium shadow-lg animate-slide-up whitespace-nowrap">
+          {exportToast}
         </div>
       )}
 

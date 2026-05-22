@@ -11,7 +11,8 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MessageContextMenu } from "@/components/MessageContextMenu";
 import { useSwipeableMessage } from "@/hooks/useTouchGestures";
 import { Avatar } from "@/components/Avatar";
-import type { ChatMessage, LinkPreviewData } from "@/lib/api";
+import type { ChatMessage } from "@/lib/api";
+import { MessageLinkPreviews, extractURLs } from "@/components/LinkPreview";
 
 const EmojiPicker = lazy(() => import("@/components/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
 
@@ -51,7 +52,6 @@ interface MessageBubbleProps {
 const AUDIO_EXT_RE = /\.(webm|ogg|mp3|wav|m4a)(\?.*)?$/i;
 const isAudioUrl = (url: string): boolean => AUDIO_EXT_RE.test(url);
 /** Regex: detect image file extensions to skip link preview */
-const IMAGE_EXT_RE = /\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i;
 
 /** Markdown components with link sanitization, audio player for voice messages, and message-link navigation */
 const safeMarkdownComponents = {
@@ -368,42 +368,10 @@ export const MessageBubble = memo(function MessageBubble({
   const [recentlyToggledReaction, setRecentlyToggledReaction] = useState<string | null>(null);
   const [bubbleCopied, setBubbleCopied] = useState(false);
   const isDeleted = message.deleted === true;
-  // Link preview: fetch OpenGraph metadata for URLs in message content
-  const [linkPreview, setLinkPreview] = useState<LinkPreviewData | null>(null);
-  const linkPreviewCache = useRef<Map<string, LinkPreviewData | null>>(new Map());
-
-  useEffect(() => {
-    if (isDeleted) return;
-    const urlMatch = message.content.match(/https?:\/\/[^\s)]+/);
-    if (!urlMatch) {
-      setLinkPreview(null);
-      return;
-    }
-    const url = urlMatch[0];
-    // Skip image URLs
-    if (IMAGE_EXT_RE.test(url)) {
-      setLinkPreview(null);
-      return;
-    }
-
-    // Check cache first to avoid re-fetching the same URL
-    const cached = linkPreviewCache.current.get(url);
-    if (cached !== undefined) {
-      setLinkPreview(cached);
-      return;
-    }
-
-    let cancelled = false;
-    chatAPI.fetchLinkPreview(url).then((preview) => {
-      if (cancelled) return;
-      linkPreviewCache.current.set(url, preview);
-      if (preview?.title) {
-        setLinkPreview(preview);
-      } else {
-        setLinkPreview(null);
-      }
-    });
-    return () => { cancelled = true; };
+  // Link previews: rendered below bubble for all detected URLs
+  const hasUrls = useMemo(() => {
+    if (isDeleted) return false;
+    return extractURLs(message.content).length > 0;
   }, [message.content, isDeleted]);
 
   const handleAddReaction = useCallback(
@@ -1042,52 +1010,9 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           )}
 
-          {/* Link preview card -- inline OG metadata preview below message text */}
-          {!isEditing && linkPreview && (
-            <a
-              href={linkPreview.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 block rounded-lg border border-border overflow-hidden hover:border-primary/30 hover:shadow-md transition-all duration-200 no-underline group/link"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {linkPreview.image && (
-                <div className="overflow-hidden">
-                  <img
-                    src={linkPreview.image}
-                    alt={linkPreview.title || "Link preview"}
-                    loading="lazy"
-                    className="w-full h-32 object-cover group-hover/link:scale-105 transition-transform duration-300"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                </div>
-              )}
-              <div className="p-3">
-                <div className="flex items-start gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-foreground/85 truncate group-hover/link:text-primary/80 transition-colors">
-                      {linkPreview.title}
-                    </div>
-                    {linkPreview.description && (
-                      <div className="text-[11px] text-muted-foreground/60 mt-1 line-clamp-2 leading-relaxed">
-                        {linkPreview.description}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/35 flex-shrink-0">
-                        <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                      </svg>
-                      <span className="text-[10px] text-muted-foreground/40 truncate">
-                        {(() => { try { return new URL(linkPreview.url).hostname; } catch { return linkPreview.url; } })()}
-                      </span>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/35 flex-shrink-0 opacity-0 group-hover/link:opacity-100 transition-opacity">
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </a>
+          {/* Link previews: rendered below message text for all detected URLs */}
+          {!isEditing && hasUrls && (
+            <MessageLinkPreviews content={message.content} />
           )}
                     {/* Copy & Forward buttons (appear on hover) */}
           {!selectMode && !isEditing && (

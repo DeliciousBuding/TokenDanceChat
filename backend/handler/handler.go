@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -36,6 +37,7 @@ type linkPreviewResult struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Image       string `json:"image"`
+	SiteName    string `json:"site_name"`
 	URL         string `json:"url"`
 	fetchedAt   time.Time
 }
@@ -275,10 +277,12 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 // --- Link Preview ---
 
 var (
-	ogTitleRegex       = regexp.MustCompile(`<meta[^>]+property="og:title"[^>]+content="([^"]*)"`)
-	ogDescriptionRegex = regexp.MustCompile(`<meta[^>]+property="og:description"[^>]+content="([^"]*)"`)
-	ogImageRegex       = regexp.MustCompile(`<meta[^>]+property="og:image"[^>]+content="([^"]*)"`)
-	htmlTagRe          = regexp.MustCompile(`<[^>]*>`)
+	ogTitleRegex        = regexp.MustCompile(`<meta[^>]+property="og:title"[^>]+content="([^"]*)"`)
+	ogDescriptionRegex  = regexp.MustCompile(`<meta[^>]+property="og:description"[^>]+content="([^"]*)"`)
+	ogImageRegex        = regexp.MustCompile(`<meta[^>]+property="og:image"[^>]+content="([^"]*)"`)
+	ogSiteNameRegex     = regexp.MustCompile(`<meta[^>]+property="og:site_name"[^>]+content="([^"]*)"`)
+	metaDescriptionRegex = regexp.MustCompile(`<meta[^>]+name="description"[^>]+content="([^"]*)"`)
+	htmlTagRe           = regexp.MustCompile(`<[^>]*>`)
 )
 
 // LinkPreview handles GET /api/link-preview?url=...
@@ -368,12 +372,20 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 	if matches := ogImageRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
 		result.Image = strings.TrimSpace(matches[1])
 	}
+	if matches := ogSiteNameRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
+		result.SiteName = htmlTagRe.ReplaceAllString(strings.TrimSpace(matches[1]), "")
+	}
 
-	// If no OG title, try <title> tag as fallback.
+	// Fallbacks if OG tags are missing.
 	if result.Title == "" {
 		titleRegex := regexp.MustCompile(`<title[^>]*>([^<]+)</title>`)
 		if matches := titleRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
 			result.Title = htmlTagRe.ReplaceAllString(strings.TrimSpace(matches[1]), "")
+		}
+	}
+	if result.Description == "" {
+		if matches := metaDescriptionRegex.FindStringSubmatch(bodyStr); len(matches) > 1 {
+			result.Description = htmlTagRe.ReplaceAllString(strings.TrimSpace(matches[1]), "")
 		}
 	}
 
@@ -394,7 +406,7 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 
 // --- Image Upload ---
 
-const maxUploadSize = 5 << 20 // 5 MB
+const maxUploadSize = 50 << 20 // 50 MB
 const maxLinkPreviewCacheSize = 1000
 
 // UploadImage handles POST /api/upload (multipart form).
@@ -490,4 +502,130 @@ func isPrivateHost(host string) bool {
 		}
 	}
 	return false
+}
+
+// ExportMessages handles GET /api/export?conversation=...&format=json|text&limit=...&username=...
+func (h *Handler) ExportMessages(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+
+	conversation := r.URL.Query().Get("conversation")
+	format := r.URL.Query().Get("format")
+	username := r.URL.Query().Get("username")
+
+	if format == "" {
+		format = "json"
+	}
+	if format != "json" && format != "text" {
+		writeJSONError(w, http.StatusBadRequest, "format must be json or text", "INVALID_FORMAT", requestID)
+		return
+	}
+
+	limit := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			if parsed > 10000 {
+				limit = 10000
+			} else {
+				limit = parsed
+			}
+		}
+	}
+
+	ctx := r.Context()
+
+	var roomID, toUser, groupName, currentUser string
+	var displayName string
+
+	// Parse conversation key.
+	switch {
+	case strings.HasPrefix(conversation, "dm:"):
+		toUser = strings.TrimPrefix(conversation, "dm:")
+		currentUser = username
+		displayName = toUser
+	case strings.HasPrefix(conversation, "group:"):
+		groupName = strings.TrimPrefix(conversation, "group:")
+		displayName = groupName
+	case conversation != "" && conversation != "public":
+		roomID = conversation
+		displayName = conversation
+	default:
+		// Public chat (conversation is empty, "public", or just the room_id).
+		if conversation == "" || conversation == "public" {
+			displayName = "Public Chat"
+		}
+	}
+
+	if toUser != "" && currentUser == "" {
+		writeJSONError(w, http.StatusBadRequest, "username query parameter is required for DM export", "MISSING_USERNAME", requestID)
+		return
+	}
+
+	messages, err := h.store.ExportMessages(ctx, roomID, toUser, groupName, currentUser, limit)
+	if err != nil {
+		log.Printf("export error: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to export messages", "EXPORT_ERROR", requestID)
+		return
+	}
+
+	now := time.Now().Format("2006-01-02")
+	filename := fmt.Sprintf("chat_export_%s_%s.%s",
+		sanitizeExportName(displayName), now, format)
+
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+	switch format {
+	case "text":
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		h.writeTextExport(w, messages, displayName)
+	default:
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		json.NewEncoder(w).Encode(messages)
+	}
+}
+
+// sanitizeExportName replaces characters unsafe for filenames.
+func sanitizeExportName(name string) string {
+	if name == "" {
+		return "public"
+	}
+	re := regexp.MustCompile(`[^a-zA-Z0-9\p{Han}_-]`)
+	safe := re.ReplaceAllString(name, "_")
+	if len(safe) > 100 {
+		safe = safe[:100]
+	}
+	return safe
+}
+
+// writeTextExport writes messages in Telegram-style plain text format.
+func (h *Handler) writeTextExport(w io.Writer, messages []hub.StoredMessage, conversationName string) {
+	now := time.Now().Format("2006-01-02 15:04")
+	fmt.Fprintf(w, "TokenDanceChat Export\r\n")
+	fmt.Fprintf(w, "Conversation: %s\r\n", conversationName)
+	fmt.Fprintf(w, "Exported: %s\r\n", now)
+	fmt.Fprintf(w, "\r\n")
+
+	for _, m := range messages {
+		ts := time.UnixMilli(m.Timestamp).Format("2006-01-02 15:04")
+		content := m.Content
+		if m.Deleted {
+			content = "[deleted]"
+		}
+		if m.Edited {
+			content += " (edited)"
+		}
+		fmt.Fprintf(w, "[%s] %s: %s\r\n", ts, m.Username, content)
+
+		// Append reactions on a new line.
+		if len(m.Reactions) > 0 {
+			var parts []string
+			for emoji, users := range m.Reactions {
+				parts = append(parts, fmt.Sprintf("%s %d", emoji, len(users)))
+			}
+			fmt.Fprintf(w, "    %s\r\n", strings.Join(parts, "  "))
+		}
+	}
 }

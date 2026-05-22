@@ -1,8 +1,10 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -67,6 +69,37 @@ type Poll struct {
 	CreatedAt      int64             `json:"created_at"`
 }
 
+// ScheduledMessage represents a message scheduled for future delivery.
+type ScheduledMessage struct {
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	Content   string `json:"content"`
+	RoomID    string `json:"room_id"`
+	ToUser    string `json:"to_user"`
+	GroupName string `json:"group_name"`
+	ReplyToID string `json:"reply_to_id"`
+	ThreadID  string `json:"thread_id"`
+	SendAt    int64  `json:"send_at"`
+	CreatedAt int64  `json:"created_at"`
+	Sent      int    `json:"sent"`
+}
+
+// GroupInfo holds metadata about a group.
+type GroupInfo struct {
+	Name        string `json:"name"`
+	Owner       string `json:"owner"`
+	MemberCount int    `json:"member_count"`
+	CreatedAt   int64  `json:"created_at"`
+	Description string `json:"description"`
+	AvatarURL   string `json:"avatar_url"`
+}
+
+// GroupMemberInfo represents a member with their role in a group.
+type GroupMemberInfo struct {
+	Username string `json:"username"`
+	Role     string `json:"role"`
+}
+
 // Store handles SQLite message persistence.
 type Store struct {
 	db            *sql.DB
@@ -106,106 +139,130 @@ func New(dbPath string) (*Store, error) {
 
 func (s *Store) migrate() error {
 	query := `
-		CREATE TABLE IF NOT EXISTS rooms (
-			id TEXT PRIMARY KEY,
-			name TEXT UNIQUE NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS messages (
-			id TEXT PRIMARY KEY,
-			username TEXT NOT NULL,
-			content TEXT NOT NULL,
-			timestamp INTEGER NOT NULL,
-			reply_to_id TEXT DEFAULT '',
-			room_id TEXT DEFAULT '',
-			deleted INTEGER NOT NULL DEFAULT 0,
-			edited INTEGER NOT NULL DEFAULT 0
-		);
-		CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
-		CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, timestamp DESC);
-		CREATE TABLE IF NOT EXISTS reactions (
-			message_id TEXT NOT NULL,
-			emoji TEXT NOT NULL,
-			username TEXT NOT NULL,
-			PRIMARY KEY (message_id, emoji, username),
-			FOREIGN KEY (message_id) REFERENCES messages(id)
-		);
-		CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id);
-
-		CREATE TABLE IF NOT EXISTS friends (
-			username TEXT NOT NULL,
-			friend TEXT NOT NULL,
-			PRIMARY KEY (username, friend)
-		);
-
-		CREATE TABLE IF NOT EXISTS group_members (
-			group_name TEXT NOT NULL,
-			username TEXT NOT NULL,
-			PRIMARY KEY (group_name, username)
-		);
-
-			CREATE TABLE IF NOT EXISTS blocked_users (
-				username TEXT NOT NULL,
-				blocked TEXT NOT NULL,
-				PRIMARY KEY (username, blocked)
-			);
-
-			CREATE TABLE IF NOT EXISTS pinned_messages (
-				room_id TEXT NOT NULL DEFAULT "",
-				message_id TEXT NOT NULL,
-				pinned_by TEXT NOT NULL,
-				pinned_at INTEGER NOT NULL,
-				PRIMARY KEY (room_id, message_id)
-			);
-
-			CREATE TABLE IF NOT EXISTS pinned_conversations (
-				username TEXT NOT NULL,
-				key TEXT NOT NULL,
-				PRIMARY KEY (username, key)
-			);
-
-			CREATE TABLE IF NOT EXISTS muted_conversations (
-				username TEXT NOT NULL,
-				key TEXT NOT NULL,
-				PRIMARY KEY (username, key)
-			);
-
-			CREATE TABLE IF NOT EXISTS archived_conversations (
-				username TEXT NOT NULL,
-				key TEXT NOT NULL,
-				PRIMARY KEY (username, key)
-			);
-
-			CREATE TABLE IF NOT EXISTS notification_prefs (
-				username TEXT NOT NULL,
-				key TEXT NOT NULL,
-				muted_until INTEGER DEFAULT 0,
-				show_preview INTEGER DEFAULT 1,
-				PRIMARY KEY (username, key)
-			);
-
-			CREATE TABLE IF NOT EXISTS user_profiles (
-				username TEXT PRIMARY KEY,
-				display_name TEXT DEFAULT '',
-				avatar_url TEXT DEFAULT '',
-				bio TEXT DEFAULT '',
-				status TEXT DEFAULT '',
-				last_seen INTEGER DEFAULT 0
-			);
-
-			CREATE TABLE IF NOT EXISTS polls (
+			CREATE TABLE IF NOT EXISTS rooms (
 				id TEXT PRIMARY KEY,
-				room_id TEXT NOT NULL DEFAULT 'public',
-				creator TEXT NOT NULL,
-				question TEXT NOT NULL,
-				options TEXT NOT NULL,
-				multiple_choice INTEGER DEFAULT 0,
-				is_anonymous INTEGER DEFAULT 0,
-				is_closed INTEGER DEFAULT 0,
-				votes TEXT DEFAULT '{}',
-				voters TEXT DEFAULT '{}',
-				created_at INTEGER NOT NULL
+				name TEXT UNIQUE NOT NULL
 			);
-		`
+			CREATE TABLE IF NOT EXISTS messages (
+				id TEXT PRIMARY KEY,
+				username TEXT NOT NULL,
+				content TEXT NOT NULL,
+				timestamp INTEGER NOT NULL,
+				reply_to_id TEXT DEFAULT '',
+				room_id TEXT DEFAULT '',
+				deleted INTEGER NOT NULL DEFAULT 0,
+				edited INTEGER NOT NULL DEFAULT 0
+			);
+			CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
+			CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, timestamp DESC);
+			CREATE TABLE IF NOT EXISTS reactions (
+				message_id TEXT NOT NULL,
+				emoji TEXT NOT NULL,
+				username TEXT NOT NULL,
+				PRIMARY KEY (message_id, emoji, username),
+				FOREIGN KEY (message_id) REFERENCES messages(id)
+			);
+			CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id);
+
+			CREATE TABLE IF NOT EXISTS friends (
+				username TEXT NOT NULL,
+				friend TEXT NOT NULL,
+				PRIMARY KEY (username, friend)
+			);
+
+			CREATE TABLE IF NOT EXISTS group_members (
+				group_name TEXT NOT NULL,
+				username TEXT NOT NULL,
+				role TEXT DEFAULT 'member',
+				PRIMARY KEY (group_name, username)
+			);
+
+			CREATE TABLE IF NOT EXISTS groups_info (
+				name TEXT PRIMARY KEY,
+				owner TEXT NOT NULL,
+				created_at INTEGER NOT NULL,
+				description TEXT DEFAULT '',
+				avatar_url TEXT DEFAULT ''
+			);
+
+				CREATE TABLE IF NOT EXISTS blocked_users (
+					username TEXT NOT NULL,
+					blocked TEXT NOT NULL,
+					PRIMARY KEY (username, blocked)
+				);
+
+				CREATE TABLE IF NOT EXISTS pinned_messages (
+					room_id TEXT NOT NULL DEFAULT "",
+					message_id TEXT NOT NULL,
+					pinned_by TEXT NOT NULL,
+					pinned_at INTEGER NOT NULL,
+					PRIMARY KEY (room_id, message_id)
+				);
+
+				CREATE TABLE IF NOT EXISTS pinned_conversations (
+					username TEXT NOT NULL,
+					key TEXT NOT NULL,
+					PRIMARY KEY (username, key)
+				);
+
+				CREATE TABLE IF NOT EXISTS muted_conversations (
+					username TEXT NOT NULL,
+					key TEXT NOT NULL,
+					PRIMARY KEY (username, key)
+				);
+
+				CREATE TABLE IF NOT EXISTS archived_conversations (
+					username TEXT NOT NULL,
+					key TEXT NOT NULL,
+					PRIMARY KEY (username, key)
+				);
+
+				CREATE TABLE IF NOT EXISTS notification_prefs (
+					username TEXT NOT NULL,
+					key TEXT NOT NULL,
+					muted_until INTEGER DEFAULT 0,
+					show_preview INTEGER DEFAULT 1,
+					PRIMARY KEY (username, key)
+				);
+
+				CREATE TABLE IF NOT EXISTS user_profiles (
+					username TEXT PRIMARY KEY,
+					display_name TEXT DEFAULT '',
+					avatar_url TEXT DEFAULT '',
+					bio TEXT DEFAULT '',
+					status TEXT DEFAULT '',
+					last_seen INTEGER DEFAULT 0
+				);
+
+				CREATE TABLE IF NOT EXISTS polls (
+					id TEXT PRIMARY KEY,
+					room_id TEXT NOT NULL DEFAULT 'public',
+					creator TEXT NOT NULL,
+					question TEXT NOT NULL,
+					options TEXT NOT NULL,
+					multiple_choice INTEGER DEFAULT 0,
+					is_anonymous INTEGER DEFAULT 0,
+					is_closed INTEGER DEFAULT 0,
+					votes TEXT DEFAULT '{}',
+					voters TEXT DEFAULT '{}',
+					created_at INTEGER NOT NULL
+				);
+
+				CREATE TABLE IF NOT EXISTS scheduled_messages (
+					id TEXT PRIMARY KEY,
+					username TEXT NOT NULL,
+					content TEXT NOT NULL,
+					room_id TEXT DEFAULT '',
+					to_user TEXT DEFAULT '',
+					group_name TEXT DEFAULT '',
+					reply_to_id TEXT DEFAULT '',
+					thread_id TEXT DEFAULT '',
+					send_at INTEGER NOT NULL,
+					created_at INTEGER NOT NULL,
+					sent INTEGER DEFAULT 0
+				);
+				CREATE INDEX IF NOT EXISTS idx_scheduled_send_at ON scheduled_messages(send_at, sent);
+			`
 	_, err := s.db.Exec(query)
 	if err != nil {
 		return err
@@ -235,6 +292,22 @@ func (s *Store) migrate() error {
 	}
 	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN thread_id TEXT DEFAULT ''"); err != nil {
 		log.Printf("store: migrate add column thread_id: %v", err)
+	}
+
+	// Migration: add role column to group_members for existing DBs.
+	if _, err := s.db.Exec("ALTER TABLE group_members ADD COLUMN role TEXT DEFAULT 'member'"); err != nil {
+		log.Printf("store: migrate add column role to group_members: %v", err)
+	}
+
+	// Migration: create groups_info table for existing DBs.
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS groups_info (
+		name TEXT PRIMARY KEY,
+		owner TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		description TEXT DEFAULT '',
+		avatar_url TEXT DEFAULT ''
+	)`); err != nil {
+		log.Printf("store: migrate create groups_info: %v", err)
 	}
 
 	// Add indexes for DM/group/delivery queries.
@@ -590,29 +663,29 @@ func (s *Store) getMessageByIDLocked(messageID string) (StoredMessage, error) {
 
 func (s *Store) createFTS5() error {
 	query := `
-		CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-			content, username, room_id UNINDEXED,
-			content='messages', content_rowid='rowid',
-			tokenize='unicode61'
-		);
+			CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+				content, username, room_id UNINDEXED,
+				content='messages', content_rowid='rowid',
+				tokenize='unicode61'
+			);
 
-		CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
-			INSERT INTO messages_fts(rowid, content, username, room_id)
-			VALUES (new.rowid, new.content, new.username, new.room_id);
-		END;
+			CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+				INSERT INTO messages_fts(rowid, content, username, room_id)
+				VALUES (new.rowid, new.content, new.username, new.room_id);
+			END;
 
-		CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
-			INSERT INTO messages_fts(messages_fts, rowid, content, username, room_id)
-			VALUES ('delete', old.rowid, old.content, old.username, old.room_id);
-		END;
+			CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+				INSERT INTO messages_fts(messages_fts, rowid, content, username, room_id)
+				VALUES ('delete', old.rowid, old.content, old.username, old.room_id);
+			END;
 
-		CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
-			INSERT INTO messages_fts(messages_fts, rowid, content, username, room_id)
-			VALUES ('delete', old.rowid, old.content, old.username, old.room_id);
-			INSERT INTO messages_fts(rowid, content, username, room_id)
-			VALUES (new.rowid, new.content, new.username, new.room_id);
-		END;
-		`
+			CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
+				INSERT INTO messages_fts(messages_fts, rowid, content, username, room_id)
+				VALUES ('delete', old.rowid, old.content, old.username, old.room_id);
+				INSERT INTO messages_fts(rowid, content, username, room_id)
+				VALUES (new.rowid, new.content, new.username, new.room_id);
+			END;
+			`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -685,22 +758,22 @@ func (s *Store) SearchMessages(query string, roomID string, limit int) ([]Search
 
 	if roomID != "" {
 		rows, err = s.db.Query(`
-				SELECT m.id, m.username, m.content, m.timestamp,
-					snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
-					bm25(messages_fts) AS rank
-				FROM messages_fts
-				JOIN messages m ON m.rowid = messages_fts.rowid
-				WHERE m.deleted = 0 AND messages_fts MATCH ? AND messages_fts.room_id = ?
-				ORDER BY rank LIMIT ?`, query, roomID, limit)
+					SELECT m.id, m.username, m.content, m.timestamp,
+						snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
+						bm25(messages_fts) AS rank
+					FROM messages_fts
+					JOIN messages m ON m.rowid = messages_fts.rowid
+					WHERE m.deleted = 0 AND messages_fts MATCH ? AND messages_fts.room_id = ?
+					ORDER BY rank LIMIT ?`, query, roomID, limit)
 	} else {
 		rows, err = s.db.Query(`
-				SELECT m.id, m.username, m.content, m.timestamp,
-					snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
-					bm25(messages_fts) AS rank
-				FROM messages_fts
-				JOIN messages m ON m.rowid = messages_fts.rowid
-				WHERE messages_fts MATCH ?
-				ORDER BY rank LIMIT ?`, query, limit)
+					SELECT m.id, m.username, m.content, m.timestamp,
+						snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
+						bm25(messages_fts) AS rank
+					FROM messages_fts
+					JOIN messages m ON m.rowid = messages_fts.rowid
+					WHERE messages_fts MATCH ?
+					ORDER BY rank LIMIT ?`, query, limit)
 	}
 
 	if err != nil {
@@ -771,14 +844,18 @@ func (s *Store) GetFriends(username string) []string {
 func (s *Store) CreateGroup(name, creator string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.Exec("INSERT OR IGNORE INTO group_members (group_name, username) VALUES (?, ?)", name, creator)
+	_, err := s.db.Exec("INSERT OR IGNORE INTO group_members (group_name, username, role) VALUES (?, ?, 'owner')", name, creator)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec("INSERT OR IGNORE INTO groups_info (name, owner, created_at) VALUES (?, ?, ?)", name, creator, time.Now().UnixMilli())
 	return err
 }
 
 func (s *Store) AddGroupMember(groupName, username string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.Exec("INSERT OR IGNORE INTO group_members (group_name, username) VALUES (?, ?)", groupName, username)
+	_, err := s.db.Exec("INSERT OR IGNORE INTO group_members (group_name, username, role) VALUES (?, ?, 'member')", groupName, username)
 	return err
 }
 
@@ -811,6 +888,200 @@ func (s *Store) GetGroupMembers(groupName string) []string {
 		members = []string{}
 	}
 	return members
+}
+
+// GetGroupMembersWithRoles returns all members of a group with their roles.
+func (s *Store) GetGroupMembersWithRoles(groupName string) []GroupMemberInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query("SELECT username, role FROM group_members WHERE group_name = ?", groupName)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var members []GroupMemberInfo
+	for rows.Next() {
+		var m GroupMemberInfo
+		if err := rows.Scan(&m.Username, &m.Role); err == nil {
+			members = append(members, m)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: rows iteration error: %v", err)
+	}
+	if members == nil {
+		members = []GroupMemberInfo{}
+	}
+	return members
+}
+
+// SetGroupMemberRole updates a member's role in a group.
+func (s *Store) SetGroupMemberRole(groupName, username, role string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("UPDATE group_members SET role = ? WHERE group_name = ? AND username = ?", role, groupName, username)
+	return err
+}
+
+// GetGroupMemberRole returns the role of a member in a group.
+func (s *Store) GetGroupMemberRole(groupName, username string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var role string
+	err := s.db.QueryRow("SELECT role FROM group_members WHERE group_name = ? AND username = ?", groupName, username).Scan(&role)
+	if err != nil {
+		return "", err
+	}
+	return role, nil
+}
+
+// KickGroupMember removes a member from a group (permission check should be done by caller).
+func (s *Store) KickGroupMember(groupName, username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ? AND username = ?", groupName, username)
+	return err
+}
+
+// UpdateGroupName renames a group in all tables.
+func (s *Store) UpdateGroupName(oldName, newName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("UPDATE groups_info SET name = ? WHERE name = ?", newName, oldName); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE group_members SET group_name = ? WHERE group_name = ?", newName, oldName); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE messages SET group_name = ? WHERE group_name = ?", newName, oldName); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// TransferGroupOwnership changes the owner of a group.
+func (s *Store) TransferGroupOwnership(groupName, newOwner string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("UPDATE groups_info SET owner = ? WHERE name = ?", newOwner, groupName); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE group_members SET role = 'admin' WHERE group_name = ? AND role = 'owner'", groupName); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE group_members SET role = 'owner' WHERE group_name = ? AND username = ?", groupName, newOwner); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// LeaveGroup removes a user from a group. If the user is the owner, transfers
+// ownership to the oldest admin or deletes the group if no admin exists.
+func (s *Store) LeaveGroup(groupName, username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var owner string
+	err := s.db.QueryRow("SELECT owner FROM groups_info WHERE name = ?", groupName).Scan(&owner)
+	if err != nil {
+		return err
+	}
+
+	if username == owner {
+		var oldestAdmin string
+		err := s.db.QueryRow("SELECT username FROM group_members WHERE group_name = ? AND role = 'admin' AND username != ? ORDER BY rowid LIMIT 1", groupName, username).Scan(&oldestAdmin)
+		if err == nil && oldestAdmin != "" {
+			if _, err := s.db.Exec("UPDATE groups_info SET owner = ? WHERE name = ?", oldestAdmin, groupName); err != nil {
+				return err
+			}
+			if _, err := s.db.Exec("UPDATE group_members SET role = 'owner' WHERE group_name = ? AND username = ?", groupName, oldestAdmin); err != nil {
+				return err
+			}
+			if _, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ? AND username = ?", groupName, username); err != nil {
+				return err
+			}
+			return nil
+		}
+
+		var anyMember string
+		err = s.db.QueryRow("SELECT username FROM group_members WHERE group_name = ? AND username != ? ORDER BY rowid LIMIT 1", groupName, username).Scan(&anyMember)
+		if err == nil && anyMember != "" {
+			if _, err := s.db.Exec("UPDATE groups_info SET owner = ? WHERE name = ?", anyMember, groupName); err != nil {
+				return err
+			}
+			if _, err := s.db.Exec("UPDATE group_members SET role = 'owner' WHERE group_name = ? AND username = ?", groupName, anyMember); err != nil {
+				return err
+			}
+			if _, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ? AND username = ?", groupName, username); err != nil {
+				return err
+			}
+			return nil
+		}
+
+		if _, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ?", groupName); err != nil {
+			return err
+		}
+		if _, err := s.db.Exec("DELETE FROM groups_info WHERE name = ?", groupName); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	_, err = s.db.Exec("DELETE FROM group_members WHERE group_name = ? AND username = ?", groupName, username)
+	return err
+}
+
+// GetGroupInfo returns metadata for a group.
+func (s *Store) GetGroupInfo(groupName string) (*GroupInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var info GroupInfo
+	err := s.db.QueryRow("SELECT name, owner, created_at, description, avatar_url FROM groups_info WHERE name = ?", groupName).Scan(&info.Name, &info.Owner, &info.CreatedAt, &info.Description, &info.AvatarURL)
+	if err != nil {
+		return nil, err
+	}
+
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM group_members WHERE group_name = ?", groupName).Scan(&count); err != nil {
+		log.Printf("store: GetGroupInfo count error: %v", err)
+	}
+	info.MemberCount = count
+	return &info, nil
+}
+
+// GetGroupOwner returns the owner of a group.
+func (s *Store) GetGroupOwner(groupName string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var owner string
+	err := s.db.QueryRow("SELECT owner FROM groups_info WHERE name = ?", groupName).Scan(&owner)
+	return owner, err
+}
+
+// DeleteGroup completely removes a group and all its members.
+func (s *Store) DeleteGroup(groupName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ?", groupName); err != nil {
+		return err
+	}
+	_, err := s.db.Exec("DELETE FROM groups_info WHERE name = ?", groupName)
+	return err
 }
 
 func (s *Store) GetAllGroups() map[string][]string {
@@ -1449,6 +1720,174 @@ func (s *Store) ClosePoll(pollID string) error {
 	defer s.mu.Unlock()
 	_, err := s.db.Exec("UPDATE polls SET is_closed = 1 WHERE id = ?", pollID)
 	return err
+}
+
+// --- Scheduled messages ---
+
+// ScheduleMessage inserts a new scheduled message.
+func (s *Store) ScheduleMessage(msg ScheduledMessage) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(
+		"INSERT INTO scheduled_messages (id, username, content, room_id, to_user, group_name, reply_to_id, thread_id, send_at, created_at, sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+		msg.ID, msg.Username, msg.Content, msg.RoomID, msg.ToUser, msg.GroupName, msg.ReplyToID, msg.ThreadID, msg.SendAt, msg.CreatedAt,
+	)
+	return err
+}
+
+// GetPendingScheduledMessages returns unsent messages where send_at <= now.
+func (s *Store) GetPendingScheduledMessages(ctx context.Context) ([]ScheduledMessage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	now := time.Now().UnixMilli()
+	rows, err := s.db.Query(
+		"SELECT id, username, content, room_id, to_user, group_name, reply_to_id, thread_id, send_at, created_at, sent FROM scheduled_messages WHERE sent = 0 AND send_at <= ? ORDER BY send_at ASC",
+		now,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var msgs []ScheduledMessage
+	for rows.Next() {
+		var m ScheduledMessage
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.RoomID, &m.ToUser, &m.GroupName, &m.ReplyToID, &m.ThreadID, &m.SendAt, &m.CreatedAt, &m.Sent); err != nil {
+			log.Printf("store: scheduled message scan error: %v", err)
+			continue
+		}
+		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: scheduled messages iteration error: %v", err)
+	}
+	if msgs == nil {
+		msgs = []ScheduledMessage{}
+	}
+	return msgs, nil
+}
+
+// MarkScheduledSent marks a scheduled message as sent.
+func (s *Store) MarkScheduledSent(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("UPDATE scheduled_messages SET sent = 1 WHERE id = ?", id)
+	return err
+}
+
+// CancelScheduledMessage deletes a scheduled message. Only the owner can cancel.
+func (s *Store) CancelScheduledMessage(id, username string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec("DELETE FROM scheduled_messages WHERE id = ? AND username = ?", id, username)
+	return err
+}
+
+// GetUserScheduledMessages returns all scheduled messages for a user.
+func (s *Store) GetUserScheduledMessages(username string) ([]ScheduledMessage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows, err := s.db.Query(
+		"SELECT id, username, content, room_id, to_user, group_name, reply_to_id, thread_id, send_at, created_at, sent FROM scheduled_messages WHERE username = ? AND sent = 0 ORDER BY send_at ASC",
+		username,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var msgs []ScheduledMessage
+	for rows.Next() {
+		var m ScheduledMessage
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.RoomID, &m.ToUser, &m.GroupName, &m.ReplyToID, &m.ThreadID, &m.SendAt, &m.CreatedAt, &m.Sent); err != nil {
+			log.Printf("store: user scheduled message scan error: %v", err)
+			continue
+		}
+		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: user scheduled messages iteration error: %v", err)
+	}
+	if msgs == nil {
+		msgs = []ScheduledMessage{}
+	}
+	return msgs, nil
+}
+
+// ExportMessages returns messages for a specific conversation, ordered by timestamp ascending.
+// For room export: pass roomID; for group export: pass groupName;
+// for DM export: pass toUser (peer) and username (current user).
+// limit caps the result count; 0 or negative means no limit (max 10000).
+func (s *Store) ExportMessages(ctx context.Context, roomID string, toUser string, groupName string, username string, limit int) ([]StoredMessage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 10000
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	switch {
+	case groupName != "":
+		rows, err = s.db.Query(
+			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE group_name = ? AND deleted = 0 ORDER BY timestamp ASC LIMIT ?",
+			groupName, limit,
+		)
+	case toUser != "" && username != "":
+		rows, err = s.db.Query(
+			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE deleted = 0 AND ((username = ? AND to_user = ?) OR (username = ? AND to_user = ?)) ORDER BY timestamp ASC LIMIT ?",
+			username, toUser, toUser, username, limit,
+		)
+	case roomID != "":
+		rows, err = s.db.Query(
+			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE room_id = ? AND deleted = 0 ORDER BY timestamp ASC LIMIT ?",
+			roomID, limit,
+		)
+	default:
+		// Public chat (no to_user, no group_name, no specific room_id).
+		rows, err = s.db.Query(
+			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE to_user = '' AND group_name = '' AND deleted = 0 ORDER BY timestamp ASC LIMIT ?",
+			limit,
+		)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("store: ExportMessages query error: %w", err)
+	}
+	defer rows.Close()
+
+	messages := make([]StoredMessage, 0, limit)
+	for rows.Next() {
+		var m StoredMessage
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
+			log.Printf("store: ExportMessages scan error: %v", err)
+			continue
+		}
+		if m.Deleted {
+			m.Content = ""
+		}
+		messages = append(messages, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: ExportMessages iteration error: %w", err)
+	}
+
+	// Enrich with reactions.
+	if len(messages) > 0 {
+		messageIDs := make([]string, len(messages))
+		for i, m := range messages {
+			messageIDs[i] = m.ID
+		}
+		reactions := s.GetReactionsForMessages(messageIDs)
+		for i := range messages {
+			messages[i].Reactions = reactions[messages[i].ID]
+		}
+	}
+
+	if messages == nil {
+		messages = []StoredMessage{}
+	}
+	return messages, nil
 }
 
 func boolToInt(b bool) int {

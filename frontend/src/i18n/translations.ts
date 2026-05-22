@@ -239,6 +239,44 @@ export interface TranslationDict {
     replyPlaceholder: string;
     close: string;
   };
+  editor: {
+    bold: string;
+    italic: string;
+    strikethrough: string;
+    code: string;
+    quote: string;
+    link: string;
+    preview: string;
+    linkUrl: string;
+  };
+  schedule: {
+    schedule: string;
+    scheduleMessage: string;
+    sendAt: string;
+    cancelSchedule: string;
+    scheduledMessages: string;
+    noScheduled: string;
+    scheduledFor: string;
+    today: string;
+    tomorrow: string;
+    pickDateTime: string;
+    confirmSchedule: string;
+    cancelled: string;
+    sentToast: string;
+  };
+  export: {
+    exportChat: string;
+    exportJson: string;
+    exportText: string;
+    exportSuccess: string;
+    exportError: string;
+  };
+  file: {
+    uploading: string;
+    downloadFile: string;
+    fileSize: string;
+    dropFilesHere: string;
+  };
 }
 
 const zhCN: TranslationDict = {
@@ -337,7 +375,7 @@ const zhCN: TranslationDict = {
     escapeToCancel: "按 Esc 取消",
     cancel: "取消",
     save: "保存",
-    fileTooLarge: "文件过大（最大 20MB）",
+    fileTooLarge: "文件过大（最大 50MB）",
     uploadFailed: "上传失败",
     editingMessage: "编辑消息",
   },
@@ -480,6 +518,44 @@ const zhCN: TranslationDict = {
     replyPlaceholder: "回复此消息...",
     close: "关闭",
   },
+  editor: {
+    bold: "加粗",
+    italic: "斜体",
+    strikethrough: "删除线",
+    code: "代码",
+    quote: "引用",
+    link: "链接",
+    preview: "预览",
+    linkUrl: "输入链接",
+  },
+  schedule: {
+    schedule: "定时",
+    scheduleMessage: "定时发送消息",
+    sendAt: "发送时间",
+    cancelSchedule: "取消定时",
+    scheduledMessages: "定时消息",
+    noScheduled: "没有定时消息",
+    scheduledFor: "计划于 {{time}} 发送",
+    today: "今天",
+    tomorrow: "明天",
+    pickDateTime: "选择日期和时间",
+    confirmSchedule: "确认定时",
+    cancelled: "已取消定时消息",
+    sentToast: "定时消息已发送计划",
+  },
+  export: {
+    exportChat: "导出聊天记录",
+    exportJson: "导出为 JSON",
+    exportText: "导出为文本",
+    exportSuccess: "聊天记录导出成功",
+    exportError: "导出聊天记录失败",
+  },
+  file: {
+    uploading: "上传中...",
+    downloadFile: "下载文件",
+    fileSize: "{{size}}",
+    dropFilesHere: "拖放文件到此处",
+  },
 };
 
 const enUS: TranslationDict = {
@@ -579,7 +655,7 @@ const enUS: TranslationDict = {
     escapeToCancel: "Escape to cancel",
     cancel: "Cancel",
     save: "Save",
-    fileTooLarge: "File too large (max 20MB)",
+    fileTooLarge: "File too large (max 50MB)",
     uploadFailed: "Upload failed",
     editingMessage: "Edit message",
   },
@@ -721,6 +797,44 @@ const enUS: TranslationDict = {
     replyCount: "{count} replies",
     replyPlaceholder: "Reply to thread...",
     close: "Close",
+  },
+  editor: {
+    bold: "Bold",
+    italic: "Italic",
+    strikethrough: "Strikethrough",
+    code: "Code",
+    quote: "Quote",
+    link: "Link",
+    preview: "Preview",
+    linkUrl: "Enter URL",
+  },
+  schedule: {
+    schedule: "Schedule",
+    scheduleMessage: "Schedule Message",
+    sendAt: "Send at",
+    cancelSchedule: "Cancel Schedule",
+    scheduledMessages: "Scheduled Messages",
+    noScheduled: "No scheduled messages",
+    scheduledFor: "Scheduled for {{time}}",
+    today: "Today",
+    tomorrow: "Tomorrow",
+    pickDateTime: "Pick date and time",
+    confirmSchedule: "Confirm Schedule",
+    cancelled: "Scheduled message cancelled",
+    sentToast: "Scheduled message queued",
+  },
+  export: {
+    exportChat: "Export Chat",
+    exportJson: "Export as JSON",
+    exportText: "Export as Text",
+    exportSuccess: "Chat exported successfully",
+    exportError: "Failed to export chat",
+  },
+  file: {
+    uploading: "Uploading...",
+    downloadFile: "Download file",
+    fileSize: "{{size}}",
+    dropFilesHere: "Drop files here",
   },
 };
 

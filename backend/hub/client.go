@@ -14,6 +14,7 @@ import (
 	"tokendancechat/backend/llm"
 	"tokendancechat/backend/store"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -185,6 +186,12 @@ func (c *Client) ReadPump() {
 			c.handleNotificationPrefsSet(msg)
 		case "notification_prefs_get":
 			c.handleNotificationPrefsGet()
+		case "schedule_message":
+			c.handleScheduleMessage(msg)
+		case "cancel_scheduled_message":
+			c.handleCancelScheduledMessage(msg)
+		case "scheduled_messages_list":
+			c.handleScheduledMessagesList()
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -2154,4 +2161,142 @@ func (c *Client) handlePollClose(msg Message) {
 	c.hub.BroadcastToRoom(broadcastMsg, updated.RoomID)
 }
 
+// --- Scheduled message handlers ---
+
+// handleScheduleMessage processes a schedule_message request.
+func (c *Client) handleScheduleMessage(msg Message) {
+	if c.username == "" {
+		return
+	}
+	content := sanitizeContent(msg.Content)
+	if content == "" {
+		return
+	}
+	sendAt := msg.Timestamp
+	if sendAt <= time.Now().UnixMilli() {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "send_at must be in the future",
+			ErrorCode: "INVALID_SCHEDULE_TIME",
+		})
+		select { case c.send <- errMsg: default: }
+		return
+	}
+	if sendAt > time.Now().UnixMilli()+365*24*60*60*1000 {
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "cannot schedule more than 1 year in advance",
+			ErrorCode: "SCHEDULE_TOO_FAR",
+		})
+		select { case c.send <- errMsg: default: }
+		return
+	}
+
+	sm := ScheduledMessage{
+		ID:        uuid.NewString(),
+		Username:  c.username,
+		Content:   content,
+		RoomID:    msg.RoomID,
+		ToUser:    msg.To,
+		GroupName: msg.Group,
+		ReplyToID: msg.ReplyToID,
+		ThreadID:  msg.ThreadID,
+		SendAt:    sendAt,
+		CreatedAt: time.Now().UnixMilli(),
+	}
+
+	if sm.RoomID == "" {
+		sm.RoomID = c.getCurrentRoomID()
+	}
+
+	if err := c.hub.store.ScheduleMessage(sm); err != nil {
+		log.Printf("schedule_message: insert error: %v", err)
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "failed to schedule message",
+			ErrorCode: "SERVER_ERROR",
+		})
+		select { case c.send <- errMsg: default: }
+		return
+	}
+
+	confirm, _ := json.Marshal(Message{
+		Type:      "scheduled_message_confirm",
+		ID:        sm.ID,
+		Content:   sm.Content,
+		Username:  sm.Username,
+		Timestamp: sm.SendAt,
+		RoomID:    sm.RoomID,
+		To:        sm.ToUser,
+		Group:     sm.GroupName,
+	})
+	select { case c.send <- confirm: default: }
+}
+
+// handleCancelScheduledMessage processes a cancel_scheduled_message request.
+func (c *Client) handleCancelScheduledMessage(msg Message) {
+	if c.username == "" {
+		return
+	}
+	id := msg.ID
+	if id == "" {
+		return
+	}
+
+	if err := c.hub.store.CancelScheduledMessage(id, c.username); err != nil {
+		log.Printf("cancel_scheduled_message: error: %v", err)
+		errMsg, _ := json.Marshal(Message{
+			Type:      "error",
+			Content:   "failed to cancel scheduled message or not authorized",
+			ErrorCode: "CANCEL_SCHEDULE_FAILED",
+		})
+		select { case c.send <- errMsg: default: }
+		return
+	}
+
+	confirm, _ := json.Marshal(Message{
+		Type: "scheduled_message_cancelled",
+		ID:   id,
+	})
+	select { case c.send <- confirm: default: }
+}
+
+// handleScheduledMessagesList returns the user's scheduled messages.
+func (c *Client) handleScheduledMessagesList() {
+	if c.username == "" {
+		return
+	}
+
+	msgs, err := c.hub.store.GetUserScheduledMessages(c.username)
+	if err != nil {
+		log.Printf("scheduled_messages_list: error: %v", err)
+		return
+	}
+
+	payload, _ := json.Marshal(Message{
+		Type:     "scheduled_messages_list",
+		Messages: msgsToMessages(msgs),
+	})
+	select { case c.send <- payload: default: }
+}
+
+// msgsToMessages converts []ScheduledMessage to []StoredMessage for JSON serialization
+// within the Message struct.
+func msgsToMessages(sms []ScheduledMessage) []StoredMessage {
+	result := make([]StoredMessage, 0, len(sms))
+	for _, sm := range sms {
+		result = append(result, StoredMessage{
+			ID:        sm.ID,
+			Username:  sm.Username,
+			Content:   sm.Content,
+			Timestamp: sm.SendAt,
+			RoomID:    sm.RoomID,
+			ToUser:    sm.ToUser,
+			GroupName: sm.GroupName,
+			ReplyToID: sm.ReplyToID,
+			ThreadID:  sm.ThreadID,
+		})
+	}
+	return result
+}
 
