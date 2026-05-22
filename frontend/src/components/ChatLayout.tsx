@@ -5,6 +5,7 @@ import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
 import { GroupCreateModal } from "./GroupCreateModal";
 import { ForwardModal } from "./ForwardModal";
+import { ImageLightbox } from "./ImageLightbox";
 import { ThemeToggle } from "./ThemeToggle";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { SearchBar } from "./SearchBar";
@@ -36,6 +37,7 @@ export function ChatLayout() {
     setLatestMention,
     pinnedMessages,
     connected,
+    lightboxImage,
   } = useChatStore();
   const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, forwardMessage, markRead } =
     useWebSocket();
@@ -102,6 +104,16 @@ export function ChatLayout() {
         }, 100);
       }
       if (e.key === "Escape") {
+        // Cancel reply if active
+        if (useChatStore.getState().replyTo) {
+          e.preventDefault();
+          setReplyTo(null);
+        }
+        // Exit multi-select mode (via event — no-op if not active)
+        window.dispatchEvent(new CustomEvent("tdchat:exit-select-mode"));
+        // Close all open emoji pickers
+        window.dispatchEvent(new CustomEvent("tdchat:close-emoji-picker"));
+        // Close mobile sidebar
         setSidebarOpen(false);
       }
     };
@@ -531,6 +543,14 @@ export function ChatLayout() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-destructive text-destructive-foreground text-sm font-medium shadow-lg animate-slide-up whitespace-nowrap">
           {uploadError}
         </div>
+      )}
+
+      {/* Image lightbox */}
+      {lightboxImage && (
+        <ImageLightbox
+          imageUrl={lightboxImage}
+          onClose={() => useChatStore.getState().setLightboxImage(null)}
+        />
       )}
     </div>
   );

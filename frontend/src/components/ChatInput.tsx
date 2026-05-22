@@ -23,7 +23,7 @@ export function ChatInput({
   onUpload,
 }: ChatInputProps) {
   const { t } = useTranslation();
-  const { onlineUsers, username, currentChat, pendingImage, setPendingImage, setReplyTo, connected } = useChatStore();
+  const { onlineUsers, username, currentChat, pendingImage, setPendingImage, setReplyTo, connected, replyTo } = useChatStore();
   const [content, setContent] = useState("");
   const draftKey = useMemo(() => {
     if (currentChat.type === "dm") return `dm-${currentChat.username}`;
