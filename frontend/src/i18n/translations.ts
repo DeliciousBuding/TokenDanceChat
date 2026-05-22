@@ -174,6 +174,11 @@ export interface TranslationDict {
     objects: string;
     misc: string;
   };
+  model: {
+    selectModel: string;
+    closeSelector: string;
+    selected: string;
+  };
 }
 
 const zhCN: TranslationDict = {
@@ -349,6 +354,11 @@ const zhCN: TranslationDict = {
     hearts: "爱心",
     objects: "物品",
     misc: "其他",
+  },
+  model: {
+    selectModel: "选择模型",
+    closeSelector: "关闭",
+    selected: "已选择",
   },
 };
 
@@ -526,6 +536,11 @@ const enUS: TranslationDict = {
     hearts: "Hearts",
     objects: "Objects",
     misc: "Misc",
+  },
+  model: {
+    selectModel: "Select Model",
+    closeSelector: "Close",
+    selected: "Selected",
   },
 };
 

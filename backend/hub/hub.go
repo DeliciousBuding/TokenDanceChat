@@ -144,7 +144,25 @@ type Message struct {
 	PinnedAt int64            `json:"pinned_at,omitempty"`
 }
 
-// Hub maintains the set of active clients and broadcasts messages to them.
+// HubCommand PicoClaw 可向 Hub 发送的命令类型。
+// 用于 PicoClaw 通过 WebSocket 双向通道查询 Hub 状态或执行操作。
+type HubCommand struct {
+	Type    string         `json:"type"`              // 命令类型：online_users, history, send_dm
+	RoomID  string         `json:"room_id,omitempty"` // 房间 ID
+	Limit   int            `json:"limit,omitempty"`   // 分页数量
+	Before  int64          `json:"before,omitempty"`  // 分页起始时间戳
+	ToUser  string         `json:"to_user,omitempty"` // DM 目标用户
+	Content string         `json:"content,omitempty"` // DM 内容
+	Params  map[string]any `json:"params,omitempty"`  // 扩展参数
+}
+
+// HubCommandResponse Hub 命令执行结果。
+type HubCommandResponse struct {
+	Type    string         `json:"type"`              // 回显命令类型
+	Success bool           `json:"success"`           // 是否成功
+	Data    map[string]any `json:"data,omitempty"`    // 响应数据
+	Error   string         `json:"error,omitempty"`   // 错误信息
+}
 type Hub struct {
 	// Registered clients.
 	clients map[*Client]bool
