@@ -1136,6 +1136,142 @@ func (h *Hub) InRoom(roomID, username string) bool {
 	return h.rooms[roomID][username]
 }
 
+// -------- PicoClaw 双向查询接口 --------
+
+// RequestOnlineUsers 返回在线用户列表，供 PicoClaw 通过命令通道查询。
+func (h *Hub) RequestOnlineUsers() HubCommandResponse {
+	users := h.OnlineUsers()
+	data := map[string]any{
+		"online": users,
+		"count":  len(users),
+		"time":   time.Now().UnixMilli(),
+	}
+	return HubCommandResponse{
+		Type:    "online_users",
+		Success: true,
+		Data:    data,
+	}
+}
+
+// RequestHistory 返回指定房间的消息历史，供 PicoClaw 查询。
+// roomID 为空时返回全局消息。
+func (h *Hub) RequestHistory(roomID string, limit int, before int64) HubCommandResponse {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	var messages []StoredMessage
+	if roomID != "" {
+		messages = h.store.GetRoomMessages(roomID, limit, before)
+	} else {
+		messages = h.store.GetMessages(limit, before)
+	}
+
+	if messages == nil {
+		messages = []StoredMessage{}
+	}
+
+	data := map[string]any{
+		"messages": messages,
+		"count":    len(messages),
+		"room_id":  roomID,
+	}
+	return HubCommandResponse{
+		Type:    "history",
+		Success: true,
+		Data:    data,
+	}
+}
+
+// SendDM 以指定身份发送私信给目标用户，供 PicoClaw 调用。
+// fromUsername: 发送者标识（通常为 PicoClaw 代理名）。
+// toUsername: 接收者用户名。
+// content: 私信内容。
+func (h *Hub) SendDM(fromUsername, toUsername, content string) HubCommandResponse {
+	if fromUsername == "" || toUsername == "" || content == "" {
+		return HubCommandResponse{
+			Type:    "send_dm",
+			Success: false,
+			Error:   "缺少必要参数：fromUsername、toUsername 或 content 为空",
+		}
+	}
+
+	// 持久化到 store。
+	storedMsg, err := h.store.InsertMessage(fromUsername, content, "", "", toUsername, "")
+	if err != nil {
+		log.Printf("SendDM: insert message error: %v", err)
+		return HubCommandResponse{
+			Type:    "send_dm",
+			Success: false,
+			Error:   fmt.Sprintf("持久化消息失败: %v", err),
+		}
+	}
+
+	// 构建 DM 消息。
+	dmData, err := json.Marshal(Message{
+		Type:      "dm_message",
+		ID:        storedMsg.ID,
+		Username:  fromUsername,
+		Content:   content,
+		Timestamp: storedMsg.Timestamp,
+		To:        toUsername,
+		From:      fromUsername,
+	})
+	if err != nil {
+		return HubCommandResponse{
+			Type:    "send_dm",
+			Success: false,
+			Error:   fmt.Sprintf("序列化消息失败: %v", err),
+		}
+	}
+
+	// 发送给目标用户。
+	delivered := h.SendToUser(toUsername, dmData)
+	if delivered {
+		h.store.MarkMessagesDelivered([]string{storedMsg.ID})
+	}
+
+	data := map[string]any{
+		"message_id": storedMsg.ID,
+		"delivered":  delivered,
+		"to":         toUsername,
+		"timestamp":  storedMsg.Timestamp,
+	}
+	return HubCommandResponse{
+		Type:    "send_dm",
+		Success: true,
+		Data:    data,
+	}
+}
+
+// ExecuteHubCommand 执行 PicoClaw 发来的 Hub 命令。
+// 根据 cmd.Type 分派到对应的处理方法。
+func (h *Hub) ExecuteHubCommand(cmd HubCommand) HubCommandResponse {
+	switch cmd.Type {
+	case "online_users":
+		return h.RequestOnlineUsers()
+	case "history":
+		return h.RequestHistory(cmd.RoomID, cmd.Limit, cmd.Before)
+	case "send_dm":
+		fromUsername := h.AgentName() // 默认使用 PicoClaw 代理名
+		if cmd.Params != nil {
+			if from, ok := cmd.Params["from"].(string); ok && from != "" {
+				fromUsername = from
+			}
+		}
+		return h.SendDM(fromUsername, cmd.ToUser, cmd.Content)
+	default:
+		return HubCommandResponse{
+			Type:    cmd.Type,
+			Success: false,
+			Error:   fmt.Sprintf("未知命令类型: %s", cmd.Type),
+		}
+	}
+}
+
 // Shutdown gracefully stops the hub and closes all client connections.
 func (h *Hub) Shutdown() {
 	h.mu.Lock()
