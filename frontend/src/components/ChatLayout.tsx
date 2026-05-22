@@ -53,6 +53,7 @@ export function ChatLayout() {
     connected,
     lightboxImage,
     username,
+    groups,
     groupInfoPanel,
     setGroupInfoPanel,
     incomingCall,
@@ -74,6 +75,10 @@ export function ChatLayout() {
     "public",
   [currentChat]);
   const [convFade, setConvFade] = useState(false);
+  const groupCallParticipants = useMemo(() => {
+    if (currentChat.type !== "group") return [];
+    return (groups[currentChat.name]?.members ?? []).filter((member) => member !== username);
+  }, [currentChat, groups, username]);
 
   useEffect(() => {
     setConvFade(true);
@@ -316,15 +321,28 @@ export function ChatLayout() {
 
   const handleStartCall = useCallback(
     (callType: "video" | "voice") => {
-      if (currentChat.type !== "dm") return;
-      setActiveCall({
-        callId: "",
-        peer: currentChat.username,
-        callType,
-        startTime: Date.now(),
-      });
+      if (currentChat.type === "dm") {
+        setActiveCall({
+          callId: "",
+          peer: currentChat.username,
+          callType,
+          startTime: Date.now(),
+        });
+        return;
+      }
+      if (currentChat.type === "group" && groupCallParticipants.length > 0) {
+        setActiveCall({
+          callId: "",
+          peer: currentChat.name,
+          callType,
+          startTime: Date.now(),
+          isGroupCall: true,
+          groupName: currentChat.name,
+          participants: groupCallParticipants,
+        });
+      }
     },
-    [currentChat, setActiveCall],
+    [currentChat, groupCallParticipants, setActiveCall],
   );
 
   const handleCloseCall = useCallback(() => {
@@ -470,13 +488,24 @@ export function ChatLayout() {
           )}
           {/* Group info button (mobile) */}
           {currentChat.type === "group" && (
-            <button
-              onClick={() => setGroupInfoPanel(currentChat.name)}
-              className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
-              aria-label={t("group.groupInfo")}
-            >
-              <Info className="h-4 w-4" />
-            </button>
+            <>
+              {groupCallParticipants.length > 0 && (
+                <button
+                  onClick={() => handleStartCall("video")}
+                  className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+                  aria-label={t("call.groupCall")}
+                >
+                  <Video className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={() => setGroupInfoPanel(currentChat.name)}
+                className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+                aria-label={t("group.groupInfo")}
+              >
+                <Info className="h-4 w-4" />
+              </button>
+            </>
           )}
           <button
             onClick={toggleLang}
@@ -579,6 +608,16 @@ export function ChatLayout() {
                   {t("call.videoCall")}
                 </button>
               </div>
+            )}
+            {currentChat.type === "group" && groupCallParticipants.length > 0 && (
+              <button
+                onClick={() => handleStartCall("video")}
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted transition-all duration-200"
+                aria-label={t("call.groupCall")}
+              >
+                <Video className="h-3.5 w-3.5" />
+                {t("call.groupCall")}
+              </button>
             )}
             <button
               onClick={toggleLang}
