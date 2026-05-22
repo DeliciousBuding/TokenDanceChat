@@ -194,7 +194,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 		Addr:         addr,
 		Handler:      srv,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 120 * time.Second, // allow large media uploads
 		IdleTimeout:  60 * time.Second,
 	}
 
@@ -273,11 +273,8 @@ func main() {
 		log.Println("PicoClaw disconnected")
 	}
 
-	// Allow in-flight operations to complete before shutting down hub.
-	time.Sleep(100 * time.Millisecond)
-	h.Shutdown()
-	log.Println("hub shut down")
-
+	// Shut down HTTP server first to stop accepting new connections
+	// and drain in-flight requests, then close hub connections.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -286,4 +283,7 @@ func main() {
 	}
 
 	log.Println("server exited gracefully")
+
+	h.Shutdown()
+	log.Println("hub shut down")
 }

@@ -272,10 +272,14 @@ class ChatAPI {
           );
           this.pendingJoin = null;
         }
+        // Close the timed-out socket to prevent orphaned onopen from
+        // writing to a newer connection.
+        this.ws?.close();
       }, 8000);
 
       this.ws.onopen = () => {
         clearTimeout(timeout);
+        if (!this.pendingJoin) return; // Timed out, ignore.
         this.reconnectAttempts = 0;
         this.send({ type: "join", username });
       };

@@ -38,6 +38,15 @@ function i18nSys(key: string, params?: Record<string, string>): string {
   return JSON.stringify({ key });
 }
 
+// Desktop notification helper
+function notifyMessage(title: string, body: string) {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  try {
+    const n = new Notification(title, { body, icon: "/favicon.svg", silent: true });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch { /* ignore */ }
+}
+
 export function useWebSocket() {
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
@@ -187,6 +196,12 @@ export function useWebSocket() {
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
+
+    // Request notification permission on first interaction.
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+
     const unsubs: (() => void)[] = [];
 
     // Public chat message
@@ -209,6 +224,7 @@ export function useWebSocket() {
         if (state.currentChat.type !== "public") {
           useChatStore.getState().incrementConversationUnread("public");
           if (!isTabActive) playMessageSound();
+            notifyMessage(username, content);
         }
       }),
     );
@@ -234,6 +250,7 @@ export function useWebSocket() {
         if (!(state.currentChat.type === "dm" && state.currentChat.username === partner)) {
           useChatStore.getState().incrementConversationUnread(`dm:${partner}`);
           playMessageSound();
+            notifyMessage(partner, m.content);
         }
       }),
     );
@@ -252,12 +269,12 @@ export function useWebSocket() {
           reply_to_content: m.reply_to_content,
           reply_to_user: m.reply_to_user,
         });
-        // Increment unread for this group if not currently viewing it.
         const state = useChatStore.getState();
         const groupName = m.group || m.to;
         if (groupName && !(state.currentChat.type === "group" && state.currentChat.name === groupName)) {
           useChatStore.getState().incrementConversationUnread(`group:${groupName}`);
           playMessageSound();
+          notifyMessage(groupName, `${m.username}: ${m.content}`);
         }
       }),
     );

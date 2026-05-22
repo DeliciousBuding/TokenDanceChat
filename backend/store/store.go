@@ -154,9 +154,15 @@ func (s *Store) migrate() error {
 	// Add indexes for DM/group/delivery queries.
 	// These must be after all ALTER TABLE statements because the columns may
 	// have been added via ALTER TABLE (not present in original CREATE TABLE).
-	s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_to_user ON messages(to_user, timestamp DESC)")
-	s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_name, timestamp DESC)")
-	s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_delivered ON messages(delivered, to_user)")
+	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_to_user ON messages(to_user, timestamp DESC)"); err != nil {
+		log.Printf("store: idx_messages_to_user: %v", err)
+	}
+	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_name, timestamp DESC)"); err != nil {
+		log.Printf("store: idx_messages_group: %v", err)
+	}
+	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_delivered ON messages(delivered, to_user)"); err != nil {
+		log.Printf("store: idx_messages_delivered: %v", err)
+	}
 
 	// Seed default room if not present.
 	s.ensureDefaultRoom()
@@ -802,7 +808,10 @@ func (s *Store) IsBlocked(username, blocked string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var count int
-	s.db.QueryRow("SELECT COUNT(*) FROM blocked_users WHERE username = ? AND blocked = ?", username, blocked).Scan(&count)
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM blocked_users WHERE username = ? AND blocked = ?", username, blocked).Scan(&count); err != nil {
+		log.Printf("store: IsBlocked error: %v", err)
+		return false
+	}
 	return count > 0
 }
 
