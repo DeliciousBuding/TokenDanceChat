@@ -48,4 +48,5 @@ dist/
 backend/backend.exe
 
 frontend/test-results/
+frontend/playwright-report/
 frontend/coverage/
