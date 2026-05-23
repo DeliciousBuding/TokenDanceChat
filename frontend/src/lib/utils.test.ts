@@ -58,6 +58,7 @@ describe("cn", () => {
   });
 
   it("处理条件类名（falsy值被过滤）", () => {
+    // eslint-disable-next-line no-constant-binary-expression
     const result = cn("base", false && "hidden", "visible");
     expect(result).toContain("base");
     expect(result).toContain("visible");

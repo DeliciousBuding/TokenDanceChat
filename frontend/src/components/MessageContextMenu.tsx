@@ -82,7 +82,6 @@ export function MessageContextMenu({
   // Calculate position to keep menu within viewport
   const menuStyle = useMemo(() => {
     const menuWidth = 220;
-    let menuHeight = 200;
     // Estimate height based on visible items
     let itemCount = 4; // Reply, Copy, Forward, Select
     if (isOwn && onEdit) itemCount += 1;
@@ -91,7 +90,7 @@ export function MessageContextMenu({
     if (onTranslate) itemCount += 1;
     if (isOwn) itemCount += 1; // Delete
     itemCount += 2; // dividers
-    menuHeight = itemCount * 44 + 16;
+    const menuHeight = itemCount * 44 + 16;
     let { x, y } = position;
     if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 8;
     if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 8;
