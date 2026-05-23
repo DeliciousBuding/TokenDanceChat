@@ -852,14 +852,7 @@ export function ChatLayout() {
           </div>
         )}
 
-        {/* Conversation search (Ctrl+F) */}
-        <ConversationSearch
-          open={conversationSearchOpen}
-          onClose={() => setConversationSearchOpen(false)}
-          onHighlightChange={setSearchHighlight}
-        />
-
-        {/* In-conversation search bar */}
+        {/* In-conversation search (Ctrl+F) */}
         <ConversationSearch
           open={conversationSearchOpen}
           onClose={() => {

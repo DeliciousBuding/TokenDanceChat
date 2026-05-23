@@ -482,6 +482,7 @@ func (s *Store) migrate() error {
 				metadata TEXT NOT NULL DEFAULT ''
 			);
 			CREATE INDEX IF NOT EXISTS idx_webhooks_group_created ON webhooks(group_name, created_at);
+				CREATE INDEX IF NOT EXISTS idx_webhooks_url ON webhooks(url);
 			CREATE INDEX IF NOT EXISTS idx_webhook_audit_group_created ON webhook_audit_logs(group_name, created_at DESC);
 			`
 	_, err := s.db.Exec(query)
@@ -1508,7 +1509,7 @@ func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	rows, err := s.db.Query(
-		"SELECT m.id, m.username, m.content, m.timestamp, m.reply_to_id, m.room_id, m.deleted, m.edited, m.to_user, m.group_name FROM pinned_messages p JOIN messages m ON p.message_id = m.id WHERE p.room_id = ? ORDER BY p.pinned_at DESC",
+		"SELECT m.id, m.username, m.content, m.timestamp, m.reply_to_id, m.room_id, m.deleted, m.edited, m.to_user, m.group_name, m.thread_id FROM pinned_messages p JOIN messages m ON p.message_id = m.id WHERE p.room_id = ? ORDER BY p.pinned_at DESC",
 		roomID,
 	)
 	if err != nil {

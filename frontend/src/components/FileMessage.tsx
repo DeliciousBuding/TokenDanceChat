@@ -186,7 +186,7 @@ function PdfPreview({ fileUrl, fileName }: { fileUrl: string; fileName: string }
             src={fileUrl}
             className="w-full h-80 bg-white"
             title={fileName}
-            sandbox="allow-scripts allow-same-origin"
+            sandbox="allow-scripts"
           />
         </div>
       )}

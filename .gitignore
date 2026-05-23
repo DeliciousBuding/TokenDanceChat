@@ -44,3 +44,7 @@ Thumbs.db
 *.log
 .claude/
 dist/
+
+backend/backend.exe
+
+frontend/test-results/
