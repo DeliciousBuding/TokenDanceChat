@@ -2040,10 +2040,10 @@ func (c *Client) fallbackPicoClawToLLM(ctx context.Context, userContent, agentNa
 	if mem := c.hub.Memory(); mem != nil {
 		messages = mem.GetMessages()
 	}
-	systemPrompt := "你是一个名叫 PicoClaw 的 AI 助手，运行在 TokenDanceChat 平台上。" +
-		"你是一个 Agent 工作流机器人，可以帮用户分析问题、执行任务、搜索信息。" +
-		"请用中文回复，保持简洁友好。" +
-		"当用户说'帮我'或'分析'时，主动提供详细的帮助。"
+	systemPrompt := "你是 PicoClaw，运行在 TokenDanceChat 平台上的智能助手。" +
+		"你的回复应简洁、专业、有帮助，类似飞书/企业 IM 机器人的风格。" +
+		"你可以：回答用户问题、参与群聊讨论、提供技术建议、搜索和总结信息。" +
+		"回复时使用中文，保持礼貌和友好。不知道答案时诚实说明。"
 	client := c.hub.LLMClient()
 
 	var fullResponse strings.Builder
@@ -2075,16 +2075,6 @@ func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, r
 	// PicoClaw now responds directly via LLM API for reliability.
 	// The PicoClaw WebSocket gateway is retained for proactive notifications only.
 	c.fallbackPicoClawToLLM(ctx, userContent, c.hub.AgentName(), roomID, c.username)
-}
-
-func picoStreamDelta(previous, current string) (string, string) {
-	if current == "" {
-		return previous, ""
-	}
-	if strings.HasPrefix(current, previous) {
-		return current, strings.TrimPrefix(current, previous)
-	}
-	return current, current
 }
 
 // sanitizeContent trims whitespace, strips null bytes, and enforces max length.

@@ -642,21 +642,6 @@ func TestAssistantMentionTarget(t *testing.T) {
 	}
 }
 
-func TestPicoStreamDelta(t *testing.T) {
-	last, delta := picoStreamDelta("", "O")
-	if last != "O" || delta != "O" {
-		t.Fatalf("first delta = (%q, %q), want (O, O)", last, delta)
-	}
-	last, delta = picoStreamDelta(last, "OK")
-	if last != "OK" || delta != "K" {
-		t.Fatalf("accumulated delta = (%q, %q), want (OK, K)", last, delta)
-	}
-	last, delta = picoStreamDelta(last, "done")
-	if last != "done" || delta != "done" {
-		t.Fatalf("replacement delta = (%q, %q), want (done, done)", last, delta)
-	}
-}
-
 func TestIsUsernameTaken(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")

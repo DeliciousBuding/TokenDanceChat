@@ -1,8 +1,5 @@
-// Package llm provides a lightweight LLM adapter supporting Anthropic and OpenAI APIs.
-//
-// Deprecated: This package is preserved for reference on the archive/llm-bot branch.
-// New integrations should use the picoclaw adapter (backend/picoclaw/) which connects
-// to a PicoClaw gateway via WebSocket for LLM routing, streaming, and conversation memory.
+// Package llm provides an LLM adapter supporting Anthropic and OpenAI-compatible APIs
+// (including DeepSeek, OpenAI, and other providers that implement the /v1/chat/completions endpoint).
 package llm
 
 import (
