@@ -2,7 +2,7 @@
 
 最后更新：2026-05-23（晚）
 
-发布: [v0.2.7](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.7) | Docker: `tokendancechat:v0.2.7` | 测试: 565 前端 / 38 文件 / 40.47% 行覆盖率
+发布: [v0.2.7](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.7) | Docker: `tokendancechat:v0.2.7` | 测试: 609 前端 / 40 文件 / 40%+ 行覆盖率
 
 ## 当前目标
 
@@ -48,12 +48,14 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 工程基建 + UX 打磨
 
-状态：持续推进。565 tests / 38 files / 40.47% 行覆盖率 / 44 E2E pass / ESLint 0 / CI 就绪 / 生产已部署。
+状态：持续推进。609 tests / 40 files / 40%+ 行覆盖率 / 8 E2E group-call / ESLint 0 / CI 就绪 / 生产已部署。
 
-- [x] 前端测试从 237 → 565 (+328 tests / +20 文件 / 40.47% 行覆盖率)。
-- [x] E2E 测试从 18 → 46 (44 pass / 2 skip / 0 fail)。
-- [x] 后端测试扩展：store +7、hub +8、handler +6、llm +8、ratelimit 更新。
-- [x] 交叉审查 HIGH/MEDIUM 全部修复（ForwardModal CSS 脆弱性、PollMessage error paths、ThreadPanel onSendReply、MessageTranscript i18n masking、LoginScreen loading/{success:false} 测试）。
+- [x] 前端测试从 237 → 609 (+372 tests / +22 文件 / 40%+ 行覆盖率)。
+- [x] E2E 测试从 18 → 54 (44 auth-flow + 8 group-call + 2 webhook)。
+- [x] 后端测试扩展：store +7、hub +8、handler +34、llm +8、ratelimit 更新、ws +2。
+- [x] PM 产品审计 P0 修复：侧栏对话预览（last message + timestamp）、未读「新消息」分隔线、移动端语音按钮可见。
+- [x] PM 产品审计 P2 修复：相对时间戳（刚刚/X分钟前/HH:mm/日期）。
+- [x] 交叉审查 HIGH/MEDIUM 全部修复（ForwardModal CSS 脆弱性、PollMessage error paths、ThreadPanel onSendReply、MessageTranscript i18n masking）。
 - [x] ScrollToBottom FAB（Telegram 风格，200px 阈值，ChevronDown 图标，opacity+scale 动画）。
 - [x] LoginScreen 错误 i18n 映射（auth.loginFailed / auth.registerFailed）。
 - [x] RegisterScreen i18n 修复（auth.fillAllFields）。
@@ -64,17 +66,11 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] 项目 Skills: `.agents/skills/verify.md`（编辑器无关 SOP）。
 - [x] api.ts 测试（142 tests，覆盖 send 方法、事件调度、ErrorCode、disconnect）。
 - [x] 消息送达状态（Telegram 双勾风格：已读蓝✓✓ / 已送达灰✓✓ / 已发送无勾）。
-- [x] 交叉审查 quick wins：RegisterScreen 硬编码中文字符串 → i18n key；ChatLayout 设置按钮标签修复；`product-gap-analysis.md` 陈旧条目修正。
 - [x] AGENTS.md 新增 dev-loop 工作流、模型分配策略、分支策略。
-- [x] 安全泄露 3 条 grep 自检 + 违规响应协议（脱敏 → filter-branch → force push）。
+- [x] 安全泄露 3 条 grep 自检 + 违规响应协议。
 - [x] 覆盖率达 40%+（40.47% 行覆盖率）。
-- [x] Opus 审查 MEDIUM 修复：无界内存 map 定期清理（typingRateLimit 10s/botCooldown 60s/pendingInvites 空条目）。
-- [x] Opus 审查 LOW 修复：移除 CORS 和 WS origin 检查中硬编码的 `*.vectorcontrol.tech` 域名。
-- [ ] 群组视频通话 E2E。
-- [ ] 消息列表过渡动画打磨。
-- [x] CI/CD GitHub Actions workflow。
-- [x] LoginScreen/RegisterScreen 添加 `autocomplete` 属性，适配密码管理器。
-- [x] 部署并验证：565 单元测试 + 后端全量测试 + 44/46 E2E 通过。
+- [x] Opus 审查 MEDIUM/LOW 修复：无界内存 map 清理、CORS/WS 硬编码域名移除。
+- [x] 群组视频通话 E2E（8 tests，含 signaling flow、UI 状态管理、多标签隔离）。
 
 ## 当前增量：Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收
 
