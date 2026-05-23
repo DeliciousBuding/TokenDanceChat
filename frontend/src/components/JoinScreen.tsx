@@ -36,7 +36,7 @@ export function JoinScreen() {
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [subView, setSubView] = useState<SubView>("guest");
-  const { setView, setUsername: setStoreUsername } = useChatStore();
+  const { setView, setUsername: setStoreUsername, setGuest } = useChatStore();
   const { connect } = useWebSocket();
 
   // Load saved username from localStorage on mount.
@@ -89,9 +89,10 @@ export function JoinScreen() {
 
       setError("");
       setConnecting(true);
+      setGuest(true);
       await handleJoinSuccess(trimmed);
     },
-    [username, handleJoinSuccess, t],
+    [username, handleJoinSuccess, t, setGuest],
   );
 
   const handleAuthSuccess = useCallback(
@@ -101,9 +102,10 @@ export function JoinScreen() {
       setUsername(name);
       setError("");
       setConnecting(true);
+      setGuest(false);
       handleJoinSuccess(name);
     },
-    [handleJoinSuccess],
+    [handleJoinSuccess, setGuest],
   );
 
   const handleKeyDown = useCallback(

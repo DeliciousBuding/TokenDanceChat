@@ -61,6 +61,7 @@ export interface TranslationDict {
     dmIndicator: string;
     groupIndicator: string;
     deletedMessage: string;
+    guestWarning: string;
   };
   sidebar: {
     publicChat: string;
@@ -360,6 +361,7 @@ export interface TranslationDict {
     link: string;
     preview: string;
     linkUrl: string;
+    formatting: string;
   };
   schedule: {
     schedule: string;
@@ -483,6 +485,7 @@ const zhCN: TranslationDict = {
     dmIndicator: "私信",
     groupIndicator: "群聊",
     deletedMessage: "此消息已被删除",
+    guestWarning: "游客模式：你的身份未经验证，其他人可以使用相同用户名",
   },
   sidebar: {
     publicChat: "公共聊天",
@@ -781,6 +784,7 @@ const zhCN: TranslationDict = {
     link: "链接",
     preview: "预览",
     linkUrl: "输入链接",
+    formatting: "Markdown 格式",
   },
   schedule: {
     schedule: "定时",
@@ -907,6 +911,7 @@ const enUS: TranslationDict = {
     dmIndicator: "DM",
     groupIndicator: "Group",
     deletedMessage: "This message was deleted",
+    guestWarning: "Guest mode: your identity is unverified. Others may use the same username.",
   },
   sidebar: {
     publicChat: "Public Chat",
@@ -1205,6 +1210,7 @@ const enUS: TranslationDict = {
     link: "Link",
     preview: "Preview",
     linkUrl: "Enter URL",
+    formatting: "Markdown formatting",
   },
   schedule: {
     schedule: "Schedule",

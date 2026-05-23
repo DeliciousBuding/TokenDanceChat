@@ -105,6 +105,7 @@ interface ChatState {
   view: ViewState;
   username: string;
   connected: boolean;
+  isGuest: boolean;
 
   // Messages
   messages: ChatMessage[];
@@ -197,6 +198,7 @@ interface ChatState {
   setView: (view: ViewState) => void;
   setUsername: (username: string) => void;
   setConnected: (connected: boolean) => void;
+  setGuest: (isGuest: boolean) => void;
   addMessage: (message: ChatMessage) => void;
   deleteMessage: (id: string) => void;
   addSystemMessage: (content: string, timestamp: number) => void;
@@ -276,6 +278,7 @@ export const useChatStore = create<ChatState>((set) => ({
   view: "join",
   username: "",
   connected: false,
+  isGuest: false,
   messages: [],
   historyLoaded: false,
   onlineUsers: [],
@@ -317,6 +320,7 @@ export const useChatStore = create<ChatState>((set) => ({
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username }),
   setConnected: (connected) => set({ connected }),
+  setGuest: (isGuest) => set({ isGuest }),
   addMessage: (message) =>
     set((state) => {
       // Filter out messages from blocked users.
@@ -691,6 +695,7 @@ export const useChatStore = create<ChatState>((set) => ({
       view: "join",
       username: "",
       connected: false,
+      isGuest: false,
       messages: [],
       historyLoaded: false,
       onlineUsers: [],

@@ -1464,8 +1464,8 @@ export function ChatInput({
                 type="button"
                 onClick={() => setFormatToolbarOpen((open) => !open)}
                 disabled={disabled}
-                aria-label="Toggle formatting toolbar"
-                title="Toggle formatting toolbar"
+                aria-label={t("editor.formatting")}
+                title={t("editor.formatting")}
                 className={cn(
                   "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:hidden",
                   formatToolbarOpen
