@@ -3954,3 +3954,287 @@ func TestCreateWebhookEmptySecret(t *testing.T) {
 			t.Errorf("expected 0 for non-existent thread, got %d", count)
 		}
 	}
+
+
+// ── LeaveGroup: owner leaves alone (group deleted) ──
+
+func TestLeaveGroupOwnerAlone(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("solo", "alice")
+
+	// Verify group exists.
+	info, err := s.GetGroupInfo("solo")
+	if err != nil {
+		t.Fatalf("GetGroupInfo returned error: %v", err)
+	}
+	if info.MemberCount != 1 {
+		t.Fatalf("expected 1 member, got %d", info.MemberCount)
+	}
+
+	// Owner leaves (only member).
+	err = s.LeaveGroup("solo", "alice")
+	if err != nil {
+		t.Fatalf("LeaveGroup returned error: %v", err)
+	}
+
+	// Group should be deleted.
+	_, err = s.GetGroupInfo("solo")
+	if err == nil {
+		t.Error("expected error for deleted group info")
+	}
+
+	// Members should be empty.
+	members := s.GetGroupMembers("solo")
+	if len(members) != 0 {
+		t.Errorf("expected 0 members after group deleted, got %d", len(members))
+	}
+
+	// GetAllGroups should not include it.
+	allGroups := s.GetAllGroups()
+	if _, ok := allGroups["solo"]; ok {
+		t.Error("deleted group should not appear in GetAllGroups")
+	}
+}
+
+// ── LeaveGroup: owner leaves with another member (ownership transferred) ──
+
+func TestLeaveGroupOwnerWithMember(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("devs", "alice")
+	s.AddGroupMember("devs", "bob")
+
+	// Owner leaves (another member exists).
+	err = s.LeaveGroup("devs", "alice")
+	if err != nil {
+		t.Fatalf("LeaveGroup returned error: %v", err)
+	}
+
+	// Group should persist.
+	info, err := s.GetGroupInfo("devs")
+	if err != nil {
+		t.Fatalf("GetGroupInfo returned error: %v", err)
+	}
+	if info.Owner != "bob" {
+		t.Errorf("expected owner 'bob' after transfer, got '%s'", info.Owner)
+	}
+	if info.MemberCount != 1 {
+		t.Errorf("expected 1 member after owner left, got %d", info.MemberCount)
+	}
+
+	// bob should now have the "owner" role.
+	role, err := s.GetGroupMemberRole("devs", "bob")
+	if err != nil {
+		t.Fatalf("GetGroupMemberRole returned error: %v", err)
+	}
+	if role != "owner" {
+		t.Errorf("expected role 'owner' for bob after transfer, got '%s'", role)
+	}
+
+	// alice should no longer be a member.
+	_, err = s.GetGroupMemberRole("devs", "alice")
+	if err == nil {
+		t.Error("expected error for alice (no longer a member)")
+	}
+}
+
+// ── LeaveGroup: owner leaves with an admin present (transferred to admin) ──
+
+func TestLeaveGroupOwnerWithAdmin(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("devs", "alice")
+	s.AddGroupMember("devs", "bob")
+	s.AddGroupMember("devs", "charlie")
+	s.SetGroupMemberRole("devs", "bob", "admin")
+
+	// Owner leaves (admin exists).
+	err = s.LeaveGroup("devs", "alice")
+	if err != nil {
+		t.Fatalf("LeaveGroup returned error: %v", err)
+	}
+
+	// Group should persist.
+	info, err := s.GetGroupInfo("devs")
+	if err != nil {
+		t.Fatalf("GetGroupInfo returned error: %v", err)
+	}
+	// Ownership should transfer to the admin (bob), not a random member.
+	if info.Owner != "bob" {
+		t.Errorf("expected owner 'bob' (admin) after transfer, got '%s'", info.Owner)
+	}
+	if info.MemberCount != 2 {
+		t.Errorf("expected 2 members after owner left, got %d", info.MemberCount)
+	}
+
+	// bob should now be owner.
+	role, err := s.GetGroupMemberRole("devs", "bob")
+	if err != nil {
+		t.Fatalf("GetGroupMemberRole for bob returned error: %v", err)
+	}
+	if role != "owner" {
+		t.Errorf("expected role 'owner' for bob, got '%s'", role)
+	}
+
+	// charlie should still be member.
+	role, err = s.GetGroupMemberRole("devs", "charlie")
+	if err != nil {
+		t.Fatalf("GetGroupMemberRole for charlie returned error: %v", err)
+	}
+	if role != "member" {
+		t.Errorf("expected role 'member' for charlie, got '%s'", role)
+	}
+}
+
+// ── KickGroupMember: kicking the owner ──
+
+func TestKickGroupOwner(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("devs", "alice")
+	s.AddGroupMember("devs", "bob")
+
+	// Kick the owner (allowed at store level; caller must enforce permission).
+	err = s.KickGroupMember("devs", "alice")
+	if err != nil {
+		t.Fatalf("KickGroupMember returned error: %v", err)
+	}
+
+	// Owner is removed from group_members.
+	members := s.GetGroupMembers("devs")
+	if len(members) != 1 {
+		t.Errorf("expected 1 member after kicking owner, got %d", len(members))
+	}
+	if members[0] != "bob" {
+		t.Errorf("expected 'bob' remaining, got '%s'", members[0])
+	}
+
+	// groups_info still references the old owner (caller must fix).
+	info, err := s.GetGroupInfo("devs")
+	if err != nil {
+		t.Fatalf("GetGroupInfo returned error: %v", err)
+	}
+	if info.Owner != "alice" {
+		t.Errorf("expected groups_info owner still 'alice', got '%s'", info.Owner)
+	}
+}
+
+// ── TransferGroupOwnership: transfer to a non-member ──
+
+func TestTransferGroupOwnershipToNonMember(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("devs", "alice")
+	s.AddGroupMember("devs", "bob")
+
+	// Transfer ownership to someone not in the group.
+	err = s.TransferGroupOwnership("devs", "charlie")
+	if err != nil {
+		t.Fatalf("TransferGroupOwnership returned error: %v", err)
+	}
+
+	// groups_info owner is updated to charlie.
+	info, err := s.GetGroupInfo("devs")
+	if err != nil {
+		t.Fatalf("GetGroupInfo returned error: %v", err)
+	}
+	if info.Owner != "charlie" {
+		t.Errorf("expected owner 'charlie', got '%s'", info.Owner)
+	}
+
+	// Old owner alice is demoted to admin.
+	role, err := s.GetGroupMemberRole("devs", "alice")
+	if err != nil {
+		t.Fatalf("GetGroupMemberRole for alice returned error: %v", err)
+	}
+	if role != "admin" {
+		t.Errorf("expected role 'admin' for old owner alice, got '%s'", role)
+	}
+
+	// charlie is not a member and does not get owner role (caller must add first).
+	_, err = s.GetGroupMemberRole("devs", "charlie")
+	if err == nil {
+		t.Error("expected error: charlie is not a member")
+	}
+}
+
+// ── UpdateGroupName: duplicate name rejection ──
+
+func TestUpdateGroupNameDuplicate(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("devs", "alice")
+	s.CreateGroup("ops", "bob")
+
+	// Try to rename "devs" to "ops" (already exists) — should fail.
+	err = s.UpdateGroupName("devs", "ops")
+	if err == nil {
+		t.Error("expected error renaming to duplicate group name")
+	}
+
+	// "devs" should still have its original name.
+	info, err := s.GetGroupInfo("devs")
+	if err != nil {
+		t.Fatalf("GetGroupInfo for devs returned error: %v", err)
+	}
+	if info.Name != "devs" {
+		t.Errorf("expected name 'devs' unchanged, got '%s'", info.Name)
+	}
+
+	// "ops" should still exist with its original owner.
+	owner, err := s.GetGroupOwner("ops")
+	if err != nil {
+		t.Fatalf("GetGroupOwner for ops returned error: %v", err)
+	}
+	if owner != "bob" {
+		t.Errorf("expected ops owner 'bob', got '%s'", owner)
+	}
+}
+
+// ── DeleteGroup: non-existent group is a no-op ──
+
+func TestDeleteGroupNonExistent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Deleting a non-existent group should not error.
+	err = s.DeleteGroup("nonexistent-group")
+	if err != nil {
+		t.Errorf("DeleteGroup on non-existent group should not error, got: %v", err)
+	}
+
+	// Should not affect existing groups.
+	s.CreateGroup("devs", "alice")
+	groups := s.GetAllGroups()
+	if len(groups) != 1 {
+		t.Errorf("expected 1 group, got %d", len(groups))
+	}
+}
