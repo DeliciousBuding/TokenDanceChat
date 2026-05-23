@@ -1073,7 +1073,7 @@ export const MessageBubble = memo(function MessageBubble({
           )}
 
           {/* Link previews: rendered below message text for all detected URLs */}
-          {!isEditing && hasUrls && (
+          {!isEditing && (hasUrls ?? false) && (
             <MessageLinkPreviews content={message.content} />
           )}
           {!selectMode && !isEditing && (
