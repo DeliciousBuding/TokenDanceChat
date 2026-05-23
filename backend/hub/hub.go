@@ -423,6 +423,9 @@ type Hub struct {
 	callRooms   map[string]*CallRoom
 	callRoomsMu sync.RWMutex
 
+	done     chan struct{}
+	stopOnce sync.Once
+
 	mu sync.RWMutex
 }
 
@@ -472,6 +475,7 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 		botCooldown:     make(map[string]time.Time),
 		callSessions:    make(map[string]*CallSession),
 		callRooms:       make(map[string]*CallRoom),
+		done:            make(chan struct{}),
 	}
 }
 
@@ -548,6 +552,8 @@ func (h *Hub) Run() {
 
 	for {
 		select {
+		case <-h.done:
+			return
 		case client := <-h.register:
 			h.mu.Lock()
 			// Kick existing connection with the same username (new login takes over).
@@ -1833,8 +1839,16 @@ func (h *Hub) GetCallRoom(roomID string) *CallRoom {
 	return h.callRooms[roomID]
 }
 
+// Stop signals the Run loop to exit cleanly. Safe to call multiple times.
+func (h *Hub) Stop() {
+	h.stopOnce.Do(func() {
+		close(h.done)
+	})
+}
+
 // Shutdown gracefully stops the hub and closes all client connections.
 func (h *Hub) Shutdown() {
+	h.Stop()
 	h.mu.Lock()
 	count := len(h.clients)
 	for c := range h.clients {

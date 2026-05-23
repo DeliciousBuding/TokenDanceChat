@@ -545,7 +545,6 @@ export function MessageTranscript({
         onPointerUp={handleContainerPointerUp}
         onPointerCancel={handleContainerPointerUp}
         className={cn("flex-1 min-h-0 overflow-y-auto relative scrollbar-thin", className)}
-        style={{ willChange: "transform" }}
       {...pullDownHandlers}
     >
       {selectMode && (

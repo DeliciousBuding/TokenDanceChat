@@ -175,7 +175,7 @@ export function Sidebar({
   onMentionAssistant,
   pendingFriendUsers = [],
 }: SidebarProps) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const {
     onlineUsers,
     username,
@@ -616,7 +616,7 @@ export function Sidebar({
                           {preview.content}
                         </span>
                         <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
-                          {formatTime(preview.timestamp)}
+                          {formatTime(preview.timestamp, lang)}
                         </span>
                       </div>
                     );
@@ -693,7 +693,7 @@ export function Sidebar({
                           {preview.content}
                         </span>
                         <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
-                          {formatTime(preview.timestamp)}
+                          {formatTime(preview.timestamp, lang)}
                         </span>
                       </div>
                     )}
@@ -764,7 +764,7 @@ export function Sidebar({
                         {preview.content}
                       </span>
                       <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
-                        {formatTime(preview.timestamp)}
+                        {formatTime(preview.timestamp, lang)}
                       </span>
                     </div>
                   )}
@@ -828,7 +828,7 @@ export function Sidebar({
               : friends.length > 0
                 ? friends.map((friend) => {
                     const friendStatus = userStatusList.find((u) => u.username === friend);
-                    const lsText = friendStatus && !friendStatus.online ? formatLastSeen(friendStatus.last_seen) : "";
+                    const lsText = friendStatus && !friendStatus.online ? formatLastSeen(friendStatus.last_seen, lang) : "";
                     return (
                     <div
                       key={friend}

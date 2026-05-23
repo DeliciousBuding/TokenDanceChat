@@ -666,6 +666,7 @@ func TestIsUsernameTaken(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	// Initially, no username should be taken.
 	if h.IsUsernameTaken("alice") {
@@ -697,6 +698,7 @@ func TestOnlineUsers(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	// Initially, no users.
 	users := h.OnlineUsers()
@@ -750,6 +752,7 @@ func TestHubRunStartStop(t *testing.T) {
 	h := New(ms, nil, nil, "")
 	// Start the hub.
 	go h.Run()
+	defer h.Stop()
 
 	// Verify the hub is running by registering and querying.
 	client := &Client{username: "testuser", send: make(chan []byte, 1)}
@@ -793,6 +796,7 @@ func TestShutdown(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	// Shutdown on an empty hub should not panic.
 	h.Shutdown()
@@ -835,6 +839,7 @@ func TestBotCooldown(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	// First call — should be allowed (no prior trigger).
 	if !h.CheckBotCooldown("bot:alice") {
@@ -967,6 +972,7 @@ func TestHandleMarkRead(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	// Case 1: empty username — handler returns early, no message sent.
 	c := &Client{hub: h, send: make(chan []byte, 1)}
@@ -1283,6 +1289,7 @@ func TestHandlePinMessage(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
 	h.register <- c
@@ -1348,6 +1355,7 @@ func TestHandleUnpinMessage(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
 	h.register <- c
@@ -1395,6 +1403,7 @@ func TestHandleMuteAndUnmuteConversation(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
 	h.register <- c
@@ -1456,6 +1465,7 @@ func TestHandleArchiveAndUnarchiveConversation(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
 	h.register <- c
@@ -2082,6 +2092,7 @@ func TestConnectionCount(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	if h.ConnectionCount() != 0 {
 		t.Fatalf("expected 0 connections initially, got %d", h.ConnectionCount())
@@ -2114,6 +2125,7 @@ func TestIsFull(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	// Empty hub should not be full.
 	if h.IsFull() {
@@ -2158,6 +2170,7 @@ func TestIsUsernameTaken_CaseSensitivity(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	client := &Client{username: "Alice", send: make(chan []byte, 1)}
 	h.register <- client
@@ -2568,6 +2581,7 @@ func TestSendToUser(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	// Send to non-existent user returns false.
 	data := []byte(`{"test":true}`)
@@ -2658,6 +2672,7 @@ func TestAllUserStatusSortsOnlineFirst(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	// Set last seen timestamps: alice most recent, charlie oldest.
 	h.SetLastSeen("alice", 3000)
@@ -2766,6 +2781,7 @@ func TestBroadcastJSON(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	client := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
 	h.register <- client
@@ -2798,6 +2814,7 @@ func TestBroadcastToRoom(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
 	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-2"}
@@ -2848,6 +2865,7 @@ func TestBroadcastTyping(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	sender := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
 	other := &Client{hub: h, username: "bob", send: make(chan []byte, 10)}
@@ -2910,6 +2928,7 @@ func TestShutdownWithClients(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
 	go h.Run()
+	defer h.Stop()
 
 	// Create an httptest server for WebSocket connections.
 	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
@@ -2992,6 +3011,7 @@ func TestSendBotMessage(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "TestBot")
 	go h.Run()
+	defer h.Stop()
 
 	client := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
 	h.register <- client
