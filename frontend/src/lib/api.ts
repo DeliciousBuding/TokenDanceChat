@@ -429,6 +429,7 @@ class ChatAPI {
       this.intentionalClose = false;
       this.reconnectUsername = username;
       this.pendingJoin = { resolve, reject };
+      this.ws?.close();
       this.ws = new WebSocket(this.url);
 
       const timeout = setTimeout(() => {
@@ -1025,7 +1026,8 @@ class ChatAPI {
       this.ws.close();
       this.ws = null;
     }
-    this.handlers.clear();
+    // Note: we intentionally do NOT clear handlers here.
+    // Handlers are managed by component lifecycle (on/off).
   }
 }
 

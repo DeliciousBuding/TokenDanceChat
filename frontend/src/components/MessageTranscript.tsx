@@ -103,6 +103,7 @@ export function MessageTranscript({
   const hasMoreRef = useRef(true);
   const prevConversationRef = useRef("");
   const pendingScrollRestore = useRef(0);
+  const firstMessageIdBeforeLoad = useRef("");
   const scrollPositions = useRef<Map<string, number>>(new Map());
   const conversationKey = currentChat.type === "dm" ? `dm:${currentChat.username}` : currentChat.type === "group" ? `group:${currentChat.name}` : "public";
 
@@ -117,15 +118,23 @@ export function MessageTranscript({
       prevConversationRef.current = conversationKey;
       setNewMessageCount(0);
       lastSeenMessageIdRef.current = null;
+      pendingScrollRestore.current = 0;
+      firstMessageIdBeforeLoad.current = "";
+      setLoadingOlder(false);
     }
-  }, [conversationKey]);
+  }, [conversationKey, setLoadingOlder]);
 
   // Listen for "no more history" events.
   useEffect(() => {
-    const handler = () => { hasMoreRef.current = false; };
+    const handler = () => {
+      hasMoreRef.current = false;
+      pendingScrollRestore.current = 0;
+      firstMessageIdBeforeLoad.current = "";
+      setLoadingOlder(false);
+    };
     window.addEventListener("tdchat:no-more-history", handler);
     return () => window.removeEventListener("tdchat:no-more-history", handler);
-  }, []);
+  }, [setLoadingOlder]);
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -193,7 +202,19 @@ export function MessageTranscript({
       if (oldest) {
         setLoadingOlder(true);
         pendingScrollRestore.current = container.scrollHeight;
+        firstMessageIdBeforeLoad.current = effectiveMessages[0]?.id ?? "";
         chatAPI.sendLoadHistory(oldest.timestamp);
+        // Safety timeout: clear loadingOlder if server never responds
+        setTimeout(() => {
+          setLoadingOlder((prev) => {
+            if (prev) {
+              pendingScrollRestore.current = 0;
+              firstMessageIdBeforeLoad.current = "";
+              return false;
+            }
+            return prev;
+          });
+        }, 5000);
       }
     }
   }, [conversationKey, loadingOlder, effectiveMessages]);
@@ -202,9 +223,18 @@ export function MessageTranscript({
   // useLayoutEffect runs synchronously after DOM commits, preventing races with live messages.
   useLayoutEffect(() => {
     if (pendingScrollRestore.current && containerRef.current) {
+      // Guard against race condition: if a new live message arrives at the
+      // bottom while waiting for older history, effectiveMessages.length
+      // changes but the first message ID stays the same. Skip the scroll
+      // restore until older messages are actually prepended.
+      const currentFirstId = effectiveMessages[0]?.id ?? "";
+      if (currentFirstId === firstMessageIdBeforeLoad.current && firstMessageIdBeforeLoad.current !== "") {
+        return;
+      }
       const afterScroll = containerRef.current.scrollHeight;
       containerRef.current.scrollTop += afterScroll - pendingScrollRestore.current;
       pendingScrollRestore.current = 0;
+      firstMessageIdBeforeLoad.current = "";
       setLoadingOlder(false);
     }
   }, [effectiveMessages.length]);
