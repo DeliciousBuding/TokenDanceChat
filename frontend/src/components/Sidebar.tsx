@@ -284,6 +284,25 @@ export function Sidebar({
   // Friend users who are online
   const onlineFriends = friends.filter((f) => onlineUsers.includes(f));
 
+  // Sort other users for display: friends first, then DM partners, then others
+  const sortedOnlineGroups = useMemo(() => {
+    const friendsSet = new Set(friends);
+    const dmSet = new Set(dmPartners);
+    const friendUsers: string[] = [];
+    const dmUsers: string[] = [];
+    const restUsers: string[] = [];
+    for (const u of otherUsers) {
+      if (friendsSet.has(u)) {
+        friendUsers.push(u);
+      } else if (dmSet.has(u)) {
+        dmUsers.push(u);
+      } else {
+        restUsers.push(u);
+      }
+    }
+    return { friends: friendUsers, dmPartners: dmUsers, others: restUsers };
+  }, [otherUsers, friends, dmPartners]);
+
   // Resolve a conversation key to a display name.
   const resolveConversationName = useCallback(
     (key: string): string => {
@@ -428,9 +447,12 @@ export function Sidebar({
     const q = debouncedQuery.toLowerCase();
     const results: { type: "dm" | "group" | "friend"; name: string; key: string }[] = [];
 
+    const addedKeys = new Set<string>();
     for (const partner of dmPartners) {
       if (partner.toLowerCase().includes(q)) {
-        results.push({ type: "dm", name: partner, key: `dm:${partner}` });
+        const key = `dm:${partner}`;
+        addedKeys.add(key);
+        results.push({ type: "dm", name: partner, key });
       }
     }
     for (const g of groupList) {
@@ -440,7 +462,10 @@ export function Sidebar({
     }
     for (const friend of friends) {
       if (friend.toLowerCase().includes(q)) {
-        results.push({ type: "friend", name: friend, key: `dm:${friend}` });
+        const key = `dm:${friend}`;
+        if (!addedKeys.has(key)) {
+          results.push({ type: "friend", name: friend, key });
+        }
       }
     }
     return results;
@@ -498,6 +523,7 @@ export function Sidebar({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder}
             className="w-full rounded-lg border border-border bg-background/50 pl-9 pr-8 py-2 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/50 transition-colors"
           />
           {searchQuery && (
@@ -869,6 +895,7 @@ export function Sidebar({
       <div className="px-3 pt-1.5 pb-0.5">
         <button
           onClick={() => setAiAssistantsExpanded(!aiAssistantsExpanded)}
+          aria-expanded={aiAssistantsExpanded}
           className="flex min-h-9 w-full items-center gap-1 px-2 py-1.5 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors"
         >
           {aiAssistantsExpanded ? (
@@ -980,8 +1007,54 @@ export function Sidebar({
                   )}
                 </>
               )}
-              {/* Other users */}
-              {otherUsers.map((user) => (
+              {/* Friends online sub-section header (only when friends AND non-friends coexist) */}
+              {sortedOnlineGroups.friends.length > 0 && (sortedOnlineGroups.dmPartners.length > 0 || sortedOnlineGroups.others.length > 0) && (
+                <div className="flex items-center gap-2 px-3 py-1.5">
+                  <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider">
+                    {lang === "zh-CN" ? "好友在线" : "Friends Online"}
+                  </span>
+                  <div className="h-px flex-1 bg-accent" />
+                </div>
+              )}
+              {sortedOnlineGroups.friends.map((user) => (
+                <UserListItem
+                  key={user}
+                  user={user}
+                  isSelf={false}
+                  youLabel={t("sidebar.you")}
+                  sendMessageLabel={t("sidebar.sendMessage")}
+                  addFriendLabel={t("sidebar.addFriend")}
+                  onlineLabel={t("sidebar.online")}
+                  requestPendingLabel={t("sidebar.requestPending")}
+                  onStartDM={onStartDM}
+                  onAddFriend={onAddFriend}
+                  isFriend={friends.includes(user)}
+                  hasPendingRequest={pendingFriendUsers.includes(user)}
+                  displayName={userProfiles[user]?.display_name || user}
+                  avatarUrl={userProfiles[user]?.avatar_url || null}
+                  statusText={userProfiles[user]?.status || ""}
+                />
+              ))}
+              {sortedOnlineGroups.dmPartners.map((user) => (
+                <UserListItem
+                  key={user}
+                  user={user}
+                  isSelf={false}
+                  youLabel={t("sidebar.you")}
+                  sendMessageLabel={t("sidebar.sendMessage")}
+                  addFriendLabel={t("sidebar.addFriend")}
+                  onlineLabel={t("sidebar.online")}
+                  requestPendingLabel={t("sidebar.requestPending")}
+                  onStartDM={onStartDM}
+                  onAddFriend={onAddFriend}
+                  isFriend={friends.includes(user)}
+                  hasPendingRequest={pendingFriendUsers.includes(user)}
+                  displayName={userProfiles[user]?.display_name || user}
+                  avatarUrl={userProfiles[user]?.avatar_url || null}
+                  statusText={userProfiles[user]?.status || ""}
+                />
+              ))}
+              {sortedOnlineGroups.others.map((user) => (
                 <UserListItem
                   key={user}
                   user={user}
@@ -1010,6 +1083,7 @@ export function Sidebar({
         <div className="border-t border-border px-3 pt-2 pb-1">
           <button
             onClick={() => setArchivedExpanded(!archivedExpanded)}
+            aria-expanded={archivedExpanded}
             className="flex min-h-9 w-full items-center gap-1 px-2 py-1.5 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors"
           >
             {archivedExpanded ? (

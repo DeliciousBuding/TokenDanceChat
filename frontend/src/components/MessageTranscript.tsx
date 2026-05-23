@@ -82,7 +82,7 @@ export function MessageTranscript({
   highlight,
   scrollContainerRef,
 }: MessageTranscriptProps) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const {
     messages,
     username,
@@ -212,6 +212,22 @@ export function MessageTranscript({
   const hiddenCount = effectiveMessages.length - visibleMessages.length;
 
   const groups = useMemo(() => buildMessageGroups(visibleMessages, username), [visibleMessages, username]);
+
+  // Track render time for new-message animation detection
+  const renderTimeRef = useRef(Date.now());
+  renderTimeRef.current = Date.now();
+
+  // Identify messages that arrived in the last 2 seconds (real-time incoming)
+  const newMessageIds = useMemo(() => {
+    const cutoff = renderTimeRef.current - 2000;
+    const ids = new Set<string>();
+    for (const msg of visibleMessages) {
+      if (msg.timestamp > cutoff) {
+        ids.add(msg.id);
+      }
+    }
+    return ids;
+  }, [visibleMessages]);
 
   // Compute where to show the "New messages" unread divider.
   const lastReadTimestamp = lastReadTimestamps[conversationKey];
@@ -629,7 +645,7 @@ export function MessageTranscript({
               <div className="flex items-center gap-3 px-4 py-1.5 sm:py-2">
                 <div className="h-px flex-1 bg-border/50" />
                 <span className="text-[11px] font-medium text-muted-foreground/40 whitespace-nowrap select-none">
-                  {formatDate(groupTs)}
+                  {formatDate(groupTs, lang)}
                 </span>
                 <div className="h-px flex-1 bg-border/50" />
               </div>
@@ -685,6 +701,7 @@ export function MessageTranscript({
                         hideUsername={!isFirst}
                         forceShowTimestamp={isLast}
                         isGrouped={!isSolo}
+                        isNew={newMessageIds.has(msg.id)}
                         onReply={onReply}
                         onDelete={onDelete}
                         onForward={onForward}

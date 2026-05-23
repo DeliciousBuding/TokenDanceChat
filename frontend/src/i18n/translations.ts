@@ -157,6 +157,7 @@ export interface TranslationDict {
     react: string;
     translate: string;
     contextMenu: string;
+    seenBy: string;
   };
   system: {
     userJoined: string;
@@ -585,6 +586,7 @@ const zhCN: TranslationDict = {
     react: "添加表情",
     translate: "翻译",
     contextMenu: "消息操作",
+    seenBy: "{{n}} 人已读",
   },
   system: {
     userJoined: "{{username}} 加入了聊天室",
@@ -1015,6 +1017,7 @@ const enUS: TranslationDict = {
     react: "React",
     translate: "Translate",
     contextMenu: "Message actions",
+    seenBy: "Seen by {{n}}",
   },
   system: {
     userJoined: "{{username}} joined the chat",

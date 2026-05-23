@@ -45,6 +45,8 @@ interface MessageBubbleProps {
   staggerDelay?: number;
   /** Search highlight term — wraps matching text in <mark> */
   highlight?: string;
+  /** Animate this message as a real-time incoming message */
+  isNew?: boolean;
 }
 
 /** Simple code block renderer with syntax highlighting and copy button */
@@ -459,6 +461,7 @@ export const MessageBubble = memo(function MessageBubble({
   onLongPress,
   staggerDelay,
   highlight,
+  isNew = false,
 }: MessageBubbleProps) {
   const { t } = useTranslation();
   const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
@@ -866,13 +869,17 @@ export const MessageBubble = memo(function MessageBubble({
         }
       }}
       className={cn(
-        "group flex gap-2 px-3 animate-spring-up scroll-mt-16 sm:gap-3 sm:px-4",
+        "group flex gap-2 px-3 scroll-mt-16 sm:gap-3 sm:px-4",
+        isNew ? "animate-message-in" : "animate-spring-up",
         isOwn ? "justify-end" : "justify-start",
         paddingY,
         selectMode && "cursor-pointer",
         isSelected && "bg-primary/5",
       )}
-      style={{ animationDelay: staggerDelay ? `${staggerDelay}ms` : undefined }}
+      style={{
+        animationDelay: staggerDelay ? `${staggerDelay}ms` : undefined,
+        ...(isNew ? { willChange: "transform, opacity" } : {}),
+      }}
     >
       {/* Select checkbox (visible in select mode) */}
       {selectMode && (
@@ -1178,13 +1185,23 @@ export const MessageBubble = memo(function MessageBubble({
           <div className="mt-1 flex justify-end items-center gap-1">
             {/* Delivery status icons — Telegram-style checkmarks */}
             {message.read_by && message.read_by.length > 0 ? (
-              <ReadReceipt
-                readers={message.read_by}
-                readByLabel={t("message.readBy")}
-                readLabel={t("message.read")}
-                userProfiles={userProfiles}
-                onlineUsers={onlineUsers}
-              />
+              <>
+                <ReadReceipt
+                  readers={message.read_by}
+                  readByLabel={t("message.readBy")}
+                  readLabel={t("message.read")}
+                  userProfiles={userProfiles}
+                  onlineUsers={onlineUsers}
+                />
+                {message.group && (
+                  <GroupSeenByLabel
+                    readers={message.read_by}
+                    userProfiles={userProfiles}
+                    seenByLabel={t("message.seenBy", { n: message.read_by.length })}
+                    readLabel={t("message.read")}
+                  />
+                )}
+              </>
             ) : message.id ? (
               <span className="inline-flex text-muted-foreground/40" aria-label={t("message.sent")}>
                 <Check className="h-3 w-3" />
@@ -1284,6 +1301,50 @@ export const MessageBubble = memo(function MessageBubble({
 });
 
 
+
+// ── GroupSeenByLabel: compact "Seen by N" label for group messages ──
+
+function GroupSeenByLabel({ readers, userProfiles, seenByLabel, readLabel }: {
+  readers: string[];
+  userProfiles: Record<string, { display_name?: string; avatar_url?: string }>;
+  seenByLabel: string;
+  readLabel: string;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const first5 = readers.slice(0, 5);
+  const more = readers.length - 5;
+
+  return (
+    <span className="relative inline-flex">
+      <button
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        onClick={(e) => { e.stopPropagation(); setShowTooltip(!showTooltip); }}
+        className="text-[11px] text-muted-foreground/70 cursor-pointer hover:text-muted-foreground transition-colors"
+        aria-label={readLabel}
+      >
+        {seenByLabel}
+      </button>
+      {showTooltip && (
+        <div className="absolute bottom-full right-0 mb-1.5 z-50 rounded-lg border border-border bg-card shadow-xl p-2 min-w-[120px] animate-scale-in">
+          {first5.map((r) => {
+            const profile = userProfiles[r];
+            return (
+              <div key={r} className="flex items-center gap-2 px-1 py-0.5 text-xs text-foreground/80">
+                <span className="truncate">{profile?.display_name || r}</span>
+              </div>
+            );
+          })}
+          {more > 0 && (
+            <div className="text-[10px] text-muted-foreground/60 mt-1 px-1">
+              +{more}
+            </div>
+          )}
+        </div>
+      )}
+    </span>
+  );
+}
 
 // ── ReadReceipt: clickable tooltip showing who read a message ──
 
