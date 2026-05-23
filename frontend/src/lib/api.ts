@@ -510,7 +510,6 @@ class ChatAPI {
       this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1);
 
     this.reconnectTimer = setTimeout(() => {
-      console.log(`Reconnecting... attempt ${this.reconnectAttempts}`);
       this.connect(username).catch(() => {
         // Error already logged in connect.
       });

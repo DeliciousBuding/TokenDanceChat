@@ -264,6 +264,18 @@ func (c *Client) ReadPump() {
 			c.handleWebhookList(msg)
 		case "webhook_audit_list":
 			c.handleWebhookAuditList(msg)
+		case "profile_update":
+			c.handleProfileUpdate(msg)
+		case "profile_get":
+			c.handleProfileGet(msg)
+		case "status_update":
+			c.handleStatusUpdate(msg)
+		case "poll_create":
+			c.handlePollCreate(msg)
+		case "poll_vote":
+			c.handlePollVote(msg)
+		case "poll_close":
+			c.handlePollClose(msg)
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -600,7 +612,9 @@ func (c *Client) handleChatMessage(msg Message) {
 			} else if c.botResponding.CompareAndSwap(false, true) {
 				go func() {
 					defer c.botResponding.Store(false)
-					c.handleAgentResponsePicoClaw(context.Background(), content, currentRoom)
+					ctxPC, cancelPC := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancelPC()
+				c.handleAgentResponsePicoClaw(ctxPC, content, currentRoom)
 				}()
 			}
 		} else {
