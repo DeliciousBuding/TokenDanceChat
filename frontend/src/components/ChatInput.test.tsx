@@ -538,4 +538,242 @@ describe("ChatInput", () => {
       expect(onSend).not.toHaveBeenCalled();
     });
   });
+
+  describe("草稿保存/恢复 (draft save/restore)", () => {
+    it("public 会话挂载时从 tdchat-draft-public 恢复草稿", () => {
+      localStorageMock.setItem("tdchat-draft-public", "saved draft");
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      expect(textarea.value).toBe("saved draft");
+    });
+
+    it("DM 会话挂载时从 tdchat-draft-dm-{username} 恢复草稿", () => {
+      localStorageMock.setItem("tdchat-draft-dm-alice", "dm draft");
+      useChatStore.setState({ currentChat: { type: "dm", username: "alice" } });
+      renderChatInput();
+      const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+      expect(textarea.value).toBe("dm draft");
+    });
+
+    it("group 会话挂载时从 tdchat-draft-group-{name} 恢复草稿", () => {
+      localStorageMock.setItem("tdchat-draft-group-general", "group draft");
+      useChatStore.setState({ currentChat: { type: "group", name: "general" } });
+      renderChatInput();
+      const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+      expect(textarea.value).toBe("group draft");
+    });
+
+    it("内容变化后防抖 500ms 自动保存草稿", () => {
+      vi.useFakeTimers();
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      typeInTextarea(textarea, "auto saved draft");
+
+      // 防抖未到时不应保存
+      expect(localStorageMock.getItem("tdchat-draft-public")).toBeNull();
+
+      vi.advanceTimersByTime(600);
+      expect(localStorageMock.getItem("tdchat-draft-public")).toBe("auto saved draft");
+      vi.useRealTimers();
+    });
+
+    it("清空内容后防抖删除草稿", () => {
+      vi.useFakeTimers();
+      localStorageMock.setItem("tdchat-draft-public", "existing draft");
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+
+      // Clear the restored draft content
+      typeInTextarea(textarea, "");
+      vi.advanceTimersByTime(600);
+
+      expect(localStorageMock.getItem("tdchat-draft-public")).toBeNull();
+      vi.useRealTimers();
+    });
+
+    it("发送消息后同步清除草稿", () => {
+      localStorageMock.setItem("tdchat-draft-public", "draft before send");
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      typeInTextarea(textarea, "draft before send");
+
+      fireEvent.keyDown(textarea, { key: "Enter" });
+
+      expect(localStorageMock.getItem("tdchat-draft-public")).toBeNull();
+    });
+  });
+
+  describe("文件/图片粘贴 (file/image paste)", () => {
+    it("粘贴图片调用 FileReader 并设置 pendingImage", () => {
+      const readAsDataURLSpy = vi
+        .spyOn(FileReader.prototype, "readAsDataURL")
+        .mockImplementation(function (this: FileReader, _blob: Blob) {
+          Object.defineProperty(this, "result", { value: "data:image/png;base64,mock123" });
+          this.onload?.(new Event("load") as ProgressEvent<FileReader>);
+        });
+
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+
+      const file = new File(["fake-image"], "test.png", { type: "image/png" });
+      fireEvent.paste(textarea, {
+        clipboardData: {
+          items: [{ type: "image/png", getAsFile: () => file }],
+        },
+      });
+
+      expect(readAsDataURLSpy).toHaveBeenCalledWith(file);
+      expect(useChatStore.getState().pendingImage).toBe("data:image/png;base64,mock123");
+      readAsDataURLSpy.mockRestore();
+    });
+
+    it("粘贴非图片内容不触发 FileReader", () => {
+      const readAsDataURLSpy = vi.spyOn(FileReader.prototype, "readAsDataURL");
+
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+
+      fireEvent.paste(textarea, {
+        clipboardData: {
+          items: [{ type: "text/plain", getAsFile: () => null }],
+        },
+      });
+
+      expect(readAsDataURLSpy).not.toHaveBeenCalled();
+      readAsDataURLSpy.mockRestore();
+    });
+
+    it("粘贴超过 50MB 的图片被忽略", () => {
+      const readAsDataURLSpy = vi.spyOn(FileReader.prototype, "readAsDataURL");
+
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+
+      const largeFile = new File([], "large.png", { type: "image/png" });
+      Object.defineProperty(largeFile, "size", { value: 51 * 1024 * 1024 });
+
+      fireEvent.paste(textarea, {
+        clipboardData: {
+          items: [{ type: "image/png", getAsFile: () => largeFile }],
+        },
+      });
+
+      expect(readAsDataURLSpy).not.toHaveBeenCalled();
+      readAsDataURLSpy.mockRestore();
+    });
+  });
+
+  describe("回复取消 (reply-to cancel)", () => {
+    it("点击取消按钮清除回复状态", () => {
+      const replyTo: ChatMessage = {
+        id: "msg-1",
+        username: "alice",
+        content: "Original message",
+        timestamp: Date.now(),
+      };
+      renderChatInput({ replyTo });
+
+      // Reply indicator should be visible
+      expect(screen.getByText("alice")).toBeTruthy();
+
+      // Click the cancel button (aria-label="取消")
+      fireEvent.click(screen.getByLabelText("取消"));
+
+      // After clicking cancel, replyTo should be cleared (setReplyTo(null) was called)
+      expect(useChatStore.getState().replyTo).toBeNull();
+    });
+  });
+
+  describe("编辑消息内联模式 (editing message inline UI)", () => {
+    it("ArrowUp 加载消息后显示编辑指示器", () => {
+      const messages = [
+        { id: "m1", username: "testuser", content: "original message", timestamp: 1000 },
+      ];
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages,
+      });
+
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+
+      fireEvent.keyDown(textarea, { key: "ArrowUp" });
+
+      // Editing indicator should appear
+      expect(screen.getByText("编辑消息")).toBeTruthy();
+      expect(textarea.value).toBe("original message");
+    });
+
+    it("点击编辑取消按钮退出编辑态并清空输入", () => {
+      const messages = [
+        { id: "m1", username: "testuser", content: "original message", timestamp: 1000 },
+      ];
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages,
+      });
+
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+
+      // Enter editing mode
+      fireEvent.keyDown(textarea, { key: "ArrowUp" });
+      expect(screen.getByText("编辑消息")).toBeTruthy();
+
+      // Click cancel button
+      fireEvent.click(screen.getByLabelText("取消"));
+
+      // Should exit editing mode and clear content
+      expect(screen.queryByText("编辑消息")).toBeNull();
+      expect(textarea.value).toBe("");
+    });
+
+    it("同时有 replyTo 和编辑态时优先显示回复指示器", () => {
+      const messages = [
+        { id: "m1", username: "testuser", content: "my message", timestamp: 1000 },
+      ];
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages,
+      });
+
+      const replyTo: ChatMessage = {
+        id: "msg-2",
+        username: "alice",
+        content: "reply target message",
+        timestamp: Date.now(),
+      };
+
+      renderChatInput({ replyTo });
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+
+      fireEvent.keyDown(textarea, { key: "ArrowUp" });
+
+      // Reply indicator should be visible (priority over editing)
+      expect(screen.getByText("alice")).toBeTruthy();
+      // Editing indicator should NOT appear
+      expect(screen.queryByText("编辑消息")).toBeNull();
+    });
+  });
+
+  describe("@mention 额外场景", () => {
+    it("DM 会话的 mention 列表不包含 @all", () => {
+      useChatStore.setState({ currentChat: { type: "dm", username: "alice" } });
+
+      renderChatInput();
+      const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+
+      fireEvent.change(textarea, { target: { value: "@" } });
+      Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
+
+      // TokenBot and PicoClaw (assistants) should appear
+      expect(screen.getByText("TokenBot")).toBeTruthy();
+      expect(screen.getByText("PicoClaw")).toBeTruthy();
+      // @all should NOT appear in DM context
+      expect(screen.queryByText("all")).toBeNull();
+    });
+  });
 });
