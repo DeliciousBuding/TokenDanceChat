@@ -76,7 +76,7 @@ async function createPollViaWS(
           const wsUrl = `${protocol}//${window.location.host}/ws`;
           const ws = new WebSocket(wsUrl);
           const botName =
-            username ?? `pollbot_${Date.now()}`;
+            username ?? `pb_${Math.random().toString(36).slice(2, 8)}`;
 
           const timeout = setTimeout(() => {
             ws.close();
@@ -95,7 +95,7 @@ async function createPollViaWS(
             // Wait for join confirmation, then send poll_create.
             if (
               !joined &&
-              (msg.type === "joined" || msg.type === "users")
+              (msg.type === "history" || msg.type === "user_status")
             ) {
               joined = true;
               ws.send(
@@ -139,56 +139,81 @@ async function createPollViaWS(
 }
 
 /**
- * Close a poll by opening a temporary WebSocket as the poll creator.
- * The `creatorName` must match the poll's creator field.
+ * Create a poll through the page's existing WebSocket connection
+ * (window.__chatAPI).  Use this when the poll creator must match the
+ * page user — it avoids the kick mechanism that would disconnect the
+ * page if we opened a second WS with the same username.
  */
-async function closePollViaWS(
+async function createPollViaPage(
   page: import("@playwright/test").Page,
-  pollId: string,
-  creatorName: string,
-): Promise<void> {
+  question: string,
+  options: string[],
+  opts?: { multipleChoice?: boolean; isAnonymous?: boolean },
+): Promise<string> {
   return page.evaluate(
-    ({ pollId, creatorName }) => {
-      return new Promise<void>((resolve, reject) => {
-        const protocol =
-          window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
-        const ws = new WebSocket(wsUrl);
+    ({ question, options, multipleChoice, isAnonymous }) => {
+      return new Promise<string>((resolve, reject) => {
+        const api = (window as any).__chatAPI;
+        if (!api) return reject(new Error("__chatAPI not on window"));
 
         const timeout = setTimeout(() => {
-          ws.close();
-          reject(new Error("Poll close via WS timed out after 10s"));
-        }, 10000);
+          unsub();
+          reject(new Error("Poll create via page WS timed out after 15s"));
+        }, 15000);
 
-        let joined = false;
-
-        ws.onopen = () => {
-          ws.send(JSON.stringify({ type: "join", username: creatorName }));
-        };
-
-        ws.onmessage = (e) => {
-          const msg = JSON.parse(e.data as string);
-
-          if (!joined && (msg.type === "joined" || msg.type === "users")) {
-            joined = true;
-            ws.send(JSON.stringify({ type: "poll_close", id: pollId }));
-            return;
-          }
-
-          if (msg.type === "poll_closed") {
+        function handler(msg: any) {
+          if (msg.poll && (msg.poll.question === question)) {
             clearTimeout(timeout);
-            ws.close();
-            resolve();
+            unsub();
+            resolve(msg.id || msg.poll.id);
           }
-        };
+        }
 
-        ws.onerror = () => {
-          clearTimeout(timeout);
-          reject(new Error("WebSocket error during poll close"));
-        };
+        const unsub = api.on("poll_created", handler);
+        api.sendPollCreate(question, options, multipleChoice ?? false, isAnonymous ?? false);
       });
     },
-    { pollId, creatorName },
+    {
+      question,
+      options,
+      multipleChoice: opts?.multipleChoice ?? false,
+      isAnonymous: opts?.isAnonymous ?? false,
+    },
+  );
+}
+
+/**
+ * Close a poll through the page's existing WebSocket connection.
+ * Use when the page user is the poll creator (avoids kick).
+ */
+async function closePollViaPage(
+  page: import("@playwright/test").Page,
+  pollId: string,
+): Promise<void> {
+  return page.evaluate(
+    (pollId) => {
+      return new Promise<void>((resolve, reject) => {
+        const api = (window as any).__chatAPI;
+        if (!api) return reject(new Error("__chatAPI not on window"));
+
+        const timeout = setTimeout(() => {
+          unsub();
+          reject(new Error("Poll close via page WS timed out after 10s"));
+        }, 10000);
+
+        function handler(msg: any) {
+          if (msg.id === pollId) {
+            clearTimeout(timeout);
+            unsub();
+            resolve();
+          }
+        }
+
+        const unsub = api.on("poll_closed", handler);
+        api.sendPollClose(pollId);
+      });
+    },
+    pollId,
   );
 }
 
@@ -298,7 +323,7 @@ test.describe("Poll Creation & Voting Flow", () => {
 
       // The vote count text should show "1 票" (zh-CN) or "1 vote".
       // PollMessage renders: t("poll.votes", { count: totalVotes })
-      await expect(page.getByText(/1\s*(票|vote)/)).toBeVisible({
+      await expect(page.getByText(/1\s*(票|vote)/).first()).toBeVisible({
         timeout: 5000,
       });
     });
@@ -395,13 +420,12 @@ test.describe("Poll Creation & Voting Flow", () => {
         timeout: 15000,
       });
 
-      // Create the poll under the same identity so isOwnPoll is true
-      // and the close button renders.
+      // Create the poll via the page's own WebSocket so isOwnPoll is true
+      // and the close button renders.  (Using createPollViaWS would open a
+      // second WS with the same username and kick the page.)
       const question = `CloseTest_${Math.random().toString(36).slice(2, 6)}`;
       const options = ["Keep", "Archive", "Delete"];
-      await createPollViaWS(page, question, options, {
-        username: creatorName,
-      });
+      const pollId = await createPollViaPage(page, question, options);
 
       await expect(page.getByText(question)).toBeVisible({ timeout: 10000 });
 
@@ -423,11 +447,8 @@ test.describe("Poll Creation & Voting Flow", () => {
       const question = `FinalResult_${Math.random().toString(36).slice(2, 6)}`;
       const options = ["Up", "Down", "Strange", "Charm"];
 
-      const { pollId, botName } = await createPollViaWS(
-        page,
-        question,
-        options,
-      );
+      // Create the poll via the page's own WebSocket (avoids kick).
+      const pollId = await createPollViaPage(page, question, options);
       await expect(page.getByText(question)).toBeVisible({ timeout: 10000 });
 
       // Vote for "Charm" to generate some data.
@@ -436,24 +457,24 @@ test.describe("Poll Creation & Voting Flow", () => {
         .filter({ hasText: "Charm" })
         .first()
         .click();
-      await page.getByRole("button", { name: "投票" }).click();
-      await expect(page.getByText(/1\s*(票|vote)/)).toBeVisible({
+      await page.getByRole("button", { name: "投票" }).first().click();
+      await expect(page.getByText(/1\s*(票|vote)/).first()).toBeVisible({
         timeout: 5000,
       });
 
-      // Close the poll via WS using the bot's identity.
-      await closePollViaWS(page, pollId, botName);
+      // Close the poll via the page's own WebSocket.
+      await closePollViaPage(page, pollId);
 
       // After poll_closed broadcast, the PollMessage should show:
       // - "最终结果" badge (t("poll.finalResults"))
       // - Percentage bars on each option
       // - Options should be disabled
-      await expect(page.getByText("最终结果")).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText("最终结果").first()).toBeVisible({ timeout: 10000 });
 
       // Percentage text should be visible on the options.
       // The winning option shows 100%, others show 0% (or 2% minimum bar).
-      await expect(page.getByText(/100%/)).toBeVisible({ timeout: 5000 });
-      await expect(page.getByText(/0%/)).toBeVisible({ timeout: 5000 });
+      await expect(page.getByText(/100%/).first()).toBeVisible({ timeout: 5000 });
+      await expect(page.getByText(/0%/).first()).toBeVisible({ timeout: 5000 });
 
       // All option buttons should be disabled in closed state.
       const optionButtons = page
