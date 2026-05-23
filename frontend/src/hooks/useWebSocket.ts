@@ -29,14 +29,18 @@ let unreadTitleCount = 0;
 let isTabActive = typeof document !== "undefined" ? !document.hidden : true;
 
 function updatePageTitle(): void {
-  if (!isTabActive && unreadTitleCount > 0) {
-    document.title = `(${unreadTitleCount}) ${BASE_TITLE}`;
-  } else {
-    document.title = BASE_TITLE;
-  }
+  document.title = getPageTitle(unreadTitleCount, isTabActive);
 }
 
-function i18nSys(key: string, params?: Record<string, string>): string {
+/** Pure computation — exported for testing. */
+export function getPageTitle(unreadCount: number, tabActive: boolean): string {
+  if (!tabActive && unreadCount > 0) {
+    return `(${unreadCount}) ${BASE_TITLE}`;
+  }
+  return BASE_TITLE;
+}
+
+export function i18nSys(key: string, params?: Record<string, string>): string {
   if (params) {
     return JSON.stringify({ key, params });
   }
@@ -44,12 +48,22 @@ function i18nSys(key: string, params?: Record<string, string>): string {
 }
 
 // Desktop notification helper
-function notifyMessage(title: string, body: string) {
+export function notifyMessage(title: string, body: string) {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
   try {
     const n = new Notification(title, { body, icon: "/favicon.svg", silent: true });
     n.onclick = () => { window.focus(); n.close(); };
   } catch { /* ignore */ }
+}
+
+/** Check if a conversation is muted, considering both legacy mutedConversations
+ *  and per-conversation notification preferences with time-based muting. */
+export function isConversationMuted(key: string): boolean {
+  const state = useChatStore.getState();
+  if (state.mutedConversations.includes(key)) return true;
+  const pref = state.notificationPrefs[key];
+  if (pref && pref.mutedUntil > Date.now()) return true;
+  return false;
 }
 
 export function useWebSocket() {
@@ -112,16 +126,6 @@ export function useWebSocket() {
     setGroupInfoPanel,
     setTranslation,
   } = useChatStore();
-
-  // Check if a conversation is muted, considering both legacy mutedConversations
-  // and per-conversation notification preferences with time-based muting.
-  function isConversationMuted(key: string): boolean {
-    const state = useChatStore.getState();
-    if (state.mutedConversations.includes(key)) return true;
-    const pref = state.notificationPrefs[key];
-    if (pref && pref.mutedUntil > Date.now()) return true;
-    return false;
-  }
 
   const connect = useCallback(
     async (name: string) => {
