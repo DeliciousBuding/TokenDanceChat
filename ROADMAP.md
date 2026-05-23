@@ -2,7 +2,7 @@
 
 最后更新：2026-05-23（晚）
 
-发布: [v0.2.7](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.7) | Docker: `tokendancechat:v0.2.7` | 测试: 609 前端 / 40 文件 / 40%+ 行覆盖率
+发布: [v0.2.7](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.7) | Docker: `tokendancechat:v0.2.7` | 测试: 624 前端 / 40 文件 / 全绿
 
 ## 当前目标
 
@@ -48,13 +48,14 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 工程基建 + UX 打磨
 
-状态：持续推进。609 tests / 40 files / 40%+ 行覆盖率 / 8 E2E group-call / ESLint 0 / CI 就绪 / 生产已部署。
+状态：持续推进。624 tests / 40 files / tsc 0 / ESLint 0 / CI 就绪。
 
-- [x] 前端测试从 237 → 609 (+372 tests / +22 文件 / 40%+ 行覆盖率)。
+- [x] 前端测试从 237 → 624 (+387 tests / +22 文件 / 40%+ 行覆盖率)。
 - [x] E2E 测试从 18 → 54 (44 auth-flow + 8 group-call + 2 webhook)。
 - [x] 后端测试扩展：store +7、hub +8、handler +34、llm +8、ratelimit 更新、ws +2。
-- [x] PM 产品审计 P0 修复：侧栏对话预览（last message + timestamp）、未读「新消息」分隔线、移动端语音按钮可见。
-- [x] PM 产品审计 P2 修复：相对时间戳（刚刚/X分钟前/HH:mm/日期）。
+- [x] PM 产品审计 P0 修复：侧栏对话预览、未读「新消息」分隔线、移动端语音按钮可见。
+- [x] PM 产品审计 P1 修复：侧栏 IA 重排（DM/群组优先，AI 助手折叠）、对话搜索/过滤。
+- [x] PM 产品审计 P2 修复：桌面 header「更多」下拉菜单、相对时间戳（刚刚/X分钟前/日期/年）。
 - [x] 交叉审查 HIGH/MEDIUM 全部修复（ForwardModal CSS 脆弱性、PollMessage error paths、ThreadPanel onSendReply、MessageTranscript i18n masking）。
 - [x] ScrollToBottom FAB（Telegram 风格，200px 阈值，ChevronDown 图标，opacity+scale 动画）。
 - [x] LoginScreen 错误 i18n 映射（auth.loginFailed / auth.registerFailed）。
@@ -63,13 +64,14 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] product-gap-analysis.md 陈旧条目修正（置顶/归档/静音/↑编辑）。
 - [x] 3 项安全修复（邀请码枚举泄露、WritePump 挂起、密码 bcrypt 上限）。
 - [x] CI/CD: GitHub Actions（backend-test / frontend-test / lint）。
-- [x] 项目 Skills: `.agents/skills/verify.md`（编辑器无关 SOP）。
+- [x] 项目 Skills: `.agents/skills/verify.md`、`.agents/skills/pm-audit.md`。
 - [x] api.ts 测试（142 tests，覆盖 send 方法、事件调度、ErrorCode、disconnect）。
 - [x] 消息送达状态（Telegram 双勾风格：已读蓝✓✓ / 已送达灰✓✓ / 已发送无勾）。
 - [x] AGENTS.md 新增 dev-loop 工作流、模型分配策略、分支策略。
 - [x] 安全泄露 3 条 grep 自检 + 违规响应协议。
 - [x] 覆盖率达 40%+（40.47% 行覆盖率）。
 - [x] Opus 审查 MEDIUM/LOW 修复：无界内存 map 清理、CORS/WS 硬编码域名移除。
+- [x] Opus 交叉审查第二轮修复（2 HIGH + 5 MEDIUM）：Sidebar previewMap 记忆化、i18n key 冲突、未读清理、屏蔽用户过滤、年份消除歧义、user-scoped localStorage。
 - [x] 群组视频通话 E2E（8 tests，含 signaling flow、UI 状态管理、多标签隔离）。
 
 ## 当前增量：Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收
