@@ -48,19 +48,22 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 工程基建 + UX 打磨
 
-状态：推进中。406 tests / 36 文件 / 46 E2E tests / ESLint 0 errors / CI 就绪。
+状态：推进中。411 tests / 36 files / 44 E2E pass / ESLint 0 / CI 就绪 / 生产已部署。
 
-- [x] 前端测试从 237 (18 文件) → 406 (36 文件)，+169 tests / +18 文件。
-- [x] E2E 测试从 18 → 46 (+28：auth-flow 注册/登录/游客/多标签页)。
-- [x] 后端 store 测试 +7 函数（RegisterUser, VerifyUser, Groups, Messages, InviteCodes）。
-- [x] 覆盖率从 ~25% → ~35%（前端）+ store 22% → ~30%（后端）。
-- [x] cross-review 审查新测试质量：3 HIGH 已修复（CSS selector 脆弱性、ForwardModal 断言）。
-- [x] LoginScreen 错误消息 i18n 映射（不再泄漏原始英文错误）。
-- [x] 新增组件测试：LoginScreen, RegisterScreen, FileMessage, ForwardModal, SearchBar, SystemMessage, ConversationSearch, PollMessage, GroupCreateModal, ThemeToggle, Avatar。
-- [x] jest-dom matchers 全局启用（`toBeDisabled`, `toBeVisible` 等）。
-- [x] 共享 `mockI18n()` 工具，消除重复 i18n mock 样板。
-- [x] `@vitest/coverage-v8` + `npm run test:coverage` / `test:watch`。
-- [x] ESLint flat config（typescript-eslint + react-hooks），0 errors / 27 warnings。
+- [x] 前端测试从 237 → 411 (+174 tests / +18 文件 / 36% 覆盖率)。
+- [x] E2E 测试从 18 → 46 (44 pass / 2 skip / 0 fail)。
+- [x] 后端测试扩展：store +7、hub +8。
+- [x] 交叉审查 HIGH/MEDIUM 全部修复（ForwardModal CSS 脆弱性、PollMessage error paths、ThreadPanel onSendReply、MessageTranscript i18n masking、LoginScreen loading/{success:false} 测试）。
+- [x] ScrollToBottom FAB（Telegram 风格，200px 阈值，ChevronDown 图标，opacity+scale 动画）。
+- [x] LoginScreen 错误 i18n 映射（auth.loginFailed / auth.registerFailed）。
+- [x] RegisterScreen i18n 修复（auth.fillAllFields）。
+- [x] Settings 按钮标签修复（notificationPrefs → openSettings）。
+- [x] product-gap-analysis.md 陈旧条目修正（置顶/归档/静音/↑编辑）。
+- [x] 3 项安全修复（邀请码枚举泄露、WritePump 挂起、密码 bcrypt 上限）。
+- [x] CI/CD: GitHub Actions（backend-test / frontend-test / lint）。
+- [x] 项目 Skills: `.agents/skills/verify.md`（编辑器无关 SOP）。
+- [ ] api.ts 测试（覆盖率 7.2%，进行中）。
+- [ ] 消息送达状态（Telegram 双勾风格）。
 - [x] 交叉审查 quick wins：RegisterScreen 硬编码中文字符串 → i18n key；ChatLayout 设置按钮标签修复；`product-gap-analysis.md` 陈旧条目修正。
 - [x] AGENTS.md 新增 dev-loop 工作流、模型分配策略、分支策略。
 - [x] 安全泄露 3 条 grep 自检 + 违规响应协议（脱敏 → filter-branch → force push）。
