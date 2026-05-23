@@ -120,7 +120,7 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 → {"type":"block","username":"spammer"}
 ```
 
-完整协议见 [docs/llm-api-reference.md](./docs/llm-api-reference.md)。
+完整协议见 [docs/webhook-integration.md](./docs/webhook-integration.md)。
 
 ---
 

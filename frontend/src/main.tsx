@@ -60,8 +60,12 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
   });
 }
 
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
 createRoot(document.getElementById("root")!).render(
   <I18nProvider>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </I18nProvider>,
 );
