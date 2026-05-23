@@ -84,6 +84,20 @@ const clickCallingEndButton = async (page: import("@playwright/test").Page) => {
   await rejectBtn.click();
 };
 
+/**
+ * 在 member 页面上接受群组邀请。
+ * 群主调用 createGroup 后，member 会收到 group_invite，
+ * 顶部横幅显示 "接受" 按钮。点击后 member 正式加入群组。
+ */
+const acceptGroupInvite = async (memberPage: import("@playwright/test").Page) => {
+  // 等待邀请横幅出现并点击接受按钮。
+  const acceptBtn = memberPage.getByRole("button", { name: "接受" });
+  await expect(acceptBtn).toBeVisible({ timeout: 8000 });
+  await acceptBtn.click();
+  // 等待横幅消失，确认邀请已被处理。
+  await expect(acceptBtn).not.toBeVisible({ timeout: 5000 });
+};
+
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
 /* ------------------------------------------------------------------ */
@@ -120,13 +134,16 @@ test.describe("Group video call", () => {
       // 群主创建群组并选择成员。
       await createGroup(page, groupName, memberName);
 
+      // 成员接受群组邀请，正式加入群组。
+      await acceptGroupInvite(pageMember);
+
       // 等待 group_info 事件更新 groups store 中的 members 列表。
       await page.waitForTimeout(1500);
 
       // ── 2. 发起群组通话 ──
 
       // 服务器返回 group_create 后 members 列表已填充 → 按钮可见。
-      const callButton = page.getByLabel("群组通话");
+      const callButton = page.locator('button[aria-label="群组通话"]').last();
       await expect(callButton).toBeVisible({ timeout: 10000 });
       await callButton.click();
 
@@ -179,10 +196,12 @@ test.describe("Group video call", () => {
 
       // 创建群组。
       await createGroup(page, groupName, memberName);
+      await acceptGroupInvite(pageMember);
+      await page.waitForTimeout(1000);
 
       // 发起通话。
-      await expect(page.getByLabel("群组通话")).toBeVisible({ timeout: 10000 });
-      await page.getByLabel("群组通话").click();
+      await expect(page.locator('button[aria-label="群组通话"]').last()).toBeVisible({ timeout: 10000 });
+      await page.locator('button[aria-label="群组通话"]').last().click();
 
       // 不点击挂断按钮，等 getUserMedia 失败 → startGroupCall 内部 setState("ended")。
       // 注意：此时 endCall 未被调用，activeCall 仍然存在，
@@ -222,7 +241,7 @@ test.describe("Group video call", () => {
 
       // "群组通话"按钮不应出现（无其他成员则无法发起群组通话）。
       await page.waitForTimeout(500);
-      await expect(page.getByLabel("群组通话")).not.toBeVisible({
+      await expect(page.locator('button[aria-label="群组通话"]').last()).not.toBeVisible({
         timeout: 3000,
       });
     });
@@ -250,13 +269,14 @@ test.describe("Group video call", () => {
 
       // 创建带成员的群组 → 按钮可见。
       await createGroup(page, groupName, memberName);
+      await acceptGroupInvite(pageMember);
       await page.waitForTimeout(1500);
-      await expect(page.getByLabel("群组通话")).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('button[aria-label="群组通话"]').last()).toBeVisible({ timeout: 10000 });
 
       // 切换回公开聊天 → 按钮应消失（当前非 group 类型）。
       await page.getByRole("button", { name: /^TokenDance/ }).click();
       await page.waitForTimeout(500);
-      await expect(page.getByLabel("群组通话")).not.toBeVisible({
+      await expect(page.locator('button[aria-label="群组通话"]').last()).not.toBeVisible({
         timeout: 3000,
       });
 
@@ -265,7 +285,7 @@ test.describe("Group video call", () => {
       await expect(page.getByRole("heading", { name: new RegExp(groupName) })).toBeVisible({
         timeout: 5000,
       });
-      await expect(page.getByLabel("群组通话")).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('button[aria-label="群组通话"]').last()).toBeVisible({ timeout: 10000 });
 
       await pageMember.close();
     });
@@ -292,10 +312,12 @@ test.describe("Group video call", () => {
       await page.waitForTimeout(1000);
 
       await createGroup(page, groupName, memberName);
+      await acceptGroupInvite(pageMember);
+      await page.waitForTimeout(1000);
 
       // 发起通话。
-      await expect(page.getByLabel("群组通话")).toBeVisible({ timeout: 10000 });
-      await page.getByLabel("群组通话").click();
+      await expect(page.locator('button[aria-label="群组通话"]').last()).toBeVisible({ timeout: 10000 });
+      await page.locator('button[aria-label="群组通话"]').last().click();
 
       // 在 calling 状态下验证以下元素存在：
       //   - 群组名称标题
@@ -350,10 +372,12 @@ test.describe("Group video call", () => {
 
       // 群主创建群组（仅选择 member，不选 bystander）。
       await createGroup(page, groupName, memberName);
+      await acceptGroupInvite(pageMember);
+      await page.waitForTimeout(1000);
 
       // 群主发起通话。
-      await expect(page.getByLabel("群组通话")).toBeVisible({ timeout: 10000 });
-      await page.getByLabel("群组通话").click();
+      await expect(page.locator('button[aria-label="群组通话"]').last()).toBeVisible({ timeout: 10000 });
+      await page.locator('button[aria-label="群组通话"]').last().click();
 
       // 群主标签页看到 calling 或 ended 状态。
       // 等 getUserMedia 失败 → ended。
@@ -403,10 +427,12 @@ test.describe("Group video call", () => {
 
       // 创建群组（仅含 member）。
       await createGroup(page, groupName, memberName);
+      await acceptGroupInvite(pageMember);
+      await page.waitForTimeout(1000);
 
       // 群主发起通话。
-      await expect(page.getByLabel("群组通话")).toBeVisible({ timeout: 10000 });
-      await page.getByLabel("群组通话").click();
+      await expect(page.locator('button[aria-label="群组通话"]').last()).toBeVisible({ timeout: 10000 });
+      await page.locator('button[aria-label="群组通话"]').last().click();
 
       // 等待 calling 状态出现。
       await page.waitForTimeout(500);
