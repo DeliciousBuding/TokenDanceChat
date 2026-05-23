@@ -36,10 +36,10 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 ## 当前增量
 
-性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.10），716 前端测试 / 47 文件 / E2E 全绿 / tsc 0 / ESLint 0 / CI 全绿。
+性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.12），779 前端测试 / 50 文件 / E2E 47/52 / tsc 0 / ESLint 0 / CI 全绿。
 
 此增量包含：
-- 前端测试扩展至 695 tests / 46 files（~40% 行覆盖率）。
+- 前端测试扩展至 779 tests / 50 files（51.86% 行覆盖率）。
 - E2E 测试扩展（64 tests：44 auth-flow + 8 group-call + 2 webhook + 10 dm-flow）。
 - 性能优化：O(1) reaction/read_by 查找表、onlineUsers prop 下沉至 MessageBubble、emoji 预处理提升。
 - WebSocket 自动重连：指数退避 + jitter（1s/2s/4s/8s/16s 上限），重连期间 banner 提示。

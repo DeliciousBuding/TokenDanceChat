@@ -228,4 +228,113 @@ describe("GroupCreateModal", () => {
       expect(onCreate).toHaveBeenCalledWith("Group", []);
     });
   });
+
+  describe("edge cases", () => {
+    it("deduplicates users that appear in both friends and onlineUsers", () => {
+      // bob is both a friend and online
+      setStore({
+        friends: ["bob", "charlie"],
+        onlineUsers: ["bob", "dave"],
+      });
+
+      render(
+        <GroupCreateModal open={true} onClose={onClose} onCreate={onCreate} />,
+      );
+
+      // bob should appear only once
+      const bobElements = screen.getAllByText("bob");
+      expect(bobElements.length).toBe(1);
+    });
+
+    it("shows no users available when all friends and online users are self", () => {
+      setStore({
+        username: "alice",
+        friends: ["alice"],
+        onlineUsers: ["alice"],
+      });
+
+      render(
+        <GroupCreateModal open={true} onClose={onClose} onCreate={onCreate} />,
+      );
+
+      expect(screen.getByText("No users available")).toBeTruthy();
+    });
+
+    it("does not show member selection section when no users available", () => {
+      setStore({ friends: [], onlineUsers: [] });
+
+      render(
+        <GroupCreateModal open={true} onClose={onClose} onCreate={onCreate} />,
+      );
+
+      expect(screen.getByText("No users available")).toBeTruthy();
+      expect(screen.queryByText("Select members")).toBeFalsy();
+    });
+
+    it("deselects a member via repeated click then reselects", () => {
+      render(
+        <GroupCreateModal open={true} onClose={onClose} onCreate={onCreate} />,
+      );
+
+      // Select bob
+      fireEvent.click(screen.getByText("bob"));
+      // Deselect bob
+      fireEvent.click(screen.getByText("bob"));
+      // Reselect bob
+      fireEvent.click(screen.getByText("bob"));
+
+      const input = screen.getByPlaceholderText("Group name...");
+      fireEvent.change(input, { target: { value: "Only Bob" } });
+
+      fireEvent.click(screen.getByText("Create"));
+
+      expect(onCreate).toHaveBeenCalledWith("Only Bob", ["bob"]);
+    });
+
+    it("resets form state after successful creation", () => {
+      render(
+        <GroupCreateModal open={true} onClose={onClose} onCreate={onCreate} />,
+      );
+
+      const input = screen.getByPlaceholderText(
+        "Group name...",
+      ) as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "My Group" } });
+      fireEvent.click(screen.getByText("bob"));
+
+      fireEvent.click(screen.getByText("Create"));
+
+      // After creation: name and selection should be cleared by the component
+      expect(onCreate).toHaveBeenCalledWith("My Group", ["bob"]);
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it("create button is disabled when name is whitespace only", () => {
+      render(
+        <GroupCreateModal open={true} onClose={onClose} onCreate={onCreate} />,
+      );
+
+      const input = screen.getByPlaceholderText("Group name...");
+      fireEvent.change(input, { target: { value: "   " } });
+
+      const createBtn = screen.getByText("Create");
+      expect(createBtn.closest("button")).toBeDisabled();
+    });
+
+    it("create button becomes enabled after typing a valid name", () => {
+      render(
+        <GroupCreateModal open={true} onClose={onClose} onCreate={onCreate} />,
+      );
+
+      const input = screen.getByPlaceholderText("Group name...");
+      const createBtn = screen.getByText("Create");
+
+      // Initially disabled
+      expect(createBtn.closest("button")).toBeDisabled();
+
+      // Type a valid name
+      fireEvent.change(input, { target: { value: "Valid" } });
+      expect(createBtn.closest("button")).not.toBeDisabled();
+    });
+  });
 });

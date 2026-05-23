@@ -1,6 +1,6 @@
 # Changelog
 
-> **累计**: 20+ commits, 30+ features/fixes, 5 skills (verify, pm-audit, deploy, cross-review, i18n-scan)
+> **累计**: 25+ commits, 35+ features/fixes, 5 skills (verify, pm-audit, deploy, cross-review, i18n-scan)
 
 ## v0.2.11 (2026-05-24)
 
@@ -9,6 +9,13 @@
 - Store tests +7（BlockUser, SearchCustomEmojis, UpdateUserStatus, ThreadReplyCount）。
 - E2E production fixes x3（target 47/52）。
 - nginx production fix：agenthub-chat.conf 冲突修复。
+
+## v0.2.12 (2026-05-24)
+
+- 测试扩展至 779 tests / 50 files, coverage 51.86% lines。
+- E2E 47/52 against production。
+- Backend 全量 PASS。
+- 生产环境 healthy（nginx 修复确认）。
 
 ## v0.2.10 (2026-05-24)
 
