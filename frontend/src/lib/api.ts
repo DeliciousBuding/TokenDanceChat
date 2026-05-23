@@ -426,11 +426,11 @@ class ChatAPI {
 
   connect(username: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Prevent onclose handler from triggering auto-reconnect when we
-      // intentionally close the old socket to create a new connection.
+      // Keep intentionalClose=true until the new socket opens, so the old
+      // socket's onclose handler (which fires asynchronously after close())
+      // won't trigger a duplicate attemptReconnect().
       this.intentionalClose = true;
       this.ws?.close();
-      this.intentionalClose = false;
       this.reconnectUsername = username;
       this.pendingJoin = { resolve, reject };
       this.ws = new WebSocket(this.url);
@@ -442,12 +442,11 @@ class ChatAPI {
           );
           this.pendingJoin = null;
         }
-        // Close the timed-out socket to prevent orphaned onopen from
-        // writing to a newer connection.
         this.ws?.close();
       }, 15000);
 
       this.ws.onopen = () => {
+        this.intentionalClose = false;
         clearTimeout(timeout);
         if (!this.pendingJoin) return; // Timed out, ignore.
         this.reconnectAttempt = 0;
