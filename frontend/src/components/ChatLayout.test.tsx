@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { I18nProvider } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
+import { chatAPI } from "@/lib/api";
 
 // ── Mocks ──────────────────────────────────────────
 
@@ -43,40 +44,51 @@ vi.mock("@/components/VideoCall", () => ({
   VideoCall: () => <div data-testid="video-call" />,
 }));
 
-vi.mock("@/lib/api", () => ({
-  chatAPI: {
-    on: vi.fn(() => vi.fn()),
-    sendTypingStart: vi.fn(),
-    sendTypingStop: vi.fn(),
-    uploadImage: vi.fn().mockResolvedValue("https://example.com/uploads/file.png"),
-    sendMessage: vi.fn(),
-    sendDMMessage: vi.fn(),
-    sendGroupMessage: vi.fn(),
-    sendReaction: vi.fn(),
-    sendMessageEdit: vi.fn(),
-    sendPinMessage: vi.fn(),
-    deleteMessage: vi.fn(),
-    sendFriendRequest: vi.fn(),
-    sendFriendAccept: vi.fn(),
-    sendFriendReject: vi.fn(),
-    sendGroupCreate: vi.fn(),
-    sendGroupInvite: vi.fn(),
-    sendGroupInviteAccept: vi.fn(),
-    sendGroupInviteDecline: vi.fn(),
-    sendScheduledMessagesList: vi.fn(),
-    sendCancelScheduledMessage: vi.fn(),
-    sendFolderList: vi.fn(),
-    fetchLinkPreview: vi.fn(),
-  },
-  ChatError: class ChatError extends Error {
-    code: string;
-    constructor(code: string, message: string) {
-      super(message);
-      this.code = code;
-    }
-  },
-  ErrorCode: { TIMEOUT: "TIMEOUT", CLOSED: "CLOSED", CANNOT_CONNECT: "CANNOT_CONNECT" },
-}));
+vi.mock("@/lib/api", () => {
+  const handlers: Map<string, Set<(msg: unknown) => void>> = new Map();
+  return {
+    chatAPI: {
+      on: vi.fn((event: string, handler: (msg: unknown) => void) => {
+        if (!handlers.has(event)) handlers.set(event, new Set());
+        handlers.get(event)!.add(handler);
+        return () => { handlers.get(event)?.delete(handler); };
+      }),
+      dispatch: (event: string, data: unknown) => {
+        handlers.get(event)?.forEach((h) => h(data));
+        handlers.get("*")?.forEach((h) => h(data));
+      },
+      sendTypingStart: vi.fn(),
+      sendTypingStop: vi.fn(),
+      uploadImage: vi.fn().mockResolvedValue("https://example.com/uploads/file.png"),
+      sendMessage: vi.fn(),
+      sendDMMessage: vi.fn(),
+      sendGroupMessage: vi.fn(),
+      sendReaction: vi.fn(),
+      sendMessageEdit: vi.fn(),
+      sendPinMessage: vi.fn(),
+      deleteMessage: vi.fn(),
+      sendFriendRequest: vi.fn(),
+      sendFriendAccept: vi.fn(),
+      sendFriendReject: vi.fn(),
+      sendGroupCreate: vi.fn(),
+      sendGroupInvite: vi.fn(),
+      sendGroupInviteAccept: vi.fn(),
+      sendGroupInviteDecline: vi.fn(),
+      sendScheduledMessagesList: vi.fn(),
+      sendCancelScheduledMessage: vi.fn(),
+      sendFolderList: vi.fn(),
+      fetchLinkPreview: vi.fn(),
+    },
+    ChatError: class ChatError extends Error {
+      code: string;
+      constructor(code: string, message: string) {
+        super(message);
+        this.code = code;
+      }
+    },
+    ErrorCode: { TIMEOUT: "TIMEOUT", CLOSED: "CLOSED", CANNOT_CONNECT: "CANNOT_CONNECT" },
+  };
+});
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -264,15 +276,30 @@ describe("ChatLayout", () => {
       expect(screen.getByText("连接已断开，正在尝试重新连接...")).toBeTruthy();
     });
 
-    it("断线横幅有重载按钮", () => {
+    it("connected=false 时不显示重载按钮（等待自动重连）", () => {
       useChatStore.setState({ connected: false });
       renderChatLayout();
+      // Reload button should only appear after reconnect_failed, not on initial disconnect.
+      expect(screen.queryByText("刷新页面")).toBeFalsy();
+    });
+
+    it("reconnect_failed 后显示重载按钮", async () => {
+      useChatStore.setState({ connected: false });
+      renderChatLayout();
+      // Simulate reconnect_failed via chatAPI event dispatch.
+      await act(async () => {
+        (chatAPI as any).dispatch("reconnect_failed", { type: "reconnect_failed", attempt: 10 });
+      });
       expect(screen.getByText("刷新页面")).toBeTruthy();
     });
 
-    it("点击重载按钮触发 reload", () => {
+    it("点击重载按钮触发 reload", async () => {
       useChatStore.setState({ connected: false });
       renderChatLayout();
+      // Must set reconnectFailed state before the reload button appears.
+      await act(async () => {
+        (chatAPI as any).dispatch("reconnect_failed", { type: "reconnect_failed", attempt: 10 });
+      });
       fireEvent.click(screen.getByText("刷新页面"));
       expect(mockReload).toHaveBeenCalledTimes(1);
     });

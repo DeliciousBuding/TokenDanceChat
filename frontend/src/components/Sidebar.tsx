@@ -981,10 +981,24 @@ export function Sidebar({
         {/* User list */}
         <div className="flex-1 overflow-y-auto px-3 py-1">
           {onlineUsers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <Users className="mb-2 h-6 w-6 opacity-30" />
-              <p className="text-xs">{t("sidebar.emptyState")}</p>
-            </div>
+            !connected ? (
+              <div className="flex flex-col items-center py-6 px-3 gap-1">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3 w-full px-3 py-2">
+                    <div className="h-7 w-7 rounded-full bg-muted-foreground/10 animate-pulse" />
+                    <div className="h-3 w-28 rounded bg-muted-foreground/10 animate-pulse" />
+                  </div>
+                ))}
+                <p className="text-[11px] text-muted-foreground/40 mt-1">
+                  {lang === "zh-CN" ? "连接中..." : "Connecting..."}
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <Users className="mb-2 h-6 w-6 opacity-30" />
+                <p className="text-xs">{t("sidebar.emptyState")}</p>
+              </div>
+            )
           ) : (
             <div className="space-y-0.5 relative">
               {/* Current user at top */}

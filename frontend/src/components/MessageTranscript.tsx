@@ -108,13 +108,15 @@ export function MessageTranscript({
 
   // Track new messages that arrived while user is scrolled up for the FAB badge.
   const [newMessageCount, setNewMessageCount] = useState(0);
-  const prevMessageCountRef = useRef(0);
+  const lastSeenMessageIdRef = useRef<string | null>(null);
 
   // Reset infinite scroll state when switching conversations.
   useEffect(() => {
     if (prevConversationRef.current !== conversationKey) {
       hasMoreRef.current = true;
       prevConversationRef.current = conversationKey;
+      setNewMessageCount(0);
+      lastSeenMessageIdRef.current = null;
     }
   }, [conversationKey]);
 
@@ -274,6 +276,35 @@ export function MessageTranscript({
       });
     }
   }, [groups, shouldAutoScroll]);
+
+  // Increment new-message counter when messages arrive while user is scrolled up.
+  useEffect(() => {
+    const msgs = effectiveMessages;
+    if (msgs.length === 0) {
+      lastSeenMessageIdRef.current = null;
+      return;
+    }
+    const lastId = msgs[msgs.length - 1].id;
+    const prevLastId = lastSeenMessageIdRef.current;
+    lastSeenMessageIdRef.current = lastId;
+
+    if (!prevLastId || lastId === prevLastId || shouldAutoScroll) return;
+
+    const prevIdx = msgs.findIndex((m) => m.id === prevLastId);
+    if (prevIdx === -1) return;
+
+    const newMsgs = msgs.length - prevIdx - 1;
+    if (newMsgs > 0) {
+      setNewMessageCount((c) => c + newMsgs);
+    }
+  }, [effectiveMessages, shouldAutoScroll]);
+
+  // Reset the new-message badge when the user scrolls back to the bottom.
+  useEffect(() => {
+    if (shouldAutoScroll) {
+      setNewMessageCount(0);
+    }
+  }, [shouldAutoScroll]);
 
   // Listen for search result "jump to message" events.
   useEffect(() => {
@@ -443,18 +474,19 @@ export function MessageTranscript({
   }, [contextMenu]);
 
   return (
-    <div
-      ref={(node) => {
-        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (scrollContainerRef) scrollContainerRef.current = node;
-      }}
-      onScroll={handleScroll}
-      onClick={handleContainerClick}
-      onPointerMove={handleContainerPointerMove}
-      onPointerUp={handleContainerPointerUp}
-      onPointerCancel={handleContainerPointerUp}
-      className={cn("flex-1 min-h-0 overflow-y-auto relative scrollbar-thin", className)}
-      style={{ willChange: "transform" }}
+    <>
+      <div
+        ref={(node) => {
+          (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+          if (scrollContainerRef) scrollContainerRef.current = node;
+        }}
+        onScroll={handleScroll}
+        onClick={handleContainerClick}
+        onPointerMove={handleContainerPointerMove}
+        onPointerUp={handleContainerPointerUp}
+        onPointerCancel={handleContainerPointerUp}
+        className={cn("flex-1 min-h-0 overflow-y-auto relative scrollbar-thin", className)}
+        style={{ willChange: "transform" }}
       {...pullDownHandlers}
     >
       {selectMode && (
@@ -790,5 +822,7 @@ export function MessageTranscript({
         </>
       )}
     </div>
-  );
+    <ScrollToBottom containerRef={containerRef as React.RefObject<HTMLDivElement | null>} newCount={newMessageCount} onClearCount={() => setNewMessageCount(0)} />
+  </>
+);
 }

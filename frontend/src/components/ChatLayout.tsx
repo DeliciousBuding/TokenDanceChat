@@ -11,7 +11,6 @@ import { SearchBar } from "./SearchBar";
 import { ConversationSearch } from "./ConversationSearch";
 import { ScheduledMessagesPanel } from "./ScheduledMessagesPanel";
 import { SettingsPanel } from "./SettingsPanel";
-import { ScrollToBottom } from "./ScrollToBottom";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
@@ -39,6 +38,8 @@ export function ChatLayout() {
   const [exportToast, setExportToast] = useState<string | null>(null);
   const [conversationSearchOpen, setConversationSearchOpen] = useState(false);
   const [searchHighlight, setSearchHighlight] = useState("");
+  const [reconnectAttempt, setReconnectAttempt] = useState<number | null>(null);
+  const [reconnectFailed, setReconnectFailed] = useState(false);
   const {
     reset,
     currentChat,
@@ -53,6 +54,7 @@ export function ChatLayout() {
     setLatestMention,
     pinnedMessages,
     connected,
+    setConnected,
     lightboxImage,
     username,
     groups,
@@ -214,6 +216,28 @@ export function ChatLayout() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [showMoreMenu]);
+
+  // Reconnect status events from chatAPI.
+  useEffect(() => {
+    const unsubReconnecting = chatAPI.on("reconnecting", (msg) => {
+      setReconnectAttempt((msg as unknown as { attempt: number }).attempt);
+      setReconnectFailed(false);
+    });
+    const unsubReconnected = chatAPI.on("reconnected", () => {
+      setReconnectAttempt(null);
+      setReconnectFailed(false);
+      setConnected(true);
+    });
+    const unsubReconnectFailed = chatAPI.on("reconnect_failed", () => {
+      setReconnectAttempt(null);
+      setReconnectFailed(true);
+    });
+    return () => {
+      unsubReconnecting();
+      unsubReconnected();
+      unsubReconnectFailed();
+    };
+  }, []);
 
   const toggleLang = useCallback(() => {
     const next: Language = lang === "zh-CN" ? "en-US" : "zh-CN";
@@ -761,17 +785,28 @@ export function ChatLayout() {
 
         {/* Connection lost / reconnecting banner */}
         {!connected && (
-          <div className="border-b border-warning/50 bg-warning/10 px-6 py-2 flex items-center gap-3 text-xs animate-pulse">
+          <div className={cn(
+            "border-b border-warning/50 bg-warning/10 px-6 py-2 flex items-center gap-3 text-xs",
+            reconnectAttempt !== null && "animate-pulse",
+          )}>
             <div className="flex items-center gap-2">
               <span className="flex h-2 w-2 rounded-full bg-warning" />
-              <span className="text-warning-foreground font-medium">{t("system.connectionLost")}</span>
+              <span className="text-warning-foreground font-medium">
+                {reconnectAttempt !== null
+                  ? t("system.reconnecting", { attempt: String(reconnectAttempt + 1) })
+                  : reconnectFailed
+                    ? t("system.reconnectFailed")
+                    : t("system.connectionLost")}
+              </span>
             </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="ml-auto rounded-md px-2 py-0.5 text-[10px] text-warning hover:text-warning-foreground hover:bg-warning/20 transition-colors"
-            >
-              {t("error.reload")}
-            </button>
+            {reconnectFailed && (
+              <button
+                onClick={() => window.location.reload()}
+                className="ml-auto rounded-md px-2 py-0.5 text-[10px] text-warning hover:text-warning-foreground hover:bg-warning/20 transition-colors"
+              >
+                {t("error.reload")}
+              </button>
+            )}
           </div>
         )}
 
@@ -927,9 +962,6 @@ export function ChatLayout() {
           </ErrorBoundary>
         </div>
       </div>
-
-      {/* Scroll-to-bottom FAB */}
-      <ScrollToBottom containerRef={transcriptContainerRef} />
 
       {/* Thread panel */}
       <Suspense fallback={null}>

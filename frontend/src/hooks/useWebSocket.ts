@@ -433,7 +433,7 @@ export function useWebSocket() {
       }),
     );
 
-    // Connection lost
+    // User status / presence updates
     unsubs.push(
       chatAPI.on("user_status", (msg: WSMessage) => {
         const { users } = msg as WSUserStatus;
@@ -526,9 +526,27 @@ export function useWebSocket() {
       }),
     );
 
+    // Connection lost / reconnecting
     unsubs.push(
-      chatAPI.on("connection_lost", () => {
-        addSystemMessage(i18nSys("system.connectionLost"), Date.now());
+      chatAPI.on("reconnecting", (msg: WSMessage) => {
+        const { attempt } = msg as { type: string; attempt: number };
+        setConnected(false);
+        addSystemMessage(
+          i18nSys("system.reconnecting", { attempt: String(attempt + 1) }),
+          Date.now(),
+        );
+      }),
+    );
+
+    unsubs.push(
+      chatAPI.on("reconnected", () => {
+        addSystemMessage(i18nSys("system.reconnected"), Date.now());
+      }),
+    );
+
+    unsubs.push(
+      chatAPI.on("reconnect_failed", () => {
+        addSystemMessage(i18nSys("system.reconnectFailed"), Date.now());
       }),
     );
 
