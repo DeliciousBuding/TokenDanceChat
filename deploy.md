@@ -1,4 +1,4 @@
-# Deployment Guide
+# 部署指南
 
 > 通用部署流程。服务器具体配置见私有运维文档。
 
@@ -40,7 +40,7 @@ ssh user@server "
 "
 ```
 
-`Dockerfile.runtime` includes a same-container `HEALTHCHECK` for `/api/health`. It derives the probe port from `CHAT_ADDR`, so the example above checks `127.0.0.1:3000` instead of assuming the default container port.
+`Dockerfile.runtime` 内置对 `/api/health` 的同容器 `HEALTHCHECK`。检查端口从 `CHAT_ADDR` 派生，因此上例探测 `127.0.0.1:3000` 而非假设默认容器端口。
 
 ### 仅更新前端（不动后端）
 
