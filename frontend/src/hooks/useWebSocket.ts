@@ -128,6 +128,7 @@ export function useWebSocket() {
       try {
         await chatAPI.connect(name);
         setConnected(true);
+        useChatStore.getState().setGuest(false);
         chatAPI.sendMarkRead();
         chatAPI.sendBlockList();
       } catch (err) {
