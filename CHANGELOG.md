@@ -1,5 +1,65 @@
 # Changelog
 
+## v0.2.8 (2026-05-23)
+
+### Added
+- WebSocket 自动重连（指数退避 + jitter：1s/2s/4s/8s/16s 上限），重连期间显示 banner 提示。
+- 侧栏对话预览：最后一条消息摘要 + 相对时间戳（刚刚 / X 分钟前 / 日期 / 年份）。
+- 未读「新消息」分隔线（蓝色强调线），标记上次离开后的新消息起点。
+- 移动端语音消息按钮可见（不再隐藏在折叠菜单中）。
+- 相对时间戳系统：刚刚、X 分钟前、今天 HH:mm、昨天 HH:mm、日期、年份。
+- 侧栏 IA 重排：DM 和群组置顶，AI 助手分区折叠；侧栏新增对话搜索/过滤。
+- 桌面端 header「更多」下拉菜单：语言切换、主题切换、导出记录、设置入口。
+- 群组消息已读回执：「N 人已读」显示（群组内非本人的已读计数）。
+- 在线用户排序优化：好友和 DM 联系人优先显示；在线用户区域加载骨架屏。
+- 消息入场动画（fade-in + slide-up），新消息平滑进入视口。
+- 回到底部 FAB（Telegram 风格，距离底部 200px 触发，ChevronDown 图标，带未读计数徽章，opacity+scale 过渡）。
+- 消息送达状态指示器（Telegram 双勾风格）：已读蓝✓✓ / 已送达灰✓✓ / 已发送无勾。
+- 发送失败反馈：WebSocket 断开时发送按钮红色闪烁 + 警告 toast。
+- URL 预览卡片（紧凑型，500ms 防抖，年龄分级过滤，加载/错误/溢出状态覆盖）。
+- 4 个项目级 Skills：verify、pm-audit、deploy、cross-review（位于 `.agents/skills/`）。
+- GitHub Actions CI 工作流：backend-test、frontend-test、lint。
+- ESLint flat config 迁移（零警告）。
+- AGENTS.md 新增 dev-loop 工作流、模型分配策略、分支策略、安全边界 grep 自检规则。
+- 前端 ErrorBoundary 包裹 `<App />`，防止未捕获异常导致空白页。
+- Guest 身份警告提示（JoinScreen 游客模式免责说明）。
+- 格式化工具栏可发现性改进（Markdown 工具按钮更明显）。
+- JoinScreen 引导文案优化（注册/登录/游客三种路径说明）。
+
+### Changed
+- 前端测试从 237 扩展至 636（40 文件，~40% 行覆盖率）。
+- E2E 测试从 18 扩展至 54（44 auth-flow + 8 group-call + 2 webhook ingress）。
+- 后端测试大幅扩展：handler +34、hub +8、store +7、llm +8、ratelimit 更新、ws +2。
+- WebSocket rate limit 从 30 提升至 50（每 10 秒），适应并行 E2E 测试和重连风暴。
+- 桌面布局断点从 `md` 移至 `lg`，解决平板 textarea 挤压问题。
+- 移动端消息密度收紧：更小气泡字号、更窄内边距、减少分隔线内边距。
+- 移动端辅助操作收入更多菜单，确保「公共聊天」完整显示。
+- 消息 hover 操作合并为单个 44px 操作菜单（copy / forward / translate / react / pin / edit / delete / select）。
+- Header 操作、Markdown 工具栏、定时消息入口、侧栏工具按钮、可点击头像、消息操作按钮均提升至 44px 触摸目标。
+- 核心聊天界面视觉减重：气泡边框更轻、composer 工具按钮不再渲染粗边框块。
+- light mode 设为首次运行默认主题（飞书风格验收）。
+- 移动端 composer 重做：Markdown 工具收起为图标，textarea 保持完整可用。
+- 项目 Skills 从 `.claude/skills/` 迁移至 `.agents/skills/`。
+- ROADMAP.md、product-gap-analysis.md、AGENTS.md 随进度同步更新。
+
+### Fixed
+- **多轮交叉审查修复（5 轮）**：
+  - Round 1 (HIGH): register channel buffer 数据竞争、admin stats rate limit 遗漏。
+  - Round 1 (MEDIUM): 无界内存 map 清理、CORS/WS 硬编码域名移除。
+  - Round 2 (HIGH): scrollIntoView 级联导致 ChatInput 被推出视口；`min-h-0` 缺失导致 MessageTranscript flex 容器无法收缩。
+  - Round 2 (MEDIUM): ForwardModal CSS 脆弱性、PollMessage error path、ThreadPanel onSendReply、MessageTranscript i18n masking。
+  - Round 3: Sidebar previewMap 记忆化缺失、i18n key 冲突、未读清理不完整、屏蔽用户过滤不一致、年份消除歧义、localStorage user-scoped 隔离。
+  - Round 4: 组件 handlers 生命周期问题、媒体错误路径加固。
+  - Round 5: 3 项 MEDIUM 跨组件问题 + hub 测试补充。
+- 3 项安全修复：邀请码枚举泄露、WritePump 挂起导致 goroutine 泄漏、密码 bcrypt 长度上限。
+- LoginScreen 错误 i18n 映射（auth.loginFailed / auth.registerFailed）。
+- RegisterScreen i18n 修复（auth.fillAllFields）。
+- Settings 按钮标签修复（notificationPrefs → openSettings）。
+- product-gap-analysis.md 陈旧条目修正（置顶/归档/静音/编辑状态同步）。
+- `isGuest=false` 防御性重置：每次 `connect()` 调用强制重置游客标志。
+- 生产构建静态资源被计入 REST API rate limit 的问题：`/api/...` 保持限流，SPA 静态资源不限。
+- 前端 `group_info` 处理修复：正确读取后端 `group_members` role payload，owner/admin 状态在 WebSocket round trip 后正确驱动群组信息和 Webhook 管理。
+
 ## v0.2.7 (2026-05-23)
 
 ### Added

@@ -20,11 +20,17 @@
 - **Auth rate limiter**: `/api/login` 和 `/api/register` 新增独立 rate limiter（5 次/分钟/IP），防暴力破解。`ratelimit.go` 新增 `authEntries` 桶。
 - **CORS 从通配符改为 origin-aware**: `handler.go` 的 CORS 中间件不再返回 `Access-Control-Allow-Origin: *`。同源请求允许（无 Origin 头），跨域回显 `CHAT_ALLOWED_ORIGINS` 环境变量中的具体 origin，不允许的 origin 不返回 CORS 头。
 - **WebSocket Origin 验证加强**: `ws.go` 的 `CheckOrigin` 现在验证同源请求、`CHAT_ALLOWED_ORIGINS` 环境变量配置的额外域名、以及 `vectorcontrol.tech` 子域名历史兼容白名单。
-- **CSP 头双重覆盖**: 前端 `index.html` 的 `<meta http-equiv="Content-Security-Policy">` 标签 + 后端 `SecurityHeadersMiddleware` 双保险。
+- **CSP 头双重覆盖**: 前端 `index.html` 的 `<meta http-equiv="Content-Security-Policy">` 标签 + 后端 `SecurityHeadersMiddleware` 双保险。经浏览器 DevTools 和生产构建验证，CSP 头正确传递。
 - **PDF iframe sandbox 加固**: `FileMessage.tsx` 中 PDF 预览 iframe 的 sandbox 属性从 `"allow-scripts allow-same-origin"` 收紧为 `"allow-scripts"`，防止 sandbox 逃逸。
 - **PicoClaw 超时保护**: LLM 调用路径新增 60s `context.WithTimeout`，防止 goroutine 泄漏。
 - **Session kick-off 机制**: 同名用户重新登录时，旧连接发送 "kicked" 消息并关闭，新连接接入。消除 "username already taken" 竞态，防止会话劫持。
-- **WS rate limit 调整**: `wsMaxPerWindow` 从 5 提升至 30（每 10 秒），支持并行 E2E 测试 worker 同时接入。
+- **WS rate limit 调整**: `wsMaxPerWindow` 从 5 提升至 50（每 10 秒），支持并行 E2E 测试 worker 同时接入并防御重连风暴。
+- **WebSocket 重连加固**: `api.ts` 中重连逻辑在创建新连接前显式调用 `ws.close()` 并清空旧 handler 集合（`handlers.clear()` 移除），防止重连后事件处理器重复触发和旧连接资源泄漏。
+- **mountedRef 生命周期守卫**: 重连定时器回调在操作 DOM/状态前检查 `mountedRef.current`，防止组件卸载后的 timeout 回调访问已销毁状态。
+- **发送失败反馈**: WebSocket 断开时发送按钮进入红色闪烁错误态 + 警告 toast，用户可感知消息未成功发送而非静默丢失。
+- **3 项 Opus 安全审查修复**: (1) 邀请码枚举泄露 — 注册/登录错误消息统一化，不再区分"用户不存在"与"密码错误"；(2) WritePump 挂起 — 发送 channel 满时增加超时 write，防止 goroutine 永久阻塞；(3) 密码 bcrypt 输入上限 — 前端限制密码长度，防止 bcrypt 72 字节截断攻击。
+- **安全边界自检规则**: AGENTS.md 新增敏感信息 grep 自检 checklist 和违规响应协议，每次交接前强制扫描。
+- **公开文档脱敏**: 从 ROADMAP、README、docs 中移除内部 server 别名、端口号和部署拓扑细节。
 
 ---
 
@@ -200,12 +206,16 @@
 | **.env 已 Git 忽略** | `.gitignore:17-18` 覆盖 `.env` 和 `.env.local`。无凭据提交。 |
 | **精简 Docker 镜像** | `alpine:3.21` 基础镜像仅含 `ca-certificates` 和 `tzdata`。构建使用多阶段，运行时排除 Go 工具链。 |
 | **Docker Healthcheck** | `Dockerfile` 和 `Dockerfile.runtime` 探测同容器 `/api/health` 并跟随 `CHAT_ADDR`，覆盖默认和非默认监听端口。 |
+| **WebSocket 重连安全** | `api.ts` 重连前显式 `ws.close()` + `handlers.clear()`，防止事件处理器重复绑定和旧连接泄漏。`mountedRef` 守卫防止卸载后 timeout 回调。发送失败时 UI 显式反馈（红色闪烁 + toast），不静默丢弃。 |
+| **CSP 验证** | 前端 meta 标签 + 后端 SecurityHeadersMiddleware 双覆盖；经浏览器 DevTools 验证生产构建 CSP 头正确发送。 |
+| **测试覆盖** | 前端 636 tests（40 文件，~40% 行覆盖率）；后端 `go test ./...` 全绿；E2E 54 条（含 webhook ingress 闭环、重连测试）。 |
+| **持续安全实践** | 项目采用多轮交叉审查（cross-review）流程：每轮由独立视角审查 HIGH/MEDIUM/LOW 安全问题，修复后回归验证。`.agents/skills/cross-review.md` 记录审查维度与 checklist。AGENTS.md 安全边界 grep 自检规则每次交接前强制扫描。 |
 
 ---
 
 ## 4. 整体安全评估
 
-**评估**: 应用架构良好，作为 Demo 具备扎实的基础：参数化查询、消息大小限制、每连接频率限制、WebSocket ping/pong 保活、精简 Docker 镜像、规范的 Git 卫生。核心 WebSocket 协议处理和数据库层是安全的。
+**评估**: 应用架构良好，作为 Demo 具备扎实的基础：参数化查询、消息大小限制、每连接频率限制、WebSocket ping/pong 保活、自动重连（指数退避 + mountedRef 守卫）、精简 Docker 镜像、规范的 Git 卫生。核心 WebSocket 协议处理和数据库层是安全的。前端 636 tests / 后端全量测试 / E2E 54 条为回归安全提供持续保障。项目采用多轮交叉审查（cross-review）作为持续安全实践，`.agents/skills/cross-review.md` 记录审查维度与 checklist。
 
 **Demo 阶段风险画像**: 低。剩余的 MEDIUM 问题（开放 CORS）是公开 Demo 无认证的有意设计选择。仅在超出 Demo 范围的场景下才可能被利用（例如引入敏感数据或认证但未相应限制来源）。WebSocket origin 检查已通过同源验证 + `CHAT_ALLOWED_ORIGINS` 环境变量收紧。
 
