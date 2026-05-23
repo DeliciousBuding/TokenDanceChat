@@ -1,23 +1,60 @@
 # Changelog
 
-## Unreleased (2026-05-23)
+## v0.2.7 (2026-05-23)
 
 ### Added
-- AgentHub 验证项目定位文档与长期工程目标文档。
-- 群组传入 Webhook 管理 UI：管理员可在群信息面板中创建、复制、列出、删除 Webhook。
-- Webhook 集成文档，覆盖 WebSocket 控制事件、HTTP 投递格式、安全契约和验证命令。
-- 前端 focused 测试覆盖 Webhook 一次性 secret 状态和群面板管理行为。
+- 会话挤下线机制：同名用户在新标签页登录时，旧连接自动断开并收到 "kicked" 消息，新会话正常接入。
+- `/api/login` 和 `/api/register` 新增独立的 auth rate limiter（5 次/分钟/IP），防暴力破解。
+- LoginScreen / RegisterScreen 添加 `autocomplete` 属性（`username`、`current-password`、`new-password`），适配密码管理器。
+- RegisterScreen 新增表单完整性提示：「请填写所有字段后点击注册」。
 
 ### Fixed
-- `webhook_create` 现在会把 secret 只返回给创建者，避免创建后无法实际调用 HTTP Webhook。
-- `webhook_list` 现在要求群主/管理员权限，并且列表响应不再暴露 secret。
-- `store.Webhook.Secret` 加上 `json:"-"`，降低误序列化泄露风险。
-- `useWebSocket` 的 `translate_result` / `webhook_*` 事件现在进入统一退订列表，避免重复订阅泄漏。
-- `GroupInfoPanel` hooks 顺序整理到条件返回之前，避免群面板打开/关闭时的 hooks 数量变化风险。
+- 注册成功后表单冻结问题：`handleAuthSuccess` 现在先切换到游客视图再执行自动加入，确保注册成功后正确跳转。
+- WebSocket rate limit 从 5 提升至 30（每 10 秒），解决 14 worker 并行 E2E 测试被限流的问题。
+- 前端 `handleJoinSuccess` 简化错误处理：挤下线机制消除 "already taken" 错误，普通错误直接显示服务端消息。
+- 移除 `handleJoin` 中的 `IsUsernameTaken` 预检查——重复用户名由 hub 注册通道统一原子处理。
 
 ### Changed
-- `ROADMAP.md` 改为持续目标账本，明确本项目是 AgentHub 技术栈验证项目和可玩 Demo。
-- 删除根目录交接文档，改由 `AGENTS.md` 承载项目级 Agent 接手规则、架构地图和验证命令。
+- 挤下线机制取代旧的重复用户名拒绝策略：hub 注册通道在检测到同名用户时发送 "kicked" 消息并关闭旧连接，新连接直接接入。
+- E2E 测试更新：`重复用户名被拒绝` → `重复用户名踢出旧连接`，验证新行为而非旧的错误提示。
+
+## v0.2.6 (2026-05-23)
+
+### Added
+- Delicious233 账号密码确认：`123456`，登录 API 验证通过。
+- 前后端全面测试覆盖：237 前端单元测试 + 后端全量测试 + 18/18 E2E 线上实测。
+
+### Fixed
+- **CRITICAL**: `GetPinnedMessages` SQL 列数不匹配（SELECT 10 列但 Scan 11 列，缺少 `thread_id`）。
+- **CRITICAL**: 6 个 WebSocket handler 未接入 ReadPump switch：`profile_update`、`profile_get`、`status_update`、`poll_create`、`poll_vote`、`poll_close`。
+- **CRITICAL**: PicoClaw 路径使用 `context.Background()`（无超时，goroutine 泄漏风险），已替换为 60s `context.WithTimeout`。
+- PDF iframe sandbox 安全加固：移除 `allow-same-origin`，防止 sandbox 逃逸。
+- 重复 `ConversationSearch` 渲染：ChatLayout 中同一组件被渲染两次。
+- 前端构建脚本：移除 `tsc -b`（在 CI 中解析模块失败），类型检查改为独立的 `npx tsc --noEmit`。
+- `blog/go.mod` 无效 Go 版本 `go 1.25.0` 修正为 `go 1.24.0`。
+
+### Changed
+- 密码哈希从 SHA-256 升级为 bcrypt（cost 12）；`VerifyUser` 在登录成功时自动将旧 SHA-256 哈希升级为 bcrypt。
+- CORS 从通配符 `*` 改为 origin-aware 逻辑：同源请求允许（无 Origin 头），跨域回显具体 origin，不允许的 origin 不返回 `Access-Control-Allow-Origin` 头。
+- 前端 `index.html` 新增 CSP meta 标签：`default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; ...`。
+- WebSocket connect 超时从 8s 提升至 15s。
+- `.env.example` 更新 LLM 配置为 DeepSeek V4 Pro/Flash（无真实 URL 或 key）。
+- PicoClaw system prompt 更新为飞书风格；删除死代码 `picoStreamDelta`、`BroadcastStreamChunk`、已废弃的 `picoclaw/bot.go`。
+- 新数据库时自动 seed 4 条 TokenBot 欢迎消息（可通过 `CHAT_SKIP_SEED=true` 跳过）。
+- `.gitignore` 新增 `backend/backend.exe`、`frontend/test-results/`。
+
+## v0.2.5 (2026-05-23)
+
+### Added
+- 18 个 Playwright E2E 测试（5 workers），覆盖：页面加载、i18n 切换、加入表单验证、游客加入、消息发送、Webhook ingress。
+- `scripts/verify.ps1` 新增 `-WithE2E` 参数：自动启动后端、运行 E2E、清理残留。
+- MessageBubble、AdminPanel、ChatInput、GroupInfoPanel 组件测试。
+- 前端 store 测试：webhook rotation、group call、chatStore 完整覆盖。
+- 前端 `ErrorBoundary` 包裹 `<App />`，防止空白页面崩溃。
+
+### Fixed
+- E2E 选择器与生产 UI 不一致（旧 "加入聊天" 按钮 vs 新 "游客加入/登录/注册" 三按钮流程）。
+- npm ci 损坏 node_modules：改用 `rm -rf node_modules && npm install`。
 
 ## v0.4.0 (2026-05-22)
 

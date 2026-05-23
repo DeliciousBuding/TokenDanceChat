@@ -6,6 +6,8 @@
 - [ ] 后端测试通过：`cd backend && go test ./...`
 - [ ] 前端构建通过：`cd frontend && npm run build`
 - [ ] 前端测试通过：`cd frontend && npx vitest run`
+- [ ] 类型检查通过：`cd frontend && npx tsc --noEmit`
+- [ ] E2E 测试通过：`cd frontend && E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium`
 - [ ] 无敏感信息泄露：grep 服务器 IP / 内部端口 / SSH 配置
 - [ ] `.gitignore` 覆盖所有生成文件
 - [ ] `.env.example` 无真实凭据或内部 URL

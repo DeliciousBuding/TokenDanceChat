@@ -36,37 +36,23 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 ## 当前增量
 
-Webhook 静态安全、媒体存储、screenshot 驱动的 UI 验收是本 worktree 已完成的工作切片：
+Kick-off 机制 + 登录限流 + 挤下线 —— 已完成部署（v0.2.7），18/18 E2E 全绿。
 
-- Webhook secret 以高熵一次性值生成，在 SQLite 中以 versioned salted HMAC hash 存储，通过 constant-time comparison 验证。
-- 旧版明文 webhook 行在 store 启动时迁移为 hash。
-- HTTP webhook ingress 通过 `store.VerifyWebhookSecret` 验证；list 响应对 owner/admin 受限且脱敏。
-- `webhook_rotate` 立即使旧 secret 失效，写入 append-only audit log 行（created/rotated/deleted），向调用者返回一次性新 secret。
-- `webhook_audit_list` 按群组返回脱敏审计事件；audit log 行通过 DTO 绝不包含 secret hash 或 metadata。
-- `MediaStore` 支持本地磁盘、WebDAV 和 S3-compatible 存储。
-- S3-compatible 媒体配置由 env 驱动，production-server 部署形态优先使用。
-- 普通上传和自定义 emoji 均使用 safe media key 和同源 `/uploads/...` 路由。
-- Docker runtime 镜像内置同容器 `/api/health` HEALTHCHECK，跟随 `CHAT_ADDR`（包括 `:3000` 等非默认监听地址）。
-- 前端默认 light mode，飞书/Lark 风格的第一印象。
-- 移动端 composer 保持 textarea 可用，Markdown 工具栏收起为图标。
-- 移动端辅助聊天操作收入更多菜单，确保「公共聊天」可读。
-- 消息记录密度已针对移动端/平板收紧，包括移除非本人消息的底部重复时间戳。
-- 每条消息的 hover 操作合并为单个 44px 操作菜单；copy、forward、translate、react、pin、edit、delete、select 均从菜单可用。
-- Header 操作、格式控件、定时消息入口、侧栏工具按钮、可点击头像均在 screenshot pass 中达到 44px 视觉验收目标。
-- 桌面 sidebar 密度已收紧：4 张 model preview card，紧凑空状态，online-user 区首屏可见。
-- 核心聊天界面视觉重量已降低：message bubble 使用更轻的边框，composer 工具按钮更轻，展开的 Markdown 工具栏更克制，可点击头像使用 46px 安全底板避免像素取整失败。
-- 群组信息/管理界面现已纳入视觉验收：脚本创建真实群组、打开右侧面板、验证仅 owner 可见的 Webhook 区，以 44px 目标对面板控件做硬门槛。
-- 前端 `group_info` 处理读取后端 `group_members` role payload，owner/admin 角色在真实 WebSocket round trip 后正确驱动群组信息和 Webhook 管理。
-- group-info 截图门槛现在也检查桌面标题单行稳定性和群组首屏空状态可见，此系人工截图复核发现 header 挤压和空群内容稀疏后补充。
-- 浏览器 E2E 现已覆盖完整的 Webhook ingress 闭环：群组管理员通过 UI 创建一次性 webhook，对生成的 URL 发送 HTTP POST，在群聊记录中可见外部消息。
-- 视觉验收由 `npm run visual:acceptance`、真实浏览器 screenshot、metrics 和美学复核支撑。
-- 生成的 `gpt-image-2` 参考图可作为美术方向参考，但不能替代真实浏览器截图作为验收依据。
-- 当前已通过验收的干净 DB screenshot pass：`C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-23T04-02-23-020Z`。
-- 平板和移动端使用紧凑顶栏直到 `lg` 断点；768px 不得被强制纳入桌面 sidebar/header 布局。
+此增量包含：
+- 同名用户在新标签页登录时自动踢掉旧连接，发送 "kicked" 消息。
+- `/api/login` 和 `/api/register` 独立 auth rate limiter（5 次/分钟/IP）。
+- LoginScreen / RegisterScreen `autocomplete` 属性适配密码管理器。
+- hub 注册通道原子化处理重复用户名（移除 `handleJoin` 中的 `IsUsernameTaken` 预检查）。
 
-剩余跟进项：
+## 近期增量（v0.2.6）
 
-- 群组视频通话多浏览器 smoke/E2E。
+密码哈希升级 + CORS 加固 + PicoClaw 修复 + 全面测试覆盖。
+- 密码从 SHA-256 升级为 bcrypt cost 12，登录时自动迁移旧哈希。
+- CORS 从通配符 `*` 改为 origin-aware（`CHAT_ALLOWED_ORIGINS` 环境变量驱动）。
+- 6 个未接入的 WS handler 已修复；PicoClaw 60s context timeout；PDF sandbox 加固。
+- 237 前端单元测试 + 后端全量 + 18/18 E2E 线上实测。
+
+## Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收（v0.2.5）
 
 ## 架构地图
 

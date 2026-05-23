@@ -5,7 +5,7 @@
 
 [![Status](https://img.shields.io/badge/status-active-brightgreen)](#)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev/)
+[![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.4-646CFF?logo=vite)](https://vite.dev/)
 
@@ -60,9 +60,12 @@ AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/�
 - 无障碍 (a11y)：屏幕阅读器、键盘导航
 
 ### 安全 Security
+- 密码：bcrypt (cost 12) 哈希，SHA-256 旧哈希登录时自动升级
+- Auth 频率限制：login/register 5 次/分钟/IP
+- CORS origin-aware（非通配符）+ WebSocket Origin 验证
 - SQL 参数化查询 · FTS5 注入防护 · XSS 过滤
-- WebSocket Origin 验证 · CSP 头
-- 频率限制（WS + REST 双层级）
+- CSP 头双层覆盖（前端 meta 标签 + 后端中间件）
+- 会话挤下线：新登录自动踢出旧连接
 - 路径穿越防护 · 消息大小限制
 - 用户屏蔽 · 好友系统
 
@@ -91,7 +94,7 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 | 层 Layer | 技术 Tech |
 |----------|----------|
 | 前端 Frontend | React 19 · Vite 6 · Tailwind CSS 4 · Zustand 5 |
-| 后端 Backend | Go 1.25 · gorilla/websocket · net/http |
+| 后端 Backend | Go 1.24 · gorilla/websocket · net/http |
 | 数据库 Database | SQLite (modernc.org/sqlite, pure Go) + FTS5 |
 | 实时协议 Realtime | WebSocket typed events |
 | LLM | Anthropic Messages API + OpenAI Chat Completions |
