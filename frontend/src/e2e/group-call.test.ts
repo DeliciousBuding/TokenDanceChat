@@ -103,6 +103,10 @@ const acceptGroupInvite = async (memberPage: import("@playwright/test").Page) =>
 /* ------------------------------------------------------------------ */
 
 test.describe("Group video call", () => {
+  // Run tests serially — each creates 2-3 browser contexts (page + member pages)
+  // which means 2-3 WebSocket connections. Parallel execution exceeds rate limit.
+  test.describe.configure({ mode: "serial" });
+
   test.describe("Signaling flow (no real media)", () => {
     test("create group with member, initiate call, end during calling state, return to chat", async ({
       page,
@@ -231,9 +235,11 @@ test.describe("Group video call", () => {
     test("group call button not visible for solo group (only creator)", async ({
       page,
     }) => {
+      test.setTimeout(60000);
       const suffix = Math.random().toString(36).slice(2, 6);
       const groupName = `Solo_${suffix}`;
 
+      await setupPage(page);
       await joinChat(page, `SoloUsr_${suffix}`);
 
       // 创建不包含其他成员的群组。
