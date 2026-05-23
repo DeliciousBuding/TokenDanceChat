@@ -193,6 +193,7 @@ export function Sidebar({
     setGroupInfoPanel,
     folders,
     blockedUsers,
+    lastPreviews,
   } = useChatStore();
 
   // Sound toggle state
@@ -241,46 +242,15 @@ export function Sidebar({
   // Convert groups record to array
   const groupList = useMemo(() => Object.values(groups), [groups]);
 
-  // Precompute last message previews for all conversations (single pass over messages)
-  const groupNames = useMemo(() => new Set(Object.keys(groups)), [groups]);
+  // O(1) lookup: previews are maintained in the store (lastPreviews map)
+  // Convert to Map for compatibility with existing .get() callers
   const previewMap = useMemo(() => {
     const map = new Map<string, { content: string; timestamp: number; sender: string }>();
-    const recentMessages = messages.slice(-200);
-    for (let i = recentMessages.length - 1; i >= 0; i--) {
-      const m = recentMessages[i];
-      if (m.deleted || m.username === "system" || !m.content) continue;
-
-      let key: string | null = null;
-      if (!m.to && !m.from && !m.group) {
-        key = "public";
-      } else if (m.group && groupNames.has(m.group)) {
-        key = `group:${m.group}`;
-      } else if (m.to && groupNames.has(m.to)) {
-        key = `group:${m.to}`;
-      } else if (m.to && (m.from || m.username)) {
-        // DM: determine partner (who isn't the current user)
-        const msgSender = m.from || m.username;
-        const msgRecipient = m.to;
-        if (msgSender === username && msgRecipient) {
-          key = `dm:${msgRecipient}`;
-        } else if (msgRecipient === username && msgSender) {
-          key = `dm:${msgSender}`;
-        }
-      }
-
-      if (key && !map.has(key)) {
-        let content = m.content;
-        if (content.length > 50) {
-          content = content.slice(0, 47) + "...";
-        }
-        if (m.username === username) {
-          content = "You: " + content;
-        }
-        map.set(key, { content, timestamp: m.timestamp, sender: m.username });
-      }
+    for (const [key, val] of Object.entries(lastPreviews)) {
+      map.set(key, val);
     }
     return map;
-  }, [messages, username, groupNames]);
+  }, [lastPreviews]);
 
   // Friend users who are online
   const onlineFriends = friends.filter((f) => onlineUsers.includes(f));
