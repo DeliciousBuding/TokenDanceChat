@@ -426,10 +426,13 @@ class ChatAPI {
 
   connect(username: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Prevent onclose handler from triggering auto-reconnect when we
+      // intentionally close the old socket to create a new connection.
+      this.intentionalClose = true;
+      this.ws?.close();
       this.intentionalClose = false;
       this.reconnectUsername = username;
       this.pendingJoin = { resolve, reject };
-      this.ws?.close();
       this.ws = new WebSocket(this.url);
 
       const timeout = setTimeout(() => {
@@ -461,6 +464,15 @@ class ChatAPI {
             this.pendingJoin.reject(new Error(data.content as string));
             this.pendingJoin = null;
             this.ws?.close();
+            return;
+          }
+
+          // Handle kick (duplicate login) during join phase.
+          if (data.type === "kicked" && this.pendingJoin) {
+            clearTimeout(timeout);
+            this.pendingJoin.reject(new Error("Kicked by new login"));
+            this.pendingJoin = null;
+            // Don't close — the server already closed it.
             return;
           }
 
