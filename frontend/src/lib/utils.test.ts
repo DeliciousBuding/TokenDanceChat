@@ -85,6 +85,26 @@ describe("cn", () => {
   it("无参数时返回空字符串", () => {
     expect(cn()).toBe("");
   });
+
+  it("过滤 undefined 和 null", () => {
+    const result = cn("base", undefined, null);
+    expect(result).toBe("base");
+  });
+
+  it("展开数组参数", () => {
+    const result = cn("base", ["px-4", "py-2"]);
+    expect(result).toContain("base");
+    expect(result).toContain("px-4");
+    expect(result).toContain("py-2");
+  });
+
+  it("处理对象形式的条件类名", () => {
+    const result = cn("base", { active: true, disabled: false, hidden: false });
+    expect(result).toContain("base");
+    expect(result).toContain("active");
+    expect(result).not.toContain("disabled");
+    expect(result).not.toContain("hidden");
+  });
 });
 
 describe("hashString", () => {
@@ -100,6 +120,10 @@ describe("hashString", () => {
     const h = hashString("test");
     expect(h).toBeGreaterThanOrEqual(0);
     expect(Number.isInteger(h)).toBe(true);
+  });
+
+  it("空字符串返回0", () => {
+    expect(hashString("")).toBe(0);
   });
 });
 

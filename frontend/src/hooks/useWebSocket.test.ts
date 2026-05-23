@@ -73,6 +73,16 @@ describe("notifyMessage", () => {
     notifyMessage("Bob", "Hi");
     expect(fakeNotification).not.toHaveBeenCalled();
   });
+
+  it("catches Notification constructor errors gracefully", () => {
+    const fakeNotification = vi.fn(() => {
+      throw new Error("Not supported");
+    }) as unknown as typeof Notification;
+    Object.defineProperty(fakeNotification, "permission", { value: "granted", writable: true });
+    vi.stubGlobal("Notification", fakeNotification);
+
+    expect(() => notifyMessage("Alice", "Hello")).not.toThrow();
+  });
 });
 
 // ─── isConversationMuted ────────────────────────────────────────
