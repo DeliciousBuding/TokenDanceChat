@@ -1060,7 +1060,8 @@ export function ChatInput({
 
   return (
     <div
-      className="relative border-t border-border bg-background pb-safe"
+      className="relative flex-shrink-0 border-t border-border bg-card pb-safe"
+      data-testid="chat-input"
       onDragEnter={(e) => {
         e.preventDefault();
         dragCounter.current += 1;

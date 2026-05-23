@@ -95,6 +95,10 @@ export interface TranslationDict {
     archivedSection: string;
     archiveConversation: string;
     unarchiveConversation: string;
+    searchConversations: string;
+    searchResults: string;
+    searchEmpty: string;
+    aiAssistants: string;
   };
   transcript: {
     loading: string;
@@ -524,6 +528,10 @@ const zhCN: TranslationDict = {
     archivedSection: "已归档会话",
     archiveConversation: "归档会话",
     unarchiveConversation: "取消归档",
+    searchConversations: "搜索对话...",
+    searchResults: "搜索结果",
+    searchEmpty: "未找到匹配的对话",
+    aiAssistants: "AI 助手",
   },
   transcript: {
     loading: "加载消息中...",
@@ -955,6 +963,10 @@ const enUS: TranslationDict = {
     archivedSection: "Archived",
     archiveConversation: "Archive",
     unarchiveConversation: "Unarchive",
+    searchConversations: "Search conversations...",
+    searchResults: "Search results",
+    searchEmpty: "No matching conversations",
+    aiAssistants: "AI Assistants",
   },
   transcript: {
     loading: "Loading messages...",

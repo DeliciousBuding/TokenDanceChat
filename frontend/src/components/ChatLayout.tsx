@@ -5,7 +5,7 @@ import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
 import { GroupCreateModal } from "./GroupCreateModal";
 import { ForwardModal } from "./ForwardModal";
-import { ThemeToggle } from "./ThemeToggle";
+import { ThemeToggle, getStoredTheme, applyTheme, STORAGE_KEY as THEME_STORAGE_KEY, cycleOrder } from "./ThemeToggle";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { SearchBar } from "./SearchBar";
 import { ConversationSearch } from "./ConversationSearch";
@@ -677,8 +677,7 @@ export function ChatLayout() {
                     {t("lang.switchTo")}
                   </button>
                   {(() => {
-                    const stored = localStorage.getItem("tdchat-theme") || "light";
-                    const theme = ["light", "dark", "system"].includes(stored) ? stored : "light";
+                    const theme = getStoredTheme();
                     const ThemeIcon = theme === "dark" ? Moon : theme === "system" ? Monitor : Sun;
                     const labels: Record<string, string> = {
                       light: t("settings.themeLight"),
@@ -688,15 +687,12 @@ export function ChatLayout() {
                     return (
                       <button
                         onClick={() => {
-                          const cycle = ["light", "dark", "system"];
-                          const cur = localStorage.getItem("tdchat-theme") || "light";
-                          const idx = cycle.indexOf(cur);
-                          const next = cycle[(idx + 1) % cycle.length] || "light";
-                          localStorage.setItem("tdchat-theme", next);
-                          const root = document.documentElement;
-                          if (next === "light") { root.classList.remove("dark"); root.classList.add("light"); }
-                          else if (next === "dark") { root.classList.add("dark"); root.classList.remove("light"); }
-                          else { const pd = window.matchMedia("(prefers-color-scheme: dark)").matches; root.classList.toggle("dark", pd); root.classList.remove("light"); }
+                          const cur = getStoredTheme();
+                          const idx = cycleOrder.indexOf(cur);
+                          const next = cycleOrder[(idx + 1) % cycleOrder.length];
+                          applyTheme(next);
+                          localStorage.setItem(THEME_STORAGE_KEY, next);
+                          window.dispatchEvent(new CustomEvent("tdchat:theme-changed", { detail: { theme: next } }));
                           setShowMoreMenu(false);
                         }}
                         className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"

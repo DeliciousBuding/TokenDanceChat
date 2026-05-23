@@ -259,8 +259,10 @@ export function MessageTranscript({
   }, [effectiveMessages]);
 
   useEffect(() => {
-    if (shouldAutoScroll && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    if (shouldAutoScroll && containerRef.current) {
+      // Use explicit scrollTop on the container to avoid scrollIntoView
+      // cascading to ancestor scrollable elements and pushing ChatInput off-screen.
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [groups, shouldAutoScroll]);
 

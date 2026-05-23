@@ -3,9 +3,9 @@ import { Moon, Sun, Monitor } from "lucide-react";
 
 type Theme = "dark" | "light" | "system";
 
-const STORAGE_KEY = "tdchat-theme";
+export const STORAGE_KEY = "tdchat-theme";
 
-function getStoredTheme(): Theme {
+export function getStoredTheme(): Theme {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === "light" || stored === "dark" || stored === "system") {
     return stored;
@@ -13,7 +13,7 @@ function getStoredTheme(): Theme {
   return "light";
 }
 
-function applyTheme(theme: Theme) {
+export function applyTheme(theme: Theme) {
   const root = document.documentElement;
   if (theme === "light") {
     root.classList.remove("dark");
@@ -35,7 +35,7 @@ const icons: Record<Theme, typeof Moon> = {
   system: Monitor,
 };
 
-const cycleOrder: Theme[] = ["light", "dark", "system"];
+export const cycleOrder: Theme[] = ["light", "dark", "system"];
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
@@ -56,6 +56,18 @@ export function ThemeToggle() {
     };
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
+  }, []);
+
+  // Listen for external theme changes (e.g., from ChatLayout More dropdown)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.theme && cycleOrder.includes(detail.theme)) {
+        setTheme(detail.theme);
+      }
+    };
+    window.addEventListener("tdchat:theme-changed", handler);
+    return () => window.removeEventListener("tdchat:theme-changed", handler);
   }, []);
 
   const cycle = useCallback(() => {

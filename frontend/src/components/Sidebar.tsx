@@ -245,8 +245,9 @@ export function Sidebar({
   const groupNames = useMemo(() => new Set(Object.keys(groups)), [groups]);
   const previewMap = useMemo(() => {
     const map = new Map<string, { content: string; timestamp: number; sender: string }>();
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i];
+    const recentMessages = messages.slice(-200);
+    for (let i = recentMessages.length - 1; i >= 0; i--) {
+      const m = recentMessages[i];
       if (m.deleted || m.username === "system" || !m.content) continue;
 
       let key: string | null = null;
@@ -472,10 +473,7 @@ export function Sidebar({
   }, [isFiltering, debouncedQuery, dmPartners, groupList, friends]);
 
   // Inline bilingual labels for new UI (no translation file changes needed)
-  const searchPlaceholder = lang === "zh-CN" ? "搜索对话..." : "Search conversations...";
-  const searchResultsLabel = lang === "zh-CN" ? "搜索结果" : "Search Results";
-  const searchEmptyLabel = lang === "zh-CN" ? "未找到匹配的对话" : "No matching conversations";
-  const aiAssistantsLabel = lang === "zh-CN" ? "AI 助手" : "AI Assistants";
+  // (removed — migrated to i18n t() calls)
 
   return (
     <aside
@@ -522,8 +520,8 @@ export function Sidebar({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
+            placeholder={t("sidebar.searchConversations")}
+            aria-label={t("sidebar.searchConversations")}
             className="w-full rounded-lg border border-border bg-background/50 pl-9 pr-8 py-2 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/50 transition-colors"
           />
           {searchQuery && (
@@ -602,11 +600,14 @@ export function Sidebar({
         </div>
       )}
 
+      {/* Scrollable middle area: DMs, Groups, Friends, AI Assistants */}
+      <div className="overflow-y-auto flex-1 min-h-0">
+
       {/* Search results (when filtering) — replaces DMs / Groups / Friends */}
       {isFiltering ? (
         <div className="px-3 pt-1.5 pb-0.5">
           <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-            {searchResultsLabel}
+            {t("sidebar.searchResults")}
           </span>
           {filteredItems && filteredItems.length > 0 ? (
             filteredItems.map((item) => (
@@ -683,7 +684,7 @@ export function Sidebar({
           ) : (
             <div className="px-5 py-3">
               <span className="text-[11px] text-muted-foreground/35 italic">
-                {searchEmptyLabel}
+                {t("sidebar.searchEmpty")}
               </span>
             </div>
           )}
@@ -903,7 +904,7 @@ export function Sidebar({
           ) : (
             <ChevronRight className="h-3 w-3" />
           )}
-          {aiAssistantsLabel}
+          {t("sidebar.aiAssistants")}
         </button>
         {aiAssistantsExpanded && (
           <>
@@ -961,8 +962,10 @@ export function Sidebar({
         )}
       </div>
 
+      </div>
+
       {/* Online users section */}
-      <div className="flex-1 overflow-hidden flex flex-col mt-1">
+      <div className="flex-1 overflow-hidden flex flex-col mt-1 min-h-0">
         <div data-visual="sidebar-online-users" className="flex items-center justify-between px-5 py-1.5">
           <div className="flex items-center gap-2">
             <Users className="h-3.5 w-3.5 text-muted-foreground" />
