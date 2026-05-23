@@ -433,6 +433,7 @@ class ChatAPI {
       this.ws = new WebSocket(this.url);
 
       const timeout = setTimeout(() => {
+        if (gen !== this.connectGeneration) return;
         if (this.pendingJoin) {
           this.pendingJoin.reject(
             new ChatError(ErrorCode.TIMEOUT, "Connection timed out"),
@@ -443,6 +444,7 @@ class ChatAPI {
       }, 15000);
 
       this.ws.onopen = () => {
+        if (gen !== this.connectGeneration) return;
         clearTimeout(timeout);
         if (!this.pendingJoin) return; // Timed out, ignore.
         this.reconnectAttempt = 0;
@@ -450,6 +452,7 @@ class ChatAPI {
       };
 
       this.ws.onmessage = (event) => {
+        if (gen !== this.connectGeneration) return;
         try {
           const data = JSON.parse(event.data) as WSMessage;
 
@@ -503,6 +506,7 @@ class ChatAPI {
       };
 
       this.ws.onerror = () => {
+        if (gen !== this.connectGeneration) return;
         if (this.pendingJoin) {
           clearTimeout(timeout);
           this.pendingJoin.reject(
