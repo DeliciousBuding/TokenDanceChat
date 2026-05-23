@@ -1,6 +1,6 @@
 # TokenDanceChat Agent 指南
 
-最后更新：2026-05-23
+最后更新：2026-05-24
 
 ## 项目定位
 
@@ -36,7 +36,22 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 ## 当前增量
 
-Kick-off 机制 + 登录限流 + 挤下线 —— 已完成部署（v0.2.7），18/18 E2E 全绿。
+性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.8+），644 前端测试 / 42 文件 / tsc 0 / ESLint 0 / CI 全绿。
+
+此增量包含：
+- 前端测试扩展至 644 tests / 42 files（~40% 行覆盖率）。
+- E2E 测试扩展（64 tests：44 auth-flow + 8 group-call + 2 webhook + 10 dm-flow）。
+- 性能优化：O(1) reaction/read_by 查找表、onlineUsers prop 下沉至 MessageBubble、emoji 预处理提升。
+- WebSocket 自动重连：指数退避 + jitter（1s/2s/4s/8s/16s 上限），重连期间 banner 提示。
+- 发送失败反馈：WebSocket 断开时发送按钮红色闪烁 + 警告 toast。
+- URL 预览卡片：紧凑型，500ms 防抖，年龄分级过滤，加载/错误/溢出状态覆盖。
+- 在线用户加载骨架屏、FAB 未读计数徽章。
+- SettingsModal + SettingsPanel 测试。
+- 交叉审查 5 轮全部修复（HIGH + MEDIUM），安全修复 3 项。
+
+## 近期增量（v0.2.7）
+
+Kick-off 机制 + 登录限流 + 挤下线 —— 已完成部署，18/18 E2E 全绿。
 
 此增量包含：
 - 同名用户在新标签页登录时自动踢掉旧连接，发送 "kicked" 消息。
@@ -240,8 +255,11 @@ git log --oneline --all --grep='hk1|hk2|3221'
 
 ### 项目级 Skill
 
-可复用 SOP 沉淀到 `.agents/skills/` 目录（不含本机路径、凭据、IP）。已有：
+可复用 SOP 沉淀到 `.agents/skills/` 目录（不含本机路径、凭据、IP）。共 4 个活跃 skill + 使用指南：
+
 - `verify` -- 提交前验证门禁（quick/full/security/E2E）
 - `pm-audit` -- PM UX 审计 SOP（file checklist, UX dimensions, competitor comparison, priority framework）
 - `deploy` -- 部署 SOP（Docker cp/build, systemctl, health check, rollback）
 - `cross-review` -- 代码交叉审查 SOP（8 维检查清单, file groups, 常见 bug 模式, 严重度分类, 输出格式）
+
+详见 `.agents/skills/README.md`。
