@@ -428,7 +428,7 @@ test.describe("Group video call", () => {
       browserName,
     }) => {
       test.skip(
-        browserName !== "chromium" || process.env.CI !== undefined,
+        browserName !== "chromium",
         "Requires real camera/mic — skip in CI and non-Chromium browsers.",
       );
 

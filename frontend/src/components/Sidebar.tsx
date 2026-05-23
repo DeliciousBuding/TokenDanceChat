@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
-import { cn, avatarGradient, formatLastSeen } from "@/lib/utils";
+import { cn, avatarGradient, formatLastSeen, formatTime } from "@/lib/utils";
 import { Avatar } from "@/components/Avatar";
 import { assistants, modelCatalog } from "@/lib/assistantRegistry";
 import { AssistantIcon } from "@/components/AssistantIcon";
@@ -191,6 +191,7 @@ export function Sidebar({
     userProfiles,
     setGroupInfoPanel,
     folders,
+    getLastMessagePreview,
   } = useChatStore();
 
   // Sound toggle state
@@ -521,7 +522,9 @@ export function Sidebar({
           <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
             {t("sidebar.directMessages")}
           </span>
-          {dmPartners.map((partner) => (
+          {dmPartners.map((partner) => {
+            const preview = getLastMessagePreview(`dm:${partner}`);
+            return (
             <button
               key={partner}
               onClick={() =>
@@ -536,23 +539,35 @@ export function Sidebar({
                   : "text-foreground/70 hover:bg-accent hover:text-foreground",
               )}
             >
-              <User className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="truncate">{partner}</span>
+              <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="block truncate">{partner}</span>
+                {preview && (
+                  <div className="flex items-center w-full">
+                    <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                      {preview.content}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
+                      {formatTime(preview.timestamp)}
+                    </span>
+                  </div>
+                )}
+              </div>
               {(() => {
                 const count = unreadByConversation[`dm:${partner}`];
                 if (count) {
                   return (
-                    <span key={`dm-${partner}-${count}`} className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge">
+                    <span key={`dm-${partner}-${count}`} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge shrink-0">
                       {count > 99 ? "99+" : count}
                     </span>
                   );
                 }
                 return onlineUsers.includes(partner) && (
-                  <span className="ml-auto h-2 w-2 rounded-full bg-online" />
+                  <span className="h-2 w-2 rounded-full bg-online shrink-0" />
                 );
               })()}
             </button>
-          ))}
+          )})}
         </div>
       )}
 
@@ -581,7 +596,9 @@ export function Sidebar({
             </button>
           )}
         </div>
-        {groupList.map((g) => (
+        {groupList.map((g) => {
+            const preview = getLastMessagePreview(`group:${g.name}`);
+            return (
           <button
             key={g.name}
             onClick={() => setCurrentChat({ type: "group", name: g.name })}
@@ -593,25 +610,37 @@ export function Sidebar({
                 : "text-foreground/70 hover:bg-accent hover:text-foreground",
             )}
           >
-            <Hash className="h-4 w-4 text-muted-foreground" />
-            <span className="truncate">{g.name}</span>
+            <Hash className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="block truncate">{g.name}</span>
+              {preview && (
+                <div className="flex items-center w-full">
+                  <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                    {preview.content}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
+                    {formatTime(preview.timestamp)}
+                  </span>
+                </div>
+              )}
+            </div>
             {(() => {
               const count = unreadByConversation[`group:${g.name}`];
               if (count) {
                 return (
-                  <span key={`group-${g.name}-${count}`} className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge">
+                  <span key={`group-${g.name}-${count}`} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge shrink-0">
                     {count > 99 ? "99+" : count}
                   </span>
                 );
               }
               return (
-                <span className="ml-auto text-[10px] text-muted-foreground/50">
+                <span className="text-[10px] text-muted-foreground/50 shrink-0">
                   {g.members.length}
                 </span>
               );
             })()}
           </button>
-        ))}
+        )})}
         {/* Groups: empty state */}
         {groupList.length === 0 && (
           <div className="px-2 py-0.5">

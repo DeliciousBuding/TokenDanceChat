@@ -52,8 +52,8 @@ describe("notifyMessage", () => {
   });
 
   it("creates a Notification when permission is granted", () => {
-    const fakeNotification = vi.fn();
-    fakeNotification.permission = "granted";
+    const fakeNotification = vi.fn() as unknown as typeof Notification;
+    Object.defineProperty(fakeNotification, "permission", { value: "granted", writable: true });
     vi.stubGlobal("Notification", fakeNotification);
 
     notifyMessage("Alice", "Hello world");
@@ -66,8 +66,8 @@ describe("notifyMessage", () => {
   });
 
   it("skips Notification when permission is denied", () => {
-    const fakeNotification = vi.fn();
-    fakeNotification.permission = "denied";
+    const fakeNotification = vi.fn() as unknown as typeof Notification;
+    Object.defineProperty(fakeNotification, "permission", { value: "denied", writable: true });
     vi.stubGlobal("Notification", fakeNotification);
 
     notifyMessage("Bob", "Hi");

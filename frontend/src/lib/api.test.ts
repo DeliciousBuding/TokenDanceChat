@@ -69,7 +69,7 @@ describe("registerUser", () => {
       ok,
       status,
       json: async () => body,
-    } as Response);
+    } as unknown as Response);
   }
 
   it("sends a POST to /api/register with the correct JSON body", async () => {
@@ -111,7 +111,7 @@ describe("registerUser", () => {
       json: async () => {
         throw new Error("parse error");
       },
-    } as Response);
+    } as unknown as Response);
 
     await expect(
       registerUser(username, password, inviteCode),
@@ -130,7 +130,7 @@ describe("loginUser", () => {
     mockFetch.mockResolvedValueOnce({
       ok,
       json: async () => body,
-    } as Response);
+    } as unknown as Response);
   }
 
   it("sends a POST to /api/login with the correct JSON body", async () => {
@@ -166,7 +166,7 @@ describe("loginUser", () => {
       json: async () => {
         throw new Error("bad json");
       },
-    } as Response);
+    } as unknown as Response);
 
     await expect(loginUser(username, password)).rejects.toThrow("Login failed");
   });
@@ -180,7 +180,7 @@ describe("generateInviteCode", () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ code: "ABC123" }),
-    } as Response);
+    } as unknown as Response);
 
     await generateInviteCode("charlie", 3);
 
@@ -194,7 +194,7 @@ describe("generateInviteCode", () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ code: "DEF456" }),
-    } as Response);
+    } as unknown as Response);
 
     await generateInviteCode("dave");
 
@@ -213,7 +213,7 @@ describe("listInviteCodes", () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ codes: [] }),
-    } as Response);
+    } as unknown as Response);
 
     await listInviteCodes("eve");
 
@@ -228,7 +228,7 @@ describe("listInviteCodes", () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ codes }),
-    } as Response);
+    } as unknown as Response);
 
     const result = await listInviteCodes("eve");
 
@@ -271,7 +271,7 @@ describe("generateInviteCode errors", () => {
       ok: false,
       status: 403,
       json: async () => ({ error: "Not authorized" }),
-    } as Response);
+    } as unknown as Response);
 
     await expect(generateInviteCode("dave")).rejects.toThrow("Not authorized");
   });
@@ -283,7 +283,7 @@ describe("generateInviteCode errors", () => {
       json: async () => {
         throw new Error("parse error");
       },
-    } as Response);
+    } as unknown as Response);
 
     await expect(generateInviteCode("dave")).rejects.toThrow(
       "Failed to generate invite code",
@@ -300,7 +300,7 @@ describe("listInviteCodes errors", () => {
       ok: false,
       status: 500,
       json: async () => ({ error: "Server error" }),
-    } as Response);
+    } as unknown as Response);
 
     await expect(listInviteCodes("eve")).rejects.toThrow("Server error");
   });
@@ -312,7 +312,7 @@ describe("listInviteCodes errors", () => {
       json: async () => {
         throw new Error("boom");
       },
-    } as Response);
+    } as unknown as Response);
 
     await expect(listInviteCodes("eve")).rejects.toThrow(
       "Failed to list invite codes",
@@ -323,7 +323,7 @@ describe("listInviteCodes errors", () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ message: "no codes" }),
-    } as Response);
+    } as unknown as Response);
 
     const result = await listInviteCodes("newuser");
     expect(result).toEqual([]);
@@ -333,7 +333,7 @@ describe("listInviteCodes errors", () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ codes: [] }),
-    } as Response);
+    } as unknown as Response);
 
     await listInviteCodes("user name");
 

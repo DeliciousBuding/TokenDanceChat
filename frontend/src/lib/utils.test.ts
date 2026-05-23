@@ -31,29 +31,29 @@ describe("formatTime", () => {
     expect(formatTime(ts)).toBe("5m ago");
   });
 
-  it("同一天超过1小时显示HH:mm", () => {
-    // 2 hours ago on the same day — use Date.now() for timezone-agnostic test
+  it("同一天内小于4小时显示HH:mm", () => {
+    // 2 hours ago — still within the 4-hour window, so shows HH:mm
     const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
     const expected = new Date(twoHoursAgo);
     const pad = (n: number) => String(n).padStart(2, "0");
     expect(formatTime(twoHoursAgo)).toBe(`${pad(expected.getHours())}:${pad(expected.getMinutes())}`);
   });
 
-  it("同一年内不同天显示MM-DD HH:mm", () => {
-    // 5 days ago — different day, same year
+  it("超过4小时显示MM-DD", () => {
+    // 5 days ago — well past the 4-hour window, shows date only
     const fiveDaysAgo = Date.now() - 5 * 24 * 60 * 60 * 1000;
     const d = new Date(fiveDaysAgo);
     const pad = (n: number) => String(n).padStart(2, "0");
-    expect(formatTime(fiveDaysAgo)).toBe(`${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    expect(formatTime(fiveDaysAgo)).toBe(`${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
   });
 
-  it("不同年份显示YYYY-MM-DD", () => {
+  it("不同年份也显示MM-DD", () => {
     // Create a timestamp in the previous year
     const now = new Date();
     const lastYear = new Date(now.getFullYear() - 1, 5, 15, 12, 0, 0);
     const pad = (n: number) => String(n).padStart(2, "0");
     expect(formatTime(lastYear.getTime())).toBe(
-      `${lastYear.getFullYear()}-${pad(lastYear.getMonth() + 1)}-${pad(lastYear.getDate())}`,
+      `${pad(lastYear.getMonth() + 1)}-${pad(lastYear.getDate())}`,
     );
   });
 });
@@ -214,8 +214,8 @@ describe("formatLastSeen", () => {
   it("falls back to formatTime for 30+ days", () => {
     const ts = new Date("2025-04-10T10:00:00").getTime();
     const result = formatLastSeen(ts);
-    // Should output MM-DD HH:mm (same year, different day)
-    expect(result).toBe("04-10 10:00");
+    // formatTime now returns MM-DD for old dates
+    expect(result).toBe("04-10");
   });
 
   it("handles boundary at exactly 60 seconds", () => {
