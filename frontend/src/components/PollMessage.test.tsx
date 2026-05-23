@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PollMessage } from "@/components/PollMessage";
 import { mockI18n } from "@/test-utils";
 import type { PollData } from "@/lib/api";
@@ -165,7 +165,7 @@ describe("PollMessage", () => {
       expect(chatAPI.sendPollVote).toHaveBeenCalledWith("msg-1", 1);
     });
 
-    it("disables interaction after submitting a vote", () => {
+    it("disables interaction after submitting a vote", async () => {
       const poll = makePoll({ multiple_choice: false });
       render(<PollMessage poll={poll} messageId="msg-1" />);
 
@@ -173,14 +173,16 @@ describe("PollMessage", () => {
       fireEvent.click(screen.getByText("Vote"));
 
       // After voting, Vote button should disappear and options should be disabled
-      expect(screen.queryByText("Vote")).toBeFalsy();
+      await waitFor(() => {
+        expect(screen.queryByText("Vote")).toBeFalsy();
+      });
       const redOption = screen.getByText("Red").closest("button")!;
       expect(redOption).toBeDisabled();
     });
   });
 
   describe("multiple choice", () => {
-    it("allows selecting multiple options", () => {
+    it("allows selecting multiple options", async () => {
       const poll = makePoll({ multiple_choice: true });
       render(<PollMessage poll={poll} messageId="msg-1" />);
 
@@ -189,7 +191,9 @@ describe("PollMessage", () => {
 
       fireEvent.click(screen.getByText("Vote"));
 
-      expect(chatAPI.sendPollVote).toHaveBeenCalledTimes(2);
+      await waitFor(() => {
+        expect(chatAPI.sendPollVote).toHaveBeenCalledTimes(2);
+      });
       expect(chatAPI.sendPollVote).toHaveBeenCalledWith("msg-1", 0);
       expect(chatAPI.sendPollVote).toHaveBeenCalledWith("msg-1", 1);
     });
@@ -225,6 +229,36 @@ describe("PollMessage", () => {
       fireEvent.click(screen.getByText("Close Poll"));
 
       expect(chatAPI.sendPollClose).toHaveBeenCalledWith("msg-1");
+    });
+
+    it("shows error feedback when close poll fails", async () => {
+      setStore({ username: "alice" });
+      (chatAPI.sendPollClose as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error("Network error"),
+      );
+      const poll = makePoll({ creator: "alice" });
+
+      render(<PollMessage poll={poll} messageId="msg-1" />);
+      fireEvent.click(screen.getByText("Close Poll"));
+
+      await screen.findByRole("alert");
+      expect(screen.getByText("Network error")).toBeTruthy();
+    });
+  });
+
+  describe("error handling", () => {
+    it("shows error feedback when vote fails", async () => {
+      (chatAPI.sendPollVote as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error("Vote failed"),
+      );
+      const poll = makePoll({ multiple_choice: false });
+
+      render(<PollMessage poll={poll} messageId="msg-1" />);
+      fireEvent.click(screen.getByText("Red"));
+      fireEvent.click(screen.getByText("Vote"));
+
+      await screen.findByRole("alert");
+      expect(screen.getByText("Vote failed")).toBeTruthy();
     });
   });
 });

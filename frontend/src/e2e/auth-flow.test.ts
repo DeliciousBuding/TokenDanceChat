@@ -44,7 +44,7 @@ test.describe("Auth flow", () => {
 
       // Form fields should be present.
       await expect(page.getByLabel("用户名")).toBeVisible({ timeout: 15000 });
-      await expect(page.getByLabel("密码")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByLabel("密码", { exact: true })).toBeVisible({ timeout: 15000 });
       await expect(page.getByLabel("确认密码")).toBeVisible({ timeout: 15000 });
       await expect(page.getByLabel("邀请码")).toBeVisible({ timeout: 15000 });
     });
@@ -126,7 +126,7 @@ test.describe("Auth flow", () => {
       });
 
       await page.getByLabel("用户名").fill("testuser");
-      await page.getByLabel("密码").fill("12345");
+      await page.getByLabel("密码", { exact: true }).fill("12345");
       await page.getByLabel("用户名").press("Enter");
 
       const error = page.getByRole("alert");
@@ -143,7 +143,7 @@ test.describe("Auth flow", () => {
       });
 
       await page.getByLabel("用户名").fill("testuser");
-      await page.getByLabel("密码").fill("123456");
+      await page.getByLabel("密码", { exact: true }).fill("123456");
       await page.getByLabel("确认密码").fill("different");
       await page.getByLabel("用户名").press("Enter");
 
@@ -161,7 +161,7 @@ test.describe("Auth flow", () => {
       });
 
       await page.getByLabel("用户名").fill("testuser");
-      await page.getByLabel("密码").fill("123456");
+      await page.getByLabel("密码", { exact: true }).fill("123456");
       await page.getByLabel("确认密码").fill("123456");
       // Leave invite code empty.
       await page.getByLabel("用户名").press("Enter");
@@ -189,7 +189,7 @@ test.describe("Auth flow", () => {
 
       // Form fields should be present.
       await expect(page.getByLabel("用户名")).toBeVisible({ timeout: 15000 });
-      await expect(page.getByLabel("密码")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByLabel("密码", { exact: true })).toBeVisible({ timeout: 15000 });
     });
 
     test("back button returns to guest join screen", async ({ page }) => {
@@ -349,28 +349,25 @@ test.describe("Auth flow", () => {
       });
     });
 
-    test("language toggle works inside register screen", async ({ page }) => {
+    test("register screen respects language set on guest screen", async ({ page }) => {
       await page.goto("/");
-      await page.getByRole("button", { name: "注册" }).click();
 
-      await expect(
-        page.getByRole("heading", { name: "注册账号" }),
-      ).toBeVisible({ timeout: 15000 });
-
-      // Toggle language.
+      // Toggle language to English on the guest/join screen.
       const langButton = page.getByLabel("切换语言");
       await langButton.click();
 
-      // Heading should switch to English.
+      // Navigate to register screen.
+      await page.getByRole("button", { name: "Register" }).click();
+
       await expect(
         page.getByRole("heading", { name: "Register Account" }),
       ).toBeVisible({ timeout: 15000 });
 
-      // Fields should switch labels.
+      // Fields should show English labels.
       await expect(page.getByLabel("Username")).toBeVisible({
         timeout: 15000,
       });
-      await expect(page.getByLabel("Password")).toBeVisible({
+      await expect(page.getByLabel("Password", { exact: true })).toBeVisible({
         timeout: 15000,
       });
       await expect(page.getByLabel("Confirm Password")).toBeVisible({
@@ -379,21 +376,34 @@ test.describe("Auth flow", () => {
       await expect(page.getByLabel("Invite Code")).toBeVisible({
         timeout: 15000,
       });
+
+      // Back to guest screen, toggle back to Chinese.
+      await page.getByLabel("Back").click();
+      await page.getByLabel("Switch language").click();
+
+      // Navigate back to register and verify Chinese labels.
+      await page.getByRole("button", { name: "注册" }).click();
+
+      await expect(
+        page.getByRole("heading", { name: "注册账号" }),
+      ).toBeVisible({ timeout: 15000 });
+
+      await expect(page.getByLabel("用户名")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByLabel("密码", { exact: true })).toBeVisible({ timeout: 15000 });
+      await expect(page.getByLabel("确认密码")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByLabel("邀请码")).toBeVisible({ timeout: 15000 });
     });
 
-    test("language toggle works inside login screen", async ({ page }) => {
+    test("login screen respects language set on guest screen", async ({ page }) => {
       await page.goto("/");
-      await page.getByRole("button", { name: "登录" }).click();
 
-      await expect(page.getByRole("heading", { name: "登录" })).toBeVisible({
-        timeout: 15000,
-      });
-
-      // Toggle language.
+      // Toggle language to English on the guest/join screen.
       const langButton = page.getByLabel("切换语言");
       await langButton.click();
 
-      // Heading should switch to English.
+      // Navigate to login screen.
+      await page.getByRole("button", { name: "Login" }).click();
+
       await expect(page.getByRole("heading", { name: "Login" })).toBeVisible({
         timeout: 15000,
       });
@@ -401,9 +411,23 @@ test.describe("Auth flow", () => {
       await expect(page.getByLabel("Username")).toBeVisible({
         timeout: 15000,
       });
-      await expect(page.getByLabel("Password")).toBeVisible({
+      await expect(page.getByLabel("Password", { exact: true })).toBeVisible({
         timeout: 15000,
       });
+
+      // Back to guest screen, toggle back to Chinese.
+      await page.getByLabel("Back").click();
+      await page.getByLabel("Switch language").click();
+
+      // Navigate back to login and verify Chinese labels.
+      await page.getByRole("button", { name: "登录" }).click();
+
+      await expect(page.getByRole("heading", { name: "登录" })).toBeVisible({
+        timeout: 15000,
+      });
+
+      await expect(page.getByLabel("用户名")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByLabel("密码", { exact: true })).toBeVisible({ timeout: 15000 });
     });
   });
 
@@ -424,7 +448,7 @@ test.describe("Auth flow", () => {
       });
 
       // Click the disconnect/leave button on desktop.
-      const leaveBtn = page.getByRole("button", { name: "离开" });
+      const leaveBtn = page.getByRole("button", { name: "断开连接" });
       await expect(leaveBtn).toBeVisible({ timeout: 15000 });
       await leaveBtn.click();
 
@@ -452,10 +476,13 @@ test.describe("Auth flow", () => {
       });
 
       // Disconnect.
-      await page.getByRole("button", { name: "离开" }).click();
+      await page.getByRole("button", { name: "断开连接" }).click();
       await expect(page.getByPlaceholder("你的用户名...")).toBeVisible({
         timeout: 15000,
       });
+
+      // Wait for server to release the old WebSocket session before reconnecting.
+      await page.waitForTimeout(1000);
 
       // Rejoin with same name.
       await page.getByPlaceholder("你的用户名...").fill(name);
@@ -491,7 +518,7 @@ test.describe("Auth flow", () => {
       expect(saved).toBe(name);
 
       // Disconnect.
-      await page.getByRole("button", { name: "离开" }).click();
+      await page.getByRole("button", { name: "断开连接" }).click();
       await expect(page.getByPlaceholder("你的用户名...")).toBeVisible({
         timeout: 15000,
       });
@@ -534,7 +561,7 @@ test.describe("Auth flow", () => {
 
       // Fill credentials.
       await page.getByLabel("用户名").fill(username);
-      await page.getByLabel("密码").fill(password);
+      await page.getByLabel("密码", { exact: true }).fill(password);
 
       // Submit.
       await page.getByRole("button", { name: "登录" }).click();
@@ -545,7 +572,7 @@ test.describe("Auth flow", () => {
       });
 
       // Cleanup: disconnect.
-      await page.getByRole("button", { name: "离开" }).click();
+      await page.getByRole("button", { name: "断开连接" }).click();
       await expect(page.getByPlaceholder("你的用户名...")).toBeVisible({
         timeout: 15000,
       });
@@ -560,7 +587,7 @@ test.describe("Auth flow", () => {
       });
 
       await page.getByLabel("用户名").fill("nonexistent_user_xyz");
-      await page.getByLabel("密码").fill("wrongpassword");
+      await page.getByLabel("密码", { exact: true }).fill("wrongpassword");
       await page.getByRole("button", { name: "登录" }).click();
 
       // Should see an error message (not auto-join).
@@ -599,7 +626,7 @@ test.describe("Auth flow", () => {
 
       // Fill the registration form.
       await page.getByLabel("用户名").fill(username);
-      await page.getByLabel("密码").fill(password);
+      await page.getByLabel("密码", { exact: true }).fill(password);
       await page.getByLabel("确认密码").fill(password);
       await page.getByLabel("邀请码").fill(inviteCode);
 
@@ -612,7 +639,7 @@ test.describe("Auth flow", () => {
       });
 
       // Cleanup: disconnect.
-      await page.getByRole("button", { name: "离开" }).click();
+      await page.getByRole("button", { name: "断开连接" }).click();
       await expect(page.getByPlaceholder("你的用户名...")).toBeVisible({
         timeout: 15000,
       });
@@ -627,7 +654,7 @@ test.describe("Auth flow", () => {
       ).toBeVisible({ timeout: 15000 });
 
       await page.getByLabel("用户名").fill("testuser");
-      await page.getByLabel("密码").fill("123456");
+      await page.getByLabel("密码", { exact: true }).fill("123456");
       await page.getByLabel("确认密码").fill("123456");
       await page.getByLabel("邀请码").fill("INVALID_CODE_XYZ");
 
@@ -668,10 +695,10 @@ test.describe("Auth flow", () => {
 
       // Both tabs show the disconnect button.
       await expect(
-        page.getByRole("button", { name: "离开" }),
+        page.getByRole("button", { name: "断开连接" }),
       ).toBeVisible({ timeout: 5000 });
       await expect(
-        page2.getByRole("button", { name: "离开" }),
+        page2.getByRole("button", { name: "断开连接" }),
       ).toBeVisible({ timeout: 5000 });
 
       await page2.close();
@@ -700,7 +727,7 @@ test.describe("Auth flow", () => {
 
       // Tab 2 connected successfully.
       await expect(
-        page2.getByRole("button", { name: "离开" }),
+        page2.getByRole("button", { name: "断开连接" }),
       ).toBeVisible({ timeout: 5000 });
 
       await page2.close();

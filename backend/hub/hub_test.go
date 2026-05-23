@@ -917,3 +917,344 @@ func TestPicoClawContentSizeLimit(t *testing.T) {
 		t.Errorf("expected truncated content to be %d runes, got %d", maxPicoClawContent, len([]rune(content)))
 	}
 }
+
+func TestValidateUsernameExtended(t *testing.T) {
+	tests := []struct {
+		name     string
+		username string
+		valid    bool
+	}{
+		{name: "single char", username: "a", valid: true},
+		{name: "exactly 20 chars", username: "12345678901234567890", valid: true},
+		{name: "mixed Latin and Chinese", username: "user_测试", valid: true},
+		{name: "21 chars too long", username: "123456789012345678901", valid: false},
+		{name: "katakana not allowed", username: "テスト", valid: false},
+		{name: "emoji not allowed", username: "hello😀", valid: false},
+		{name: "hyphen not allowed", username: "hello-world", valid: false},
+		{name: "Cyrillic not allowed", username: "привет", valid: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ValidateUsername(tc.username)
+			if result != tc.valid {
+				t.Errorf("ValidateUsername(%q) = %v, want %v", tc.username, result, tc.valid)
+			}
+		})
+	}
+}
+
+func TestHandleMarkRead(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	// Case 1: empty username — handler returns early, no message sent.
+	c := &Client{hub: h, send: make(chan []byte, 1)}
+	c.handleMarkRead(Message{Context: "public"})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no response for empty username, got %s", string(msg))
+	default:
+	}
+
+	// Case 2: DM context — read_receipt sent to the DM partner.
+	c.username = "alice"
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 1)}
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	c.handleMarkRead(Message{Context: "dm", To: "bob"})
+
+	var got Message
+	select {
+	case payload := <-bob.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode read_receipt: %v", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected read_receipt on bob's channel")
+	}
+	if got.Type != "read_receipt" {
+		t.Fatalf("expected read_receipt, got %q", got.Type)
+	}
+	if got.From != "alice" {
+		t.Fatalf("expected from=alice, got %q", got.From)
+	}
+	if got.Context != "dm" || got.To != "bob" {
+		t.Fatalf("unexpected context/to: %q/%q", got.Context, got.To)
+	}
+
+	// Cleanup.
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestHandleTypingGuards(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// typing_start with empty username: should return early.
+	c := &Client{hub: h, send: make(chan []byte, 1)}
+	c.handleTypingStart(Message{Context: "public"})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no typing for empty username, got %s", string(msg))
+	default:
+	}
+
+	// typing_stop with empty username: should return early.
+	c.handleTypingStop(Message{Context: "public"})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no typing_stop for empty username, got %s", string(msg))
+	default:
+	}
+
+	// typing_start with valid username: first call passes rate limit, broadcasts.
+	c.username = "alice"
+	// Should not panic; BroadcastTyping sends to other clients only.
+	c.handleTypingStart(Message{Context: "dm", To: "bob"})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no typing echo to sender, got %s", string(msg))
+	default:
+	}
+
+	// typing_stop with valid username: should not panic.
+	c.handleTypingStop(Message{Context: "dm", To: "bob"})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no typing_stop echo to sender, got %s", string(msg))
+	default:
+	}
+}
+
+func TestHandleFriendRequest(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+
+	// Self-request: should be silently ignored.
+	c.handleFriendRequest(Message{To: "alice"})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no response for self-request, got %s", string(msg))
+	default:
+	}
+
+	// Already friends: should receive ALREADY_FRIENDS error.
+	h.AddFriend("alice", "bob")
+	c.handleFriendRequest(Message{To: "bob"})
+	var got Message
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode error: %v", err)
+		}
+	default:
+		t.Fatal("expected ALREADY_FRIENDS error response")
+	}
+	if got.Type != "error" || got.ErrorCode != "ALREADY_FRIENDS" {
+		t.Fatalf("expected ALREADY_FRIENDS error, got type=%q code=%q", got.Type, got.ErrorCode)
+	}
+	if got.Content != "already friends with bob" {
+		t.Fatalf("unexpected error content: %q", got.Content)
+	}
+
+	// Valid request to a new user: no error to sender (target notified via SendToUser if online).
+	freshClient := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+	freshClient.handleFriendRequest(Message{To: "charlie"})
+	select {
+	case msg := <-freshClient.send:
+		t.Fatalf("expected no message to sender for valid friend_request, got %s", string(msg))
+	default:
+	}
+}
+
+func TestHandleFriendAccept(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+
+	// Empty username guard.
+	anon := &Client{hub: h, send: make(chan []byte, 1)}
+	anon.handleFriendAccept(Message{From: "bob"})
+	select {
+	case msg := <-anon.send:
+		t.Fatalf("expected no response for empty username, got %s", string(msg))
+	default:
+	}
+
+	// Valid accept: self receives updated friend_list.
+	c.handleFriendAccept(Message{From: "bob"})
+
+	var got Message
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode: %v", err)
+		}
+	default:
+		t.Fatal("expected friend_list response after accept")
+	}
+	if got.Type != "friend_list" {
+		t.Fatalf("expected friend_list, got %q", got.Type)
+	}
+	if !h.IsFriend("alice", "bob") {
+		t.Error("expected alice and bob to be friends after accept")
+	}
+}
+
+func TestHandleFriendReject(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Empty username guard.
+	c := &Client{hub: h, send: make(chan []byte, 1)}
+	c.handleFriendReject(Message{From: "bob"})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no response for empty username, got %s", string(msg))
+	default:
+	}
+
+	// Empty From: handler returns early.
+	c.username = "alice"
+	c.handleFriendReject(Message{From: ""})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no response for empty From, got %s", string(msg))
+	default:
+	}
+
+	// Valid reject: sends friend_reject to requester (silent if offline).
+	c.handleFriendReject(Message{From: "bob"})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no response to rejecter, got %s", string(msg))
+	default:
+	}
+}
+
+func TestHandleBlock(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Block: should receive confirmation.
+	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+	c.handleBlock(Message{Username: "bob"})
+
+	var got Message
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode block response: %v", err)
+		}
+	default:
+		t.Fatal("expected block confirmation")
+	}
+	if got.Type != "block" || got.Username != "bob" {
+		t.Fatalf("expected block bob, got type=%q username=%q", got.Type, got.Username)
+	}
+
+	// Unblock: should receive confirmation.
+	c2 := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+	c2.handleUnblock(Message{Username: "bob"})
+	select {
+	case payload := <-c2.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode unblock response: %v", err)
+		}
+	default:
+		t.Fatal("expected unblock confirmation")
+	}
+	if got.Type != "unblock" || got.Username != "bob" {
+		t.Fatalf("expected unblock bob, got type=%q username=%q", got.Type, got.Username)
+	}
+
+	// Block list: should receive list response.
+	c3 := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+	c3.handleBlockList()
+	select {
+	case payload := <-c3.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode block_list response: %v", err)
+		}
+	default:
+		t.Fatal("expected block_list response")
+	}
+	if got.Type != "block_list" {
+		t.Fatalf("expected block_list, got %q", got.Type)
+	}
+}
+
+func TestHandleRoomCreateAndList(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+
+	// Invalid room name: should get INVALID_ROOM_NAME error.
+	c.handleRoomCreate(Message{Group: ""})
+	var got Message
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode invalid room error: %v", err)
+		}
+	default:
+		t.Fatal("expected INVALID_ROOM_NAME error")
+	}
+	if got.Type != "error" || got.ErrorCode != "INVALID_ROOM_NAME" {
+		t.Fatalf("expected INVALID_ROOM_NAME error, got type=%q code=%q", got.Type, got.ErrorCode)
+	}
+
+	// Valid room create: should get room_create confirmation with room ID.
+	c2 := &Client{hub: h, username: "bob", send: make(chan []byte, 1)}
+	c2.handleRoomCreate(Message{Group: "test-room"})
+	select {
+	case payload := <-c2.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode room_create response: %v", err)
+		}
+	default:
+		t.Fatal("expected room_create confirmation")
+	}
+	if got.Type != "room_create" {
+		t.Fatalf("expected room_create, got %q", got.Type)
+	}
+	if got.Group != "test-room" {
+		t.Fatalf("expected room name test-room, got %q", got.Group)
+	}
+	if got.RoomID == "" {
+		t.Fatal("expected non-empty room ID")
+	}
+
+	// Room list: should include the newly created room.
+	c3 := &Client{hub: h, username: "charlie", send: make(chan []byte, 1)}
+	c3.handleRoomList()
+	select {
+	case payload := <-c3.send:
+		var listMsg Message
+		if err := json.Unmarshal(payload, &listMsg); err != nil {
+			t.Fatalf("failed to decode room_list: %v", err)
+		}
+		if listMsg.Type != "room_list" {
+			t.Fatalf("expected room_list, got %q", listMsg.Type)
+		}
+		found := false
+		for _, r := range listMsg.Rooms {
+			if r.Name == "test-room" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatal("expected test-room in room list")
+		}
+	default:
+		t.Fatal("expected room_list response")
+	}
+}
