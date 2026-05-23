@@ -7,6 +7,7 @@ Reusable SOPs for TokenDanceChat development. Each skill is a self-contained mar
 | [verify](verify.md) | Commit-gate checklist: quick verify, full verify, security leak scan, E2E |
 | [pm-audit](pm-audit.md) | PM UX audit SOP: file checklist, UX dimensions, competitor comparison, priority framework, report format |
 | [cross-review](cross-review.md) | Code cross-review SOP: pre-review checklist, 8 review dimensions, file groups, common bug patterns, severity classification, output format, post-review actions |
+| [i18n-scan](i18n-scan.md) | Internationalization audit SOP: scan checklist, grep patterns, common historical issues, output table format, post-scan fix actions |
 | [deploy](deploy.md) | Deployment SOP: Docker cp, Docker build, systemctl (legacy), health check, rollback, troubleshooting |
 
 ## Usage
