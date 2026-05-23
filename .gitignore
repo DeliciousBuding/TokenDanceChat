@@ -42,7 +42,8 @@ Thumbs.db
 
 # Logs
 *.log
-.claude/
+.claude/*
+!.claude/skills/
 dist/
 
 backend/backend.exe
