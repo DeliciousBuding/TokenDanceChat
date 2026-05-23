@@ -194,6 +194,11 @@ export function MessageTranscript({
     const container = containerRef.current;
     if (!container) return;
     scrollPositions.current.set(conversationKey, container.scrollTop);
+    // LRU cap: evict oldest entry when map exceeds 30 entries (FIFO via insertion order).
+    if (scrollPositions.current.size > 30) {
+      const firstKey = scrollPositions.current.keys().next().value;
+      if (firstKey) scrollPositions.current.delete(firstKey);
+    }
     const { scrollTop, scrollHeight, clientHeight } = container;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     setShouldAutoScroll(distanceFromBottom < 120);

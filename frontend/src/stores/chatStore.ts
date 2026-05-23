@@ -126,6 +126,8 @@ interface ChatState {
   // Lookup maps for O(1) reaction and read receipt updates (avoid O(n) array copies)
   reactionsByMessageId: Record<string, Record<string, string[]>>;
   readByMessageId: Record<string, string[]>;
+  // Per-conversation last message preview cache (avoids O(n) reverse scan)
+  lastPreviews: Record<string, { content: string; timestamp: number; sender: string }>;
 
   // Online users
   onlineUsers: string[];
@@ -304,6 +306,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   historyLoaded: false,
   reactionsByMessageId: {},
   readByMessageId: {},
+  lastPreviews: {},
   onlineUsers: [],
   userStatusList: [],
   selectedProfileUser: null,
@@ -353,6 +356,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (messages.length > MESSAGE_CAP) {
         messages.splice(0, messages.length - MESSAGE_CAP);
       }
+
+      // Update lastPreviews cache (O(1) map lookup instead of O(n) reverse scan).
+      if (!message.deleted && message.username !== "system" && message.content) {
+        const msgSender = message.from || message.username;
+        const msgRecipient = message.to;
+        let key: string;
+        if (message.group) {
+          key = `group:${message.group}`;
+        } else if (message.to) {
+          // Distinguish group (to is a known group name) from DM (to is a username).
+          if (state.groups[message.to]) {
+            key = `group:${message.to}`;
+          } else {
+            const partner = msgSender === state.username ? msgRecipient : msgSender;
+            key = `dm:${partner}`;
+          }
+        } else {
+          key = "public";
+        }
+        let content = message.content;
+        if (content.length > 50) {
+          content = content.slice(0, 47) + "...";
+        }
+        if (message.username === state.username) {
+          content = "You: " + content;
+        }
+        state.lastPreviews[key] = { content, timestamp: message.timestamp, sender: message.username };
+      }
+
       return { messages };
     }),
   deleteMessage: (id) =>
@@ -375,6 +407,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       const existingIDs = new Set(state.messages.map((m) => m.id));
       const newMessages = incoming.filter((m) => !existingIDs.has(m.id));
+      // Populate lastPreviews from history messages (chronological, so last wins).
+      for (const m of newMessages) {
+        if (m.deleted || m.username === "system" || !m.content) continue;
+        const msgSender = m.from || m.username;
+        const msgRecipient = m.to;
+        let key: string;
+        if (m.group) {
+          key = `group:${m.group}`;
+        } else if (m.to) {
+          if (state.groups[m.to]) {
+            key = `group:${m.to}`;
+          } else {
+            const partner = msgSender === state.username ? msgRecipient : msgSender;
+            key = `dm:${partner}`;
+          }
+        } else {
+          key = "public";
+        }
+        let content = m.content;
+        if (content.length > 50) {
+          content = content.slice(0, 47) + "...";
+        }
+        if (m.username === state.username) {
+          content = "You: " + content;
+        }
+        state.lastPreviews[key] = { content, timestamp: m.timestamp, sender: m.username };
+      }
       return {
         messages: [...state.messages, ...newMessages],
         historyLoaded: true,
@@ -742,38 +801,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }),
   clearLatestCreatedWebhook: () => set({ latestCreatedWebhook: null }),
   getLastMessagePreview: (key: string) => {
-    const { messages, username } = get();
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i];
-      if (m.deleted || m.username === "system" || !m.content) continue;
-
-      let match = false;
-      if (key === "public") {
-        match = !m.to && !m.from && !m.group;
-      } else if (key.startsWith("dm:")) {
-        const partner = key.slice(3);
-        const msgSender = m.from || m.username;
-        const msgRecipient = m.to;
-        match =
-          (msgSender === partner && msgRecipient === username) ||
-          (msgSender === username && msgRecipient === partner);
-      } else if (key.startsWith("group:")) {
-        const groupName = key.slice(6);
-        match = m.to === groupName || m.group === groupName;
-      }
-
-      if (match) {
-        let content = m.content;
-        if (content.length > 50) {
-          content = content.slice(0, 47) + "...";
-        }
-        if (m.username === username) {
-          content = "You: " + content;
-        }
-        return { content, timestamp: m.timestamp, sender: m.username };
-      }
-    }
-    return null;
+    return get().lastPreviews[key] || null;
   },
   setIncomingCall: (incomingCall) => set({ incomingCall }),
   setActiveCall: (activeCall) => set({ activeCall }),
@@ -795,6 +823,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       historyLoaded: false,
       reactionsByMessageId: {},
       readByMessageId: {},
+      lastPreviews: {},
       onlineUsers: [],
       userStatusList: [],
       selectedProfileUser: null,

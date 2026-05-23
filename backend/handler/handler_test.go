@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -2133,5 +2134,306 @@ func TestGetMessagesWithLimitAndBefore(t *testing.T) {
 	}
 	if _, ok := body["messages"]; !ok {
 		t.Error("expected 'messages' key in response")
+	}
+}
+
+// --- Auth endpoint deep tests ---
+
+// mockStoreUsernameTaken is a mockStore that returns "already registered" from RegisterUser.
+type mockStoreUsernameTaken struct {
+	mockStore
+}
+
+func (m *mockStoreUsernameTaken) RegisterUser(username, passwordHash, inviteCode string) error {
+	return errors.New("already registered")
+}
+
+func newTestHandlerWithUsernameTaken() *Handler {
+	ms := &mockStoreUsernameTaken{}
+	h := hub.New(ms, nil, nil, "")
+	go h.Run()
+	return New(h, ms, "/tmp/test-uploads")
+}
+
+func TestInviteGenerateInvalidJSON(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	body := `{invalid`
+	req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.3:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.InviteGenerate(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "INVALID_JSON" {
+		t.Errorf("expected code INVALID_JSON, got %q", result["code"])
+	}
+}
+
+func TestRegisterInvalidJSON(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	body := `{broken`
+	req := httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.4:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Register(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "INVALID_JSON" {
+		t.Errorf("expected code INVALID_JSON, got %q", result["code"])
+	}
+}
+
+func TestRegisterEmptyInviteCode(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	body := `{"username":"alice","password":"secret123","invite_code":""}`
+	req := httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.5:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Register(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "MISSING_INVITE_CODE" {
+		t.Errorf("expected code MISSING_INVITE_CODE, got %q", result["code"])
+	}
+}
+
+func TestRegisterUsernameAlreadyTaken(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandlerWithUsernameTaken()
+
+	body := `{"username":"alice","password":"secret123","invite_code":"VALIDCODE"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.6:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Register(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "USERNAME_TAKEN" {
+		t.Errorf("expected code USERNAME_TAKEN, got %q", result["code"])
+	}
+}
+
+func TestLoginInvalidJSON(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	body := `not-json`
+	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.7:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Login(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "INVALID_JSON" {
+		t.Errorf("expected code INVALID_JSON, got %q", result["code"])
+	}
+}
+
+func TestLoginEmptyUsername(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	body := `{"username":"","password":"secret123"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.8:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Login(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "MISSING_FIELDS" {
+		t.Errorf("expected code MISSING_FIELDS, got %q", result["code"])
+	}
+}
+
+func TestLoginEmptyPassword(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	body := `{"username":"alice","password":""}`
+	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.9:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Login(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "MISSING_FIELDS" {
+		t.Errorf("expected code MISSING_FIELDS, got %q", result["code"])
+	}
+}
+
+// --- MediaStore key validation deep tests ---
+
+func TestCleanMediaKeyEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		key     string
+		wantErr bool
+	}{
+		{"valid simple", "photo.png", false},
+		{"valid nested dir", "emojis/smile.png", false},
+		{"valid deep nested", "a/b/c/d.png", false},
+		{"empty string", "", true},
+		{"single dot", ".", true},
+		{"double dot", "..", true},
+		{"starts with dot slash", "./photo.png", true},
+		{"starts with dot dot slash", "../photo.png", true},
+		{"bare dot dot in path", "a/../photo.png", true},
+		{"bare dot in path", "a/./photo.png", true},
+		{"double slash empty segment", "a//photo.png", true},
+		{"trailing slash", "photo.png/", true},
+		{"leading slash", "/photo.png", false},
+		{"backslash traversal", `..\escape.png`, true},
+		{"backslash nested ok", `a\b\photo.png`, false},
+		{"triple dot ok", ".../photo.png", false},
+		{"clean results in dot", "a/..", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := cleanMediaKey(tt.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("cleanMediaKey(%q) error = %v, wantErr = %v", tt.key, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestContentTypeForFilenameSVG(t *testing.T) {
+	// SVG is not in the explicit switch, falls through to mime.TypeByExtension.
+	got := contentTypeForFilename("icon.svg")
+	if got != "image/svg+xml" {
+		t.Errorf("contentTypeForFilename(icon.svg) = %q, want image/svg+xml", got)
+	}
+}
+
+func TestContentTypeForFilenameUnknownBinary(t *testing.T) {
+	// Unknown extension with no mime mapping falls to application/octet-stream.
+	got := contentTypeForFilename("data.bin")
+	if got != "application/octet-stream" {
+		t.Errorf("contentTypeForFilename(data.bin) = %q, want application/octet-stream", got)
+	}
+}
+
+// TestLocalMediaStoreSaveAndOpen verifies a full round-trip: Save then Open.
+func TestLocalMediaStoreSaveAndOpen(t *testing.T) {
+	dir := t.TempDir()
+	store := NewLocalMediaStore(dir)
+
+	// Save a file.
+	err := store.Save(context.Background(), "hello.txt", "text/plain; charset=utf-8", strings.NewReader("hello world"))
+	if err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	// Verify on-disk file exists.
+	if _, err := os.Stat(filepath.Join(dir, "hello.txt")); os.IsNotExist(err) {
+		t.Error("expected file to exist on disk after Save")
+	}
+
+	// Open and verify round-trip.
+	media, err := store.Open(context.Background(), "hello.txt")
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer media.Body.Close()
+
+	body, err := io.ReadAll(media.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+	if string(body) != "hello world" {
+		t.Errorf("expected 'hello world', got %q", string(body))
+	}
+	if media.ContentType != "text/plain; charset=utf-8" {
+		t.Errorf("expected text/plain; charset=utf-8, got %s", media.ContentType)
 	}
 }

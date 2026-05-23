@@ -1,8 +1,8 @@
 # TokenDanceChat ROADMAP
 
-最后更新：2026-05-23（晚）
+最后更新：2026-05-24（晚）
 
-发布: [v0.2.7](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.7) | Docker: `tokendancechat:v0.2.7` | 测试: 624 前端 / 40 文件 / 全绿
+发布: [v0.2.8](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.8) | Docker: `tokendancechat:v0.2.8` | 测试: 644 前端 / 42 文件 / 全绿
 
 ## 当前目标
 
@@ -46,12 +46,12 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | P2 | 运维/性能 | Health check、部署 checklist、bundle/runtime profiling、虚拟列表调优、WebSocket fanout/load check。 |
 | P2 | UI/美术方向 | 克制企业 UI + 流畅聊天交互；避免装饰性营销布局。 |
 
-## 当前增量（dev）：测试覆盖 + 工程基建 + UX 打磨
+## 当前增量（dev）：测试覆盖 + 性能优化 + UI 打磨 + 工程基建
 
-状态：持续推进。624 tests / 40 files / tsc 0 / ESLint 0 / CI 就绪。
+状态：持续推进。644 tests / 42 files / tsc 0 / ESLint 0 / CI 就绪。
 
-- [x] 前端测试从 237 → 624 (+387 tests / +22 文件 / 40%+ 行覆盖率)。
-- [x] E2E 测试从 18 → 54 (44 auth-flow + 8 group-call + 2 webhook)。
+- [x] 前端测试从 237 → 644 (+407 tests / +24 文件 / 40%+ 行覆盖率)。
+- [x] E2E 测试从 18 → 64 (44 auth-flow + 8 group-call + 2 webhook + 10 dm-flow)。
 - [x] 后端测试扩展：store +7、hub +8、handler +34、llm +8、ratelimit 更新、ws +2。
 - [x] PM 产品审计 P0 修复：侧栏对话预览、未读「新消息」分隔线、移动端语音按钮可见。
 - [x] PM 产品审计 P1 修复：侧栏 IA 重排（DM/群组优先，AI 助手折叠）、对话搜索/过滤。
@@ -73,6 +73,15 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] Opus 审查 MEDIUM/LOW 修复：无界内存 map 清理、CORS/WS 硬编码域名移除。
 - [x] Opus 交叉审查第二轮修复（2 HIGH + 5 MEDIUM）：Sidebar previewMap 记忆化、i18n key 冲突、未读清理、屏蔽用户过滤、年份消除歧义、user-scoped localStorage。
 - [x] 群组视频通话 E2E（8 tests，含 signaling flow、UI 状态管理、多标签隔离）。
+- [x] 性能优化：O(1) reaction/read_by 查找表（Map 预索引）、onlineUsers prop 下沉至 MessageBubble、emoji 预处理提升。
+- [x] WebSocket 自动重连：指数退避 + jitter（1s/2s/4s/8s/16s 上限），重连期间 banner 提示。
+- [x] 发送失败反馈：WebSocket 断开时发送按钮红色闪烁 + 警告 toast。
+- [x] URL 预览卡片：紧凑型，500ms 防抖，年龄分级过滤，加载/错误/溢出状态覆盖。
+- [x] E2E dm-flow 测试（10 tests）。
+- [x] 在线用户加载骨架屏。
+- [x] FAB 未读计数徽章。
+- [x] SettingsModal + SettingsPanel 测试。
+- [x] 项目 Skills 扩展至 4 个：verify、pm-audit、deploy、cross-review（`.agents/skills/`）。
 
 ## 当前增量：Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收
 
@@ -126,7 +135,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 2. ~~消息输入对等增强：上箭头编辑上一条消息、slash commands、emoji 快捷码展开。~~（已实现，已补测）
 3. 消息列表打磨：~~日期分隔线、timestamp hover~~（已实现）、更流畅的新消息和会话切换过渡。
 4. 管理/安全界面：2FA 方案、管理仪表盘、audit log 设计、邀请码管理加固。
-5. 性能 pass：消息列表 profiling、bundle/chunk review、WebSocket fanout/load check。
+5. 性能 pass：消息列表 profiling、bundle/chunk review、WebSocket fanout/load check。（已推进：O(1) reaction/read_by 查找表、emoji 预处理、onlineUsers prop 下沉）
 6. AgentHub 反馈笔记：总结哪些 webhook/group/call/media 原语应迁移到 AgentHub Hub API。
 
 ## 验证台账
@@ -140,7 +149,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-23 | `cd backend; go test ./handler -run "TestWebhookHandlerVerifiesHashedSecret|TestHealthCheck|Test(RateLimitMiddleware|ShouldRateLimitAPI|WSAllow)"` | PASS |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
 | 2026-05-23 | `cd frontend; npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx` | PASS |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 18 files / 237 tests |
+| 2026-05-23 | `cd frontend; npm test` | PASS, 42 files / 644 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
 | 2026-05-23 | `docker build --check -f Dockerfile . && docker build --check -f Dockerfile.runtime .` | PASS |
