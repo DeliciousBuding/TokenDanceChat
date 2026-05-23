@@ -240,5 +240,5 @@ git log --oneline --all --grep='hk1|hk2|3221'
 
 ### 项目级 Skill
 
-可复用 SOP 沉淀到 `.claude/skills/` 目录（不含本机路径、凭据、IP）。已有：
-- `dev-loop` — 自主开发推进引擎
+可复用 SOP 沉淀到 `.agents/skills/` 目录（不含本机路径、凭据、IP）。已有：
+- `verify` — 提交前验证门禁（quick/full/security/E2E）
