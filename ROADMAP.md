@@ -95,6 +95,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] 源码 bug 修复：Register 保留用户名检测 + HealthCheck 方法强制实施。
 - [x] isReservedUsername 导出供 handler 层使用。
 - [x] WebSocket connect 竞态修复：连接建立与 kicked 事件处理间的 race condition。
+- [x] intentionalClose 异步窗口修复：重连流程中 intentionalClose 必须保持 true 直到新 onopen 触发，防止重连期间的 close 被误判为非预期断开。
 
 ## 当前增量：Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收
 
