@@ -413,6 +413,20 @@ export function useWebSocket() {
       }),
     );
 
+    // Kicked — another session logged in with the same username.
+    unsubs.push(
+      chatAPI.on("kicked", (msg: WSMessage) => {
+        const { content } = msg as { type: string; content: string };
+        addSystemMessage(
+          content || i18nSys("system.kicked"),
+          Date.now(),
+        );
+        // Store kicked flag so JoinScreen can show the message.
+        useChatStore.getState().setView("join");
+        disconnect();
+      }),
+    );
+
     // Connection lost
     unsubs.push(
       chatAPI.on("user_status", (msg: WSMessage) => {
@@ -1350,7 +1364,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setGroupWebhooks, setGroupWebhookAuditLogs, addGroupWebhook, rotateGroupWebhookSecret, removeGroupWebhook, setIncomingCall, setActiveCall, setNotificationPrefs, setTranslation, setGroupInfoPanel]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setGroupWebhooks, setGroupWebhookAuditLogs, addGroupWebhook, rotateGroupWebhookSecret, removeGroupWebhook, setIncomingCall, setActiveCall, setNotificationPrefs, setTranslation, setGroupInfoPanel, disconnect]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

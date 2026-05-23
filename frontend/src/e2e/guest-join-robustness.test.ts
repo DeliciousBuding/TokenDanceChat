@@ -38,7 +38,7 @@ test.describe("Guest join robustness", () => {
     await expect(page.getByText(msg).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test("guest join shows error on duplicate username", async ({ page }) => {
+  test("guest join kicks old connection on duplicate username", async ({ page }) => {
     const name = `dup_${Math.random().toString(36).slice(2, 6)}`;
 
     // First join succeeds
@@ -47,16 +47,15 @@ test.describe("Guest join robustness", () => {
     await page.getByRole("button", { name: "游客加入" }).click();
     await expect(page.locator("textarea").first()).toBeVisible({ timeout: 15000 });
 
-    // Second join with same name in new page
+    // Second join with same name in new page should succeed — old connection gets kicked.
     const page2 = await page.context().newPage();
     await setupPage(page2);
     await page2.goto("/");
     await page2.getByPlaceholder("你的用户名...").fill(name);
     await page2.getByRole("button", { name: "游客加入" }).click();
 
-    // Should see an error — must not hang forever
-    const error = page2.getByRole("alert");
-    await expect(error).toBeVisible({ timeout: 15000 });
+    // New connection should show the chat textarea (joined successfully).
+    await expect(page2.locator("textarea").first()).toBeVisible({ timeout: 15000 });
     await page2.close();
   });
 
