@@ -99,6 +99,7 @@ export interface TranslationDict {
     searchResults: string;
     searchEmpty: string;
     aiAssistants: string;
+    connecting: string;
   };
   transcript: {
     loading: string;
@@ -143,6 +144,7 @@ export interface TranslationDict {
     fileTooLarge: string;
     uploadFailed: string;
     editingMessage: string;
+    notConnected: string;
   };
   message: {
     edited: string;
@@ -532,6 +534,7 @@ const zhCN: TranslationDict = {
     searchResults: "搜索结果",
     searchEmpty: "未找到匹配的对话",
     aiAssistants: "AI 助手",
+    connecting: "连接中...",
   },
   transcript: {
     loading: "加载消息中...",
@@ -576,6 +579,7 @@ const zhCN: TranslationDict = {
     fileTooLarge: "文件过大（最大 50MB）",
     uploadFailed: "上传失败",
     editingMessage: "编辑消息",
+    notConnected: "未连接 — 重新连接后重试",
   },
   message: {
     edited: "（已编辑）",
@@ -967,6 +971,7 @@ const enUS: TranslationDict = {
     searchResults: "Search results",
     searchEmpty: "No matching conversations",
     aiAssistants: "AI Assistants",
+    connecting: "Connecting...",
   },
   transcript: {
     loading: "Loading messages...",
@@ -1011,6 +1016,7 @@ const enUS: TranslationDict = {
     fileTooLarge: "File too large (max 50MB)",
     uploadFailed: "Upload failed",
     editingMessage: "Edit message",
+    notConnected: "Not connected — retrying...",
   },
   message: {
     edited: "(edited)",

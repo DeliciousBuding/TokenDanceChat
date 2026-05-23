@@ -378,6 +378,16 @@
   animation: pulseOnce 0.4s ease-out;
 }
 
+@keyframes disconnectFlash {
+  0% { box-shadow: 0 0 0 0 oklch(0.45 0.22 25 / 0.7); }
+  50% { box-shadow: 0 0 0 4px oklch(0.45 0.22 25 / 0); }
+  100% { box-shadow: 0 0 0 0 oklch(0.45 0.22 25 / 0); }
+}
+
+@utility animate-disconnect-flash {
+  animation: disconnectFlash 0.3s ease-out;
+}
+
 @utility animate-pulse-dot {
   animation: pulseDot 2.4s ease-in-out infinite;
 }

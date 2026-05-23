@@ -5,6 +5,7 @@ import { useTranslation } from "@/i18n/context";
 import { usePullDownGesture } from "@/hooks/useTouchGestures";
 import { MessageBubble } from "./MessageBubble";
 import { SystemMessage } from "./SystemMessage";
+import { ScrollToBottom } from "./ScrollToBottom";
 import { cn, formatDate, formatFullTime } from "@/lib/utils";
 import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
@@ -104,6 +105,10 @@ export function MessageTranscript({
   const pendingScrollRestore = useRef(0);
   const scrollPositions = useRef<Map<string, number>>(new Map());
   const conversationKey = currentChat.type === "dm" ? `dm:${currentChat.username}` : currentChat.type === "group" ? `group:${currentChat.name}` : "public";
+
+  // Track new messages that arrived while user is scrolled up for the FAB badge.
+  const [newMessageCount, setNewMessageCount] = useState(0);
+  const prevMessageCountRef = useRef(0);
 
   // Reset infinite scroll state when switching conversations.
   useEffect(() => {
@@ -260,9 +265,13 @@ export function MessageTranscript({
 
   useEffect(() => {
     if (shouldAutoScroll && containerRef.current) {
-      // Use explicit scrollTop on the container to avoid scrollIntoView
-      // cascading to ancestor scrollable elements and pushing ChatInput off-screen.
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      // Use scrollTo on the container element to avoid scrollIntoView
+      // cascading to ancestor scrollable elements.
+      requestAnimationFrame(() => {
+        if (containerRef.current) {
+          containerRef.current.scrollTo({ top: containerRef.current.scrollHeight });
+        }
+      });
     }
   }, [groups, shouldAutoScroll]);
 
@@ -444,7 +453,7 @@ export function MessageTranscript({
       onPointerMove={handleContainerPointerMove}
       onPointerUp={handleContainerPointerUp}
       onPointerCancel={handleContainerPointerUp}
-      className={cn("flex-1 overflow-y-auto relative scrollbar-thin", className)}
+      className={cn("flex-1 min-h-0 overflow-y-auto relative scrollbar-thin", className)}
       style={{ willChange: "transform" }}
       {...pullDownHandlers}
     >

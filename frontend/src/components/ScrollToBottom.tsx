@@ -7,6 +7,10 @@ interface ScrollToBottomProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
   /** Distance from bottom (px) before the button appears. Default 200. */
   threshold?: number;
+  /** Number of new messages that arrived while scrolled up. Shows a badge when > 0. */
+  newCount?: number;
+  /** Called when the button is clicked, so the parent can clear the count. */
+  onClearCount?: () => void;
 }
 
 /**
@@ -15,7 +19,7 @@ interface ScrollToBottomProps {
  *
  * Classic Telegram / Feishu UX pattern.
  */
-export function ScrollToBottom({ containerRef, threshold = 200 }: ScrollToBottomProps) {
+export function ScrollToBottom({ containerRef, threshold = 200, newCount, onClearCount }: ScrollToBottomProps) {
   const [visible, setVisible] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -50,12 +54,15 @@ export function ScrollToBottom({ containerRef, threshold = 200 }: ScrollToBottom
     if (!container) return;
     container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
     setVisible(false);
-  }, [containerRef]);
+    onClearCount?.();
+  }, [containerRef, onClearCount]);
+
+  const displayCount = newCount && newCount > 99 ? "99+" : newCount;
 
   return (
     <button
       onClick={scrollToBottom}
-      aria-label="Scroll to bottom"
+      aria-label={newCount ? `Scroll to bottom (${newCount} new messages)` : "Scroll to bottom"}
       className={cn(
         "fixed bottom-24 right-4 z-30 flex h-10 w-10 items-center justify-center",
         "rounded-full bg-card border border-border shadow-lg",
@@ -67,6 +74,11 @@ export function ScrollToBottom({ containerRef, threshold = 200 }: ScrollToBottom
       )}
     >
       <ChevronDown className="h-5 w-5" />
+      {newCount ? (
+        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-primary text-[10px] font-bold text-primary-foreground flex items-center justify-center">
+          {displayCount}
+        </span>
+      ) : null}
     </button>
   );
 }
