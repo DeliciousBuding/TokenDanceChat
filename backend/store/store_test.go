@@ -2829,3 +2829,437 @@ func TestGetGroupMembersWithRolesEmpty(t *testing.T) {
 	}
 }
 
+// ── Edge case: RegisterUser with empty username ──
+
+func TestRegisterUserEmptyUsername(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	code, err := s.GenerateInviteCode("admin", 5)
+	if err != nil {
+		t.Fatalf("GenerateInviteCode returned error: %v", err)
+	}
+
+	// Empty username should either succeed (empty string is a valid username)
+	// or return an error — but must not panic.
+	err = s.RegisterUser("", "password123", code)
+	// We don't assert success/failure; we only assert no panic.
+	// If it succeeded, verify the user exists.
+	if err == nil {
+		var count int
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", "").Scan(&count); err != nil {
+			t.Fatalf("failed to query empty-username user: %v", err)
+		}
+		if count != 1 {
+			t.Errorf("expected 1 user with empty username, got %d", count)
+		}
+	}
+}
+
+// ── Edge case: RegisterUser with empty password ──
+
+func TestRegisterUserEmptyPassword(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	code, err := s.GenerateInviteCode("admin", 5)
+	if err != nil {
+		t.Fatalf("GenerateInviteCode returned error: %v", err)
+	}
+
+	// Empty password: bcrypt should handle it.
+	err = s.RegisterUser("emptypass", "", code)
+	if err != nil {
+		t.Fatalf("RegisterUser with empty password returned error: %v", err)
+	}
+
+	// Verify the user can authenticate with empty password.
+	ok, err := s.VerifyUser("emptypass", "")
+	if err != nil {
+		t.Fatalf("VerifyUser returned error: %v", err)
+	}
+	if !ok {
+		t.Error("expected VerifyUser to succeed with empty password")
+	}
+}
+
+// ── Edge case: VerifyUser edge cases (non-existent, wrong password) ──
+
+func TestVerifyUserEdgeCases(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	code, _ := s.GenerateInviteCode("admin", 5)
+	s.RegisterUser("realuser", "realpassword", code)
+
+	tests := []struct {
+		name     string
+		username string
+		password string
+		wantOK   bool
+	}{
+		{
+			name:     "non-existent username",
+			username: "ghost",
+			password: "anything",
+			wantOK:   false,
+		},
+		{
+			name:     "wrong password",
+			username: "realuser",
+			password: "wrongpassword",
+			wantOK:   false,
+		},
+		{
+			name:     "correct credentials",
+			username: "realuser",
+			password: "realpassword",
+			wantOK:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ok, err := s.VerifyUser(tt.username, tt.password)
+			if err != nil {
+				t.Fatalf("VerifyUser returned error: %v", err)
+			}
+			if ok != tt.wantOK {
+				t.Errorf("expected ok=%v, got %v", tt.wantOK, ok)
+			}
+		})
+	}
+}
+
+// ── Edge case: InsertMessage with empty content ──
+
+func TestInsertMessageEmptyContent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	msg, err := s.InsertMessage("alice", "", "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("InsertMessage with empty content returned error: %v", err)
+	}
+	if msg.Content != "" {
+		t.Errorf("expected empty content, got '%s'", msg.Content)
+	}
+	if msg.ID == "" {
+		t.Error("expected non-empty ID for empty-content message")
+	}
+
+	// Verify it can be retrieved.
+	retrieved, err := s.GetMessageByID(msg.ID)
+	if err != nil {
+		t.Fatalf("GetMessageByID returned error: %v", err)
+	}
+	if retrieved.Content != "" {
+		t.Errorf("expected empty content on retrieval, got '%s'", retrieved.Content)
+	}
+}
+
+// ── Edge case: InsertMessage with very long content ──
+
+func TestInsertMessageVeryLongContent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Build a 15000-character message.
+	longContent := strings.Repeat("abcdefghij", 1500) // 10 chars * 1500 = 15000
+	if len(longContent) != 15000 {
+		t.Fatalf("test setup: expected 15000 chars, got %d", len(longContent))
+	}
+
+	msg, err := s.InsertMessage("alice", longContent, "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("InsertMessage with long content returned error: %v", err)
+	}
+	if len(msg.Content) != 15000 {
+		t.Errorf("expected content length 15000, got %d", len(msg.Content))
+	}
+
+	// Verify full content is preserved on retrieval.
+	retrieved, err := s.GetMessageByID(msg.ID)
+	if err != nil {
+		t.Fatalf("GetMessageByID returned error: %v", err)
+	}
+	if len(retrieved.Content) != 15000 {
+		t.Errorf("expected retrieved content length 15000, got %d", len(retrieved.Content))
+	}
+	if retrieved.Content != longContent {
+		t.Error("retrieved content does not match original long content")
+	}
+
+	// Verify it appears in message list.
+	msgs := s.GetMessages(10, 0)
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message in list, got %d", len(msgs))
+	}
+	if len(msgs[0].Content) != 15000 {
+		t.Errorf("expected content length 15000 in list, got %d", len(msgs[0].Content))
+	}
+}
+
+// ── Edge case: GetMessageByID with empty ID ──
+
+func TestGetMessageByIDEmptyID(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	_, err = s.GetMessageByID("")
+	if err == nil {
+		t.Error("expected error for GetMessageByID with empty ID")
+	}
+}
+
+// ── Edge case: MarkDeleted with empty ID ──
+
+func TestMarkDeletedEmptyID(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// MarkDeleted on empty ID should not error (UPDATE with no match).
+	err = s.MarkDeleted("")
+	if err != nil {
+		t.Errorf("MarkDeleted with empty ID returned error: %v", err)
+	}
+}
+
+// ── Edge case: ToggleReaction with empty message ID ──
+
+func TestToggleReactionEmptyMessageID(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// ToggleReaction with empty message ID should fail because of
+	// FOREIGN KEY constraint — no message has an empty ID.
+	_, err = s.ToggleReaction("", "👍", "alice")
+	if err == nil {
+		t.Error("expected error for ToggleReaction with empty message ID (FK constraint)")
+	}
+}
+
+// ── Edge case: ToggleReaction with empty emoji ──
+
+func TestToggleReactionEmptyEmoji(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	msg, _ := s.InsertMessage("alice", "test", "", "", "", "", "")
+
+	// ToggleReaction with empty emoji: store may allow this (emoji is just TEXT).
+	reactions, err := s.ToggleReaction(msg.ID, "", "bob")
+	if err != nil {
+		t.Fatalf("ToggleReaction with empty emoji returned error: %v", err)
+	}
+
+	// Verify the empty-emoji reaction is tracked.
+	if reactions[""] == nil || len(reactions[""]) != 1 {
+		t.Error("expected 1 empty-emoji reaction from bob")
+	}
+	if reactions[""][0] != "bob" {
+		t.Errorf("expected 'bob' as reactor, got '%s'", reactions[""][0])
+	}
+
+	// Toggle again to remove.
+	reactions, err = s.ToggleReaction(msg.ID, "", "bob")
+	if err != nil {
+		t.Fatalf("ToggleReaction (remove empty emoji) returned error: %v", err)
+	}
+	if len(reactions[""]) != 0 {
+		t.Error("expected empty-emoji reaction removed after second toggle")
+	}
+}
+
+// ── Edge case: GetReactionsForMessages with non-existent IDs ──
+
+func TestGetReactionsForMessagesNonExistentIDs(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Query reactions for IDs that don't exist.
+	reactions := s.GetReactionsForMessages([]string{"ghost-1", "ghost-2", "ghost-3"})
+	if len(reactions) != 3 {
+		t.Errorf("expected 3 entries in map, got %d", len(reactions))
+	}
+	for _, id := range []string{"ghost-1", "ghost-2", "ghost-3"} {
+		entry, ok := reactions[id]
+		if !ok {
+			t.Errorf("expected map entry for '%s'", id)
+			continue
+		}
+		if len(entry) != 0 {
+			t.Errorf("expected empty reactions for '%s', got %d", id, len(entry))
+		}
+	}
+}
+
+// ── Edge case: SearchMessages with empty query ──
+
+func TestSearchMessagesEmptyQuery(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.InsertMessage("alice", "some message", "", "", "", "", "")
+
+	results, err := s.SearchMessages("", "", 10)
+	if err != nil {
+		t.Fatalf("SearchMessages with empty query returned error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for empty query, got %d", len(results))
+	}
+	if results == nil {
+		t.Error("expected non-nil empty slice, got nil")
+	}
+}
+
+// ── Edge case: SearchMessages with special characters (SQL injection) ──
+
+func TestSearchMessagesSQLInjection(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.InsertMessage("alice", "benign message here", "", "", "", "", "")
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{name: "SQL comment", query: "'; DROP TABLE messages; --"},
+		{name: "UNION SELECT", query: "' UNION SELECT * FROM users --"},
+		{name: "OR 1=1", query: "' OR '1'='1"},
+		{name: "quotes and semicolons", query: "\"; DELETE FROM messages; \""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// SearchMessages may return an error (e.g. FTS5 syntax error on
+			// sanitized operator tokens like OR*) — that is acceptable since
+			// the query was blocked. The key invariant is that the database
+			// must remain intact.
+			results, err := s.SearchMessages(tt.query, "", 10)
+			if err != nil {
+				t.Logf("SearchMessages returned error (acceptable): %v", err)
+			}
+			_ = results
+
+			// Verify the messages table still exists and is intact.
+			var count int
+			if err := s.db.QueryRow("SELECT COUNT(*) FROM messages").Scan(&count); err != nil {
+				t.Fatalf("messages table query failed after search: %v", err)
+			}
+			if count != 1 {
+				t.Errorf("expected 1 message in table, got %d — possible injection", count)
+			}
+		})
+	}
+}
+
+// ── Edge case: SearchMessages with non-existent room ──
+
+func TestSearchMessagesNonExistentRoom(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.InsertMessage("alice", "hello world", "", "room-real", "", "", "")
+
+	results, err := s.SearchMessages("hello", "room-ghost", 10)
+	if err != nil {
+		t.Fatalf("SearchMessages with non-existent room returned error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for non-existent room, got %d", len(results))
+	}
+}
+
+// ── Edge case: AddFriend with self ──
+
+func TestAddFriendSelf(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Adding self as friend: store does not have a constraint against this.
+	err = s.AddFriend("alice", "alice")
+	if err != nil {
+		t.Fatalf("AddFriend with self returned error: %v", err)
+	}
+
+	// Verify self appears in friends list.
+	friends := s.GetFriends("alice")
+	found := false
+	for _, f := range friends {
+		if f == "alice" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected self to appear in friends list after AddFriend(self)")
+	}
+}
+
+// ── Edge case: RemoveFriend with non-existent friendship ──
+
+func TestRemoveFriendNonExistent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// RemoveFriend on non-existent friendship should not error.
+	err = s.RemoveFriend("alice", "ghost")
+	if err != nil {
+		t.Errorf("RemoveFriend with non-existent friendship returned error: %v", err)
+	}
+
+	// Friends list should remain empty.
+	friends := s.GetFriends("alice")
+	if len(friends) != 0 {
+		t.Errorf("expected 0 friends after removing non-existent, got %d", len(friends))
+	}
+}
+
