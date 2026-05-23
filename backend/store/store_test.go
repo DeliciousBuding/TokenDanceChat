@@ -3263,3 +3263,284 @@ func TestRemoveFriendNonExistent(t *testing.T) {
 	}
 }
 
+
+// ── GetUndeliveredDMs focused test ──
+
+func TestGetUndeliveredDMs(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Insert a DM (delivered defaults to 0).
+	dm, err := s.InsertMessage("alice", "hello bob", "", "", "bob", "", "")
+	if err != nil {
+		t.Fatalf("InsertMessage returned error: %v", err)
+	}
+
+	// Insert a non-DM message — should not appear as undelivered.
+	s.InsertMessage("alice", "public msg", "", "", "", "", "")
+
+	// Bob should see 1 undelivered DM.
+	undelivered := s.GetUndeliveredDMs("bob", 10)
+	if len(undelivered) != 1 {
+		t.Fatalf("expected 1 undelivered DM for bob, got %d", len(undelivered))
+	}
+	if undelivered[0].ID != dm.ID {
+		t.Errorf("expected DM id '%s', got '%s'", dm.ID, undelivered[0].ID)
+	}
+	if undelivered[0].ToUser != "bob" {
+		t.Errorf("expected ToUser 'bob', got '%s'", undelivered[0].ToUser)
+	}
+	if undelivered[0].Username != "alice" {
+		t.Errorf("expected sender 'alice', got '%s'", undelivered[0].Username)
+	}
+
+	// Alice should see 0 undelivered — the DM was sent TO bob, not alice.
+	undelivered = s.GetUndeliveredDMs("alice", 10)
+	if len(undelivered) != 0 {
+		t.Errorf("expected 0 undelivered DMs for alice, got %d", len(undelivered))
+	}
+
+	// Mark as delivered.
+	err = s.MarkMessagesDelivered([]string{dm.ID})
+	if err != nil {
+		t.Fatalf("MarkMessagesDelivered returned error: %v", err)
+	}
+
+	// Bob should now see 0 undelivered.
+	undelivered = s.GetUndeliveredDMs("bob", 10)
+	if len(undelivered) != 0 {
+		t.Errorf("expected 0 undelivered after marking delivered, got %d", len(undelivered))
+	}
+
+	// GetUndeliveredDMs for user with no DMs returns empty slice.
+	undelivered = s.GetUndeliveredDMs("nonexistent", 10)
+	if len(undelivered) != 0 {
+		t.Errorf("expected 0 undelivered for unknown user, got %d", len(undelivered))
+	}
+}
+
+// ── GetRoomID with non-existent room ──
+
+func TestGetRoomIDNonExistent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// GetRoomID for a room that was never created should return an error.
+	_, err = s.GetRoomID("phantom-room")
+	if err == nil {
+		t.Error("expected error for non-existent room")
+	}
+
+	// GetRoomID for empty room name should also return an error.
+	_, err = s.GetRoomID("")
+	if err == nil {
+		t.Error("expected error for empty room name")
+	}
+}
+
+// ── DeleteRoom with non-existent room ──
+
+func TestDeleteRoomNonExistent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// DeleteRoom on a non-existent room should not error (silent no-op).
+	err = s.DeleteRoom("nonexistent-id")
+	if err != nil {
+		t.Errorf("DeleteRoom on non-existent room returned unexpected error: %v", err)
+	}
+
+	// DeleteRoom with empty ID should not error.
+	err = s.DeleteRoom("")
+	if err != nil {
+		t.Errorf("DeleteRoom with empty ID returned unexpected error: %v", err)
+	}
+
+	// Verify room list is unaffected.
+	rooms := s.ListRooms()
+	beforeCount := len(rooms)
+	s.DeleteRoom("another-nonexistent-id")
+	rooms = s.ListRooms()
+	if len(rooms) != beforeCount {
+		t.Errorf("room count changed after deleting non-existent room: %d -> %d", beforeCount, len(rooms))
+	}
+}
+
+// ── PinConversation full round trip ──
+
+func TestPinConversationRoundTrip(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Initially no pinned conversations.
+	keys := s.ListPinnedConversations("alice")
+	if len(keys) != 0 {
+		t.Errorf("expected 0 pinned initially, got %d", len(keys))
+	}
+
+	// Pin two conversations.
+	err = s.PinConversation("alice", "dm:bob")
+	if err != nil {
+		t.Fatalf("PinConversation returned error: %v", err)
+	}
+	err = s.PinConversation("alice", "room:general")
+	if err != nil {
+		t.Fatalf("PinConversation second returned error: %v", err)
+	}
+
+	// Pin for a different user — should not appear in alice's list.
+	s.PinConversation("bob", "dm:charlie")
+
+	// List pinned for alice.
+	keys = s.ListPinnedConversations("alice")
+	if len(keys) != 2 {
+		t.Fatalf("expected 2 pinned conversations, got %d", len(keys))
+	}
+	if keys[0] != "dm:bob" || keys[1] != "room:general" {
+		t.Errorf("unexpected pinned keys: %v", keys)
+	}
+
+	// Unpin one.
+	err = s.UnpinConversation("alice", "dm:bob")
+	if err != nil {
+		t.Fatalf("UnpinConversation returned error: %v", err)
+	}
+	keys = s.ListPinnedConversations("alice")
+	if len(keys) != 1 {
+		t.Fatalf("expected 1 pinned after unpin, got %d", len(keys))
+	}
+	if keys[0] != "room:general" {
+		t.Errorf("expected 'room:general' remaining, got '%s'", keys[0])
+	}
+
+	// Unpin the other.
+	err = s.UnpinConversation("alice", "room:general")
+	if err != nil {
+		t.Fatalf("UnpinConversation second returned error: %v", err)
+	}
+	keys = s.ListPinnedConversations("alice")
+	if len(keys) != 0 {
+		t.Errorf("expected 0 pinned after both unpinned, got %d", len(keys))
+	}
+
+	// Bob's list should be unaffected by alice's operations.
+	keys = s.ListPinnedConversations("bob")
+	if len(keys) != 1 || keys[0] != "dm:charlie" {
+		t.Errorf("expected bob's pinned list ['dm:charlie'], got %v", keys)
+	}
+}
+
+// ── GetWebhookByURL ──
+
+func TestGetWebhookByURL(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	err = s.CreateWebhook("wh-url-1", "team-a", "https://example.com/hooks/alpha", "secret-alpha", "alice")
+	if err != nil {
+		t.Fatalf("CreateWebhook returned error: %v", err)
+	}
+	err = s.CreateWebhook("wh-url-2", "team-b", "https://example.com/hooks/beta", "secret-beta", "bob")
+	if err != nil {
+		t.Fatalf("CreateWebhook second returned error: %v", err)
+	}
+
+	// Look up by URL.
+	w, err := s.GetWebhookByURL("https://example.com/hooks/alpha")
+	if err != nil {
+		t.Fatalf("GetWebhookByURL returned error: %v", err)
+	}
+	if w.ID != "wh-url-1" {
+		t.Errorf("expected webhook id 'wh-url-1', got '%s'", w.ID)
+	}
+	if w.GroupName != "team-a" {
+		t.Errorf("expected group 'team-a', got '%s'", w.GroupName)
+	}
+	if w.CreatedBy != "alice" {
+		t.Errorf("expected created_by 'alice', got '%s'", w.CreatedBy)
+	}
+	if w.Secret == "" {
+		t.Error("expected non-empty secret hash")
+	}
+	if strings.Contains(w.Secret, "secret-alpha") {
+		t.Error("secret hash should not contain plaintext secret")
+	}
+
+	// Look up the second webhook.
+	w, err = s.GetWebhookByURL("https://example.com/hooks/beta")
+	if err != nil {
+		t.Fatalf("GetWebhookByURL second returned error: %v", err)
+	}
+	if w.ID != "wh-url-2" {
+		t.Errorf("expected webhook id 'wh-url-2', got '%s'", w.ID)
+	}
+}
+
+// ── GetWebhookByURL with non-existent URL ──
+
+func TestGetWebhookByURLNonExistent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Lookup with no webhooks in DB should return error.
+	_, err = s.GetWebhookByURL("https://example.com/nonexistent")
+	if err == nil {
+		t.Error("expected error for non-existent webhook URL")
+	}
+
+	// Insert a webhook, then look up a different URL.
+	s.CreateWebhook("wh-1", "team", "https://example.com/real", "secret", "alice")
+	_, err = s.GetWebhookByURL("https://example.com/wrong")
+	if err == nil {
+		t.Error("expected error for wrong webhook URL")
+	}
+
+	// Empty URL should also return error.
+	_, err = s.GetWebhookByURL("")
+	if err == nil {
+		t.Error("expected error for empty webhook URL")
+	}
+}
+
+// ── CreateWebhook with empty secret ──
+
+func TestCreateWebhookEmptySecret(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// hashWebhookSecret rejects empty secrets.
+	err = s.CreateWebhook("wh-1", "team", "wh-url", "", "alice")
+	if err == nil {
+		t.Error("expected error for empty webhook secret")
+	}
+
+	// Verify no webhook was created.
+	webhooks, err := s.ListWebhooks("team")
+	if err != nil {
+		t.Fatalf("ListWebhooks returned error: %v", err)
+	}
+	if len(webhooks) != 0 {
+		t.Errorf("expected 0 webhooks after failed create, got %d", len(webhooks))
+	}
+}

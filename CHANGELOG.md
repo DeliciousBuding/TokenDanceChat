@@ -2,6 +2,16 @@
 
 > **累计**: 20+ commits, 30+ features/fixes, 5 skills (verify, pm-audit, deploy, cross-review, i18n-scan)
 
+## v0.2.10 (2026-05-24)
+
+### Added
+- Register 保留用户名检测：`isReservedUsername` 导出供 handler 层使用，防止注册占用保留用户名。
+- HealthCheck 方法强制实施：Docker HEALTHCHECK 探针 `/api/health` 遵循 `CHAT_ADDR`。
+- hub method 测试 (+8)：hub 模块新增 8 个 focused 测试，覆盖注册/健康检查路径。
+
+### Fixed
+- E2E 修复：E2E 测试套件稳定性修复，对齐最新 UI 变更。
+
 ## v0.2.9 (2026-05-24)
 
 ### Added

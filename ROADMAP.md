@@ -176,8 +176,11 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-23 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | PASS, 18/18 |
 | 2026-05-23 | `git diff --check` | PASS |
 | 2026-05-23 | 搜索已删除交接文件的所有过期引用，排除 `node_modules`、`.git` 和 `.worktrees` | PASS，无匹配 |
-| 2026-05-24 | `cd frontend; npm test` | PASS, 43 files / 679 tests |
+| 2026-05-24 | `cd frontend; npm test` | PASS, 47 files / 716 tests |
 | 2026-05-24 | `cd backend; go test ./...` | PASS |
+| 2026-05-24 | `cd backend; go test ./hub -run "TestRegister"` | PASS（保留用户名检测 + HealthCheck 强制实施） |
+| 2026-05-24 | `cd frontend; npx playwright test src/e2e/ --project=chromium` | PASS（E2E 修复后） |
+
 ## Review Gates
 
 提交或交接有意义的变更前：
