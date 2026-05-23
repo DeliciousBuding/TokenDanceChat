@@ -31,6 +31,7 @@ export interface TranslationDict {
     guestLogin: string;
     invalidCode: string;
     codeUsed: string;
+    fillAllFields: string;
     passwordsMatch: string;
     registerSuccess: string;
     passwordMinLength: string;
@@ -448,6 +449,7 @@ const zhCN: TranslationDict = {
     guestLogin: "返回游客模式",
     invalidCode: "邀请码无效或已过期",
     codeUsed: "邀请码已达最大使用次数",
+    fillAllFields: "请填写所有字段后点击注册",
     passwordsMatch: "两次输入的密码不一致",
     registerSuccess: "注册成功",
     passwordMinLength: "密码至少需要6个字符",
@@ -867,6 +869,7 @@ const enUS: TranslationDict = {
     guestLogin: "Back to Guest Mode",
     invalidCode: "Invalid or expired invite code",
     codeUsed: "Invite code has reached maximum uses",
+    fillAllFields: "Please fill in all fields to register",
     passwordsMatch: "Passwords do not match",
     registerSuccess: "Registration successful",
     passwordMinLength: "Password must be at least 6 characters",

@@ -222,7 +222,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
 
         {!loading && (!username.trim() || !password || !confirmPassword || !inviteCode.trim()) && (
           <p className="mt-2 text-xs text-muted-foreground/60 text-center">
-            请填写所有字段后点击注册
+            {t("auth.fillAllFields")}
           </p>
         )}
 
