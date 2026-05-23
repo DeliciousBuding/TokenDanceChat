@@ -115,6 +115,11 @@ npm run visual:acceptance
 # 仓库 diff 卫生
 cd D:\Code\Projects\TokenDanceChat
 git diff --check
+
+# 安全泄露检查（必须无声才算通过；AGENTS.md 自身的示例为预期豁免）
+git grep -n -E '\b(hk1|hk2|us1|us2|us3|gz1)\b' -- ':!.git' ':!node_modules' ':!AGENTS.md'
+git grep -n -E ':(3221)\b' -- ':!.git' ':!node_modules' ':!AGENTS.md'
+git grep -n -E 'password.*[0-9]{4,}|sk-[a-zA-Z0-9]{20,}' -- ':!.git' ':!node_modules' ':!AGENTS.md'
 ```
 
 ## 工程规则
@@ -150,9 +155,38 @@ git diff --check
 
 ## 安全与运维边界
 
-- 不得 commit 生产环境 hostname、IP、SSH alias、容器名、内部端口、实际数据路径、凭证、API key 或部署日志。
+### 红线（违反即事故）
+
+以下内容**绝对禁止**出现在仓库的任何文件、commit message、branch name 或 PR 描述中：
+
+| 禁止项 | 示例（均为反例） |
+|--------|------------------|
+| SSH alias / 服务器昵称 | `hk1`、`hk2`、`us1`、`gz1`、`prod-box` |
+| 内部 IP / 端口 | `10.0.0.50`、`192.168.1.100`、`:3221` |
+| 容器名 / 实例名 | 任何非项目名的 Docker 容器名或 K8s 实例名 |
+| 真实 hostname | `chat.vectorcontrol.tech`（仅在 README "Live" 链接和 RELEASE E2E 命令中豁免） |
+| 数据路径 | `/app/data`（Dockerfile 内可保留，但不得出现在公开文档中描述为生产路径） |
+| 密码 / 凭据 / API key | `123456`、`sk-xxx`、`Bearer xxx`、任何 secret 的实际值 |
+| 部署日志 | `docker run` 的实际输出、`scp` 的源/目标路径 |
+
+违反后必须：当前文件脱敏 + `git filter-branch` 重写历史 + force push。
+
+### 提交前自检
+
+```powershell
+# 在项目根目录跑，有输出就是有泄露（AGENTS.md 自身的示例为预期豁免）
+git grep -n -E '\b(hk1|hk2|us1|us2|us3|gz1)\b' -- ':!.git' ':!node_modules' ':!AGENTS.md'
+git grep -n -E ':(3221)\b' -- ':!.git' ':!node_modules' ':!AGENTS.md'
+git grep -n -E 'password.*[0-9]{4,}|sk-[a-zA-Z0-9]{20,}' -- ':!.git' ':!node_modules' ':!AGENTS.md'
+git log --oneline --all --grep='hk1|hk2|3221'
+```
+
+### 公开文档规则
+
 - 公开文档可描述部署形态和验证命令，不描述私有基础设施细节。
+- 部署示例使用占位符：`user@server`、`chat.example.com`、`:3000`（示例端口）。
 - `SECURITY.md` 跟踪安全态势；安全敏感行为变更时保持更新。
+- CHANGELOG 不得包含真实用户名或密码。
 
 ## AgentHub 映射
 
