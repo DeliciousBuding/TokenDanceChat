@@ -137,14 +137,13 @@ describe("chatStore", () => {
   });
 
   describe("read receipts", () => {
-    it("marks own messages as read", () => {
+    it("marks own messages as read in lookup map", () => {
       useChatStore.getState().setUsername("Me");
       useChatStore.getState().addMessage({
         id: "1", username: "Me", content: "hi", timestamp: 1,
       });
       useChatStore.getState().markMessagesReadBy("Alice");
-      const msg = useChatStore.getState().messages[0];
-      expect(msg.read_by).toContain("Alice");
+      expect(useChatStore.getState().readByMessageId["1"]).toContain("Alice");
     });
 
     it("does not mark others messages as read", () => {
@@ -153,8 +152,7 @@ describe("chatStore", () => {
         id: "1", username: "Bob", content: "hi", timestamp: 1,
       });
       useChatStore.getState().markMessagesReadBy("Alice");
-      const msg = useChatStore.getState().messages[0];
-      expect(msg.read_by).toBeUndefined();
+      expect(useChatStore.getState().readByMessageId["1"]).toBeUndefined();
     });
   });
 
@@ -325,12 +323,12 @@ describe("chatStore", () => {
   });
 
   describe("reactions", () => {
-    it("updates message reactions", () => {
+    it("updates message reactions in lookup map", () => {
       useChatStore.getState().addMessage({
         id: "1", username: "A", content: "hi", timestamp: 1,
       });
       useChatStore.getState().updateMessageReactions("1", { "👍": ["Alice", "Bob"] });
-      expect(useChatStore.getState().messages[0].reactions?.["👍"]).toHaveLength(2);
+      expect(useChatStore.getState().reactionsByMessageId["1"]?.["👍"]).toHaveLength(2);
     });
   });
 

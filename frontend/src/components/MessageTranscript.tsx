@@ -93,6 +93,7 @@ export function MessageTranscript({
     onlineUsers,
     groups: chatGroups,
     lastReadTimestamps,
+    customEmojis,
   } = useChatStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -249,6 +250,16 @@ export function MessageTranscript({
   const hiddenCount = effectiveMessages.length - visibleMessages.length;
 
   const groups = useMemo(() => buildMessageGroups(visibleMessages, username), [visibleMessages, username]);
+
+  // Pre-compute custom emoji lookup structures once for all MessageBubble instances.
+  const emojiPreprocess = useMemo(() => {
+    if (customEmojis.length === 0) return null;
+    const emojiMap = new Map(customEmojis.map((e) => [e.name, e.url]));
+    const names = [...emojiMap.keys()].sort((a, b) => b.length - a.length);
+    const escapedNames = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const pattern = new RegExp(`:(${escapedNames.join('|')}):`, 'g');
+    return { emojiMap, pattern };
+  }, [customEmojis]);
 
   // Track render time for new-message animation detection
   const renderTimeRef = useRef(Date.now());
@@ -786,6 +797,8 @@ export function MessageTranscript({
                         onLongPress={startDragSelect}
                         staggerDelay={gi * 50}
                         highlight={highlight}
+                        onlineUsers={onlineUsers}
+                        emojiPreprocess={emojiPreprocess}
                       />
                     );
                   })}
