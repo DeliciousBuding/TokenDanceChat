@@ -47,10 +47,6 @@ var upgrader = websocket.Upgrader{
 				}
 			}
 		}
-		// Legacy: allow vectorcontrol.tech and subdomains.
-		if strings.HasSuffix(originHost, ".vectorcontrol.tech") || originHost == "vectorcontrol.tech" {
-			return true
-		}
 		log.Printf("ws: rejected origin %q for host %q", origin, host)
 		return false
 	},

@@ -505,6 +505,39 @@ func (h *Hub) LoadPersistedState() {
 
 }
 
+// cleanupMaps prunes stale entries from rate-limit and pending-invite maps
+// to prevent unbounded memory growth on long-running servers.
+func (h *Hub) cleanupMaps() {
+	now := time.Now()
+
+	// Prune typingRateLimit entries older than 10 seconds (cooldown is 3s).
+	h.mu.Lock()
+	for k, v := range h.typingRateLimit {
+		if now.Sub(v) > 10*time.Second {
+			delete(h.typingRateLimit, k)
+		}
+	}
+	h.mu.Unlock()
+
+	// Prune botCooldown entries older than 60 seconds (max cooldown is 30s).
+	h.botCooldownMu.Lock()
+	for k, v := range h.botCooldown {
+		if now.Sub(v) > 60*time.Second {
+			delete(h.botCooldown, k)
+		}
+	}
+	h.botCooldownMu.Unlock()
+
+	// Prune pendingInvites entries whose inner map is empty.
+	h.pendingInvitesMu.Lock()
+	for k, v := range h.pendingInvites {
+		if len(v) == 0 {
+			delete(h.pendingInvites, k)
+		}
+	}
+	h.pendingInvitesMu.Unlock()
+}
+
 // Run starts the hub's event loop. It should be run in a goroutine.
 func (h *Hub) Run() {
 	syncTicker := time.NewTicker(30 * time.Second)
@@ -625,6 +658,8 @@ func (h *Hub) Run() {
 			h.mu.RUnlock()
 
 		case <-syncTicker.C:
+			h.cleanupMaps()
+
 			online := h.onlineUsers()
 			syncMsg, err := json.Marshal(Message{
 				Type:   "online_users",

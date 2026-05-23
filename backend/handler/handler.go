@@ -117,10 +117,6 @@ func CORSMiddleware(next http.Handler) http.Handler {
 						}
 					}
 				}
-				// Legacy: allow vectorcontrol.tech subdomains.
-				if !allow && (strings.HasSuffix(originHost, ".vectorcontrol.tech") || originHost == "vectorcontrol.tech") {
-					allow = true
-				}
 			}
 		}
 
