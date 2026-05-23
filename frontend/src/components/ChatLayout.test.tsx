@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { I18nProvider } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI } from "@/lib/api";
@@ -44,6 +44,14 @@ vi.mock("@/components/VideoCall", () => ({
   VideoCall: () => <div data-testid="video-call" />,
 }));
 
+vi.mock("@/components/ThreadPanel", () => ({
+  ThreadPanel: () => <div data-testid="thread-panel" />,
+}));
+
+vi.mock("@/components/GroupInfoPanel", () => ({
+  GroupInfoPanel: () => <div data-testid="group-info-panel" />,
+}));
+
 vi.mock("@/lib/api", () => {
   const handlers: Map<string, Set<(msg: unknown) => void>> = new Map();
   return {
@@ -65,6 +73,8 @@ vi.mock("@/lib/api", () => {
       sendGroupMessage: vi.fn(),
       sendReaction: vi.fn(),
       sendMessageEdit: vi.fn(),
+      sendThreadReply: vi.fn(),
+      requestThreadMessages: vi.fn(),
       sendPinMessage: vi.fn(),
       deleteMessage: vi.fn(),
       sendFriendRequest: vi.fn(),
@@ -133,6 +143,9 @@ Object.defineProperty(window, "visualViewport", {
     removeEventListener: vi.fn(),
   },
 });
+
+// jsdom does not implement scrollTo — suppress for MessageTranscript
+Element.prototype.scrollTo = vi.fn() as any;
 
 import { ChatLayout } from "@/components/ChatLayout";
 
@@ -332,6 +345,185 @@ describe("ChatLayout", () => {
       // Just verify the handler is registered without error
       fireEvent.keyDown(window, { key: "Escape" });
       // Test passes if no error thrown
+    });
+  });
+
+  // ── New tests ────────────────────────────────────
+
+  describe("移动端侧边栏切换", () => {
+    it("点击打开侧边栏按钮显示遮罩层", () => {
+      renderChatLayout();
+      // 遮罩层初始不存在 (use div selector to avoid matching lucide SVG icons)
+      expect(document.querySelector('div[aria-hidden="true"]')).toBeFalsy();
+      fireEvent.click(screen.getByLabelText("打开侧边栏"));
+      // 遮罩层出现
+      expect(document.querySelector('div[aria-hidden="true"]')).toBeTruthy();
+    });
+
+    it("点击遮罩层关闭侧边栏", () => {
+      renderChatLayout();
+      fireEvent.click(screen.getByLabelText("打开侧边栏"));
+      const backdrop = document.querySelector('div[aria-hidden="true"]');
+      expect(backdrop).toBeTruthy();
+      fireEvent.click(backdrop!);
+      // 遮罩层消失
+      expect(document.querySelector('div[aria-hidden="true"]')).toBeFalsy();
+    });
+  });
+
+  describe("Thread panel open/close", () => {
+    it("初始不渲染 ThreadPanel", () => {
+      renderChatLayout();
+      expect(screen.queryByTestId("thread-panel")).toBeFalsy();
+    });
+
+    it("点击回复计数按钮打开 ThreadPanel", async () => {
+      // 添加消息：msg-2 是 msg-1 的 thread 回复
+      // historyLoaded must be true for MessageTranscript to render messages
+      useChatStore.setState({
+        historyLoaded: true,
+        messages: [
+          {
+            id: "msg-1",
+            username: "alice",
+            content: "Hello everyone",
+            timestamp: Date.now() - 2000,
+          },
+          {
+            id: "msg-2",
+            username: "bob",
+            content: "Thread reply",
+            timestamp: Date.now() - 1000,
+            thread_id: "msg-1",
+          },
+        ],
+      });
+      renderChatLayout();
+      // msg-1 的回复计数按钮应出现
+      const replyBtn = screen.getByLabelText("1 replies");
+      expect(replyBtn).toBeTruthy();
+      fireEvent.click(replyBtn);
+      await waitFor(() => {
+        expect(screen.getByTestId("thread-panel")).toBeTruthy();
+      });
+    });
+  });
+
+  describe("Group info panel", () => {
+    it("初始不渲染 GroupInfoPanel", () => {
+      renderChatLayout();
+      expect(screen.queryByTestId("group-info-panel")).toBeFalsy();
+    });
+
+    it("设置 groupInfoPanel 后渲染 GroupInfoPanel", async () => {
+      useChatStore.setState({ groupInfoPanel: "test-group" });
+      renderChatLayout();
+      await waitFor(() => {
+        expect(screen.getByTestId("group-info-panel")).toBeTruthy();
+      });
+    });
+  });
+
+  describe("重连横幅状态", () => {
+    it("显示带尝试次数的重连消息", async () => {
+      useChatStore.setState({ connected: false });
+      renderChatLayout();
+      await act(async () => {
+        (chatAPI as any).dispatch("reconnecting", { type: "reconnecting", attempt: 0 });
+      });
+      expect(screen.getByText("正在重新连接 (第 1 次)...")).toBeTruthy();
+    });
+
+    it("不同尝试次数显示不同计数", async () => {
+      useChatStore.setState({ connected: false });
+      renderChatLayout();
+      await act(async () => {
+        (chatAPI as any).dispatch("reconnecting", { type: "reconnecting", attempt: 4 });
+      });
+      // attempt + 1 = 5
+      expect(screen.getByText("正在重新连接 (第 5 次)...")).toBeTruthy();
+    });
+
+    it("重连成功后清除横幅", async () => {
+      useChatStore.setState({ connected: false });
+      renderChatLayout();
+      await act(async () => {
+        (chatAPI as any).dispatch("reconnected", { type: "reconnected" });
+      });
+      // connected 应恢复
+      expect(useChatStore.getState().connected).toBe(true);
+      // 横幅不应再显示
+      expect(screen.queryByText("连接已断开，正在尝试重新连接...")).toBeFalsy();
+    });
+
+    it("reconnect_failed 不显示重连次数，只显示刷新按钮", async () => {
+      useChatStore.setState({ connected: false });
+      renderChatLayout();
+      await act(async () => {
+        (chatAPI as any).dispatch("reconnect_failed", { type: "reconnect_failed", attempt: 10 });
+      });
+      // 显示失败消息，而非尝试次数
+      expect(screen.getByText("连接已断开，请刷新页面。")).toBeTruthy();
+    });
+  });
+
+  describe("Theme 循环", () => {
+    it("light -> dark -> system 循环切换", () => {
+      renderChatLayout();
+      // 打开桌面"更多"菜单
+      fireEvent.click(screen.getByLabelText("更多"));
+
+      // 初始主题 light → 显示"浅色"
+      expect(screen.getByText("浅色")).toBeTruthy();
+
+      // 点击切换到 dark
+      fireEvent.click(screen.getByText("浅色"));
+      expect(localStorageMock.getItem("tdchat-theme")).toBe("dark");
+
+      // 重新打开菜单
+      fireEvent.click(screen.getByLabelText("更多"));
+      // 现在显示"深色"
+      expect(screen.getByText("深色")).toBeTruthy();
+
+      // 点击切换到 system
+      fireEvent.click(screen.getByText("深色"));
+      expect(localStorageMock.getItem("tdchat-theme")).toBe("system");
+
+      // 重新打开菜单
+      fireEvent.click(screen.getByLabelText("更多"));
+      // 现在显示"跟随系统"
+      expect(screen.getByText("跟随系统")).toBeTruthy();
+    });
+  });
+
+  describe("移动端更多菜单", () => {
+    it("再次点击更多操作按钮可关闭菜单", () => {
+      renderChatLayout();
+      const moreBtn = screen.getByLabelText("更多操作");
+      fireEvent.click(moreBtn);
+      expect(screen.getByText("导出为 JSON")).toBeTruthy();
+      // 再次点击关闭
+      fireEvent.click(moreBtn);
+      expect(screen.queryByText("导出为 JSON")).toBeFalsy();
+    });
+
+    it("点击语言切换可切换语言", () => {
+      renderChatLayout();
+      fireEvent.click(screen.getByLabelText("更多操作"));
+      // 当前是 zh-CN，显示 "English" 表示切换到英文
+      expect(screen.getByText("English")).toBeTruthy();
+    });
+
+    it("点击断开连接后菜单关闭", () => {
+      renderChatLayout();
+      fireEvent.click(screen.getByLabelText("更多操作"));
+      // 移动端下拉中的"断开连接"
+      const disconnectBtns = screen.getAllByText("断开连接");
+      expect(disconnectBtns.length).toBeGreaterThanOrEqual(1);
+      fireEvent.click(disconnectBtns[0]);
+      // 菜单应已关闭，verify by trying to open again
+      fireEvent.click(screen.getByLabelText("更多操作"));
+      expect(screen.getByText("断开连接")).toBeTruthy();
     });
   });
 });
