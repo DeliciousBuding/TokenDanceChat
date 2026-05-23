@@ -965,7 +965,7 @@ export function Sidebar({
       </div>
 
       {/* Online users section */}
-      <div className="flex-1 overflow-hidden flex flex-col mt-1 min-h-0">
+      <div className="max-h-[40%] overflow-hidden flex flex-col mt-1 min-h-0">
         <div data-visual="sidebar-online-users" className="flex items-center justify-between px-5 py-1.5">
           <div className="flex items-center gap-2">
             <Users className="h-3.5 w-3.5 text-muted-foreground" />

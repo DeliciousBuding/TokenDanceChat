@@ -241,4 +241,7 @@ git log --oneline --all --grep='hk1|hk2|3221'
 ### 项目级 Skill
 
 可复用 SOP 沉淀到 `.agents/skills/` 目录（不含本机路径、凭据、IP）。已有：
-- `verify` — 提交前验证门禁（quick/full/security/E2E）
+- `verify` -- 提交前验证门禁（quick/full/security/E2E）
+- `pm-audit` -- PM UX 审计 SOP（file checklist, UX dimensions, competitor comparison, priority framework）
+- `deploy` -- 部署 SOP（Docker cp/build, systemctl, health check, rollback）
+- `cross-review` -- 代码交叉审查 SOP（8 维检查清单, file groups, 常见 bug 模式, 严重度分类, 输出格式）

@@ -876,13 +876,17 @@ describe("chatAPI.disconnect", () => {
     expect(chatAPI.readyState).toBe(WebSocket.CLOSED);
   });
 
-  it("removes all event handlers after disconnect", () => {
+  it("preserves event handlers after disconnect (handlers are lifecycle-managed)", () => {
     const handler = vi.fn();
-    chatAPI.on("test", handler);
+    const unsub = chatAPI.on("test", handler);
     chatAPI.disconnect();
 
+    // Handlers survive disconnect — they're managed by component lifecycle.
     (chatAPI as any).dispatch("test", { type: "test" });
-    expect(handler).not.toHaveBeenCalled();
+    expect(handler).toHaveBeenCalled();
+
+    // Cleanup
+    unsub();
   });
 
   it("closes the WebSocket when disconnect is called with an active socket", () => {

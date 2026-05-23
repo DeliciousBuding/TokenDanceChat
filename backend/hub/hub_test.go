@@ -19,6 +19,11 @@ type mockStore struct {
 	webhookByID map[string]store.Webhook
 	auditLogs    []store.WebhookAuditLog
 	customEmojis []store.CustomEmoji
+
+	// Configurable return values for state restoration tests.
+	allFriends  map[string][]string
+	allGroups   map[string][]string
+	allProfiles []store.UserProfile
 }
 
 func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error) {
@@ -91,13 +96,13 @@ func (m *mockStore) SearchMessages(query, roomID string, limit int) ([]store.Sea
 }
 func (m *mockStore) AddFriend(username, friend string) error                      { return nil }
 func (m *mockStore) RemoveFriend(username, friend string) error                   { return nil }
-func (m *mockStore) GetAllFriends() map[string][]string                           { return nil }
+func (m *mockStore) GetAllFriends() map[string][]string                           { return m.allFriends }
 func (m *mockStore) GetFriends(username string) []string                          { return nil }
 func (m *mockStore) CreateGroup(name, creator string) error                       { return nil }
 func (m *mockStore) AddGroupMember(groupName, username string) error              { return nil }
 func (m *mockStore) RemoveGroupMember(groupName, username string) error           { return nil }
 func (m *mockStore) GetGroupMembers(groupName string) []string                    { return nil }
-func (m *mockStore) GetAllGroups() map[string][]string                            { return nil }
+func (m *mockStore) GetAllGroups() map[string][]string                            { return m.allGroups }
 func (m *mockStore) GetUndeliveredDMs(username string, limit int) []StoredMessage { return nil }
 func (m *mockStore) MarkMessagesDelivered(ids []string) error                     { return nil }
 func (m *mockStore) BlockUser(username, blocked string) error                     { return nil }
@@ -128,7 +133,7 @@ func (m *mockStore) GetUserProfile(username string) (*store.UserProfile, error) 
 }
 func (m *mockStore) UpdateUserStatus(username, status string) error                 { return nil }
 func (m *mockStore) UpdateUserLastSeen(username string) error                       { return nil }
-func (m *mockStore) GetAllUserProfiles() ([]store.UserProfile, error)               { return nil, nil }
+func (m *mockStore) GetAllUserProfiles() ([]store.UserProfile, error)               { return m.allProfiles, nil }
 func (m *mockStore) CreatePoll(poll *Poll) error                                    { return nil }
 func (m *mockStore) GetPoll(pollID string) (*Poll, error)                           { return nil, nil }
 func (m *mockStore) VotePoll(pollID string, username string, optionIndex int) error { return nil }
@@ -2062,5 +2067,689 @@ func TestIsAssistantAlias(t *testing.T) {
 					tc.mention, tc.canonical, tc.aliases, result, tc.expected)
 			}
 		})
+	}
+}
+
+// --- Hub pure-logic tests (no WebSocket required) ---
+
+func TestConnectionCount(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	if h.ConnectionCount() != 0 {
+		t.Fatalf("expected 0 connections initially, got %d", h.ConnectionCount())
+	}
+
+	alice := &Client{username: "alice", send: make(chan []byte, 1)}
+	bob := &Client{username: "bob", send: make(chan []byte, 1)}
+
+	h.register <- alice
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	if h.ConnectionCount() != 2 {
+		t.Fatalf("expected 2 connections after register, got %d", h.ConnectionCount())
+	}
+
+	h.unregister <- alice
+	time.Sleep(10 * time.Millisecond)
+
+	if h.ConnectionCount() != 1 {
+		t.Fatalf("expected 1 connection after unregister, got %d", h.ConnectionCount())
+	}
+
+	// Cleanup.
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestIsFull(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	// Empty hub should not be full.
+	if h.IsFull() {
+		t.Error("expected IsFull to return false for empty hub")
+	}
+
+	// Register a few clients — still below MaxConnections (100).
+	for i := 0; i < 5; i++ {
+		client := &Client{username: "user_" + string(rune('a'+i)), send: make(chan []byte, 1)}
+		h.register <- client
+		defer func() { h.unregister <- client }()
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	if h.IsFull() {
+		t.Error("expected IsFull to return false when below MaxConnections")
+	}
+}
+
+func TestUptime(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Brand new hub should have a non-negative uptime.
+	uptime := h.Uptime()
+	if uptime < 0 {
+		t.Error("expected non-negative uptime")
+	}
+	if uptime > time.Second {
+		t.Errorf("expected uptime < 1s for brand new hub, got %v", uptime)
+	}
+
+	// After a short wait, uptime should increase.
+	time.Sleep(50 * time.Millisecond)
+	later := h.Uptime()
+	if later <= uptime {
+		t.Error("expected uptime to increase after sleep")
+	}
+}
+
+func TestIsUsernameTaken_CaseSensitivity(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	client := &Client{username: "Alice", send: make(chan []byte, 1)}
+	h.register <- client
+	time.Sleep(10 * time.Millisecond)
+
+	if !h.IsUsernameTaken("Alice") {
+		t.Error("expected exact match 'Alice' to be taken")
+	}
+	if h.IsUsernameTaken("alice") {
+		t.Error("expected 'alice' (lowercase) to NOT match 'Alice' (case-sensitive)")
+	}
+
+	// Cleanup.
+	h.unregister <- client
+	time.Sleep(10 * time.Millisecond)
+}
+
+// --- Friend system tests ---
+
+func TestIsFriend(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Non-existent user.
+	if h.IsFriend("alice", "bob") {
+		t.Error("expected IsFriend to return false for non-existent users")
+	}
+
+	// Add friend and verify.
+	h.AddFriend("alice", "bob")
+	if !h.IsFriend("alice", "bob") {
+		t.Error("expected alice-bob to be friends after AddFriend")
+	}
+	if !h.IsFriend("bob", "alice") {
+		t.Error("expected bob-alice to be friends (bidirectional)")
+	}
+
+	// Unrelated users.
+	if h.IsFriend("alice", "charlie") {
+		t.Error("expected alice-charlie to NOT be friends")
+	}
+}
+
+func TestAddFriend_Bidirectional(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	h.AddFriend("alice", "bob")
+
+	if !h.IsFriend("alice", "bob") {
+		t.Error("expected AddFriend to create alice->bob")
+	}
+	if !h.IsFriend("bob", "alice") {
+		t.Error("expected AddFriend to create bob->alice (bidirectional)")
+	}
+
+	friends := h.GetFriends("alice")
+	if len(friends) != 1 || friends[0] != "bob" {
+		t.Fatalf("expected alice friends = [bob], got %v", friends)
+	}
+
+	friends2 := h.GetFriends("bob")
+	if len(friends2) != 1 || friends2[0] != "alice" {
+		t.Fatalf("expected bob friends = [alice], got %v", friends2)
+	}
+}
+
+func TestRemoveFriend_Bidirectional(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	h.AddFriend("alice", "bob")
+	h.AddFriend("alice", "charlie")
+
+	h.RemoveFriend("alice", "bob")
+
+	if h.IsFriend("alice", "bob") {
+		t.Error("expected alice-bob friendship removed")
+	}
+	if h.IsFriend("bob", "alice") {
+		t.Error("expected bob-alice friendship removed (bidirectional)")
+	}
+	if !h.IsFriend("alice", "charlie") {
+		t.Error("expected alice-charlie friendship to remain")
+	}
+
+	// Removing non-existent friend should not panic.
+	h.RemoveFriend("alice", "nonexistent")
+}
+
+func TestGetFriends(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// No friends initially.
+	if f := h.GetFriends("alice"); len(f) != 0 {
+		t.Fatalf("expected 0 friends for new user, got %v", f)
+	}
+
+	h.AddFriend("alice", "bob")
+	h.AddFriend("alice", "charlie")
+
+	friends := h.GetFriends("alice")
+	if len(friends) != 2 {
+		t.Fatalf("expected 2 friends, got %d", len(friends))
+	}
+	friendSet := make(map[string]bool)
+	for _, f := range friends {
+		friendSet[f] = true
+	}
+	if !friendSet["bob"] || !friendSet["charlie"] {
+		t.Errorf("expected friends bob and charlie, got %v", friends)
+	}
+}
+
+// --- Room system tests ---
+
+func TestJoinRoom(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// JoinRoom creates a new room set.
+	result := h.JoinRoom("room-1", "alice")
+	if !result {
+		t.Error("expected JoinRoom to return true")
+	}
+
+	if !h.InRoom("room-1", "alice") {
+		t.Error("expected alice to be in room-1 after JoinRoom")
+	}
+
+	// JoinRoom adds to an existing room.
+	h.JoinRoom("room-1", "bob")
+	if !h.InRoom("room-1", "bob") {
+		t.Error("expected bob to be in room-1 after JoinRoom")
+	}
+
+	members := h.GetRoomMembers("room-1")
+	if len(members) != 2 {
+		t.Fatalf("expected 2 members in room-1, got %d", len(members))
+	}
+}
+
+func TestLeaveRoom(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	h.JoinRoom("room-1", "alice")
+	h.JoinRoom("room-1", "bob")
+
+	h.LeaveRoom("room-1", "alice")
+
+	if h.InRoom("room-1", "alice") {
+		t.Error("expected alice to no longer be in room-1 after LeaveRoom")
+	}
+	if !h.InRoom("room-1", "bob") {
+		t.Error("expected bob to remain in room-1")
+	}
+
+	// Leave non-existent room should not panic.
+	h.LeaveRoom("nonexistent", "alice")
+}
+
+func TestGetRoomMembers(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Empty room.
+	members := h.GetRoomMembers("empty-room")
+	if len(members) != 0 {
+		t.Fatalf("expected 0 members for non-existent room, got %d", len(members))
+	}
+
+	h.JoinRoom("room-1", "alice")
+	h.JoinRoom("room-1", "bob")
+	h.JoinRoom("room-1", "charlie")
+
+	members = h.GetRoomMembers("room-1")
+	if len(members) != 3 {
+		t.Fatalf("expected 3 members, got %d", len(members))
+	}
+}
+
+func TestInRoom(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Non-existent room.
+	if h.InRoom("nonexistent", "alice") {
+		t.Error("expected InRoom to return false for non-existent room")
+	}
+
+	h.JoinRoom("room-1", "alice")
+
+	// User in room.
+	if !h.InRoom("room-1", "alice") {
+		t.Error("expected InRoom to return true after JoinRoom")
+	}
+
+	// Different user in same room.
+	if h.InRoom("room-1", "bob") {
+		t.Error("expected InRoom to return false for non-member")
+	}
+}
+
+// --- Group system tests ---
+
+func TestCreateGroup(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Create group succeeds.
+	if !h.CreateGroup("dev-team", "alice") {
+		t.Error("expected CreateGroup to return true for new group")
+	}
+
+	if !h.InGroup("alice", "dev-team") {
+		t.Error("expected creator to be in group")
+	}
+
+	members := h.GroupMembers("dev-team")
+	if len(members) != 1 || members[0] != "alice" {
+		t.Fatalf("expected [alice], got %v", members)
+	}
+
+	// Duplicate group name is rejected.
+	if h.CreateGroup("dev-team", "bob") {
+		t.Error("expected CreateGroup to return false for duplicate name")
+	}
+
+	// bob should NOT be in dev-team (duplicate rejected).
+	if h.InGroup("bob", "dev-team") {
+		t.Error("expected bob to NOT be in dev-team after duplicate rejection")
+	}
+}
+
+func TestInGroup(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Non-existent group.
+	if h.InGroup("alice", "nonexistent") {
+		t.Error("expected InGroup to return false for non-existent group")
+	}
+
+	h.CreateGroup("team", "alice")
+
+	if !h.InGroup("alice", "team") {
+		t.Error("expected InGroup to return true for member")
+	}
+	if h.InGroup("bob", "team") {
+		t.Error("expected InGroup to return false for non-member")
+	}
+}
+
+func TestGroupMembers(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Non-existent group.
+	if members := h.GroupMembers("nonexistent"); members != nil {
+		t.Fatalf("expected nil for non-existent group, got %v", members)
+	}
+
+	h.CreateGroup("team", "alice")
+	h.AddGroupMember("team", "bob")
+	h.AddGroupMember("team", "charlie")
+
+	members := h.GroupMembers("team")
+	if len(members) != 3 {
+		t.Fatalf("expected 3 members, got %d", len(members))
+	}
+	memberSet := make(map[string]bool)
+	for _, m := range members {
+		memberSet[m] = true
+	}
+	for _, expected := range []string{"alice", "bob", "charlie"} {
+		if !memberSet[expected] {
+			t.Errorf("expected %q in group members, got %v", expected, members)
+		}
+	}
+}
+
+func TestRemoveGroupMember(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	h.CreateGroup("team", "alice")
+	h.AddGroupMember("team", "bob")
+
+	h.RemoveGroupMember("team", "bob")
+
+	if h.InGroup("bob", "team") {
+		t.Error("expected bob to be removed from team")
+	}
+	if !h.InGroup("alice", "team") {
+		t.Error("expected alice to remain in team")
+	}
+
+	// Remove from non-existent group should not panic.
+	h.RemoveGroupMember("nonexistent", "alice")
+}
+
+// --- Pending invite tests ---
+
+func TestPendingInvites(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Consume on non-existent user returns false.
+	if h.ConsumePendingInvite("alice", "team") {
+		t.Error("expected ConsumePendingInvite to return false for non-existent user")
+	}
+
+	// Add invite.
+	h.AddPendingInvite("alice", "team", "bob")
+
+	// Consume returns true.
+	if !h.ConsumePendingInvite("alice", "team") {
+		t.Error("expected ConsumePendingInvite to return true after AddPendingInvite")
+	}
+
+	// Already consumed — returns false.
+	if h.ConsumePendingInvite("alice", "team") {
+		t.Error("expected ConsumePendingInvite to return false after invite was consumed")
+	}
+
+	// Add another and remove via RemovePendingInvite.
+	h.AddPendingInvite("alice", "team2", "bob")
+	h.RemovePendingInvite("alice", "team2")
+
+	if h.ConsumePendingInvite("alice", "team2") {
+		t.Error("expected ConsumePendingInvite to return false after RemovePendingInvite")
+	}
+
+	// Remove on non-existent should not panic.
+	h.RemovePendingInvite("nonexistent", "nonexistent")
+}
+
+// --- Call session tests ---
+
+func TestCallSessions(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Get non-existent session returns nil.
+	if cs := h.GetCallSession("nonexistent"); cs != nil {
+		t.Error("expected nil for non-existent call session")
+	}
+
+	// Create session.
+	cs := h.CreateCallSession("call-1", "alice", "bob", "video")
+	if cs == nil {
+		t.Fatal("expected non-nil CallSession")
+	}
+	if cs.ID != "call-1" || cs.Caller != "alice" || cs.Callee != "bob" {
+		t.Fatalf("unexpected session fields: %+v", cs)
+	}
+	if cs.Type != "video" || cs.Status != "ringing" {
+		t.Fatalf("expected type=video, status=ringing, got type=%q status=%q", cs.Type, cs.Status)
+	}
+	if cs.CreatedAt <= 0 {
+		t.Error("expected positive CreatedAt")
+	}
+
+	// Get session.
+	retrieved := h.GetCallSession("call-1")
+	if retrieved == nil {
+		t.Fatal("expected non-nil for existing call session")
+	}
+	if retrieved.Caller != "alice" {
+		t.Fatalf("expected caller=alice, got %q", retrieved.Caller)
+	}
+
+	// Update status.
+	h.UpdateCallSessionStatus("call-1", "active")
+	updated := h.GetCallSession("call-1")
+	if updated.Status != "active" {
+		t.Fatalf("expected status=active after update, got %q", updated.Status)
+	}
+
+	// Update non-existent should not panic.
+	h.UpdateCallSessionStatus("nonexistent", "active")
+
+	// Remove session.
+	h.RemoveCallSession("call-1")
+	if cs := h.GetCallSession("call-1"); cs != nil {
+		t.Error("expected nil after RemoveCallSession")
+	}
+
+	// Remove non-existent should not panic.
+	h.RemoveCallSession("nonexistent")
+}
+
+func TestCallSessionCreateDefaultStatus(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	cs := h.CreateCallSession("call-voice", "alice", "bob", "voice")
+	if cs.Status != "ringing" {
+		t.Fatalf("expected default status=ringing, got %q", cs.Status)
+	}
+}
+
+// --- SendToUser tests ---
+
+func TestSendToUser(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	// Send to non-existent user returns false.
+	data := []byte(`{"test":true}`)
+	if h.SendToUser("alice", data) {
+		t.Error("expected SendToUser to return false for offline user")
+	}
+
+	// Register alice and verify delivery.
+	alice := &Client{username: "alice", send: make(chan []byte, 1)}
+	h.register <- alice
+	time.Sleep(10 * time.Millisecond)
+
+	if !h.SendToUser("alice", data) {
+		t.Error("expected SendToUser to return true for online user")
+	}
+
+	// Verify the message was received by alice.
+	select {
+	case received := <-alice.send:
+		if string(received) != string(data) {
+			t.Fatalf("expected %q, got %q", string(data), string(received))
+		}
+	default:
+		t.Fatal("expected message on alice's channel")
+	}
+
+	// Cleanup.
+	h.unregister <- alice
+	time.Sleep(10 * time.Millisecond)
+}
+
+// --- LoadPersistedState tests ---
+
+func TestLoadPersistedState(t *testing.T) {
+	ms := &mockStore{
+		allFriends: map[string][]string{
+			"alice": {"bob", "charlie"},
+			"bob":   {"alice"},
+		},
+		allGroups: map[string][]string{
+			"dev-team": {"alice", "bob"},
+		},
+	}
+	h := New(ms, nil, nil, "")
+
+	// Initially empty.
+	if h.IsFriend("alice", "bob") {
+		t.Error("expected no friends before LoadPersistedState")
+	}
+
+	h.LoadPersistedState()
+
+	// Friends should now be restored.
+	if !h.IsFriend("alice", "bob") {
+		t.Error("expected alice-bob friendship restored from store")
+	}
+	if !h.IsFriend("alice", "charlie") {
+		t.Error("expected alice-charlie friendship restored from store")
+	}
+	if !h.IsFriend("bob", "alice") {
+		t.Error("expected bob-alice friendship restored from store")
+	}
+
+	// Groups should now be restored.
+	if !h.InGroup("alice", "dev-team") {
+		t.Error("expected alice in dev-team after LoadPersistedState")
+	}
+	if !h.InGroup("bob", "dev-team") {
+		t.Error("expected bob in dev-team after LoadPersistedState")
+	}
+
+	members := h.GroupMembers("dev-team")
+	if len(members) != 2 {
+		t.Fatalf("expected 2 members in dev-team, got %d", len(members))
+	}
+}
+
+func TestLoadPersistedStateNilStore(t *testing.T) {
+	h := New(nil, nil, nil, "")
+
+	// Should not panic with nil store.
+	h.LoadPersistedState()
+}
+
+// --- AllUserStatus tests ---
+
+func TestAllUserStatusSortsOnlineFirst(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	// Set last seen timestamps: alice most recent, charlie oldest.
+	h.SetLastSeen("alice", 3000)
+	h.SetLastSeen("bob", 2000)
+	h.SetLastSeen("charlie", 1000)
+
+	// Register bob as online.
+	bobClient := &Client{username: "bob", send: make(chan []byte, 1)}
+	h.register <- bobClient
+	time.Sleep(10 * time.Millisecond)
+
+	users := h.AllUserStatus()
+
+	// First user should be online (bob).
+	if !users[0].Online {
+		t.Errorf("expected first user to be online, got %+v", users[0])
+	}
+	if users[0].Username != "bob" {
+		t.Errorf("expected bob first, got %q", users[0].Username)
+	}
+
+	// Offline users should be sorted by lastSeen descending.
+	// alice=3000 before charlie=1000.
+	foundAlice := false
+	foundCharlie := false
+	for i, u := range users {
+		if u.Username == "alice" {
+			foundAlice = true
+			aliceIdx := i
+			for j, u2 := range users {
+				if u2.Username == "charlie" {
+					foundCharlie = true
+					if aliceIdx >= j {
+						t.Errorf("expected alice (lastSeen=3000) before charlie (lastSeen=1000), got alice@%d charlie@%d", aliceIdx, j)
+					}
+				}
+			}
+		}
+	}
+	if !foundAlice || !foundCharlie {
+		t.Error("expected alice and charlie in user list")
+	}
+
+	// Cleanup.
+	h.unregister <- bobClient
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestAllUserStatusMergesProfileData(t *testing.T) {
+	ms := &mockStore{
+		allProfiles: []store.UserProfile{
+			{Username: "alice", DisplayName: "Alice Wang", AvatarURL: "https://example.com/alice.png", Status: "Busy"},
+			{Username: "bob", DisplayName: "Bob Li", AvatarURL: "https://example.com/bob.png", Status: "Available"},
+		},
+	}
+	h := New(ms, nil, nil, "")
+
+	h.SetLastSeen("alice", 1000)
+	h.SetLastSeen("bob", 2000)
+
+	users := h.AllUserStatus()
+	if len(users) != 2 {
+		t.Fatalf("expected 2 users, got %d", len(users))
+	}
+
+	for _, u := range users {
+		switch u.Username {
+		case "alice":
+			if u.DisplayName != "Alice Wang" {
+				t.Errorf("expected Alice Wang, got %q", u.DisplayName)
+			}
+			if u.AvatarURL != "https://example.com/alice.png" {
+				t.Errorf("expected avatar URL, got %q", u.AvatarURL)
+			}
+			if u.Status != "Busy" {
+				t.Errorf("expected Busy status, got %q", u.Status)
+			}
+		case "bob":
+			if u.DisplayName != "Bob Li" {
+				t.Errorf("expected Bob Li, got %q", u.DisplayName)
+			}
+			if u.AvatarURL != "https://example.com/bob.png" {
+				t.Errorf("expected avatar URL, got %q", u.AvatarURL)
+			}
+			if u.Status != "Available" {
+				t.Errorf("expected Available status, got %q", u.Status)
+			}
+		}
+	}
+}
+
+func TestAllUserStatusEmpty(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// No users tracked — should return empty slice.
+	users := h.AllUserStatus()
+	if len(users) != 0 {
+		t.Fatalf("expected 0 users, got %d", len(users))
 	}
 }
