@@ -15,6 +15,13 @@
 - 前端测试从 627 扩展至 679（+52 tests），后端测试新增 30+ tests（main 模块集成测试 + media 模块 focused 测试）。
 - 性能优化：lastPreviews O(1) 查找、replyCounts 缓存、reaction/read_by O(1) Map 预索引。
 
+### Fixed
+- 滚动条无法拖动根本原因修复（第 4 次尝试终成功）：父级 wrapper 缺少 `flex flex-col`，导致 flex 子元素高度计算错误，滚动容器无法正确收缩。
+- `window.__chatAPI` 仅 DEV 和 `?e2e` 模式下暴露，生产环境不挂载调试 API。
+- `Hub.Stop()` goroutine 安全测试清理：修复测试中 hub 关闭时的数据竞争。
+- `formatTime` / `formatLastSeen` 新增 `lang` 参数（i18n P3）：时间格式化现在根据当前语言环境返回本地化字符串。
+- E2E scroll-ux 测试：8 个滚动行为测试，针对生产环境验证 scrollIntoView、回到底部 FAB、新消息自动滚动等行为。
+
 ## v0.2.8 (2026-05-23)
 
 ### Added
