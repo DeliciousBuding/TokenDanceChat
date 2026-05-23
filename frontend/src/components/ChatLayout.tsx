@@ -690,11 +690,11 @@ export function ChatLayout() {
             </div>
             <button
               onClick={() => setSettingsOpen(true)}
-              aria-label={t("settings.notificationPrefs")}
+              aria-label={t("settings.openSettings")}
               className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
             >
               <Settings className="h-4 w-4" />
-              {t("settings.notificationPrefs")}
+              {t("settings.openSettings")}
             </button>
             <ScheduledMessagesPanel roomId={currentRoomID} />
             <button

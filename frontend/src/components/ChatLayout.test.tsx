@@ -173,7 +173,7 @@ describe("ChatLayout", () => {
       expect(screen.getAllByText("English").length).toBeGreaterThanOrEqual(2);
       expect(screen.getByText("导出为 JSON")).toBeTruthy();
       expect(screen.getByText("导出为文本")).toBeTruthy();
-      expect(screen.getAllByText("通知偏好").length).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByText("打开设置").length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText("断开连接")).toBeTruthy();
     });
 

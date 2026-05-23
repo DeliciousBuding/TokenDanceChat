@@ -25,7 +25,7 @@ vi.mock("@/i18n/context", () => ({
         "join.errorTooShort": "用户名至少2个字符",
         "join.errorTooLong": "用户名最多20个字符",
         "join.errorInvalidChars": "用户名只能包含中英文、数字和下划线",
-        "join.placeholder": "你的用户名...",
+        "auth.fillAllFields": "请填写所有字段后点击注册",
         "error.unknown": "未知错误",
       };
       return map[key] ?? key;
