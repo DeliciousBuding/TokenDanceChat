@@ -48,9 +48,14 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 工程基建 + UX 打磨
 
-状态：推进中。353 tests / 29 文件 / ESLint 0 errors / 后端全绿。
+状态：推进中。406 tests / 36 文件 / 46 E2E tests / ESLint 0 errors / CI 就绪。
 
-- [x] 前端测试从 237 (18 文件) → 353 (29 文件)，+116 tests / +11 文件。
+- [x] 前端测试从 237 (18 文件) → 406 (36 文件)，+169 tests / +18 文件。
+- [x] E2E 测试从 18 → 46 (+28：auth-flow 注册/登录/游客/多标签页)。
+- [x] 后端 store 测试 +7 函数（RegisterUser, VerifyUser, Groups, Messages, InviteCodes）。
+- [x] 覆盖率从 ~25% → ~35%（前端）+ store 22% → ~30%（后端）。
+- [x] cross-review 审查新测试质量：3 HIGH 已修复（CSS selector 脆弱性、ForwardModal 断言）。
+- [x] LoginScreen 错误消息 i18n 映射（不再泄漏原始英文错误）。
 - [x] 新增组件测试：LoginScreen, RegisterScreen, FileMessage, ForwardModal, SearchBar, SystemMessage, ConversationSearch, PollMessage, GroupCreateModal, ThemeToggle, Avatar。
 - [x] jest-dom matchers 全局启用（`toBeDisabled`, `toBeVisible` 等）。
 - [x] 共享 `mockI18n()` 工具，消除重复 i18n mock 样板。
