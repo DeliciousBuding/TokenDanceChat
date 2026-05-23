@@ -3629,3 +3629,366 @@ func TestRequestHistory(t *testing.T) {
 		}
 	})
 }
+
+// --- Pure function tests for client.go (no WebSocket required) ---
+
+func TestGenerateWebhookSecret(t *testing.T) {
+	// Verify format: 32 bytes produces 43 chars of base64 raw URL encoding.
+	// RawURLEncoding means no +, /, or = characters.
+
+	secrets := make(map[string]bool)
+	for i := 0; i < 20; i++ {
+		secret := generateWebhookSecret()
+
+		if secret == "" {
+			t.Fatal("generateWebhookSecret() returned empty string")
+		}
+
+		// 32 bytes → 43-44 chars in base64 raw URL encoding.
+		if len(secret) < 43 || len(secret) > 44 {
+			t.Errorf("generateWebhookSecret() length = %d, want 43-44 for 32 random bytes", len(secret))
+		}
+
+		// Verify base64 URL alphabet: A-Z, a-z, 0-9, -, _
+		for _, ch := range secret {
+			if !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+				(ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+				t.Errorf("generateWebhookSecret() contains invalid base64url char: %c in %q", ch, secret)
+			}
+		}
+
+		// Verify uniqueness.
+		if secrets[secret] {
+			t.Errorf("generateWebhookSecret() produced duplicate secret: %q", secret)
+		}
+		secrets[secret] = true
+	}
+
+	// Verify no standard base64 chars leak.
+	for s := range secrets {
+		if strings.ContainsAny(s, "+/=") {
+			t.Errorf("generateWebhookSecret() contains standard base64 chars: %q", s)
+		}
+	}
+}
+
+func TestSanitizeContentEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantStr string
+	}{
+		{
+			name:    "empty string",
+			input:   "",
+			wantStr: "",
+		},
+		{
+			name:    "newlines and tabs preserved but trimmed",
+			input:   "\n\t hello \t\n",
+			wantStr: "hello",
+		},
+		{
+			name:    "mixed null bytes and HTML",
+			input:   "<div>\x00Hello\x00</div>",
+			wantStr: "Hello",
+		},
+		{
+			name:    "unicode content with HTML stripping",
+			input:   "<b>你好世界</b>",
+			wantStr: "你好世界",
+		},
+		{
+			name:    "only null bytes becomes empty",
+			input:   "\x00\x00\x00",
+			wantStr: "",
+		},
+		{
+			name:    "nested HTML tags stripped",
+			input:   "<div><span>text</span></div>",
+			wantStr: "text",
+		},
+		{
+			name:    "javascript protocol in mixed content",
+			input:   "javascript:void(0) <script>xss</script>",
+			wantStr: "void(0) xss",
+		},
+		{
+			name:    "backticks and code blocks preserved",
+			input:   "```go\nfmt.Println(\"hi\")\n```",
+			wantStr: "```go\nfmt.Println(\"hi\")\n```",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := sanitizeContent(tc.input)
+			if result != tc.wantStr {
+				t.Errorf("sanitizeContent(%q) = %q, want %q", tc.input, result, tc.wantStr)
+			}
+		})
+	}
+}
+
+func TestSanitizeBotContentEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantStr string
+	}{
+		{
+			name:    "empty string",
+			input:   "",
+			wantStr: "",
+		},
+		{
+			name:    "whitespace only",
+			input:   "   \t\n   ",
+			wantStr: "",
+		},
+		{
+			name:    "only null bytes becomes empty",
+			input:   "\x00\x00",
+			wantStr: "",
+		},
+		{
+			name:    "unicode content preserved",
+			input:   "你好世界 \U0001F389",
+			wantStr: "你好世界 \U0001F389",
+		},
+		{
+			name:    "HTML preserved unlike sanitizeContent",
+			input:   "<code>fmt.Println()</code>",
+			wantStr: "<code>fmt.Println()</code>",
+		},
+		{
+			name:    "mixed null bytes in content",
+			input:   "Hello\x00World\x00!",
+			wantStr: "HelloWorld!",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := sanitizeBotContent(tc.input)
+			if result != tc.wantStr {
+				t.Errorf("sanitizeBotContent(%q) = %q, want %q", tc.input, result, tc.wantStr)
+			}
+		})
+	}
+
+	// Verify maxBotContentLength truncation.
+	t.Run("truncation at maxBotContentLength", func(t *testing.T) {
+		longContent := strings.Repeat("x", maxBotContentLength+200)
+		result := sanitizeBotContent(longContent)
+		if len([]rune(result)) != maxBotContentLength {
+			t.Errorf("expected %d runes after truncation, got %d", maxBotContentLength, len([]rune(result)))
+		}
+	})
+}
+
+func TestMsgsToMessages(t *testing.T) {
+	now := time.Now().UnixMilli()
+
+	tests := []struct {
+		name string
+		sms  []ScheduledMessage
+	}{
+		{
+			name: "empty slice returns empty slice",
+			sms:  []ScheduledMessage{},
+		},
+		{
+			name: "single item maps fields correctly",
+			sms: []ScheduledMessage{
+				{
+					ID: "sched-1", Username: "alice", Content: "hello",
+					RoomID: "room-a", ToUser: "bob", GroupName: "team",
+					ReplyToID: "reply-to", ThreadID: "thread-1",
+					SendAt: now, CreatedAt: now - 1000,
+				},
+			},
+		},
+		{
+			name: "multiple items preserve order",
+			sms: []ScheduledMessage{
+				{ID: "s1", Username: "a", Content: "msg1", SendAt: 100},
+				{ID: "s2", Username: "b", Content: "msg2", SendAt: 200},
+				{ID: "s3", Username: "c", Content: "msg3", SendAt: 300},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := msgsToMessages(tc.sms)
+
+			if result == nil && len(tc.sms) > 0 {
+				t.Fatal("msgsToMessages returned nil for non-empty input")
+			}
+			if result == nil && len(tc.sms) == 0 {
+				return
+			}
+
+			if len(result) != len(tc.sms) {
+				t.Fatalf("got %d messages, want %d", len(result), len(tc.sms))
+			}
+
+			for i, sm := range result {
+				src := tc.sms[i]
+				if sm.ID != src.ID {
+					t.Errorf("[%d] ID = %q, want %q", i, sm.ID, src.ID)
+				}
+				if sm.Username != src.Username {
+					t.Errorf("[%d] Username = %q, want %q", i, sm.Username, src.Username)
+				}
+				if sm.Content != src.Content {
+					t.Errorf("[%d] Content = %q, want %q", i, sm.Content, src.Content)
+				}
+				if sm.Timestamp != src.SendAt {
+					t.Errorf("[%d] Timestamp = %d, want SendAt=%d", i, sm.Timestamp, src.SendAt)
+				}
+				if sm.RoomID != src.RoomID {
+					t.Errorf("[%d] RoomID = %q, want %q", i, sm.RoomID, src.RoomID)
+				}
+				if sm.ToUser != src.ToUser {
+					t.Errorf("[%d] ToUser = %q, want %q", i, sm.ToUser, src.ToUser)
+				}
+				if sm.GroupName != src.GroupName {
+					t.Errorf("[%d] GroupName = %q, want %q", i, sm.GroupName, src.GroupName)
+				}
+				if sm.ReplyToID != src.ReplyToID {
+					t.Errorf("[%d] ReplyToID = %q, want %q", i, sm.ReplyToID, src.ReplyToID)
+				}
+				if sm.ThreadID != src.ThreadID {
+					t.Errorf("[%d] ThreadID = %q, want %q", i, sm.ThreadID, src.ThreadID)
+				}
+			}
+		})
+	}
+}
+
+func TestShouldTrigger(t *testing.T) {
+	// shouldTrigger(0) must always return false.
+	t.Run("percent 0 always false", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			if shouldTrigger(0) {
+				t.Fatal("shouldTrigger(0) returned true")
+			}
+		}
+	})
+
+	// shouldTrigger(100) must always return true.
+	t.Run("percent 100 always true", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			if !shouldTrigger(100) {
+				t.Fatal("shouldTrigger(100) returned false")
+			}
+		}
+	})
+
+	// Negative percent: `percent > 0` guard makes it always false.
+	t.Run("negative percent always false", func(t *testing.T) {
+		for i := 0; i < 100; i++ {
+			if shouldTrigger(-1) {
+				t.Fatal("shouldTrigger(-1) returned true")
+			}
+		}
+	})
+
+	// Borderline: percent=1 relies on nanosecond clock entropy.
+	// Verify it does not panic and returns a boolean (either value is valid).
+	t.Run("percent 1 does not panic", func(t *testing.T) {
+		// Call many times to exercise the modulo path.
+		for i := 0; i < 100; i++ {
+			_ = shouldTrigger(1)
+		}
+	})
+}
+
+func TestAssistantMentionTargetEdgeCases(t *testing.T) {
+	tests := []struct {
+		name      string
+		content   string
+		botName   string
+		agentName string
+		wantToken bool
+		wantAgent bool
+	}{
+		{
+			name:    "empty content returns no targets",
+			content: "",
+			botName: "TokenBot", agentName: "PicoClaw",
+		},
+		{
+			name:    "no bot or agent configured with no mention returns no targets",
+			content: "hello world",
+			botName: "", agentName: "",
+		},
+		{
+			name:    "only bot configured no trigger returns no targets",
+			content: "hello world",
+			botName: "TokenBot", agentName: "",
+		},
+		{
+			name:    "only agent configured no trigger returns no targets",
+			content: "hello world",
+			botName: "", agentName: "PicoClaw",
+		},
+		{
+			name:    "alias tokenbot detected even when bot not configured",
+			content: "@TokenBot help",
+			botName: "", agentName: "PicoClaw",
+			// assistantMentionTarget detects mentions via aliases regardless of
+			// configuration; the caller (handleChatMessage) gates on config.
+			wantToken: true,
+		},
+		{
+			name:    "alias picoclaw detected even when agent not configured",
+			content: "@PicoClaw analyze this",
+			botName: "TokenBot", agentName: "",
+			// isAssistantAlias("PicoClaw", "", "claw", "picoclaw") → alias "picoclaw" matches.
+			// No "help"/"bot"/"帮助"/"机器人" keyword in content → TokenBot not triggered.
+			wantAgent: true,
+		},
+		{
+			name:    "both configured both empty names mention targets not set",
+			content: "@TokenBot @PicoClaw help",
+			botName: "", agentName: "",
+			// Aliases still match through isAssistantAlias alias lists.
+			wantToken: true,
+			wantAgent: true,
+		},
+		{
+			name:    "question with no bot configured does not trigger TokenBot keyword",
+			content: "can you help?",
+			botName: "", agentName: "",
+			// Keyword and question triggers are guarded by botName != "".
+			wantToken: false,
+		},
+		{
+			name:    "question with no agent configured does not trigger Agent keyword",
+			content: "帮我写代码?",
+			botName: "", agentName: "",
+			// Agent keyword triggers are guarded by agentName != "".
+			wantAgent: false,
+		},
+		{
+			name:    "empty config with plain text returns no targets",
+			content: "good morning everyone",
+			botName: "", agentName: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := assistantMentionTarget(tc.content, tc.botName, tc.agentName)
+			if got.TokenBot != tc.wantToken {
+				t.Errorf("TokenBot target = %v, want %v (content=%q, bot=%q, agent=%q)",
+					got.TokenBot, tc.wantToken, tc.content, tc.botName, tc.agentName)
+			}
+			if got.Agent != tc.wantAgent {
+				t.Errorf("Agent target = %v, want %v (content=%q, bot=%q, agent=%q)",
+					got.Agent, tc.wantAgent, tc.content, tc.botName, tc.agentName)
+			}
+		})
+	}
+}
