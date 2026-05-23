@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { formatTime, cn, avatarGradient, usernameHue, hashString } from "@/lib/utils";
+import {
+  avatarGradient,
+  cn,
+  formatDate,
+  formatFullTime,
+  formatLastSeen,
+  formatTime,
+  hashString,
+  usernameHue,
+} from "@/lib/utils";
 
 describe("formatTime", () => {
   beforeEach(() => {
@@ -118,5 +127,104 @@ describe("usernameHue", () => {
 
   it("相同用户名返回相同色相", () => {
     expect(usernameHue("Alice")).toBe(usernameHue("Alice"));
+  });
+});
+
+// ── formatFullTime ──────────────────────────────────────────────────
+describe("formatFullTime", () => {
+  it("formats a known timestamp as YYYY-MM-DD HH:mm", () => {
+    const ts = new Date("2025-01-15T14:30:00").getTime();
+    expect(formatFullTime(ts)).toBe("2025-01-15 14:30");
+  });
+
+  it("zero-pads single-digit month, day, hour, and minute", () => {
+    const ts = new Date("2025-03-05T04:07:00").getTime();
+    expect(formatFullTime(ts)).toBe("2025-03-05 04:07");
+  });
+
+  it("handles end-of-year timestamps", () => {
+    const ts = new Date("2025-12-31T23:59:00").getTime();
+    expect(formatFullTime(ts)).toBe("2025-12-31 23:59");
+  });
+});
+
+// ── formatDate ──────────────────────────────────────────────────────
+describe("formatDate", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-06-15T10:30:00"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns 今天 for today', () => {
+    const ts = new Date("2025-06-15T08:00:00").getTime();
+    expect(formatDate(ts)).toBe("今天");
+  });
+
+  it('returns 昨天 for yesterday', () => {
+    const ts = new Date("2025-06-14T22:00:00").getTime();
+    expect(formatDate(ts)).toBe("昨天");
+  });
+
+  it("returns YYYY-MM-DD for any other date", () => {
+    const ts = new Date("2025-06-10T10:00:00").getTime();
+    expect(formatDate(ts)).toBe("2025-06-10");
+  });
+
+  it("returns YYYY-MM-DD for a date in a different year", () => {
+    const ts = new Date("2023-01-01T00:00:00").getTime();
+    expect(formatDate(ts)).toBe("2023-01-01");
+  });
+});
+
+// ── formatLastSeen ──────────────────────────────────────────────────
+describe("formatLastSeen", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-06-15T10:00:00"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns "just now" when less than 60 seconds', () => {
+    const ts = Date.now() - 30_000;
+    expect(formatLastSeen(ts)).toBe("just now");
+  });
+
+  it('returns "Xm ago" when 1–59 minutes', () => {
+    const ts = Date.now() - 5 * 60_000;
+    expect(formatLastSeen(ts)).toBe("5m ago");
+  });
+
+  it('returns "Xh ago" when 1–23 hours', () => {
+    const ts = Date.now() - 5 * 3_600_000;
+    expect(formatLastSeen(ts)).toBe("5h ago");
+  });
+
+  it('returns "Xd ago" when 1–29 days', () => {
+    const ts = Date.now() - 10 * 86_400_000;
+    expect(formatLastSeen(ts)).toBe("10d ago");
+  });
+
+  it("falls back to formatTime for 30+ days", () => {
+    const ts = new Date("2025-04-10T10:00:00").getTime();
+    const result = formatLastSeen(ts);
+    // Should output MM-DD HH:mm (same year, different day)
+    expect(result).toBe("04-10 10:00");
+  });
+
+  it("handles boundary at exactly 60 seconds", () => {
+    const ts = Date.now() - 60_000;
+    expect(formatLastSeen(ts)).toBe("1m ago");
+  });
+
+  it("handles boundary at exactly 60 minutes", () => {
+    const ts = Date.now() - 3_600_000;
+    expect(formatLastSeen(ts)).toBe("1h ago");
   });
 });
