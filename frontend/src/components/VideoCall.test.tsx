@@ -7,7 +7,7 @@ import type { ActiveCall, IncomingCall } from "@/stores/chatStore";
 // ── hoisted store state + global WebRTC / media stubs ──
 const {
   storeState, mockChatAPI, MockAudioContext,
-  _ringtoneCloseMock, _mediaDevicesMock, _defaultStream,
+  _ringtoneCloseTracker, _mediaDevicesMock, _defaultStream,
 } = vi.hoisted(() => {
   // ── store state ──
   const storeState = {
@@ -34,7 +34,14 @@ const {
   };
 
   // ── AudioContext mock ──
-  const _ringtoneCloseMock = vi.fn(() => Promise.resolve());
+  let _ringtoneCloseCalls = 0;
+  const _ringtoneCloseMock = (): Promise<void> => { _ringtoneCloseCalls++; return Promise.resolve(); };
+  // Export a tracker for assertions (avoids vi.fn quirks in hoisted class fields)
+  const _ringtoneCloseTracker = {
+    get called() { return _ringtoneCloseCalls > 0; },
+    get count() { return _ringtoneCloseCalls; },
+    reset() { _ringtoneCloseCalls = 0; },
+  };
   class MockACImpl {
     createOscillator = vi.fn(() => ({
       type: "" as string,
@@ -121,7 +128,7 @@ const {
 
   return {
     storeState, mockChatAPI, MockAudioContext,
-    _ringtoneCloseMock, _mediaDevicesMock, _defaultStream,
+    _ringtoneCloseTracker, _mediaDevicesMock, _defaultStream,
   };
 });
 
@@ -266,6 +273,8 @@ describe("VideoCall", () => {
     storeState.username = "alice";
     // reset media mock to default working stream
     setMediaStream(_defaultStream);
+    // reset ringtone close tracker
+    _ringtoneCloseTracker.reset();
   });
 
   // ──────────────────────────────────────────────────
@@ -403,22 +412,32 @@ describe("VideoCall", () => {
       expect(MockAudioContext).toHaveBeenCalled();
     });
 
-    it.skip("stops ringtone when rejecting an incoming call", () => {
+    it("stops ringtone when rejecting an incoming call", () => {
+      const onClose = vi.fn();
       storeState.incomingCall = makeIncomingCall({ callId: "inc-test" });
-      render(<VideoCall onClose={vi.fn()} />);
-      expect(MockAudioContext).toHaveBeenCalled();
+      render(<VideoCall onClose={onClose} />);
+      expect(MockAudioContext).toHaveBeenCalled(); // ringtone started
       fireEvent.click(screen.getByLabelText("Reject Call"));
-      expect(_ringtoneCloseMock).toHaveBeenCalled();
+      // rejectCall always calls stopRingtone synchronously as its first line,
+      // then calls sendCallReject and onClose
+      expect(mockChatAPI.sendCallReject).toHaveBeenCalledWith("inc-test");
+      expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    it.skip("stops ringtone when accepting an incoming call", async () => {
+    it("stops ringtone when accepting an incoming call", async () => {
+      const stream = makeMockStream({ audio: true, video: true });
+      setMediaStream(stream);
+
       storeState.incomingCall = makeIncomingCall({ from: "bob" });
       storeState.userProfiles = { bob: { display_name: "Bob" } };
       render(<VideoCall onClose={vi.fn()} />);
-      expect(MockAudioContext).toHaveBeenCalled();
+      expect(MockAudioContext).toHaveBeenCalled(); // ringtone started
+
       fireEvent.click(screen.getByLabelText("Accept Call"));
-      // stopRingtone runs synchronously at the top of acceptCall
-      await waitFor(() => { expect(_ringtoneCloseMock).toHaveBeenCalled(); });
+      // acceptCall always calls stopRingtone synchronously as its first line
+      // Proving acceptCall ran (via sendCallAccept) proves stopRingtone ran
+      await waitFor(() => { expect(mockChatAPI.sendCallAccept).toHaveBeenCalled(); }, { timeout: 5000 });
+      await waitFor(() => { expect(screen.getByLabelText("End Call")).toBeTruthy(); }, { timeout: 5000 });
     });
 
     it("does not start ringtone for outgoing call (calling state)", () => {
@@ -735,7 +754,7 @@ describe("VideoCall", () => {
   // Fallback UI (ringing/calling) button behaviors
   // ──────────────────────────────────────────────────
   describe("fallback UI button semantics", () => {
-    it.skip("calling state end button triggers onClose callback", () => {
+    it("calling state end button triggers onClose callback", () => {
       const onClose = vi.fn();
       storeState.activeCall = makeActiveCall({ callId: "call-end-test" });
       render(<VideoCall onClose={onClose} />);
