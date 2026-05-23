@@ -201,6 +201,20 @@ describe("ChatInput", () => {
       expect(onSend).not.toHaveBeenCalled();
     });
 
+    it("disconnected 时显示断连反馈消息", () => {
+      useChatStore.setState({ connected: false });
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      typeInTextarea(textarea, "Hello");
+
+      fireEvent.keyDown(textarea, { key: "Enter" });
+
+      // Disconnect feedback message should appear.
+      expect(screen.getByText(/未连接/)).toBeTruthy();
+      // Content is preserved (not cleared).
+      expect(textarea.value).toBe("Hello");
+    });
+
     it("disabled 时不发送消息", () => {
       const { onSend } = renderChatInput({ disabled: true });
       const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");

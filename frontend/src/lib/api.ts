@@ -411,6 +411,7 @@ class ChatAPI {
   private reconnectBaseDelay = 1000;
   private reconnectMaxDelay = 30000;
   private reconnectUsername: string | null = null;
+  private wasReconnecting = false;
   private intentionalClose = false;
   private pendingJoin:
     | {
@@ -467,12 +468,10 @@ class ChatAPI {
             clearTimeout(timeout);
             this.pendingJoin.resolve();
             this.pendingJoin = null;
-            // Successful (re)connection — notify listeners.
-            if (this.reconnectAttempt === 0 && !this.pendingJoin) {
-              // This is a reconnection that succeeded — the counter was
-              // reset in onopen above, and we are now past the join phase.
+            if (this.wasReconnecting) {
+              this.wasReconnecting = false;
+              this.dispatch("reconnected", { type: "reconnected" });
             }
-            this.dispatch("reconnected", { type: "reconnected" });
           }
 
           this.dispatch(data.type, data);
@@ -516,6 +515,8 @@ class ChatAPI {
       this.dispatch("reconnect_failed", { type: "reconnect_failed", attempt: this.reconnectAttempt });
       return;
     }
+
+    this.wasReconnecting = true;
 
     // Exponential backoff: 1s, 2s, 4s, 8s, 16s, ..., capped at 30s.
     const rawDelay = Math.min(
@@ -1015,6 +1016,7 @@ class ChatAPI {
 
   disconnect(): void {
     this.intentionalClose = true;
+    this.wasReconnecting = false;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

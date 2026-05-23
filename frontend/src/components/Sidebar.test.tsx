@@ -130,6 +130,13 @@ describe("Sidebar", () => {
       expect(screen.getByText("暂无在线用户")).toBeTruthy();
     });
 
+    it("未连接且无在线用户时显示连接中指示而非空状态", () => {
+      useChatStore.setState({ connected: false, onlineUsers: [] });
+      renderSidebar();
+      expect(screen.getByText("连接中...")).toBeTruthy();
+      expect(screen.queryByText("暂无在线用户")).toBeNull();
+    });
+
     it("显示 '在线用户' section 标题", () => {
       renderSidebar();
       expect(screen.getByText("在线用户")).toBeTruthy();

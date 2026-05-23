@@ -170,6 +170,9 @@ export interface TranslationDict {
     userLeft: string;
     userOnline: string;
     connectionLost: string;
+    reconnecting: string;
+    reconnected: string;
+    reconnectFailed: string;
     kicked: string;
     typing: string;
     typingTwo: string;
@@ -605,6 +608,9 @@ const zhCN: TranslationDict = {
     userLeft: "{{username}} 离开了聊天室",
     userOnline: "{{username}} 上线了",
     connectionLost: "连接已断开，正在尝试重新连接...",
+    reconnecting: "正在重新连接 (第 {{attempt}} 次)...",
+    reconnected: "已重新连接",
+    reconnectFailed: "连接已断开，请刷新页面。",
     kicked: "您的账号已在其他地方登录，当前连接已断开。",
     typing: "{{username}} 正在输入...",
     typingTwo: "{{name1}} 和 {{name2}} 正在输入...",
@@ -1042,6 +1048,9 @@ const enUS: TranslationDict = {
     userLeft: "{{username}} left the chat",
     userOnline: "{{username}} is now online",
     connectionLost: "Connection lost, attempting to reconnect...",
+    reconnecting: "Reconnecting (attempt {{attempt}})...",
+    reconnected: "Reconnected",
+    reconnectFailed: "Connection lost. Please reload the page.",
     kicked: "Your account was logged in elsewhere. This connection has been closed.",
     typing: "{{username}} is typing...",
     typingTwo: "{{name1}} and {{name2}} are typing...",
