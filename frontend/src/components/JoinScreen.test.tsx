@@ -3,10 +3,13 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { I18nProvider } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 
+// Shared mock connect function so individual tests can control resolve/reject.
+const mockConnect = vi.fn();
+
 // Mock WebSocket
 vi.mock("@/hooks/useWebSocket", () => ({
   useWebSocket: () => ({
-    connect: vi.fn(),
+    connect: mockConnect,
     disconnect: vi.fn(),
     sendMessage: vi.fn(),
     sendDMMessage: vi.fn(),
@@ -21,6 +24,16 @@ vi.mock("@/hooks/useWebSocket", () => ({
     uploadImage: vi.fn(),
   }),
 }));
+
+// Mock @/lib/api: keep ChatError/ErrorCode real, stub auth functions.
+vi.mock("@/lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api")>();
+  return {
+    ...actual,
+    loginUser: vi.fn(),
+    registerUser: vi.fn(),
+  };
+});
 
 // Mock sound module
 vi.mock("@/lib/sound", () => ({
@@ -59,8 +72,9 @@ Object.defineProperty(window, "matchMedia", {
   })),
 });
 
-// Must import JoinScreen AFTER all mocks are set up
+// Must import JoinScreen and ChatError AFTER all mocks are set up
 import { JoinScreen } from "@/components/JoinScreen";
+import { ChatError, ErrorCode } from "@/lib/api";
 
 function renderJoinScreen() {
   return render(
@@ -75,6 +89,7 @@ describe("JoinScreen", () => {
     localStorageMock.clear();
     localStorageMock.setItem("tokendance:lang", "zh-CN");
     useChatStore.getState().reset();
+    mockConnect.mockReset();
   });
 
   describe("表单渲染", () => {
@@ -179,6 +194,243 @@ describe("JoinScreen", () => {
       renderJoinScreen();
       const input = screen.getByPlaceholderText("你的用户名...") as HTMLInputElement;
       expect(input.value).toBe("SavedUser");
+    });
+  });
+
+  // ─── New tests ───────────────────────────────────────────────
+
+  describe("WebSocket 连接失败", () => {
+    it("超时错误显示对应提示", async () => {
+      mockConnect.mockRejectedValueOnce(new ChatError(ErrorCode.TIMEOUT, "timeout"));
+      renderJoinScreen();
+
+      const input = screen.getByPlaceholderText("你的用户名...");
+      fireEvent.change(input, { target: { value: "TestUser" } });
+      fireEvent.click(screen.getByRole("button", { name: /游客加入/ }));
+
+      expect(await screen.findByText("连接超时，请检查服务器是否运行")).toBeTruthy();
+    });
+
+    it("连接关闭错误显示对应提示", async () => {
+      mockConnect.mockRejectedValueOnce(new ChatError(ErrorCode.CLOSED, "closed"));
+      renderJoinScreen();
+
+      const input = screen.getByPlaceholderText("你的用户名...");
+      fireEvent.change(input, { target: { value: "TestUser" } });
+      fireEvent.click(screen.getByRole("button", { name: /游客加入/ }));
+
+      expect(await screen.findByText("连接已关闭")).toBeTruthy();
+    });
+
+    it("无法连接错误显示对应提示", async () => {
+      mockConnect.mockRejectedValueOnce(new ChatError(ErrorCode.CANNOT_CONNECT, "cannot-connect"));
+      renderJoinScreen();
+
+      const input = screen.getByPlaceholderText("你的用户名...");
+      fireEvent.change(input, { target: { value: "TestUser" } });
+      fireEvent.click(screen.getByRole("button", { name: /游客加入/ }));
+
+      expect(await screen.findByText("无法连接到聊天服务器")).toBeTruthy();
+    });
+
+    it("普通 Error 显示其 message", async () => {
+      mockConnect.mockRejectedValueOnce(new Error("Something broke"));
+      renderJoinScreen();
+
+      const input = screen.getByPlaceholderText("你的用户名...");
+      fireEvent.change(input, { target: { value: "TestUser" } });
+      fireEvent.click(screen.getByRole("button", { name: /游客加入/ }));
+
+      expect(await screen.findByText("Something broke")).toBeTruthy();
+    });
+  });
+
+  describe("子视图切换", () => {
+    it("从 guest 切换到 login 再返回 guest", () => {
+      renderJoinScreen();
+
+      // Click "登录" to go to login sub-view
+      fireEvent.click(screen.getByRole("button", { name: /登录/ }));
+      // LoginScreen heading is visible (use getByRole to avoid colliding with the submit button)
+      expect(screen.getByRole("heading", { name: "登录" })).toBeTruthy();
+
+      // Click back button (aria-label="返回")
+      fireEvent.click(screen.getByLabelText("返回"));
+      // Back to guest view — the guest join button is visible
+      expect(screen.getByRole("button", { name: /游客加入/ })).toBeTruthy();
+    });
+
+    it("从 guest 切换到 register 再返回 guest", () => {
+      renderJoinScreen();
+
+      // Click "注册" to go to register sub-view
+      fireEvent.click(screen.getByRole("button", { name: /注册/ }));
+      // RegisterScreen heading is visible
+      expect(screen.getByRole("heading", { name: "注册账号" })).toBeTruthy();
+
+      // Click back button (aria-label="返回")
+      fireEvent.click(screen.getByLabelText("返回"));
+      // Back to guest view
+      expect(screen.getByRole("button", { name: /游客加入/ })).toBeTruthy();
+    });
+
+    it("从 guest -> login -> 切换到 register -> 返回 guest", () => {
+      renderJoinScreen();
+
+      // guest → login
+      fireEvent.click(screen.getByRole("button", { name: /登录/ }));
+      expect(screen.getByRole("heading", { name: "登录" })).toBeTruthy();
+
+      // login → register (click "还没有账号？去注册")
+      fireEvent.click(screen.getByText("还没有账号？去注册"));
+      expect(screen.getByRole("heading", { name: "注册账号" })).toBeTruthy();
+
+      // register → guest (click back)
+      fireEvent.click(screen.getByLabelText("返回"));
+      expect(screen.getByRole("button", { name: /游客加入/ })).toBeTruthy();
+    });
+
+    it("从 guest -> register -> 切换到 login -> 返回 guest", () => {
+      renderJoinScreen();
+
+      // guest → register
+      fireEvent.click(screen.getByRole("button", { name: /注册/ }));
+      expect(screen.getByRole("heading", { name: "注册账号" })).toBeTruthy();
+
+      // register → login (click "已有账号？去登录")
+      fireEvent.click(screen.getByText("已有账号？去登录"));
+      expect(screen.getByRole("heading", { name: "登录" })).toBeTruthy();
+
+      // login → guest (click back)
+      fireEvent.click(screen.getByLabelText("返回"));
+      expect(screen.getByRole("button", { name: /游客加入/ })).toBeTruthy();
+    });
+  });
+
+  describe("Login 表单验证", () => {
+    /** Navigate to the login sub-view from the guest screen. */
+    function goToLogin() {
+      renderJoinScreen();
+      fireEvent.click(screen.getByRole("button", { name: /登录/ }));
+    }
+
+    it("空用户名时提交显示输入用户名错误", () => {
+      goToLogin();
+      // Submit the LoginScreen form directly (button disabled when empty)
+      const form = document.querySelector("form")!;
+      fireEvent.submit(form);
+      expect(screen.getByText("请输入用户名")).toBeTruthy();
+    });
+
+    it("空密码时提交显示密码错误", () => {
+      goToLogin();
+
+      const usernameInput = screen.getByLabelText("用户名");
+      fireEvent.change(usernameInput, { target: { value: "ValidUser" } });
+
+      // Submit the form with username filled but password empty
+      const form = document.querySelector("form")!;
+      fireEvent.submit(form);
+      expect(screen.getByText("密码至少需要6个字符")).toBeTruthy();
+    });
+
+    it("输入字符后清除错误", () => {
+      goToLogin();
+
+      // Trigger error first
+      const form = document.querySelector("form")!;
+      fireEvent.submit(form);
+      expect(screen.getByText("请输入用户名")).toBeTruthy();
+
+      // Type something to clear
+      const usernameInput = screen.getByLabelText("用户名");
+      fireEvent.change(usernameInput, { target: { value: "X" } });
+      expect(screen.queryByText("请输入用户名")).toBeNull();
+    });
+  });
+
+  describe("Register 表单验证", () => {
+    /** Navigate to the register sub-view from the guest screen. */
+    function goToRegister() {
+      renderJoinScreen();
+      fireEvent.click(screen.getByRole("button", { name: /注册/ }));
+    }
+
+    it("空用户名提交显示对应错误", () => {
+      goToRegister();
+      const form = document.querySelector("form")!;
+      fireEvent.submit(form);
+      expect(screen.getByText("请输入用户名")).toBeTruthy();
+    });
+
+    it("用户名少于2个字符显示太短错误", () => {
+      goToRegister();
+
+      const usernameInput = screen.getByLabelText("用户名");
+      fireEvent.change(usernameInput, { target: { value: "A" } });
+
+      const form = document.querySelector("form")!;
+      fireEvent.submit(form);
+      expect(screen.getByText("用户名至少需要2个字符")).toBeTruthy();
+    });
+
+    it("密码少于6个字符显示对应错误", () => {
+      goToRegister();
+
+      // Fill valid username
+      fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "ValidUser" } });
+      // Short password
+      fireEvent.change(screen.getByLabelText("密码"), { target: { value: "12345" } });
+
+      const form = document.querySelector("form")!;
+      fireEvent.submit(form);
+      expect(screen.getByText("密码至少需要6个字符")).toBeTruthy();
+    });
+
+    it("两次密码不一致显示对应错误", () => {
+      goToRegister();
+
+      fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "ValidUser" } });
+      fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password123" } });
+      fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "different456" } });
+
+      // Button is disabled until all fields are filled, including invite code.
+      // Submit via form directly.
+      const form = document.querySelector("form")!;
+      fireEvent.submit(form);
+      expect(screen.getByText("两次输入的密码不一致")).toBeTruthy();
+    });
+
+    it("空邀请码提交显示对应错误", () => {
+      goToRegister();
+
+      fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "ValidUser" } });
+      fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password123" } });
+      fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "password123" } });
+
+      const form = document.querySelector("form")!;
+      fireEvent.submit(form);
+      expect(screen.getByText("邀请码无效或已过期")).toBeTruthy();
+    });
+
+    it("显示填写所有字段提示", () => {
+      goToRegister();
+      // With all fields empty, the hint should be visible
+      expect(screen.getByText("请填写所有字段后点击注册")).toBeTruthy();
+    });
+
+    it("输入字符后清除错误", () => {
+      goToRegister();
+
+      // Trigger error first
+      const form = document.querySelector("form")!;
+      fireEvent.submit(form);
+      expect(screen.getByText("请输入用户名")).toBeTruthy();
+
+      // Type something to clear
+      const usernameInput = screen.getByLabelText("用户名");
+      fireEvent.change(usernameInput, { target: { value: "X" } });
+      expect(screen.queryByText("请输入用户名")).toBeNull();
     });
   });
 });
