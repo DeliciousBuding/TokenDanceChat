@@ -85,7 +85,7 @@ describe("JoinScreen", () => {
 
     it("显示副标题", () => {
       renderJoinScreen();
-      expect(screen.getByText("加入公共聊天室")).toBeTruthy();
+      expect(screen.getByText("AgentHub 实时聊天验证 Demo · AI 助手 @TokenBot @PicoClaw 随时待命")).toBeTruthy();
     });
 
     it("显示用户名输入框", () => {

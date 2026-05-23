@@ -243,6 +243,11 @@ export function JoinScreen() {
             </button>
           </div>
 
+          {/* Feature hint */}
+          <p className="mt-4 text-center text-xs text-muted-foreground/60">
+            {t("join.welcomeHint")}
+          </p>
+
           {/* Language + Theme toggles */}
           <div className="mt-4 flex justify-center gap-2">
             <button
