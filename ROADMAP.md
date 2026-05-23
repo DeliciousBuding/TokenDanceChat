@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.10](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.10) | Docker: `tokendancechat:v0.2.10` | 测试: 716 前端 / 47 文件 / E2E 全绿
+发布: [v0.2.11](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.11) | Docker: `tokendancechat:v0.2.11` | 测试: 747 前端 / 49 文件 / 51.86% 行覆盖率 / E2E 44/52
 
 ## 当前目标
 
@@ -48,9 +48,11 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 性能优化 + UI 打磨 + 工程基建
 
-状态：持续推进。716 tests / 47 files / tsc 0 / ESLint 0 / CI 就绪。
+状态：持续推进。747 tests / 49 files / tsc 0 / ESLint 0 / CI 就绪 / coverage 51.86%。
 
-- [x] 前端测试从 237 → 695 (+458 tests / +28 文件 / 40%+ 行覆盖率)。
+- [x] 前端测试从 237 → 747 (+510 tests / +30 文件 / 51.86% 行覆盖率)。
+- [x] handler +10、CustomEmojiPicker +13、ProfileEditModal +18 focused tests。
+- [x] E2E 44/52 pass against production（3 fixes 进行中，target 47/52）。
 - [x] E2E 测试从 18 → 64+，5 套 suites：auth、dm、group、poll、reconnect、sidebar、webhook。
 - [x] 后端测试扩展：store +7、hub +8、handler +34、llm +8、ratelimit 更新、ws +2。
 - [x] PM 产品审计 P0 修复：侧栏对话预览、未读「新消息」分隔线、移动端语音按钮可见。
@@ -180,6 +182,8 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-24 | `cd backend; go test ./...` | PASS |
 | 2026-05-24 | `cd backend; go test ./hub -run "TestRegister"` | PASS（保留用户名检测 + HealthCheck 强制实施） |
 | 2026-05-24 | `cd frontend; npx playwright test src/e2e/ --project=chromium` | PASS（E2E 修复后） |
+| 2026-05-24 | `cd frontend; npm test` | PASS, 49 files / 747 tests, 51.86% lines |
+| 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 44/52 pass（3 fixes pending） |
 
 ## Review Gates
 

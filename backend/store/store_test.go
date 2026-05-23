@@ -3544,3 +3544,413 @@ func TestCreateWebhookEmptySecret(t *testing.T) {
 		t.Errorf("expected 0 webhooks after failed create, got %d", len(webhooks))
 	}
 }
+
+	// ── Blocked users: GetBlockedUsers list verification ──
+
+	func TestBlockUserAndGetBlockedUsers(t *testing.T) {
+		s, err := New(":memory:")
+		if err != nil {
+			t.Fatalf("New(:memory:) returned error: %v", err)
+		}
+		defer s.Close()
+
+		// Initially no blocked users.
+		blocked := s.GetBlockedUsers("alice")
+		if len(blocked) != 0 {
+			t.Errorf("expected empty blocked list, got %d entries", len(blocked))
+		}
+		if blocked == nil {
+			t.Error("expected non-nil empty slice, got nil")
+		}
+
+		// Block bob.
+		err = s.BlockUser("alice", "bob")
+		if err != nil {
+			t.Fatalf("BlockUser returned error: %v", err)
+		}
+
+		// Verify bob appears in blocked list.
+		blocked = s.GetBlockedUsers("alice")
+		if len(blocked) != 1 {
+			t.Fatalf("expected 1 blocked user, got %d", len(blocked))
+		}
+		if blocked[0] != "bob" {
+			t.Errorf("expected blocked user 'bob', got '%s'", blocked[0])
+		}
+
+		// Block another.
+		s.BlockUser("alice", "charlie")
+		blocked = s.GetBlockedUsers("alice")
+		if len(blocked) != 2 {
+			t.Fatalf("expected 2 blocked users, got %d", len(blocked))
+		}
+
+		// Unblock bob.
+		err = s.UnblockUser("alice", "bob")
+		if err != nil {
+			t.Fatalf("UnblockUser returned error: %v", err)
+		}
+
+		// Verify bob is removed from list, charlie remains.
+		blocked = s.GetBlockedUsers("alice")
+		if len(blocked) != 1 {
+			t.Fatalf("expected 1 blocked after unblock, got %d", len(blocked))
+		}
+		if blocked[0] != "charlie" {
+			t.Errorf("expected 'charlie' remaining, got '%s'", blocked[0])
+		}
+
+		// Unblock charlie.
+		s.UnblockUser("alice", "charlie")
+		blocked = s.GetBlockedUsers("alice")
+		if len(blocked) != 0 {
+			t.Errorf("expected empty blocked list after all unblocked, got %d", len(blocked))
+		}
+	}
+
+	// ── Blocked users: self-block edge case ──
+
+	func TestIsBlockedSelf(t *testing.T) {
+		s, err := New(":memory:")
+		if err != nil {
+			t.Fatalf("New(:memory:) returned error: %v", err)
+		}
+		defer s.Close()
+
+		// Initially, user has not blocked themselves.
+		if s.IsBlocked("alice", "alice") {
+			t.Error("expected IsBlocked(alice, alice) to return false initially")
+		}
+
+		// Block yourself.
+		err = s.BlockUser("alice", "alice")
+		if err != nil {
+			t.Fatalf("BlockUser(self) returned error: %v", err)
+		}
+
+		// Now blocked.
+		if !s.IsBlocked("alice", "alice") {
+			t.Error("expected IsBlocked(alice, alice) to return true after blocking self")
+		}
+
+		// Verify blocked list includes self.
+		blocked := s.GetBlockedUsers("alice")
+		if len(blocked) != 1 || blocked[0] != "alice" {
+			t.Errorf("expected ['alice'], got %v", blocked)
+		}
+
+		// Unblock self.
+		err = s.UnblockUser("alice", "alice")
+		if err != nil {
+			t.Fatalf("UnblockUser(self) returned error: %v", err)
+		}
+		if s.IsBlocked("alice", "alice") {
+			t.Error("expected IsBlocked(alice, alice) to return false after unblocking self")
+		}
+
+		// Verify blocked list is empty after unblock.
+		blocked = s.GetBlockedUsers("alice")
+		if len(blocked) != 0 {
+			t.Errorf("expected 0 blocked after unblocking self, got %d", len(blocked))
+		}
+	}
+
+	// ── Blocked users: empty/multiple/isolation ──
+
+	func TestGetBlockedUsersEdgeCases(t *testing.T) {
+		s, err := New(":memory:")
+		if err != nil {
+			t.Fatalf("New(:memory:) returned error: %v", err)
+		}
+		defer s.Close()
+
+		// Empty list for user who has never blocked anyone.
+		blocked := s.GetBlockedUsers("alice")
+		if len(blocked) != 0 {
+			t.Errorf("expected 0 blocked for new user, got %d", len(blocked))
+		}
+		if blocked == nil {
+			t.Error("expected non-nil empty slice, got nil")
+		}
+
+		// Block multiple users.
+		s.BlockUser("alice", "bob")
+		s.BlockUser("alice", "charlie")
+		s.BlockUser("alice", "dave")
+
+		blocked = s.GetBlockedUsers("alice")
+		if len(blocked) != 3 {
+			t.Fatalf("expected 3 blocked users, got %d", len(blocked))
+		}
+
+		// Verify isolation: bob's blocked list is independent.
+		bobBlocked := s.GetBlockedUsers("bob")
+		if len(bobBlocked) != 0 {
+			t.Errorf("expected bob to have 0 blocked, got %d", len(bobBlocked))
+		}
+
+		// Block some from bob's side.
+		s.BlockUser("bob", "alice")
+		s.BlockUser("bob", "eve")
+		bobBlocked = s.GetBlockedUsers("bob")
+		if len(bobBlocked) != 2 {
+			t.Fatalf("expected bob's blocked list length 2, got %d", len(bobBlocked))
+		}
+
+		// Alice's list should be unchanged.
+		blocked = s.GetBlockedUsers("alice")
+		if len(blocked) != 3 {
+			t.Errorf("alice's blocked list changed unexpectedly, got %d entries", len(blocked))
+		}
+
+		// Block duplicate (INSERT OR IGNORE) -- should not increase count.
+		err = s.BlockUser("alice", "bob")
+		if err != nil {
+			t.Fatalf("BlockUser duplicate returned error: %v", err)
+		}
+		blocked = s.GetBlockedUsers("alice")
+		if len(blocked) != 3 {
+			t.Errorf("expected still 3 after duplicate block, got %d", len(blocked))
+		}
+
+		// Unblock non-existent user should not error and not change list.
+		err = s.UnblockUser("alice", "ghost")
+		if err != nil {
+			t.Fatalf("UnblockUser non-existent returned error: %v", err)
+		}
+		blocked = s.GetBlockedUsers("alice")
+		if len(blocked) != 3 {
+			t.Errorf("expected still 3 after unblock non-existent, got %d", len(blocked))
+		}
+	}
+
+	// ── Custom emoji: search with empty query ──
+
+	func TestSearchCustomEmojisEmptyQuery(t *testing.T) {
+		s, err := New(":memory:")
+		if err != nil {
+			t.Fatalf("New(:memory:) returned error: %v", err)
+		}
+		defer s.Close()
+
+		// Empty search on empty DB should return empty results.
+		results, err := s.SearchCustomEmojis("")
+		if err != nil {
+			t.Fatalf("SearchCustomEmojis with empty query returned error: %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("expected 0 results for empty search on empty DB, got %d", len(results))
+		}
+
+		// Add some emojis.
+		s.AddCustomEmoji("party_parrot", "https://example.com/parrot.gif", "alice", "")
+		s.AddCustomEmoji("cat_jam", "https://example.com/cat.gif", "bob", "")
+		s.AddCustomEmoji("dance", "https://example.com/dance.gif", "alice", "")
+
+		// Empty query matches all (LIKE '%').
+		results, err = s.SearchCustomEmojis("")
+		if err != nil {
+			t.Fatalf("SearchCustomEmojis with empty query returned error: %v", err)
+		}
+		if len(results) != 3 {
+			t.Errorf("expected 3 results for empty query (match all), got %d", len(results))
+		}
+
+		// Search with no matches.
+		results, err = s.SearchCustomEmojis("zzz_nonexistent")
+		if err != nil {
+			t.Fatalf("SearchCustomEmojis non-existent returned error: %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("expected 0 results for non-existent, got %d", len(results))
+		}
+	}
+
+	// ── User status: update for user without profile ──
+
+	func TestUpdateUserStatusNonExistent(t *testing.T) {
+		s, err := New(":memory:")
+		if err != nil {
+			t.Fatalf("New(:memory:) returned error: %v", err)
+		}
+		defer s.Close()
+
+		// UpdateStatus for a user who has no profile row: UPDATE with 0 rows,
+		// should not error.
+		err = s.UpdateUserStatus("no-profile-user", "away")
+		if err != nil {
+			t.Fatalf("UpdateUserStatus on non-existent profile returned error: %v", err)
+		}
+
+		// The user still has no profile (plain UPDATE does not insert).
+		_, err = s.GetUserProfile("no-profile-user")
+		if err == nil {
+			t.Error("expected error getting profile that was never inserted")
+		}
+
+		// Now create a profile and update status.
+		err = s.UpsertUserProfile("real-user", "Real Name", "", "", "online", 0)
+		if err != nil {
+			t.Fatalf("UpsertUserProfile returned error: %v", err)
+		}
+
+		err = s.UpdateUserStatus("real-user", "busy")
+		if err != nil {
+			t.Fatalf("UpdateUserStatus on existing profile returned error: %v", err)
+		}
+
+		profile, err := s.GetUserProfile("real-user")
+		if err != nil {
+			t.Fatalf("GetUserProfile returned error: %v", err)
+		}
+		if profile.Status != "busy" {
+			t.Errorf("expected status 'busy', got '%s'", profile.Status)
+		}
+
+		// Update to empty status.
+		err = s.UpdateUserStatus("real-user", "")
+		if err != nil {
+			t.Fatalf("UpdateUserStatus to empty returned error: %v", err)
+		}
+		profile, err = s.GetUserProfile("real-user")
+		if err != nil {
+			t.Fatalf("GetUserProfile after empty status returned error: %v", err)
+		}
+		if profile.Status != "" {
+			t.Errorf("expected empty status, got '%s'", profile.Status)
+		}
+	}
+
+	// ── User last seen: multiple updates and initial creation ──
+
+	func TestUpdateUserLastSeenMultiple(t *testing.T) {
+		s, err := New(":memory:")
+		if err != nil {
+			t.Fatalf("New(:memory:) returned error: %v", err)
+		}
+		defer s.Close()
+
+		// Update last seen for a user who has no profile row:
+		// UpdateUserLastSeen uses ON CONFLICT UPSERT, so it creates the row.
+		err = s.UpdateUserLastSeen("alice")
+		if err != nil {
+			t.Fatalf("UpdateUserLastSeen returned error: %v", err)
+		}
+
+		// Verify profile was created with a last_seen timestamp.
+		profile, err := s.GetUserProfile("alice")
+		if err != nil {
+			t.Fatalf("GetUserProfile after UpdateUserLastSeen returned error: %v", err)
+		}
+		ts1 := profile.LastSeen
+		if ts1 == 0 {
+			t.Fatal("expected non-zero last_seen after UpdateUserLastSeen")
+		}
+
+		// Other fields should be at defaults.
+		if profile.Username != "alice" {
+			t.Errorf("expected username 'alice', got '%s'", profile.Username)
+		}
+
+		time.Sleep(time.Millisecond * 10)
+
+		// Update again for the same user.
+		err = s.UpdateUserLastSeen("alice")
+		if err != nil {
+			t.Fatalf("UpdateUserLastSeen second call returned error: %v", err)
+		}
+
+		profile, err = s.GetUserProfile("alice")
+		if err != nil {
+			t.Fatalf("GetUserProfile after second UpdateUserLastSeen returned error: %v", err)
+		}
+		ts2 := profile.LastSeen
+		if ts2 <= ts1 {
+			t.Errorf("expected last_seen to increase (%d -> %d)", ts1, ts2)
+		}
+
+		// Update a different user.
+		time.Sleep(time.Millisecond * 10)
+		err = s.UpdateUserLastSeen("bob")
+		if err != nil {
+			t.Fatalf("UpdateUserLastSeen for bob returned error: %v", err)
+		}
+
+		bobProfile, err := s.GetUserProfile("bob")
+		if err != nil {
+			t.Fatalf("GetUserProfile for bob returned error: %v", err)
+		}
+		if bobProfile.LastSeen == 0 {
+			t.Fatal("expected non-zero last_seen for bob")
+		}
+
+		// Alice's timestamp should not have changed from the bob update.
+		profile, err = s.GetUserProfile("alice")
+		if err != nil {
+			t.Fatalf("GetUserProfile for alice after bob update returned error: %v", err)
+		}
+		if profile.LastSeen != ts2 {
+			t.Errorf("alice's last_seen changed unexpectedly: %d -> %d", ts2, profile.LastSeen)
+		}
+	}
+
+	// ── Thread reply count: deleted replies excluded ──
+
+	func TestGetThreadReplyCountDeletedReplies(t *testing.T) {
+		s, err := New(":memory:")
+		if err != nil {
+			t.Fatalf("New(:memory:) returned error: %v", err)
+		}
+		defer s.Close()
+
+		// Create a thread-parent message.
+		parent, err := s.InsertMessage("alice", "parent message", "", "", "", "", "")
+		if err != nil {
+			t.Fatalf("InsertMessage returned error: %v", err)
+		}
+
+		// Thread with no replies: count should be 0.
+		count := s.GetThreadReplyCount(parent.ID)
+		if count != 0 {
+			t.Errorf("expected 0 reply count for empty thread, got %d", count)
+		}
+
+		// Add replies.
+		reply1, _ := s.InsertMessage("bob", "reply 1", parent.ID, "", "", "", parent.ID)
+		time.Sleep(time.Millisecond)
+		reply2, _ := s.InsertMessage("charlie", "reply 2", parent.ID, "", "", "", parent.ID)
+		time.Sleep(time.Millisecond)
+		reply3, _ := s.InsertMessage("dave", "reply 3", parent.ID, "", "", "", parent.ID)
+
+		count = s.GetThreadReplyCount(parent.ID)
+		if count != 3 {
+			t.Errorf("expected 3 reply count, got %d", count)
+		}
+
+		// Delete one reply.
+		err = s.MarkDeleted(reply2.ID)
+		if err != nil {
+			t.Fatalf("MarkDeleted returned error: %v", err)
+		}
+
+		// Deleted reply should be excluded from count.
+		count = s.GetThreadReplyCount(parent.ID)
+		if count != 2 {
+			t.Errorf("expected 2 reply count after deleting one, got %d", count)
+		}
+
+		// Delete all replies.
+		s.MarkDeleted(reply1.ID)
+		s.MarkDeleted(reply3.ID)
+
+		count = s.GetThreadReplyCount(parent.ID)
+		if count != 0 {
+			t.Errorf("expected 0 reply count after deleting all replies, got %d", count)
+		}
+
+		// Non-existent thread: count should be 0.
+		count = s.GetThreadReplyCount("nonexistent-id")
+		if count != 0 {
+			t.Errorf("expected 0 for non-existent thread, got %d", count)
+		}
+	}

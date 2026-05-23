@@ -167,7 +167,7 @@ test.describe("Sidebar UX", () => {
       });
 
       // Clear the search using the X button.
-      const clearBtn = page.locator('[aria-label="Clear search"]');
+      const clearBtn = page.locator('[aria-label="清除搜索"]');
       await expect(clearBtn).toBeVisible({ timeout: 5000 });
       await clearBtn.click();
 
@@ -223,7 +223,7 @@ test.describe("Sidebar UX", () => {
       });
 
       // Clear search and confirm normal view restores.
-      const clearBtn = page.locator('[aria-label="Clear search"]');
+      const clearBtn = page.locator('[aria-label="清除搜索"]');
       await clearBtn.click();
 
       await expect(page.getByText("搜索结果", { exact: true })).not.toBeVisible({
@@ -438,11 +438,11 @@ test.describe("Sidebar UX", () => {
       await expect(langItem).toBeVisible({ timeout: 5000 });
 
       // Export JSON item should be visible.
-      const exportJsonItem = page.getByText("导出 JSON");
+      const exportJsonItem = page.getByText("导出为 JSON");
       await expect(exportJsonItem).toBeVisible({ timeout: 5000 });
 
       // Export Text item should be visible.
-      const exportTextItem = page.getByText("导出文本");
+      const exportTextItem = page.getByText("导出为文本");
       await expect(exportTextItem).toBeVisible({ timeout: 5000 });
 
       // Settings item should be visible.

@@ -2,6 +2,12 @@
 
 > **累计**: 20+ commits, 30+ features/fixes, 5 skills (verify, pm-audit, deploy, cross-review, i18n-scan)
 
+## v0.2.11 (2026-05-24)
+
+- 测试扩展至 747 tests / 49 files, coverage 51.86% lines。
+- handler +10、CustomEmojiPicker +13、ProfileEditModal +18。
+- E2E 44/52 pass against production（3 fixes 进行中，target 47/52）。
+
 ## v0.2.10 (2026-05-24)
 
 ### Added

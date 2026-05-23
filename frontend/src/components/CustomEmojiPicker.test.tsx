@@ -194,7 +194,9 @@ describe("CustomEmojiPicker", () => {
     const validFile = new File(["dummy"], "valid.png", { type: "image/png" });
 
     // Mock uploadEmoji to not resolve immediately (keeps uploading=true)
-    mockUploadEmoji.mockImplementation(() => new Promise(() => {}));
+    let resolveUpload: (v: unknown) => void;
+    const uploadPromise = new Promise((resolve) => { resolveUpload = resolve; });
+    mockUploadEmoji.mockImplementation(() => uploadPromise);
 
     fireEvent.change(fileInput, { target: { files: [validFile] } });
 
@@ -202,5 +204,8 @@ describe("CustomEmojiPicker", () => {
     expect(screen.getByText("...")).toBeTruthy();
     // Upload button text should be replaced
     expect(screen.queryByText("上传表情")).toBeNull();
+
+    // Cleanup: resolve the hanging promise
+    resolveUpload!({ url: "/uploads/emojis/test.png" });
   });
 });
