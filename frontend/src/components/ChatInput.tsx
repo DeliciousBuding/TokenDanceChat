@@ -36,7 +36,7 @@ export function ChatInput({
   replyTo,
   onUpload,
 }: ChatInputProps) {
-  const { t, lang } = useTranslation();
+  const { t } = useTranslation();
   const { onlineUsers, username, currentChat, pendingImage, setPendingImage, setReplyTo, connected } = useChatStore();
   const [content, setContent] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);

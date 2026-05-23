@@ -13,7 +13,6 @@ import { Avatar } from "@/components/Avatar";
 import type { ChatMessage } from "@/lib/api";
 import { MessageLinkPreviews, extractURLs } from "@/components/LinkPreview";
 import { PollMessage } from "@/components/PollMessage";
-import type { PollData } from "@/lib/api";
 
 const EmojiPicker = lazy(() => import("@/components/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
 
@@ -472,7 +471,7 @@ export const MessageBubble = memo(function MessageBubble({
   onlineUsers = [],
   emojiPreprocess,
 }: MessageBubbleProps) {
-  const { t, lang } = useTranslation();
+  const { t } = useTranslation();
   const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
   const translations = useChatStore((s) => s.translations);
   const polls = useChatStore((s) => s.polls);
@@ -1201,6 +1200,7 @@ export const MessageBubble = memo(function MessageBubble({
                   readers={readBy}
                   readByLabel={t("message.readBy")}
                   readLabel={t("message.read")}
+                  onlineLabel={t("a11y.online")}
                   userProfiles={userProfiles}
                   onlineUsers={onlineUsers}
                 />
@@ -1359,10 +1359,11 @@ function GroupSeenByLabel({ readers, userProfiles, seenByLabel, readLabel }: {
 
 // ── ReadReceipt: clickable tooltip showing who read a message ──
 
-function ReadReceipt({ readers, readByLabel, readLabel, userProfiles, onlineUsers }: {
+function ReadReceipt({ readers, readByLabel, readLabel, onlineLabel, userProfiles, onlineUsers }: {
   readers: string[];
   readByLabel: string;
   readLabel: string;
+  onlineLabel: string;
   userProfiles: Record<string, { display_name?: string; avatar_url?: string }>;
   onlineUsers: string[];
 }) {
@@ -1396,7 +1397,7 @@ function ReadReceipt({ readers, readByLabel, readLabel, userProfiles, onlineUser
                   )}
                 </span>
                 <span className="truncate">{profile?.display_name || r}</span>
-                {isOnline && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-green-400 flex-shrink-0" title={t("a11y.online")} />}
+                {isOnline && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-green-400 flex-shrink-0" title={onlineLabel} />}
               </div>
             );
           })}
