@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 813 前端 / 50 文件 / 51.86% 行覆盖率 / E2E 94/101 (7 group-call pre-existing)
+发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 875 前端 / 50 文件 / 51.86%+ 行覆盖率 / E2E 98/101 (7 group-call pre-existing)
 
 ## 当前目标
 
@@ -53,6 +53,9 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] SW 缓存修复：CACHE_NAME tdchat-v3 + stale-while-revalidate 策略，防止部署后浏览器加载旧 JS/CSS。
 - [x] api.ts connect 竞态修复：connectGeneration 计数器替代 intentionalClose 布尔值，消除旧 onclose 在新 onopen 后触发的竞态。
 - [x] E2E 修复：back button label "Back" → "返回"（zh-CN context），3 个测试恢复。
+- [x] Group-call E2E 邀请接受：acceptGroupInvite helper，member 接受邀请后群组通话按钮出现。4/7 通过。
+- [x] 测试覆盖扩展：useWebSocket 3.37%→44.56%（+30 tests），JoinScreen 47.29%→81.08%（+18 tests），ChatInput +14 tests（875 total）。
+- [x] PM 审计修复：AI 助手默认展开、zh-CN publicChatSub 中文化、ChatInput disconnect 改用 t()。
 - [x] 容器重启修复生产 WebSocket 连接堆积问题。
 - [x] E2E production fixes x3（target 47/52）。
 - [x] nginx production fix：agenthub-chat.conf 冲突修复。
@@ -196,6 +199,9 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 794 tests, 51.86% lines |
 | 2026-05-24 | `cd backend; go test ./...` | PASS |
 | 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 813 tests |
+| 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 875 tests |
+| 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 98/101 pass（3 group-call timing, 17 skipped） |
+| 2026-05-24 | `cd backend; go test ./...` | PASS |
 | 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 94/101 pass（7 group-call pre-existing, 17 skipped） |
 | 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 794 tests, 51.86% lines |
 | 2026-05-24 | `cd backend; go test ./...` | PASS |
