@@ -35,6 +35,7 @@ export interface TranslationDict {
     passwordsMatch: string;
     registerSuccess: string;
     passwordMinLength: string;
+    passwordMaxLength: string;
     confirmNotMatch: string;
     loginFailed: string;
     registerFailed: string;
@@ -455,6 +456,7 @@ const zhCN: TranslationDict = {
     passwordsMatch: "两次输入的密码不一致",
     registerSuccess: "注册成功",
     passwordMinLength: "密码至少需要6个字符",
+    passwordMaxLength: "密码不能超过72个字符",
     confirmNotMatch: "两次输入的密码不一致",
     loginFailed: "用户名或密码错误",
     registerFailed: "注册失败，请稍后重试",
@@ -877,6 +879,7 @@ const enUS: TranslationDict = {
     passwordsMatch: "Passwords do not match",
     registerSuccess: "Registration successful",
     passwordMinLength: "Password must be at least 6 characters",
+    passwordMaxLength: "Password must be at most 72 characters",
     confirmNotMatch: "Passwords do not match",
     loginFailed: "Invalid username or password",
     registerFailed: "Registration failed, please try again later",
