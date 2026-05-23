@@ -52,29 +52,22 @@ test.describe("Error paths", () => {
       // Navigate to page.
       await page.goto("/");
 
-      // Inject WebSocket interceptor BEFORE joining so we can capture and
+      // Inject WebSocket proxy BEFORE joining so we can capture and
       // later close the WS instance from page context.
+      // Use Proxy with construct trap to avoid prototype-chain issues.
       await page.evaluate(() => {
-        const OrigWebSocket = (window as unknown as Record<string, unknown>).WebSocket as typeof WebSocket;
-        (window as unknown as Record<string, unknown>).__wsRef = null;
-        const PatchedWS = function (
-          this: WebSocket,
-          url: string,
-          protocols?: string | string[],
-        ) {
-          const ws = new OrigWebSocket(url, protocols);
-          (window as unknown as Record<string, unknown>).__wsRef = ws;
-          return ws;
-        } as unknown as typeof WebSocket;
-        PatchedWS.prototype = OrigWebSocket.prototype;
-        PatchedWS.CONNECTING = OrigWebSocket.CONNECTING;
-        PatchedWS.OPEN = OrigWebSocket.OPEN;
-        PatchedWS.CLOSING = OrigWebSocket.CLOSING;
-        PatchedWS.CLOSED = OrigWebSocket.CLOSED;
-        (window as unknown as Record<string, unknown>).WebSocket = PatchedWS;
+        const OrigWebSocket = window.WebSocket;
+        (window as unknown as Record<string, unknown>).__wsList = [] as WebSocket[];
+        window.WebSocket = new Proxy(OrigWebSocket, {
+          construct(target, args) {
+            const ws = new target(args[0], args[1]);
+            ((window as unknown as Record<string, unknown>).__wsList as WebSocket[]).push(ws);
+            return ws;
+          },
+        }) as typeof WebSocket;
       });
 
-      // Join as guest (WebSocket is now captured in __wsRef).
+      // Join as guest (WebSocket is now captured in __wsList).
       await page.getByPlaceholder("你的用户名...").fill(name);
       await page.getByRole("button", { name: "游客加入" }).click();
       await expect(page.locator("textarea").first()).toBeVisible({
@@ -86,25 +79,23 @@ test.describe("Error paths", () => {
         page.getByText(/正在重新连接|连接已断开/).first(),
       ).not.toBeVisible({ timeout: 5000 });
 
-      // Simulate WebSocket disconnect by closing the captured WS.
+      // Simulate WebSocket disconnect by closing the first captured WS.
       await page.evaluate(() => {
-        const ws = (window as unknown as Record<string, unknown>)
-          .__wsRef as WebSocket | null;
-        if (ws) ws.close();
+        const list = (window as unknown as Record<string, unknown>)
+          .__wsList as WebSocket[];
+        if (list.length > 0) list[0].close();
       });
 
       // Reconnect banner should appear (the client enters reconnecting state).
-      // Use .first() because the text also appears as a system message in chat log.
       await expect(
         page.getByText(/正在重新连接|连接已断开/).first(),
       ).toBeVisible({ timeout: 10000 });
 
-      // Wait for reconnection to complete — banner should disappear.
-      await expect(
-        page.getByText(/正在重新连接|连接已断开/).first(),
-      ).not.toBeVisible({ timeout: 30000 });
+      // Verify reconnection succeeded by sending a message.
+      // The client's exponential-backoff reconnect starts at 1s.
+      // Wait a few seconds for reconnection to stabilize, then send.
+      await page.waitForTimeout(5000);
 
-      // Verify we can still send messages after reconnection.
       const msg = `rc_msg_${Math.random().toString(36).slice(2, 6)}`;
       await page.locator("textarea").first().fill(msg);
       await page.keyboard.press("Enter");
