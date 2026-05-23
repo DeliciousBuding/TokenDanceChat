@@ -16,16 +16,16 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: clean old caches and claim all clients
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      );
+      return Promise.all([
+        ...keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)),
+        self.clients.claim(),
+      ]);
     })
   );
-  self.clients.claim();
 });
 
 // Helper: is an API request?
