@@ -200,3 +200,43 @@ git log --oneline --all --grep='hk1|hk2|3221'
 | TokenBot/PicoClaw 界面 | Agent-as-contact UX | 验证中 |
 
 当某个功能证明是可复用原语时，将经验记录到 `docs/agenthub-validation.md` 或专门的 `docs/` 文件。
+
+## 开发工作流（dev-loop）
+
+长程多步骤开发使用 `/dev-loop` 启动。短任务（单文件修复、typo）直接做。
+
+### 模型分配策略
+
+| 别名 | 模型 | 上下文 | 用途 |
+|------|------|--------|------|
+| haiku | glm-5.1 | 200k | 编码实现、bug 修复、算法——优先使用 |
+| opus | deepseek-v4-pro | 1M | 推理、架构、审查——复杂决策 |
+| sonnet | deepseek-v4-flash | 1M | 机械工作——ESLint、格式化、批量重命名 |
+
+### 分支策略
+
+- `master` 稳定，`dev` 开发
+- 小范围 commit（每完成一个独立改动就提交），及时 push
+- 不用 `--force`、`--no-verify`
+
+### 标准循环
+
+1. 读 ROADMAP → 选 1-3 个最高价值任务
+2. 派 subagent（优先 haiku 编码，sonnet 机械工作，opus 审查）
+3. 审查 subagent 输出，修复高优先级项
+4. 运行 `neat-freak` 同步文档
+5. Commit + push
+
+### 审查门
+
+提交有意义的变更前：
+- `git diff --check`
+- `cd backend && go test ./...`
+- `cd frontend && npx tsc --noEmit && npm test -- --run`
+- 安全泄露检查（3 条 grep）
+- 涉及文件的 focused 测试
+
+### 项目级 Skill
+
+可复用 SOP 沉淀到 `.claude/skills/` 目录（不含本机路径、凭据、IP）。已有：
+- `dev-loop` — 自主开发推进引擎
