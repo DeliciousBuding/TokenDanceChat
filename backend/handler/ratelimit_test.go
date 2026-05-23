@@ -7,22 +7,22 @@ import (
 	"time"
 )
 
-// TestRateLimiterWS verifies that allowWS permits up to 30 requests per 10s window
-// and rejects the 31st from the same IP.
+// TestRateLimiterWS verifies that allowWS permits up to 50 requests per 10s window
+// and rejects the 51st from the same IP.
 func TestRateLimiterWS(t *testing.T) {
 	rl := &rateLimiter{}
 	ip := "192.168.1.100"
 
-	// First 30 requests should be allowed.
-	for i := 0; i < 30; i++ {
+	// First 50 requests should be allowed.
+	for i := 0; i < 50; i++ {
 		if !rl.allowWS(ip) {
 			t.Errorf("expected allowWS to return true for request %d", i+1)
 		}
 	}
 
-	// 31st request within the same window should be denied.
+	// 51st request within the same window should be denied.
 	if rl.allowWS(ip) {
-		t.Error("expected allowWS to return false on 31st request within window")
+		t.Error("expected allowWS to return false on 51st request within window")
 	}
 }
 
@@ -51,14 +51,14 @@ func TestRateLimiterMultipleIPs(t *testing.T) {
 	ip1 := "192.168.1.1"
 	ip2 := "192.168.1.2"
 
-	// Saturate ip1 (30 WS requests).
-	for i := 0; i < 30; i++ {
+	// Saturate ip1 (50 WS requests).
+	for i := 0; i < 50; i++ {
 		rl.allowWS(ip1)
 	}
 
 	// ip1 should now be blocked.
 	if rl.allowWS(ip1) {
-		t.Error("expected ip1 to be rate-limited after 30 WS requests")
+		t.Error("expected ip1 to be rate-limited after 50 WS requests")
 	}
 
 	// ip2 should still be allowed (independent counter).
@@ -66,14 +66,14 @@ func TestRateLimiterMultipleIPs(t *testing.T) {
 		t.Error("expected ip2 to NOT be rate-limited (independent counter)")
 	}
 
-	// ip2 gets its own 30 requests.
-	for i := 0; i < 29; i++ {
+	// ip2 gets its own 50 requests.
+	for i := 0; i < 49; i++ {
 		rl.allowWS(ip2)
 	}
 
 	// Now ip2 should also be blocked.
 	if rl.allowWS(ip2) {
-		t.Error("expected ip2 to be rate-limited after 30 WS requests")
+		t.Error("expected ip2 to be rate-limited after 50 WS requests")
 	}
 }
 
@@ -218,15 +218,15 @@ func TestWSAllow(t *testing.T) {
 
 	ip := "203.0.113.42"
 
-	// First 30 calls should succeed.
-	for i := 0; i < 30; i++ {
+	// First 50 calls should succeed.
+	for i := 0; i < 50; i++ {
 		if !WSAllow(ip) {
 			t.Errorf("expected WSAllow to return true for request %d", i+1)
 		}
 	}
 
-	// The 31st call should fail.
+	// The 51st call should fail.
 	if WSAllow(ip) {
-		t.Error("expected WSAllow to return false on 31st call")
+		t.Error("expected WSAllow to return false on 51st call")
 	}
 }

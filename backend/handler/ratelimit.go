@@ -24,7 +24,7 @@ type rateLimitEntry struct {
 }
 
 const (
-	wsMaxPerWindow   = 30
+	wsMaxPerWindow   = 50
 	wsWindow         = 10 * time.Second
 	apiMaxPerWindow  = 30
 	apiWindow        = 1 * time.Minute
@@ -112,7 +112,7 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 }
 
 // WSAllow checks whether a WebSocket upgrade is allowed for a given IP.
-// Returns false when the per-IP rate limit (5 per 10 s) is exceeded.
+// Returns false when the per-IP rate limit (50 per 10 s) is exceeded.
 func WSAllow(ip string) bool {
 	return rl.allowWS(ip)
 }
