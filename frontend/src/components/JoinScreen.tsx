@@ -96,6 +96,10 @@ export function JoinScreen() {
 
   const handleAuthSuccess = useCallback(
     (name: string) => {
+      // Switch to guest view first, then attempt auto-join
+      setSubView("guest");
+      setUsername(name);
+      setError("");
       setConnecting(true);
       handleJoinSuccess(name);
     },

@@ -216,6 +216,12 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
           </button>
         </form>
 
+        {!loading && (!username.trim() || !password || !confirmPassword || !inviteCode.trim()) && (
+          <p className="mt-2 text-xs text-muted-foreground/60 text-center">
+            请填写所有字段后点击注册
+          </p>
+        )}
+
         {/* Link to login */}
         <p className="mt-4 text-center text-sm text-muted-foreground">
           <button

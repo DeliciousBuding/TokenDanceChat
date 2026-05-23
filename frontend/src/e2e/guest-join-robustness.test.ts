@@ -86,7 +86,7 @@ test.describe("Guest join robustness", () => {
     await page2.close();
   });
 
-  test("guest join works on slow network (throttled)", async ({ page, browser }) => {
+  test("guest join works on slow network (throttled)", async ({ browser }) => {
     const name = `slow_${Math.random().toString(36).slice(2, 8)}`;
 
     // Create context with network throttling
