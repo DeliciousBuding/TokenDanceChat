@@ -23,7 +23,7 @@ type rateLimitEntry struct {
 }
 
 const (
-	wsMaxPerWindow  = 5
+	wsMaxPerWindow  = 30
 	wsWindow        = 10 * time.Second
 	apiMaxPerWindow = 30
 	apiWindow       = 1 * time.Minute
