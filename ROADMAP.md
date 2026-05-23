@@ -86,7 +86,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] 性能优化：lastPreviews O(1) 查找、replyCounts 缓存。
 - [x] Hub.Stop()：goroutine-safe test cleanup，消除测试间资源泄露。
 - [x] formatTime/formatLastSeen lang 参数（i18n P3 完成）。
-- [x] willChange:transform scroll fix：修复 Chrome/Edge 下消息列表滚动性能问题。
+- [x] 滚动修复（4 轮迭代：scrollIntoView→min-h-0→willChange→flex flex-col on parent）：根因是父容器须为 flex 容器，子元素 flex-1 才能约束高度供 overflow-y-auto 使用。滚动 E2E 8/8 全绿（production）。
 
 ## 当前增量：Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收
 

@@ -2641,3 +2641,95 @@ func TestInviteGenerateDefaultMaxUses(t *testing.T) {
 		}
 	})
 }
+
+// --- Register reserved username tests ---
+
+// TestRegisterReservedUsername verifies that reserved usernames
+// ("system", "server", "admin", "moderator", "root") are rejected during
+// registration with code RESERVED_USERNAME.
+func TestRegisterReservedUsername(t *testing.T) {
+	reserved := []string{"system", "server", "admin", "moderator", "root"}
+	ips := []string{"192.0.2.50", "192.0.2.51", "192.0.2.52", "192.0.2.53", "192.0.2.54"}
+	for i, username := range reserved {
+		t.Run(username, func(t *testing.T) {
+			ResetRateLimiter()
+			h := newTestHandler()
+
+			body := "{\"username\":\"" + username + "\",\"password\":\"secret123\",\"invite_code\":\"VALIDCODE\"}"
+			req := httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader(body))
+			req.RemoteAddr = ips[i] + ":1234"
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			h.Register(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("expected status 400 for reserved username %q, got %d", username, resp.StatusCode)
+				return
+			}
+
+			var result map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				t.Fatalf("failed to decode JSON: %v", err)
+			}
+			if result["code"] != "RESERVED_USERNAME" {
+				t.Errorf("expected code RESERVED_USERNAME for %q, got %q", username, result["code"])
+			}
+		})
+	}
+}
+
+// TestLoginLongUsername verifies that Login with a 200-character username
+// is handled gracefully without crashing.
+func TestLoginLongUsername(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	longUsername := strings.Repeat("a", 200)
+	body := "{\"username\":\"" + longUsername + "\",\"password\":\"secret123\"}"
+	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.60:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Login(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	// Should handle gracefully, not crash.
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200 for long username, got %d: %s", resp.StatusCode, w.Body.String())
+	}
+}
+
+// TestHealthCheckWrongMethod verifies that POST /api/health returns 405.
+func TestHealthCheckWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/health", nil)
+	w := httptest.NewRecorder()
+
+	h.HealthCheck(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/health, got %d", w.Code)
+	}
+}
+
+// TestServeUploadPathTraversal verifies that GET /uploads/../something
+// returns 404 (path traversal is neutralized by filepath.Base).
+func TestServeUploadPathTraversal(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/uploads/../something", nil)
+	w := httptest.NewRecorder()
+	h.ServeUpload(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for path traversal /uploads/../something, got %d", w.Code)
+	}
+}

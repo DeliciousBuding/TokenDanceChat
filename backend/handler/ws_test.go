@@ -165,3 +165,45 @@ func TestCheckOriginWithEnvAllowed(t *testing.T) {
 		}
 	})
 }
+
+func TestCheckOriginEmptyAllowedOrigins(t *testing.T) {
+	os.Unsetenv("CHAT_ALLOWED_ORIGINS")
+
+	t.Run("same-origin allowed when env is unset", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
+		got := upgrader.CheckOrigin(req)
+		if !got {
+			t.Error("expected same-origin (no Origin header) to be allowed when CHAT_ALLOWED_ORIGINS is unset")
+		}
+	})
+
+	t.Run("same-origin with Origin header allowed when env is unset", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
+		req.Header.Set("Origin", "https://chat.example.com")
+		got := upgrader.CheckOrigin(req)
+		if !got {
+			t.Error("expected same-origin to be allowed when CHAT_ALLOWED_ORIGINS is unset")
+		}
+	})
+
+	t.Run("cross-origin rejected when env is unset", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
+		req.Header.Set("Origin", "https://foreign-site.com")
+		got := upgrader.CheckOrigin(req)
+		if got {
+			t.Error("expected cross-origin to be rejected when CHAT_ALLOWED_ORIGINS is unset")
+		}
+	})
+
+	t.Run("empty string env same as unset", func(t *testing.T) {
+		os.Setenv("CHAT_ALLOWED_ORIGINS", "")
+		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
+
+		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
+		req.Header.Set("Origin", "https://foreign-site.com")
+		got := upgrader.CheckOrigin(req)
+		if got {
+			t.Error("expected cross-origin to be rejected when CHAT_ALLOWED_ORIGINS is empty string")
+		}
+	})
+}

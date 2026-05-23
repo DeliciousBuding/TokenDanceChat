@@ -54,7 +54,7 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 - 交叉审查 5 轮全部修复（HIGH + MEDIUM），安全修复 3 项。
 - Hub.Stop()：goroutine-safe test cleanup，消除测试间资源泄露。
 - formatTime/formatLastSeen lang 参数（i18n P3 完成）。
-- willChange:transform scroll fix：修复 Chrome/Edge 下消息列表滚动性能问题。
+- 滚动修复（4 轮：scrollIntoView→min-h-0→willChange→flex flex-col on parent）：父容器须为 flex，子元素 flex-1 才能约束高度供 overflow-y-auto 使用。E2E 8/8 全绿。
 
 ## 近期增量（v0.2.7）
 
@@ -165,6 +165,7 @@ git grep -n -E 'password.*[0-9]{4,}|sk-[a-zA-Z0-9]{20,}' -- ':!.git' ':!node_mod
 - 声称有意义的 UI 打磨完成前，必须用 `docs/visual-acceptance.md` 的 screenshot metrics 验证；真实截图是 UI 打磨验收的硬性要求。
 - `gpt-image-2` mockup 可作为布局、图标、密度、层级的艺术方向参考，但验收仍需真实浏览器截图。
 - 安全敏感 UI（如 webhook secret）保持一次性 secret 与常规持久化状态分离。
+- 滚动容器工程约束：flex-1 子元素需要 overflow-y-auto 滚动时，其父容器必须是 flex 容器（`display: flex`），否则高度约束断裂。Tailwind 等价为父容器加 `flex`，子容器 `flex-1 overflow-y-auto` 方可工作。
 
 ## 后端规则
 
