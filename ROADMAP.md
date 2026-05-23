@@ -46,16 +46,23 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | P2 | 运维/性能 | Health check、部署 checklist、bundle/runtime profiling、虚拟列表调优、WebSocket fanout/load check。 |
 | P2 | UI/美术方向 | 克制企业 UI + 流畅聊天交互；避免装饰性营销布局。 |
 
-## 当前增量：挤下线 + 登录限流 + UX 打磨
+## 当前增量（dev）：测试覆盖 + 工程基建 + UX 打磨
 
-状态：已实现、已部署、18/18 E2E 全绿。
+状态：推进中。353 tests / 29 文件 / ESLint 0 errors / 后端全绿。
 
-- [x] 实现 session kick-off 机制：同名用户在新标签页登录时，旧连接自动断开并收到 "kicked" 消息，新会话正常接入。
-- [x] 移除 `handleJoin` 中的 `IsUsernameTaken` 预检查——重复用户名由 hub 注册通道统一处理，确保原子性。
-- [x] 前端新增 "kicked" WebSocket 事件监听器——断开连接、显示系统消息、自动跳转回加入界面。
-- [x] 更新重复用户名 E2E 测试：验证旧连接被踢出、新连接成功加入（而非错误提示）。
-- [x] 修正 rate-limit 测试以匹配当前 `wsMaxPerWindow = 30` 限制。
-- [x] 新增 auth rate limiter：`/api/login` 和 `/api/register` 5 次/分钟/IP，防暴力破解。
+- [x] 前端测试从 237 (18 文件) → 353 (29 文件)，+116 tests / +11 文件。
+- [x] 新增组件测试：LoginScreen, RegisterScreen, FileMessage, ForwardModal, SearchBar, SystemMessage, ConversationSearch, PollMessage, GroupCreateModal, ThemeToggle, Avatar。
+- [x] jest-dom matchers 全局启用（`toBeDisabled`, `toBeVisible` 等）。
+- [x] 共享 `mockI18n()` 工具，消除重复 i18n mock 样板。
+- [x] `@vitest/coverage-v8` + `npm run test:coverage` / `test:watch`。
+- [x] ESLint flat config（typescript-eslint + react-hooks），0 errors / 27 warnings。
+- [x] 交叉审查 quick wins：RegisterScreen 硬编码中文字符串 → i18n key；ChatLayout 设置按钮标签修复；`product-gap-analysis.md` 陈旧条目修正。
+- [x] AGENTS.md 新增 dev-loop 工作流、模型分配策略、分支策略。
+- [x] 安全泄露 3 条 grep 自检 + 违规响应协议（脱敏 → filter-branch → force push）。
+- [ ] 覆盖率达 40%+（当前 29.5%）。
+- [ ] 群组视频通话 E2E。
+- [ ] 消息列表过渡动画打磨。
+- [ ] CI/CD GitHub Actions workflow。
 - [x] LoginScreen/RegisterScreen 添加 `autocomplete` 属性，适配密码管理器。
 - [x] 部署并验证：237 单元测试 + 后端全量测试 + 18/18 E2E 全部通过。
 
