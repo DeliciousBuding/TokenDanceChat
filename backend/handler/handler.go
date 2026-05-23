@@ -1061,6 +1061,14 @@ func (h *Handler) InviteGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			ip = r.RemoteAddr
+		}
+		if !AuthAllow(ip) {
+			writeJSONError(w, http.StatusTooManyRequests, "too many attempts, try again later", "RATE_LIMITED", requestID)
+			return
+		}
 	var body struct {
 		Username string `json:"username"`
 		MaxUses  int    `json:"max_uses"`

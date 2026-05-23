@@ -862,15 +862,22 @@ func (h *Hub) SendToUser(username string, data []byte) bool {
 func (h *Hub) SendToGroup(groupName string, data []byte) {
 	h.groupsMu.RLock()
 	g, ok := h.groups[groupName]
-	h.groupsMu.RUnlock()
 	if !ok {
+		h.groupsMu.RUnlock()
 		return
 	}
+	// Copy member set to avoid data race with concurrent RemoveGroupMember
+	// which modifies g.Members under groupsMu.Lock().
+	members := make(map[string]bool, len(g.Members))
+	for m := range g.Members {
+		members[m] = true
+	}
+	h.groupsMu.RUnlock()
 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for c := range h.clients {
-		if g.Members[c.username] {
+		if members[c.username] {
 			select {
 			case c.send <- data:
 			default:
