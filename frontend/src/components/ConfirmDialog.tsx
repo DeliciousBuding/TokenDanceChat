@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { useTranslation } from "@/i18n/context";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -21,6 +22,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
   if (!open) return null;
 
   return (
@@ -47,7 +49,7 @@ export function ConfirmDialog({
         <button
           onClick={onCancel}
           className="absolute top-3 right-3 rounded-full p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
-          aria-label="Close"
+          aria-label={t("a11y.close")}
         >
           <X className="h-3.5 w-3.5" />
         </button>

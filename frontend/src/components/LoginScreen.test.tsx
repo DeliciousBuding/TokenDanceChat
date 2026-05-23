@@ -20,6 +20,7 @@ vi.mock("@/i18n/context", () => ({
         "join.errorEmpty": "用户名不能为空",
         "join.placeholder": "你的用户名...",
         "error.unknown": "未知错误",
+        "a11y.back": "返回",
       };
       return map[key] ?? key;
     },
@@ -60,7 +61,7 @@ describe("LoginScreen", () => {
 
   it("shows back button that calls onBack", () => {
     renderLogin();
-    fireEvent.click(screen.getByLabelText("Back"));
+    fireEvent.click(screen.getByLabelText("返回"));
     expect(onBack).toHaveBeenCalled();
   });
 

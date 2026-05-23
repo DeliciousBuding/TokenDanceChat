@@ -126,6 +126,7 @@ export function useWebSocket() {
     setGroupInfoPanel,
     setTranslation,
     updatePoll,
+    removePoll,
   } = useChatStore();
 
   const connect = useCallback(
@@ -908,6 +909,7 @@ export function useWebSocket() {
         const { id } = msg as { type: string; id: string };
         if (id) {
           deleteMessage(id);
+          removePoll(id);
         }
       }),
     );

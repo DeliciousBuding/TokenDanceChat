@@ -137,7 +137,7 @@ export function ConversationSearch({ open, onClose, onHighlightChange }: Convers
         <button
           onClick={() => setSelectedIndex((i) => Math.max(i - 1, 0))}
           disabled={results.length === 0}
-          aria-label="Previous result"
+          aria-label={t("a11y.prevResult")}
           className="flex-shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-25"
         >
           <ChevronUp className="h-3.5 w-3.5" />
@@ -145,14 +145,14 @@ export function ConversationSearch({ open, onClose, onHighlightChange }: Convers
         <button
           onClick={() => setSelectedIndex((i) => Math.min(i + 1, results.length - 1))}
           disabled={results.length === 0}
-          aria-label="Next result"
+          aria-label={t("a11y.nextResult")}
           className="flex-shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-muted-foreground disabled:opacity-25"
         >
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={onClose}
-          aria-label="Close search"
+          aria-label={t("a11y.closeSearch")}
           className="flex-shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-muted-foreground"
         >
           <X className="h-3.5 w-3.5" />

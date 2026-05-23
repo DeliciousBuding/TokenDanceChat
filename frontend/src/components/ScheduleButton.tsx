@@ -173,7 +173,7 @@ export function ScheduleButton({ onSchedule, disabled, scheduled }: ScheduleButt
               <button
                 onClick={prevMonth}
                 className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                aria-label="Previous month"
+                aria-label={t("a11y.prevMonth")}
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
@@ -186,7 +186,7 @@ export function ScheduleButton({ onSchedule, disabled, scheduled }: ScheduleButt
               <button
                 onClick={nextMonth}
                 className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                aria-label="Next month"
+                aria-label={t("a11y.nextMonth")}
               >
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
@@ -246,7 +246,7 @@ export function ScheduleButton({ onSchedule, disabled, scheduled }: ScheduleButt
                   value={selectedHour}
                   onChange={(e) => setSelectedHour(Number(e.target.value))}
                   className="w-full rounded-lg border border-border bg-accent px-2 py-1.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-label="Hour"
+                  aria-label={t("a11y.hour")}
                 >
                   {hours.map((h) => (
                     <option key={h} value={h}>
@@ -262,7 +262,7 @@ export function ScheduleButton({ onSchedule, disabled, scheduled }: ScheduleButt
                   value={selectedMinute}
                   onChange={(e) => setSelectedMinute(Number(e.target.value))}
                   className="w-full rounded-lg border border-border bg-accent px-2 py-1.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-label="Minute"
+                  aria-label={t("a11y.minute")}
                 >
                   {minutes.map((m) => (
                     <option key={m} value={m}>

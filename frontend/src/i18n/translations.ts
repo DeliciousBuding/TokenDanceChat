@@ -455,6 +455,37 @@ export interface TranslationDict {
     vote: string;
     votes: string;
   };
+  a11y: {
+    close: string;
+    back: string;
+    clearSearch: string;
+    closeSidebar: string;
+    openSidebar: string;
+    moreActions: string;
+    removeImage: string;
+    gif: string;
+    ok: string;
+    cancelRecording: string;
+    stopRecording: string;
+    uploadImage: string;
+    uploadFile: string;
+    recordVoice: string;
+    prevResult: string;
+    nextResult: string;
+    closeSearch: string;
+    zoomOut: string;
+    zoomIn: string;
+    copyCode: string;
+    audioSeek: string;
+    exitSelect: string;
+    prevMonth: string;
+    nextMonth: string;
+    hour: string;
+    minute: string;
+    scrollToBottom: string;
+    gifStickers: string;
+    online: string;
+  };
 }
 
 const zhCN: TranslationDict = {
@@ -910,6 +941,37 @@ const zhCN: TranslationDict = {
     finalResults: "最终结果",
     vote: "投票",
     votes: "{{count}} 票",
+  },
+  a11y: {
+    close: "关闭",
+    back: "返回",
+    clearSearch: "清除搜索",
+    closeSidebar: "关闭侧边栏",
+    openSidebar: "打开侧边栏",
+    moreActions: "更多操作",
+    removeImage: "移除图片",
+    gif: "GIF",
+    ok: "确定",
+    cancelRecording: "取消录制",
+    stopRecording: "停止录制",
+    uploadImage: "上传图片",
+    uploadFile: "上传文件",
+    recordVoice: "录制语音",
+    prevResult: "上一个结果",
+    nextResult: "下一个结果",
+    closeSearch: "关闭搜索",
+    zoomOut: "缩小",
+    zoomIn: "放大",
+    copyCode: "复制代码",
+    audioSeek: "音频进度条",
+    exitSelect: "退出选择模式",
+    prevMonth: "上个月",
+    nextMonth: "下个月",
+    hour: "小时",
+    minute: "分钟",
+    scrollToBottom: "回到底部",
+    gifStickers: "GIF 和贴纸",
+    online: "在线",
   },
 
 };
@@ -1369,6 +1431,37 @@ const enUS: TranslationDict = {
     finalResults: "Final Results",
     vote: "Vote",
     votes: "{{count}} votes",
+  },
+  a11y: {
+    close: "Close",
+    back: "Back",
+    clearSearch: "Clear search",
+    closeSidebar: "Close sidebar",
+    openSidebar: "Open sidebar",
+    moreActions: "More actions",
+    removeImage: "Remove image",
+    gif: "GIF",
+    ok: "OK",
+    cancelRecording: "Cancel recording",
+    stopRecording: "Stop recording",
+    uploadImage: "Upload image",
+    uploadFile: "Upload file",
+    recordVoice: "Record voice",
+    prevResult: "Previous result",
+    nextResult: "Next result",
+    closeSearch: "Close search",
+    zoomOut: "Zoom out",
+    zoomIn: "Zoom in",
+    copyCode: "Copy code",
+    audioSeek: "Audio seek",
+    exitSelect: "Exit select mode",
+    prevMonth: "Previous month",
+    nextMonth: "Next month",
+    hour: "Hour",
+    minute: "Minute",
+    scrollToBottom: "Scroll to bottom",
+    gifStickers: "GIF & Stickers",
+    online: "Online",
   },
 
 };

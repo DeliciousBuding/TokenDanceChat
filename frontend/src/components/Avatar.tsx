@@ -1,5 +1,6 @@
 import { memo, useMemo } from "react";
 import { cn, avatarGradient } from "@/lib/utils";
+import { useTranslation } from "@/i18n/context";
 
 interface AvatarProps {
   src?: string | null;
@@ -36,6 +37,7 @@ export const Avatar = memo(function Avatar({
   className,
   onClick,
 }: AvatarProps) {
+  const { t } = useTranslation();
   const gradient = useMemo(() => avatarGradient(name), [name]);
   const initial = useMemo(() => {
     const displayName = name || "?";
@@ -106,7 +108,7 @@ export const Avatar = memo(function Avatar({
             onlineDotSizes[size],
           )}
           role="status"
-          aria-label="Online"
+          aria-label={t("a11y.online")}
         />
       )}
     </Comp>

@@ -149,7 +149,7 @@ export const GifPicker = memo(function GifPicker({
           </div>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("a11y.close")}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors flex-shrink-0"
           >
             <X className="h-4 w-4" />

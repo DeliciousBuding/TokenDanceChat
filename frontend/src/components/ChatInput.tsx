@@ -1173,7 +1173,7 @@ export function ChatInput({
               <button
                 onClick={handleCancelImage}
                 className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/90 transition-colors shadow-sm"
-                aria-label="Remove image"
+                aria-label={t("a11y.removeImage")}
               >
                 <X className="h-3 w-3" />
               </button>
@@ -1286,8 +1286,8 @@ export function ChatInput({
             type="button"
             onClick={() => setShowGifPicker((p) => !p)}
             disabled={disabled}
-            aria-label="GIF"
-            title="GIF & Stickers"
+            aria-label={t("a11y.gif")}
+            title={t("a11y.gifStickers")}
             className={cn(
               "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30",
               showGifPicker
@@ -1338,7 +1338,7 @@ export function ChatInput({
                   type="button"
                   onClick={commitLink}
                   className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:brightness-110 transition-colors"
-                  aria-label="OK"
+                  aria-label={t("a11y.ok")}
                 >
                   <Send className="h-4 w-4" />
                 </button>
@@ -1346,7 +1346,7 @@ export function ChatInput({
                   type="button"
                   onClick={cancelLink}
                   className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                  aria-label="Cancel"
+                  aria-label={t("a11y.close")}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -1447,7 +1447,7 @@ export function ChatInput({
                     : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-destructive",
                 )}
                 style={slideCancelDragging ? { transform: `translateX(${-slideCancelOffset}px)` } : undefined}
-                aria-label="Cancel recording"
+                aria-label={t("a11y.cancelRecording")}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1460,7 +1460,7 @@ export function ChatInput({
             <button
               onClick={stopRecording}
               className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:brightness-110 transition-colors"
-              aria-label="Stop recording"
+              aria-label={t("a11y.stopRecording")}
             >
               <Square className="h-4 w-4" fill="currentColor" />
             </button>
@@ -1492,7 +1492,7 @@ export function ChatInput({
               <button
                 onClick={() => imageInputRef.current?.click()}
                 disabled={disabled}
-                aria-label="Upload image"
+                aria-label={t("a11y.uploadImage")}
                 className={cn(
                   "hidden h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:flex sm:h-12 sm:w-12",
                   "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
@@ -1505,7 +1505,7 @@ export function ChatInput({
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={disabled}
-                aria-label="Upload file"
+                aria-label={t("a11y.uploadFile")}
                 className={cn(
                   "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:h-12 sm:w-12",
                   "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
@@ -1518,7 +1518,7 @@ export function ChatInput({
               <button
                 onClick={startRecording}
                 disabled={disabled}
-                aria-label="Record voice message"
+                aria-label={t("a11y.recordVoice")}
                 className={cn(
                   "h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:h-12 sm:w-12",
                   "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",

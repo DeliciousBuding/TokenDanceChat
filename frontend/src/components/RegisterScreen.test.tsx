@@ -27,6 +27,7 @@ vi.mock("@/i18n/context", () => ({
         "join.errorInvalidChars": "用户名只能包含中英文、数字和下划线",
         "auth.fillAllFields": "请填写所有字段后点击注册",
         "error.unknown": "未知错误",
+        "a11y.back": "返回",
       };
       return map[key] ?? key;
     },
@@ -177,7 +178,7 @@ describe("RegisterScreen", () => {
 
   it("navigates back when back button clicked", () => {
     renderReg();
-    fireEvent.click(screen.getByLabelText("Back"));
+    fireEvent.click(screen.getByLabelText("返回"));
     expect(onBack).toHaveBeenCalled();
   });
 

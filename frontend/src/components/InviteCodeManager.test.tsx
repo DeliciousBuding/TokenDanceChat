@@ -125,7 +125,7 @@ describe("InviteCodeManager", () => {
       expect(screen.getByText("invite.noCodes")).toBeInTheDocument();
     });
 
-    const closeBtn = screen.getByLabelText("Close");
+    const closeBtn = screen.getByLabelText("关闭");
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalledTimes(1);
   });

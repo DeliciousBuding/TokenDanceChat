@@ -1,6 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Avatar } from "./Avatar";
+
+vi.mock("@/i18n/context", () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const map: Record<string, string> = { "a11y.online": "在线" };
+      return map[key] ?? key;
+    },
+    lang: "zh-CN" as const,
+    setLang: vi.fn(),
+  }),
+}));
 
 describe("Avatar", () => {
   it("renders with username initial letter", () => {
@@ -25,7 +36,7 @@ describe("Avatar", () => {
   it("shows online status indicator when online", () => {
     render(<Avatar name="TestUser" online />);
     const dot = screen.getByRole("status");
-    expect(dot).toHaveAttribute("aria-label", "Online");
+    expect(dot).toHaveAttribute("aria-label", "在线");
   });
 
   it("does not show online indicator when offline", () => {

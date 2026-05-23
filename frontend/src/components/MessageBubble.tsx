@@ -159,7 +159,7 @@ const CodeBlock = memo(function CodeBlock({
         <button
           onClick={handleCopy}
           className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/50 hover:text-foreground hover:bg-accent opacity-0 group-hover/code:opacity-100 transition-opacity"
-          aria-label="Copy code"
+          aria-label={t("a11y.copyCode")}
         >
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
           <span>{copied ? t("message.copied") : t("message.copy")}</span>
@@ -294,7 +294,7 @@ const VoiceMessagePlayer = memo(function VoiceMessagePlayer({
         className={cn("waveform-container", playing && "is-playing")}
         onClick={handleWaveformClick}
         role="slider"
-        aria-label="Audio seek bar"
+        aria-label={t("a11y.audioSeek")}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={duration > 0 ? Math.round((currentTime / duration) * 100) : 0}
@@ -1395,7 +1395,7 @@ function ReadReceipt({ readers, readByLabel, readLabel, userProfiles, onlineUser
                   )}
                 </span>
                 <span className="truncate">{profile?.display_name || r}</span>
-                {isOnline && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-green-400 flex-shrink-0" title="Online" />}
+                {isOnline && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-green-400 flex-shrink-0" title={t("a11y.online")} />}
               </div>
             );
           })}

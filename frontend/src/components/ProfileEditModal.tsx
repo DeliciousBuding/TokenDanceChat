@@ -101,7 +101,7 @@ export function ProfileEditModal({ onClose }: ProfileEditModalProps) {
       {/* Close button */}
       <button
         onClick={onClose}
-        aria-label="Close"
+        aria-label={t("a11y.close")}
         className={cn(
           "absolute rounded-full p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors",
           isMobile ? "top-3 right-3" : "top-3 right-3",
