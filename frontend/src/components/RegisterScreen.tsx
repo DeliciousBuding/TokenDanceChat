@@ -46,6 +46,10 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
         setError(t("auth.passwordMinLength"));
         return;
       }
+      if (password.length > 72) {
+        setError(t("auth.passwordMaxLength"));
+        return;
+      }
       if (password !== confirmPassword) {
         setError(t("auth.confirmNotMatch"));
         return;

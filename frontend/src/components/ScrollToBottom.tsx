@@ -24,6 +24,7 @@ export function ScrollToBottom({ containerRef, threshold = 200 }: ScrollToBottom
     if (!container) return;
 
     const check = () => {
+      if (!container.isConnected) return;
       const distance =
         container.scrollHeight - container.scrollTop - container.clientHeight;
       setVisible(distance > threshold);
