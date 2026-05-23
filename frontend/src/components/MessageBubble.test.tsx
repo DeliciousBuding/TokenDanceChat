@@ -172,6 +172,332 @@ describe("MessageBubble", () => {
     });
   });
 
+  describe("code blocks", () => {
+    it("renders code block with language label and copy button", () => {
+      renderBubble({
+        message: {
+          id: "msg-code",
+          username: "alice",
+          content: "```javascript\nconst x = 1;\n```",
+          timestamp: 1700000000000,
+        },
+      });
+      // Language label is shown in the header bar
+      expect(screen.getByText("javascript")).toBeTruthy();
+      // Copy button with zh-CN aria-label
+      expect(screen.getByLabelText("复制代码")).toBeTruthy();
+    });
+
+    it("renders code block with default 'code' label when no language", () => {
+      renderBubble({
+        message: {
+          id: "msg-code2",
+          username: "alice",
+          content: "```\necho hello\n```",
+          timestamp: 1700000000000,
+        },
+      });
+      // Falls back to "code" label
+      expect(screen.getByText("code")).toBeTruthy();
+    });
+
+    it("renders code block inline with text before and after", () => {
+      renderBubble({
+        message: {
+          id: "msg-code3",
+          username: "alice",
+          content: "Look at this:\n```python\nprint('hi')\n```\nNice right?",
+          timestamp: 1700000000000,
+        },
+      });
+      // Surrounding text and code block both render
+      expect(screen.getByText("python")).toBeTruthy();
+      expect(screen.getByText("Look at this:")).toBeTruthy();
+      expect(screen.getByText("Nice right?")).toBeTruthy();
+    });
+  });
+
+  describe("voice message player", () => {
+    it("renders voice message player for audio markdown", () => {
+      renderBubble({
+        message: {
+          id: "msg-voice",
+          username: "alice",
+          content: "![voice](https://example.com/audio.mp3)",
+          timestamp: 1700000000000,
+        },
+      });
+      // Should render the mic icon and custom audio player container
+      expect(document.querySelector(".voice-mic-icon")).toBeTruthy();
+      expect(document.querySelector(".custom-audio-player")).toBeTruthy();
+    });
+
+    it("renders play/pause button for voice message", () => {
+      renderBubble({
+        message: {
+          id: "msg-voice2",
+          username: "alice",
+          content: "![voice](https://example.com/audio.mp3)",
+          timestamp: 1700000000000,
+        },
+      });
+      // Play button is present
+      const playBtn = screen.getByLabelText("Play voice message");
+      expect(playBtn).toBeTruthy();
+    });
+
+    it("renders time display for voice message", () => {
+      renderBubble({
+        message: {
+          id: "msg-voice3",
+          username: "alice",
+          content: "![voice](https://example.com/audio.mp3)",
+          timestamp: 1700000000000,
+        },
+      });
+      // Time display shows current and total time
+      expect(document.querySelector(".time-display")).toBeTruthy();
+      expect(document.querySelector(".current-time")).toBeTruthy();
+      expect(document.querySelector(".total-time")).toBeTruthy();
+    });
+  });
+
+  describe("GIF and sticker messages", () => {
+    it("renders GIF message with GifRenderer", () => {
+      renderBubble({
+        message: {
+          id: "msg-gif",
+          username: "alice",
+          content: "![gif](https://example.com/animation.gif)",
+          timestamp: 1700000000000,
+        },
+      });
+      // GifRenderer includes a hidden canvas element
+      expect(document.querySelector("canvas")).toBeTruthy();
+      // The GIF image is rendered
+      const img = screen.getByAltText("GIF");
+      expect(img).toBeTruthy();
+      expect(img.getAttribute("src")).toBe("https://example.com/animation.gif");
+    });
+
+    it("renders sticker message with StickerRenderer", () => {
+      renderBubble({
+        message: {
+          id: "msg-sticker",
+          username: "alice",
+          content: "![sticker](https://example.com/sticker.webp)",
+          timestamp: 1700000000000,
+        },
+      });
+      // StickerRenderer renders a draggable={false} image
+      const img = screen.getByAltText("Sticker");
+      expect(img).toBeTruthy();
+      expect(img.getAttribute("src")).toBe("https://example.com/sticker.webp");
+      expect(img.getAttribute("draggable")).toBe("false");
+    });
+  });
+
+  describe("message edit indicator", () => {
+    it("shows edited label when message.edited is true for own message", () => {
+      renderBubble({
+        isOwn: true,
+        message: {
+          id: "msg-edit",
+          username: "testuser",
+          content: "Updated message",
+          timestamp: 1700000000000,
+          edited: true,
+        },
+      });
+      // zh-CN edited label
+      expect(screen.getByText("（已编辑）")).toBeTruthy();
+    });
+
+    it("does not show edited label when message.edited is false", () => {
+      renderBubble({
+        isOwn: true,
+        message: {
+          id: "msg-noedit",
+          username: "testuser",
+          content: "Normal message",
+          timestamp: 1700000000000,
+          edited: false,
+        },
+      });
+      expect(screen.queryByText("（已编辑）")).toBeFalsy();
+    });
+
+    it("does not show edited label for others' messages", () => {
+      renderBubble({
+        isOwn: false,
+        message: {
+          id: "msg-other-edit",
+          username: "bob",
+          content: "I edited this",
+          timestamp: 1700000000000,
+          edited: true,
+        },
+      });
+      // Edited label only shows for own messages
+      expect(screen.queryByText("（已编辑）")).toBeFalsy();
+    });
+  });
+
+  describe("search term highlighting", () => {
+    it("wraps matching text in mark elements when highlight prop is provided", () => {
+      renderBubble({
+        highlight: "search",
+        message: {
+          id: "msg-hl",
+          username: "alice",
+          content: "Let me search for something here",
+          timestamp: 1700000000000,
+        },
+      });
+      const marks = document.querySelectorAll("mark");
+      expect(marks.length).toBeGreaterThan(0);
+      expect(marks[0].textContent).toBe("search");
+    });
+
+    it("highlights multiple occurrences of the search term", () => {
+      renderBubble({
+        highlight: "test",
+        message: {
+          id: "msg-hl2",
+          username: "alice",
+          content: "test this test again test",
+          timestamp: 1700000000000,
+        },
+      });
+      const marks = document.querySelectorAll("mark");
+      // Should find multiple highlights (case-insensitive split produces N+1 segments for N matches)
+      expect(marks.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("does not highlight when highlight prop is empty", () => {
+      renderBubble({
+        highlight: "",
+        message: {
+          id: "msg-nohl",
+          username: "alice",
+          content: "no highlight here",
+          timestamp: 1700000000000,
+        },
+      });
+      expect(document.querySelectorAll("mark").length).toBe(0);
+    });
+
+    it("highlight is case-insensitive", () => {
+      renderBubble({
+        highlight: "hello",
+        message: {
+          id: "msg-hl3",
+          username: "alice",
+          content: "HELLO world",
+          timestamp: 1700000000000,
+        },
+      });
+      const marks = document.querySelectorAll("mark");
+      expect(marks.length).toBe(1);
+      expect(marks[0].textContent).toBe("HELLO");
+    });
+  });
+
+  describe("reply-to preview", () => {
+    it("renders reply preview when reply_to_id is set", () => {
+      renderBubble({
+        message: {
+          id: "msg-reply",
+          username: "alice",
+          content: "This is a reply",
+          timestamp: 1700000000000,
+          reply_to_id: "msg-original",
+          reply_to_user: "bob",
+          reply_to_content: "Original message text here",
+        },
+      });
+      // Reply preview shows the original author
+      expect(screen.getByText("bob")).toBeTruthy();
+      // Reply preview shows truncated original content
+      expect(screen.getByText("Original message text here")).toBeTruthy();
+    });
+
+    it("renders reply preview when only reply_to_content is set", () => {
+      renderBubble({
+        message: {
+          id: "msg-reply2",
+          username: "alice",
+          content: "Another reply",
+          timestamp: 1700000000000,
+          reply_to_content: "Some quoted text",
+        },
+      });
+      // Falls back to "..." for missing reply_to_user
+      expect(screen.getByText("...")).toBeTruthy();
+      expect(screen.getByText("Some quoted text")).toBeTruthy();
+    });
+
+    it("does not render reply preview without reply data", () => {
+      renderBubble({
+        message: {
+          id: "msg-noreply",
+          username: "alice",
+          content: "Just a message",
+          timestamp: 1700000000000,
+        },
+      });
+      // No reply user or content visible
+      expect(screen.queryByText("...")).toBeFalsy();
+    });
+  });
+
+  describe("forwarded message indicator", () => {
+    it("renders [Forwarded] prefix in message content", () => {
+      renderBubble({
+        message: {
+          id: "msg-fwd",
+          username: "alice",
+          content: "[Forwarded] check this out",
+          timestamp: 1700000000000,
+        },
+      });
+      expect(screen.getByText("[Forwarded] check this out")).toBeTruthy();
+    });
+  });
+
+  describe("deleted message rendering", () => {
+    it("shows deleted message placeholder text in zh-CN", () => {
+      renderBubble({
+        message: {
+          id: "msg-del",
+          username: "alice",
+          content: "should not appear",
+          timestamp: 1700000000000,
+          deleted: true,
+        },
+      });
+      // Shows the deleted message placeholder
+      expect(screen.getByText("此消息已被删除")).toBeTruthy();
+      // Original content is hidden
+      expect(screen.queryByText("should not appear")).toBeFalsy();
+    });
+
+    it("applies muted styling to deleted messages", () => {
+      renderBubble({
+        message: {
+          id: "msg-del2",
+          username: "alice",
+          content: "gone",
+          timestamp: 1700000000000,
+          deleted: true,
+        },
+      });
+      // Deleted text has line-through and italic styling
+      const deletedText = screen.getByText("此消息已被删除");
+      expect(deletedText.className).toContain("line-through");
+    });
+  });
+
   describe("reply count", () => {
     it("shows reply count when replyCount > 0", () => {
       renderBubble({ replyCount: 3 });
