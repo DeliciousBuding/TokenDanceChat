@@ -61,6 +61,10 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
 }
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { chatAPI } from "@/lib/api";
+
+// Expose chatAPI for E2E tests (sends via existing WS, avoids kick mechanism).
+(window as any).__chatAPI = chatAPI;
 
 createRoot(document.getElementById("root")!).render(
   <I18nProvider>

@@ -2213,8 +2213,12 @@ func (c *Client) handlePollCreate(msg Message) {
 		return
 	}
 	roomID := c.getCurrentRoomID()
+	pollID := msg.Poll.ID
+	if pollID == "" {
+		pollID = uuid.New().String()
+	}
 	poll := &Poll{
-		ID:             msg.Poll.ID,
+		ID:             pollID,
 		RoomID:         roomID,
 		Creator:        c.username,
 		Question:       sanitizeContent(msg.Poll.Question),
