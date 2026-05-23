@@ -297,20 +297,6 @@ func (c *Client) handleJoin(msg Message) {
 		return
 	}
 
-	// Check for duplicate username.
-	if c.hub.IsUsernameTaken(username) {
-		errMsg, _ := json.Marshal(Message{
-			Type:      "error",
-			Content:   "username already taken, please choose another",
-			ErrorCode: "USERNAME_TAKEN",
-		})
-		select {
-		case c.send <- errMsg:
-		default:
-		}
-		return
-	}
-
 	// Block reserved usernames.
 	if isReservedUsername(username) {
 		errMsg, _ := json.Marshal(Message{

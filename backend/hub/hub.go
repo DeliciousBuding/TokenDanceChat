@@ -517,19 +517,24 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.register:
 			h.mu.Lock()
-			// Reject duplicate usernames atomically.
-			usernameTaken := false
+			// Kick existing connection with the same username (new login takes over).
 			for c := range h.clients {
-				if c.username == client.username {
-					usernameTaken = true
+				if c.username == client.username && c != client {
+					kickMsg, _ := json.Marshal(Message{
+						Type:    "kicked",
+						Content: "您的账号已在其他地方登录，当前连接已断开。",
+					})
+					select {
+					case c.send <- kickMsg:
+					default:
+					}
+					// Close the old WebSocket to trigger cleanup in ReadPump/WritePump.
+					// Remove from clients first so unregister handler is a no-op.
+					delete(h.clients, c)
+					c.conn.Close()
+					log.Printf("client kicked (new login): %s", c.username)
 					break
 				}
-			}
-			if usernameTaken {
-				h.mu.Unlock()
-				close(client.send)
-				log.Printf("client rejected (duplicate username): %s", client.username)
-				continue
 			}
 			h.clients[client] = true
 			h.mu.Unlock()

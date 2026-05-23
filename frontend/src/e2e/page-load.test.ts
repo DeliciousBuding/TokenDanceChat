@@ -163,7 +163,7 @@ test.describe('游客加入聊天（需要后端）', () => {
     await expect(page.locator('textarea').first()).toBeVisible({ timeout: 10000 });
   });
 
-  test('重复用户名被拒绝', async ({ page }) => {
+  test('重复用户名踢出旧连接', async ({ page }) => {
     const dupName = `e2e_dup_${Math.random().toString(36).slice(2, 6)}`;
 
     const page1 = await page.context().newPage();
@@ -173,12 +173,13 @@ test.describe('游客加入聊天（需要后端）', () => {
     await page1.getByRole('button', { name: '游客加入' }).click();
     await expect(page1.locator('textarea').first()).toBeVisible({ timeout: 10000 });
 
+    // Second join with same name should succeed — old connection gets kicked.
     await page.goto('/');
     await page.getByPlaceholder('你的用户名...').fill(dupName);
     await page.getByRole('button', { name: '游客加入' }).click();
 
-    const error = page.getByRole('alert');
-    await expect(error).toBeVisible({ timeout: 10000 });
+    // New connection should show the chat textarea (joined successfully).
+    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 10000 });
 
     await page1.close();
   });
