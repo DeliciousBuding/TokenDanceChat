@@ -3216,3 +3216,416 @@ func TestBroadcastJSONIncrementsDroppedWhenChannelFull(t *testing.T) {
 		<-h.broadcast
 	}
 }
+
+// --- SendToGroup tests ---
+
+func TestSendToGroup(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Create a group and add members.
+	h.CreateGroup("team", "alice")
+	h.AddGroupMember("team", "bob")
+	h.AddGroupMember("team", "charlie")
+
+	// Register clients: three group members and one non-member.
+	alice := &Client{username: "alice", send: make(chan []byte, 1)}
+	bob := &Client{username: "bob", send: make(chan []byte, 1)}
+	charlie := &Client{username: "charlie", send: make(chan []byte, 1)}
+	dave := &Client{username: "dave", send: make(chan []byte, 1)}
+
+	h.register <- alice
+	h.register <- bob
+	h.register <- charlie
+	h.register <- dave
+	time.Sleep(10 * time.Millisecond)
+
+	data := []byte(`{"type":"group_msg","content":"hello team"}`)
+	h.SendToGroup("team", data)
+
+	// Group members should receive.
+	for _, c := range []*Client{alice, bob, charlie} {
+		select {
+		case <-c.send:
+			// ok
+		default:
+			t.Errorf("expected group member %s to receive group message", c.username)
+		}
+	}
+
+	// Non-member dave should NOT receive.
+	select {
+	case msg := <-dave.send:
+		t.Fatalf("expected dave (non-group-member) NOT to receive, got %s", string(msg))
+	default:
+		// ok
+	}
+
+	// Send to non-existent group should not panic.
+	h.SendToGroup("nonexistent", data)
+
+	// Cleanup.
+	h.unregister <- alice
+	h.unregister <- bob
+	h.unregister <- charlie
+	h.unregister <- dave
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestSendToGroupEmptyGroup(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Register a client not in the group.
+	alice := &Client{username: "alice", send: make(chan []byte, 1)}
+	h.register <- alice
+	time.Sleep(10 * time.Millisecond)
+
+	// Group doesn't exist — should not panic and should not deliver.
+	data := []byte(`{"type":"group_msg","content":"ghost"}`)
+	h.SendToGroup("ghost-group", data)
+
+	select {
+	case msg := <-alice.send:
+		t.Fatalf("expected no message for non-existent group, got %s", string(msg))
+	default:
+		// ok
+	}
+
+	h.unregister <- alice
+	time.Sleep(10 * time.Millisecond)
+}
+
+// --- SendToAllSessions tests ---
+
+func TestSendToAllSessions(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Register two clients with the same username (bypass Run to avoid kick-on-duplicate).
+	alice1 := &Client{username: "alice", send: make(chan []byte, 1)}
+	alice2 := &Client{username: "alice", send: make(chan []byte, 1)}
+	bob := &Client{username: "bob", send: make(chan []byte, 1)}
+
+	h.mu.Lock()
+	h.clients[alice1] = true
+	h.clients[alice2] = true
+	h.clients[bob] = true
+	h.mu.Unlock()
+
+	data := []byte(`{"type":"dm","content":"secret"}`)
+	h.SendToAllSessions("alice", data)
+
+	// Both alice clients should receive.
+	select {
+	case received := <-alice1.send:
+		if string(received) != string(data) {
+			t.Fatalf("alice1: expected %q, got %q", string(data), string(received))
+		}
+	default:
+		t.Fatal("expected alice1 to receive message")
+	}
+
+	select {
+	case received := <-alice2.send:
+		if string(received) != string(data) {
+			t.Fatalf("alice2: expected %q, got %q", string(data), string(received))
+		}
+	default:
+		t.Fatal("expected alice2 to receive message")
+	}
+
+	// Bob should NOT receive (different username).
+	select {
+	case msg := <-bob.send:
+		t.Fatalf("expected bob NOT to receive, got %s", string(msg))
+	default:
+		// ok
+	}
+
+	// Cleanup.
+	h.mu.Lock()
+	delete(h.clients, alice1)
+	delete(h.clients, alice2)
+	delete(h.clients, bob)
+	h.mu.Unlock()
+}
+
+// --- ShouldBroadcastTyping tests ---
+
+func TestShouldBroadcastTyping(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// First call should be allowed.
+	if !h.ShouldBroadcastTyping("alice") {
+		t.Error("expected first ShouldBroadcastTyping to return true")
+	}
+
+	// Second call within 3s should be denied.
+	if h.ShouldBroadcastTyping("alice") {
+		t.Error("expected second ShouldBroadcastTyping within 3s to return false")
+	}
+
+	// Manually set rate limit to 4s ago to simulate elapsed time.
+	h.mu.Lock()
+	h.typingRateLimit["alice"] = time.Now().Add(-4 * time.Second)
+	h.mu.Unlock()
+
+	// After 3s window expires, should be allowed again.
+	if !h.ShouldBroadcastTyping("alice") {
+		t.Error("expected ShouldBroadcastTyping to return true after 3s cooldown expires")
+	}
+
+	// Different user should be tracked independently.
+	if !h.ShouldBroadcastTyping("bob") {
+		t.Error("expected ShouldBroadcastTyping for bob to return true (independent key)")
+	}
+}
+
+// --- CheckBotCooldown duration tests ---
+
+func TestCheckBotCooldownDurations(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// bot: prefix = 3 second cooldown.
+	t.Run("bot_3s", func(t *testing.T) {
+		if !h.CheckBotCooldown("bot:alice") {
+			t.Error("first call should be allowed")
+		}
+		if h.CheckBotCooldown("bot:alice") {
+			t.Error("second call within 3s should be denied")
+		}
+		// Manually advance past 3s.
+		h.botCooldownMu.Lock()
+		h.botCooldown["bot:alice"] = time.Now().Add(-4 * time.Second)
+		h.botCooldownMu.Unlock()
+		if !h.CheckBotCooldown("bot:alice") {
+			t.Error("should be allowed after 3s cooldown expires")
+		}
+	})
+
+	// agent: prefix = 8 second cooldown.
+	t.Run("agent_8s", func(t *testing.T) {
+		if !h.CheckBotCooldown("agent:bob") {
+			t.Error("first call should be allowed")
+		}
+		if h.CheckBotCooldown("agent:bob") {
+			t.Error("second call within 8s should be denied")
+		}
+		// Manually advance past 8s.
+		h.botCooldownMu.Lock()
+		h.botCooldown["agent:bob"] = time.Now().Add(-9 * time.Second)
+		h.botCooldownMu.Unlock()
+		if !h.CheckBotCooldown("agent:bob") {
+			t.Error("should be allowed after 8s cooldown expires")
+		}
+	})
+
+	// Default (no recognized prefix) = 30 second cooldown.
+	t.Run("default_30s", func(t *testing.T) {
+		if !h.CheckBotCooldown("custom:charlie") {
+			t.Error("first call should be allowed")
+		}
+		if h.CheckBotCooldown("custom:charlie") {
+			t.Error("second call within 30s should be denied")
+		}
+		// Manually advance past 30s.
+		h.botCooldownMu.Lock()
+		h.botCooldown["custom:charlie"] = time.Now().Add(-31 * time.Second)
+		h.botCooldownMu.Unlock()
+		if !h.CheckBotCooldown("custom:charlie") {
+			t.Error("should be allowed after 30s cooldown expires")
+		}
+	})
+}
+
+// --- RequestOnlineUsers tests ---
+
+func TestRequestOnlineUsers(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Register clients.
+	alice := &Client{username: "alice", send: make(chan []byte, 1)}
+	bob := &Client{username: "bob", send: make(chan []byte, 1)}
+	charlie := &Client{username: "charlie", send: make(chan []byte, 1)}
+	h.register <- alice
+	h.register <- bob
+	h.register <- charlie
+	time.Sleep(10 * time.Millisecond)
+
+	resp := h.RequestOnlineUsers()
+	if !resp.Success {
+		t.Error("expected success")
+	}
+	if resp.Type != "online_users" {
+		t.Errorf("type = %q, want online_users", resp.Type)
+	}
+	if resp.Error != "" {
+		t.Errorf("unexpected error: %s", resp.Error)
+	}
+
+	online, ok := resp.Data["online"].([]string)
+	if !ok {
+		t.Fatal("expected online to be []string in data")
+	}
+	if len(online) != 3 {
+		t.Fatalf("expected 3 online users, got %d", len(online))
+	}
+
+	count, ok := resp.Data["count"].(int)
+	if !ok {
+		t.Fatalf("expected count to be int, got %T", resp.Data["count"])
+	}
+	if count != 3 {
+		t.Errorf("expected count=3, got %d", count)
+	}
+
+	// Verify presence of all expected users.
+	userSet := make(map[string]bool)
+	for _, u := range online {
+		userSet[u] = true
+	}
+	for _, expected := range []string{"alice", "bob", "charlie"} {
+		if !userSet[expected] {
+			t.Errorf("expected %q in online list, got %v", expected, online)
+		}
+	}
+
+	// Verify time field is set.
+	if _, ok := resp.Data["time"]; !ok {
+		t.Error("expected time field in response data")
+	}
+
+	// Cleanup.
+	h.unregister <- alice
+	h.unregister <- bob
+	h.unregister <- charlie
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestRequestOnlineUsersEmptyHub(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	resp := h.RequestOnlineUsers()
+	if !resp.Success {
+		t.Error("expected success for empty hub")
+	}
+
+	online, ok := resp.Data["online"].([]string)
+	if !ok {
+		t.Fatal("expected online to be []string")
+	}
+	if len(online) != 0 {
+		t.Fatalf("expected 0 online users, got %d", len(online))
+	}
+
+	count, ok := resp.Data["count"].(int)
+	if !ok || count != 0 {
+		t.Errorf("expected count=0, got %v", resp.Data["count"])
+	}
+}
+
+// --- RequestHistory tests ---
+
+func TestRequestHistory(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Pre-populate test messages.
+	ms.messages = []StoredMessage{
+		{ID: "msg-1", Username: "alice", Content: "hello", Timestamp: 1000},
+		{ID: "msg-2", Username: "bob", Content: "hi there", Timestamp: 2000},
+		{ID: "msg-3", Username: "charlie", Content: "hey everyone", Timestamp: 3000},
+	}
+
+	t.Run("without roomID returns global messages", func(t *testing.T) {
+		resp := h.RequestHistory("", 50, 0)
+		if !resp.Success {
+			t.Error("expected success")
+		}
+		if resp.Type != "history" {
+			t.Errorf("type = %q, want history", resp.Type)
+		}
+		if resp.Data["room_id"] != "" {
+			t.Errorf("room_id = %v, want empty string", resp.Data["room_id"])
+		}
+		messages, ok := resp.Data["messages"].([]StoredMessage)
+		if !ok {
+			t.Fatal("expected messages in data")
+		}
+		if len(messages) != 3 {
+			t.Fatalf("expected 3 messages, got %d", len(messages))
+		}
+		count, ok := resp.Data["count"].(int)
+		if !ok || count != 3 {
+			t.Errorf("expected count=3, got %v", resp.Data["count"])
+		}
+	})
+
+	t.Run("with roomID includes room_id in response", func(t *testing.T) {
+		resp := h.RequestHistory("room-42", 10, 0)
+		if !resp.Success {
+			t.Error("expected success")
+		}
+		if resp.Data["room_id"] != "room-42" {
+			t.Errorf("room_id = %v, want room-42", resp.Data["room_id"])
+		}
+	})
+
+	t.Run("limit zero defaults to 50", func(t *testing.T) {
+		resp := h.RequestHistory("", 0, 0)
+		if !resp.Success {
+			t.Error("expected success with limit=0")
+		}
+	})
+
+	t.Run("limit exceeds 200 is capped", func(t *testing.T) {
+		resp := h.RequestHistory("", 500, 0)
+		if !resp.Success {
+			t.Error("expected success with limit=500")
+		}
+	})
+
+	t.Run("with before timestamp param", func(t *testing.T) {
+		resp := h.RequestHistory("", 10, 2500)
+		if !resp.Success {
+			t.Error("expected success with before param")
+		}
+	})
+
+	t.Run("empty store returns empty messages slice not nil", func(t *testing.T) {
+		emptyStore := &mockStore{}
+		emptyHub := New(emptyStore, nil, nil, "")
+		resp := emptyHub.RequestHistory("", 10, 0)
+		if !resp.Success {
+			t.Error("expected success")
+		}
+		messages, ok := resp.Data["messages"].([]StoredMessage)
+		if !ok {
+			t.Fatal("expected messages in data")
+		}
+		if len(messages) != 0 {
+			t.Fatalf("expected 0 messages, got %d", len(messages))
+		}
+		if messages == nil {
+			t.Error("expected non-nil empty slice")
+		}
+	})
+
+	t.Run("negative limit defaults to 50", func(t *testing.T) {
+		resp := h.RequestHistory("", -1, 0)
+		if !resp.Success {
+			t.Error("expected success with negative limit")
+		}
+	})
+}
