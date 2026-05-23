@@ -3,12 +3,17 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func init() {
+	os.Setenv("CHAT_SKIP_SEED", "true")
+}
 
 func TestNew(t *testing.T) {
 	s, err := New(":memory:")
@@ -535,6 +540,6 @@ func TestConcurrentInsert(t *testing.T) {
 
 	msgs := s.GetMessages(1000, 0)
 	if len(msgs) != numGoroutines {
-		t.Errorf("expected %d messages after concurrent inserts, got %d", numGoroutines, len(msgs))
+		t.Errorf("expected %d messages after concurrent inserts got %d", numGoroutines, len(msgs))
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -226,7 +227,58 @@ func New(dbPath string) (*Store, error) {
 	}
 
 	log.Println("store: database initialized")
+
+	if err := s.seedWelcomeMessages(); err != nil {
+		log.Printf("store: seed welcome messages: %v", err)
+		// Non-fatal: continue with empty DB.
+	}
+
 	return s, nil
+}
+
+// seedWelcomeMessages inserts a few friendly messages into the public room
+// when the database is brand new, so the first visitor sees content.
+// Set CHAT_SKIP_SEED=true to skip (used in tests).
+func (s *Store) seedWelcomeMessages() error {
+	if os.Getenv("CHAT_SKIP_SEED") == "true" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM messages").Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	now := time.Now().UnixMilli()
+	seeds := []struct {
+		id      string
+		content string
+		offset  int64
+	}{
+		{"welcome-1", "👋 欢迎来到 TokenDanceChat！这是 AgentHub 技术栈的实时聊天验证 Demo。", 0},
+		{"welcome-2", "你可以在这里体验：群聊、DM、Webhook、表情反应、Markdown、文件分享、翻译等功能。", 1000},
+		{"welcome-3", "试试在输入框里打 `/me`、`:smile:` 或 `@` 来发现快捷指令，也可以用上箭头编辑上一条消息。", 2000},
+		{"welcome-4", "如需创建群组讨论，点击侧栏「+」按钮即可。群管理员可以用 Webhook 接入外部消息。", 3000},
+	}
+
+	for _, seed := range seeds {
+		ts := now + seed.offset
+		if _, err := s.db.Exec(
+			"INSERT INTO messages (id, username, content, timestamp, reply_to_id, room_id, to_user, group_name, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			seed.id, "TokenBot", seed.content, ts, "", "", "", "", "",
+		); err != nil {
+			return err
+		}
+	}
+
+	s.totalMessages.Add(int64(len(seeds)))
+	log.Printf("store: seeded %d welcome messages", len(seeds))
+	return nil
 }
 
 func (s *Store) migrate() error {
