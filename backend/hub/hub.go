@@ -1276,10 +1276,6 @@ func (h *Hub) SendToAllSessions(username string, data []byte) {
 }
 
 // BroadcastStreamChunk sends a streaming chunk to all connected clients.
-// Deprecated: use BroadcastStreamChunkToRoom for room-scoped delivery.
-func (h *Hub) BroadcastStreamChunk(username, content string, done bool) {
-	h.BroadcastStreamChunkToRoom(username, content, done, "")
-}
 
 // BroadcastStreamChunkToRoom sends a streaming chunk to clients in a specific room.
 // If roomID is empty, broadcasts to all connected clients.

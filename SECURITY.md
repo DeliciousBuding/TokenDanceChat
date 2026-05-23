@@ -132,7 +132,7 @@
 
 ### L-01: 硬编码 WebSocket URL
 
-**位置**: `frontend\src\lib\api.ts:205`
+**位置**: `frontend\src\lib\api.ts:420`
 **说明**: WebSocket URL 硬编码为 `ws://localhost:8080/ws`。在 Docker 部署中，Vite 开发代理不存在，生产环境需要相对或可配置的 URL。目前因 Go 二进制在容器同一端口同时提供 SPA 和 WebSocket 端点而工作正常，但方式脆弱。
 **生产环境建议**: 使用相对 WebSocket URL（例如 `const url = \`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws\``），或通过构建时环境变量（Vite 的 `import.meta.env`）使其可配置。
 **状态**: Demo 阶段接受。
@@ -141,7 +141,7 @@
 
 ### L-02: localStorage 存储用户名
 
-**位置**: `frontend\src\components\JoinScreen.tsx:16-21`
+**位置**: `frontend\src\components\JoinScreen.tsx:12`
 **说明**: 最近使用的用户名以 `tokendance:username` 键名持久化在 `localStorage` 中。命名空间恰当且数据不敏感（仅为用户名），影响极小。但 localStorage 可被同源的任何 JavaScript 访问。
 **建议**: Demo 可接受。生产环境如引入认证，使用 HttpOnly cookie 存储 session token。
 **状态**: Demo 阶段接受。
@@ -183,13 +183,13 @@
 |------|-------------|
 | **SQL 注入** | 所有查询使用参数化占位符（`?`）。无字符串拼接。`store.go:75-78`、`store.go:106-113`。 |
 | **SQLite WAL 模式** | `PRAGMA journal_mode=WAL` 安全，改善并发，无安全风险。WAL/SHM 文件已从版本控制和 Docker 构建中排除。 |
-| **用户名校验** | `hub.go:202` -- 正则 `^[\p{Han}a-zA-Z0-9_]{1,20}$`。不支持 HTML 或特殊字符。前端 `JoinScreen.tsx:43` 有匹配检查。 |
-| **消息大小限制** | `client.go:24` -- `maxMessageSize = 4096` 字节，通过 `SetReadLimit` 设置。防止超大帧造成内存炸弹。 |
+| **用户名校验** | `hub.go:1032` -- 正则 `^[\p{Han}a-zA-Z0-9_]{1,20}$`。不支持 HTML 或特殊字符。前端 `JoinScreen.tsx:43` 有匹配检查。 |
+| **消息大小限制** | `client.go:34` -- `maxMessageSize = 8192` 字节，通过 `SetReadLimit` 设置。防止超大帧造成内存炸弹。 |
 | **频率限制** | `client.go:205-229` -- 每连接 5 条/秒滑动窗口。每次检查清理时间戳，内存有界。 |
 | **Ping/Pong 保活** | `client.go:58-61`、`client.go:238-242` -- 54s ping 间隔，60s pong 超时。孤儿连接被清理。 |
 | **react-markdown 安全** | `MessageBubble.tsx:131` -- 未使用 `rehype-raw` 插件。Markdown 渲染为 React 元素，非原始 HTML。XSS 安全。 |
 | **优雅关闭** | `main.go:94-106` -- SIGINT/SIGTERM 处理器，`server.Shutdown()` 有 10s 超时。 |
-| **HTTP 超时** | `main.go:54-57` -- ReadTimeout (15s)、WriteTimeout (15s)、IdleTimeout (60s)。防止 slowloris 类攻击。 |
+| **HTTP 超时** | `main.go:308` -- ReadTimeout (15s)、WriteTimeout (120s)、IdleTimeout (60s)。WriteTimeout 设为 120s 以支持大体积媒体上传。防止 slowloris 类攻击。 |
 | **发送缓冲区背压** | `hub.go:108-113`、`hub.go:123-129` -- 客户端发送缓冲区满时丢弃消息（system/user_left）或断开连接（broadcast）。防止内存无界增长。 |
 | **WebSocket 错误消息** | 发给客户端的错误消息为通用描述（如 "rate limit exceeded"），不含堆栈跟踪或内部状态。 |
 | **Webhook 列表脱敏** | `webhook_list` 为 owner/admin 专属，返回脱敏 webhook DTO 不含 `secret`；前端普通列表状态同样排除密钥。 |
@@ -204,16 +204,16 @@
 
 **评估**: 应用架构良好，作为 Demo 具备扎实的基础：参数化查询、消息大小限制、每连接频率限制、WebSocket ping/pong 保活、精简 Docker 镜像、规范的 Git 卫生。核心 WebSocket 协议处理和数据库层是安全的。
 
-**Demo 阶段风险画像**: 低。剩余的 MEDIUM 问题（开放 CORS、开放 WebSocket origin）是公开 Demo 无认证的有意设计选择。仅在超出 Demo 范围的场景下才可能被利用（例如引入敏感数据或认证但未相应限制来源）。
+**Demo 阶段风险画像**: 低。剩余的 MEDIUM 问题（开放 CORS）是公开 Demo 无认证的有意设计选择。仅在超出 Demo 范围的场景下才可能被利用（例如引入敏感数据或认证但未相应限制来源）。WebSocket origin 检查已通过同源验证 + `CHAT_ALLOWED_ORIGINS` 环境变量收紧。
 
 **生产环境风险画像**: 高。在面向真实用户部署前：
 
-1. **限制 WebSocket 来源** (`handler\ws.go:16-18`) -- 验证 `Origin` 头
+1. **WebSocket 来源已收紧** (`handler\ws.go:16-18`) -- 同源验证 + `CHAT_ALLOWED_ORIGINS` 环境变量，可根据部署调整
 2. **限制 CORS** (`handler\handler.go:45`) -- 使用具体来源，非 `*`
-3. **使 WebSocket URL 可配置** (`frontend\src\lib\api.ts:205`) -- 使用相对/协议相对 URL
+3. **使 WebSocket URL 可配置** (`frontend\src\lib\api.ts:420`) -- 使用相对/协议相对 URL
 4. **在 HTTP/nginx 层增加频率限制** -- 每 IP 连接频率限制
 5. **设置规范日志** -- 结构化日志配合轮转，避免错误信息泄漏
-6. **移除 `rehype-raw`** 前端依赖
+6. ~~**移除 `rehype-raw`** 前端依赖~~（已修复）
 7. **增加 nginx 安全头** 作为纵深防御 (`nginx\tokendance.conf`)
 8. **增加认证** 如需用户身份（JWT、带 HttpOnly/SameSite 的 session cookie）
 9. **设置显式 DB 连接池限制** (`store.go:25`)
@@ -226,7 +226,7 @@
 
 | 类别 | Demo 可接受 | 生产必修复 |
 |----------|---------------------|------------------------|
-| WS origin 检查 = 允许全部 | 是 | 否 -- 限制为已知域名 |
+| WS origin 检查 = 已收紧 | 已改进 | 已改进 -- 同源 + CHAT_ALLOWED_ORIGINS |
 | CORS = 通配符 | 是 | 否 -- 限制为具体来源 |
 | 无认证 | 是 | 是 -- 增加认证 |
 | 缺失安全头 | 否（已修复） | 已修复 |
@@ -236,7 +236,7 @@
 | Docker 以 root 运行 | 否（已修复） | 已修复 |
 | DB 文件打入 Docker 镜像 | 否（已修复） | 已修复 |
 | 硬编码 WS URL | 是 | 否 -- 改为可配置 |
-| rehype-raw 依赖残留 | 是 | 否 -- 移除未使用依赖 |
+| rehype-raw 依赖残留 | 否（已修复） | 已修复 |
 | 无 Docker HEALTHCHECK | 否（已修复） | 已修复 |
 | 无 DB 连接池限制 | 是 | 建议 |
 | nginx 缺失安全头 | 是 | 建议 |
