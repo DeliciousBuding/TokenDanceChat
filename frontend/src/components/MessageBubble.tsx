@@ -47,6 +47,10 @@ interface MessageBubbleProps {
   highlight?: string;
   /** Animate this message as a real-time incoming message */
   isNew?: boolean;
+  /** Pre-computed online users list (hoisted from MessageTranscript) */
+  onlineUsers?: string[];
+  /** Pre-computed custom emoji lookup (hoisted from MessageTranscript) */
+  emojiPreprocess?: { emojiMap: Map<string, string>; pattern: RegExp } | null;
 }
 
 /** Simple code block renderer with syntax highlighting and copy button */
@@ -462,12 +466,18 @@ export const MessageBubble = memo(function MessageBubble({
   staggerDelay,
   highlight,
   isNew = false,
+  onlineUsers = [],
+  emojiPreprocess,
 }: MessageBubbleProps) {
   const { t } = useTranslation();
   const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
-  const customEmojis = useChatStore((s) => s.customEmojis);
   const translations = useChatStore((s) => s.translations);
   const translatedText = translations[message.id];
+  // Read reactions and read_by from O(1) lookup maps, falling back to message object for backward compat
+  const reactionsByMessageId = useChatStore((s) => s.reactionsByMessageId);
+  const readByMessageId = useChatStore((s) => s.readByMessageId);
+  const reactions = reactionsByMessageId[message.id] || message.reactions;
+  const readBy = readByMessageId[message.id] || message.read_by;
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
@@ -612,7 +622,6 @@ export const MessageBubble = memo(function MessageBubble({
 
   // Get profile info for display name and avatar.
   const userProfiles = useChatStore((s) => s.userProfiles);
-  const onlineUsers = useChatStore((s) => s.onlineUsers);
   const userProfile = userProfiles[message.username];
   const messageDisplayName = userProfile?.display_name || message.username;
   const messageAvatarUrl = userProfile?.avatar_url || null;
@@ -643,13 +652,9 @@ export const MessageBubble = memo(function MessageBubble({
 
     // Pre-process custom emoji :name: patterns, replacing them with img tags.
     let processedContent = rawContent;
-    if (customEmojis.length > 0) {
-      const emojiMap = new Map(customEmojis.map((e) => [e.name, e.url]));
-      const names = [...emojiMap.keys()].sort((a, b) => b.length - a.length);
-      const escapedNames = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-      const pattern = new RegExp(`:(${escapedNames.join('|')}):`, 'g');
-      processedContent = processedContent.replace(pattern, (_match: string, name: string) => {
-        const url = emojiMap.get(name);
+    if (emojiPreprocess) {
+      processedContent = processedContent.replace(emojiPreprocess.pattern, (_match: string, name: string) => {
+        const url = emojiPreprocess.emojiMap.get(name);
         if (!url) return _match;
         return `<img src="${url}" alt=":${name}:" class="inline-custom-emoji" style="width:1.5em;height:1.5em;vertical-align:middle;display:inline-block;" />`;
       });
@@ -792,7 +797,7 @@ export const MessageBubble = memo(function MessageBubble({
 
     // Normal path (no highlight): render using existing logic.
     return renderSegment(processedContent, 0);
-  }, [message.content, currentUsername, isDeleted, t, customEmojis, highlight, isOwn, bubbleBg]);
+  }, [message.content, currentUsername, isDeleted, t, emojiPreprocess, highlight, isOwn, bubbleBg]);
 
   const paddingY =
     isGrouped && hideAvatar ? "py-0.5" : "py-1 sm:py-1.5";
@@ -1116,7 +1121,7 @@ export const MessageBubble = memo(function MessageBubble({
           <div
             className={cn(
               "flex flex-wrap items-center gap-1 mt-0.5 transition-opacity",
-              (!message.reactions || Object.values(message.reactions).every((users) => users.length === 0)) && replyCount === 0
+              (!reactions || Object.values(reactions).every((users) => users.length === 0)) && replyCount === 0
                 ? "hidden"
                 : "opacity-100",
             )}
@@ -1143,8 +1148,8 @@ export const MessageBubble = memo(function MessageBubble({
                 <span className="text-xs">{replyCount}</span>
               </button>
             )}
-            {message.reactions &&
-              Object.entries(message.reactions).map(
+            {reactions &&
+              Object.entries(reactions).map(
                 ([emoji, users]) =>
                   users.length > 0 && (
                     <button
@@ -1184,10 +1189,10 @@ export const MessageBubble = memo(function MessageBubble({
         {isOwn && (
           <div className="mt-1 flex justify-end items-center gap-1">
             {/* Delivery status icons — Telegram-style checkmarks */}
-            {message.read_by && message.read_by.length > 0 ? (
+            {readBy && readBy.length > 0 ? (
               <>
                 <ReadReceipt
-                  readers={message.read_by}
+                  readers={readBy}
                   readByLabel={t("message.readBy")}
                   readLabel={t("message.read")}
                   userProfiles={userProfiles}
@@ -1195,9 +1200,9 @@ export const MessageBubble = memo(function MessageBubble({
                 />
                 {message.group && (
                   <GroupSeenByLabel
-                    readers={message.read_by}
+                    readers={readBy}
                     userProfiles={userProfiles}
-                    seenByLabel={t("message.seenBy", { n: message.read_by.length })}
+                    seenByLabel={t("message.seenBy", { n: readBy.length })}
                     readLabel={t("message.read")}
                   />
                 )}

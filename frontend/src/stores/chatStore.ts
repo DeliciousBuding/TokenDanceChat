@@ -123,6 +123,9 @@ interface ChatState {
   // Messages
   messages: ChatMessage[];
   historyLoaded: boolean;
+  // Lookup maps for O(1) reaction and read receipt updates (avoid O(n) array copies)
+  reactionsByMessageId: Record<string, Record<string, string[]>>;
+  readByMessageId: Record<string, string[]>;
 
   // Online users
   onlineUsers: string[];
@@ -299,6 +302,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isGuest: false,
   messages: [],
   historyLoaded: false,
+  reactionsByMessageId: {},
+  readByMessageId: {},
   onlineUsers: [],
   userStatusList: [],
   selectedProfileUser: null,
@@ -531,9 +536,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }),
   updateMessageReactions: (messageId, reactions) =>
     set((state) => ({
-      messages: state.messages.map((m) =>
-        m.id === messageId ? { ...m, reactions } : m,
-      ),
+      reactionsByMessageId: { ...state.reactionsByMessageId, [messageId]: reactions },
     })),
   editMessageInPlace: (messageId, content) =>
     set((state) => ({
@@ -542,14 +545,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ),
     })),
   markMessagesReadBy: (reader) =>
-    set((state) => ({
-      messages: state.messages.map((m) => {
-        if (m.username !== state.username) return m;
-        const readBy = m.read_by || [];
-        if (readBy.includes(reader)) return m;
-        return { ...m, read_by: [...readBy, reader] };
-      }),
-    })),
+    set((state) => {
+      const next = { ...state.readByMessageId };
+      let changed = false;
+      for (const m of state.messages) {
+        if (m.username !== state.username) continue;
+        const existing = next[m.id] || m.read_by || [];
+        if (existing.includes(reader)) continue;
+        next[m.id] = [...existing, reader];
+        changed = true;
+      }
+      if (!changed) return state;
+      return { readByMessageId: next };
+    }),
   setLatestMention: (latestMention) => set({ latestMention }),
   setBlockedUsers: (blockedUsers) => set({ blockedUsers }),
   addBlockedUser: (username) =>
@@ -785,6 +793,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isGuest: false,
       messages: [],
       historyLoaded: false,
+      reactionsByMessageId: {},
+      readByMessageId: {},
       onlineUsers: [],
       userStatusList: [],
       selectedProfileUser: null,
