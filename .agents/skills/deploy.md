@@ -405,3 +405,44 @@ ssh "$HOST" "docker logs <container-name> 2>&1 | grep -i 'sqlite\|database\|migr
 # Backup the database before any manual intervention
 ssh "$HOST" "docker cp <container-name>:/app/data/chat.db /tmp/chat.db.backup.$(date +%Y%m%d-%H%M%S)"
 ```
+
+### WebSocket connections rejected (hub at capacity or rate limited)
+
+```bash
+# Symptom: frontend stuck on "连接中..." (Connecting...) after guest join.
+# The page never transitions to chat view.
+
+# Check if hub is at capacity (100 connections):
+ssh "$HOST" "curl -s http://127.0.0.1:<app-port>/api/health"
+# If health check also fails, restart container:
+ssh "$HOST" "docker restart <container-name>"
+
+# E2E tests running in parallel (5+ workers) can exhaust the rate limiter
+# (50 WS connections per 10 seconds per IP). Mitigations:
+# - Use serial mode in test files with many connections
+# - Add --workers=2 flag to playwright test command
+# - Restart container before running full E2E suite
+```
+
+### Stale frontend assets after deploy
+
+```bash
+# Symptom: browser loads old JS/CSS after deploy.
+# Root cause: multiple deploy cycles leave stale asset files in container.
+
+# Clean deploy (recommended for every frontend update):
+ssh "$HOST" "docker exec -u root <container-name> sh -c 'rm -rf /app/frontend/dist/*'"
+ssh "$HOST" "docker cp /tmp/frontend-dist/. <container-name>:/app/frontend/dist/"
+
+# Verify: check which JS files exist in the container
+ssh "$HOST" "docker exec <container-name> find /app/frontend/dist -name 'index-*.js'"
+# Should have exactly one index-*.js file
+
+# Verify served asset hash matches built asset:
+curl -s "https://<host>/" | grep -o 'index-[^"]*\.js'
+# Compare with local build: ls frontend/dist/assets/index-*.js
+
+# Service worker cache: if sw.js was updated, users need to
+# close all tabs or manually unregister the old SW.
+# Bump CACHE_NAME in sw.js on any SW behavior change.
+```
