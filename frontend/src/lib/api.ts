@@ -406,9 +406,11 @@ class ChatAPI {
   private url: string;
   private handlers: Map<string, Set<WSEventHandler>> = new Map();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 2000;
+  private reconnectAttempt = 0;
+  private maxReconnectAttempts = 10;
+  private reconnectBaseDelay = 1000;
+  private reconnectMaxDelay = 30000;
+  private reconnectUsername: string | null = null;
   private intentionalClose = false;
   private pendingJoin:
     | {
@@ -424,6 +426,7 @@ class ChatAPI {
   connect(username: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.intentionalClose = false;
+      this.reconnectUsername = username;
       this.pendingJoin = { resolve, reject };
       this.ws = new WebSocket(this.url);
 
@@ -442,7 +445,7 @@ class ChatAPI {
       this.ws.onopen = () => {
         clearTimeout(timeout);
         if (!this.pendingJoin) return; // Timed out, ignore.
-        this.reconnectAttempts = 0;
+        this.reconnectAttempt = 0;
         this.send({ type: "join", username });
       };
 
@@ -464,6 +467,12 @@ class ChatAPI {
             clearTimeout(timeout);
             this.pendingJoin.resolve();
             this.pendingJoin = null;
+            // Successful (re)connection — notify listeners.
+            if (this.reconnectAttempt === 0 && !this.pendingJoin) {
+              // This is a reconnection that succeeded — the counter was
+              // reset in onopen above, and we are now past the join phase.
+            }
+            this.dispatch("reconnected", { type: "reconnected" });
           }
 
           this.dispatch(data.type, data);
@@ -482,7 +491,7 @@ class ChatAPI {
           this.pendingJoin = null;
         }
         if (!this.intentionalClose) {
-          this.attemptReconnect(username);
+          this.attemptReconnect();
         }
       };
 
@@ -498,20 +507,36 @@ class ChatAPI {
     });
   }
 
-  private attemptReconnect(username: string) {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+  private attemptReconnect() {
+    const username = this.reconnectUsername;
+    if (!username) return;
+
+    if (this.reconnectAttempt >= this.maxReconnectAttempts) {
       console.warn("Max reconnection attempts reached");
-      this.dispatch("connection_lost", { type: "connection_lost" });
+      this.dispatch("reconnect_failed", { type: "reconnect_failed", attempt: this.reconnectAttempt });
       return;
     }
 
-    this.reconnectAttempts++;
-    const delay =
-      this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1);
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, ..., capped at 30s.
+    const rawDelay = Math.min(
+      this.reconnectBaseDelay * Math.pow(2, this.reconnectAttempt),
+      this.reconnectMaxDelay,
+    );
+    // Jitter: +/- 20% to prevent thundering herd.
+    const jitter = rawDelay * 0.2 * (Math.random() * 2 - 1);
+    const delay = Math.round(rawDelay + jitter);
+
+    const attempt = this.reconnectAttempt;
+    this.dispatch("reconnecting", {
+      type: "reconnecting",
+      attempt,
+      delay,
+    });
 
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectAttempt++;
       this.connect(username).catch(() => {
-        // Error already logged in connect.
+        // Error already logged in connect; onclose will trigger next attempt.
       });
     }, delay);
   }

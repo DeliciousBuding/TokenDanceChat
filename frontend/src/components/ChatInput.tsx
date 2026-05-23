@@ -36,7 +36,7 @@ export function ChatInput({
   replyTo,
   onUpload,
 }: ChatInputProps) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const { onlineUsers, username, currentChat, pendingImage, setPendingImage, setReplyTo, connected } = useChatStore();
   const [content, setContent] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -78,6 +78,8 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [pulseButton, setPulseButton] = useState(false);
+  const [disconnectFeedback, setDisconnectFeedback] = useState(false);
+  const [disconnectFlash, setDisconnectFlash] = useState(false);
   const hadContentRef = useRef(false);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
   const sendingRef = useRef(false);
@@ -734,6 +736,10 @@ export function ChatInput({
     if (!trimmed || disabled) return;
     if (!connected) {
       // Keep content in input so user can retry when reconnected.
+      setDisconnectFeedback(true);
+      setDisconnectFlash(true);
+      setTimeout(() => setDisconnectFlash(false), 300);
+      setTimeout(() => setDisconnectFeedback(false), 3000);
       return;
     }
     sendingRef.current = true;
@@ -1665,6 +1671,7 @@ export function ChatInput({
                     : "bg-accent/50 text-muted-foreground/45",
                   "disabled:cursor-not-allowed disabled:opacity-30",
                   pulseButton && "animate-pulse-once",
+                  disconnectFlash && "ring-2 ring-red-500 border-red-400/60",
                 )}
                 onMouseEnter={(e) => {
                   if (hasContent) {
@@ -1711,6 +1718,17 @@ export function ChatInput({
           >
             {t("input.characters", { current: content.length, max: 2000 })}
           </span>
+        </div>
+      )}
+
+      {/* Disconnect feedback */}
+      {disconnectFeedback && (
+        <div className="animate-fade-in px-4 pb-1.5">
+          <p className="text-xs text-destructive/70">
+            {lang === "zh-CN"
+              ? "未连接 — 重新连接后重试"
+              : "Not connected — retrying..."}
+          </p>
         </div>
       )}
 
