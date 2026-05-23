@@ -125,6 +125,7 @@ export function useWebSocket() {
     setActiveCall,
     setGroupInfoPanel,
     setTranslation,
+    updatePoll,
   } = useChatStore();
 
   const connect = useCallback(
@@ -1103,6 +1104,51 @@ export function useWebSocket() {
       }),
     );
 
+    // ─── Poll events ───
+
+    // Poll created
+    unsubs.push(
+      chatAPI.on("poll_created", (msg: WSMessage) => {
+        const { id, username, room_id, poll } = msg as {
+          type: string; id: string; username: string; room_id?: string; poll: import("@/lib/api").PollData;
+        };
+        if (id && poll) {
+          addMessage({
+            id,
+            username: username || poll.creator,
+            content: poll.question,
+            timestamp: poll.created_at || Date.now(),
+            room_id,
+          });
+          updatePoll(id, poll);
+        }
+      }),
+    );
+
+    // Poll vote update
+    unsubs.push(
+      chatAPI.on("poll_vote_update", (msg: WSMessage) => {
+        const { id, poll } = msg as {
+          type: string; id: string; poll: import("@/lib/api").PollData; room_id?: string;
+        };
+        if (id && poll) {
+          updatePoll(id, poll);
+        }
+      }),
+    );
+
+    // Poll closed
+    unsubs.push(
+      chatAPI.on("poll_closed", (msg: WSMessage) => {
+        const { id, poll } = msg as {
+          type: string; id: string; poll: import("@/lib/api").PollData; room_id?: string;
+        };
+        if (id && poll) {
+          updatePoll(id, poll);
+        }
+      }),
+    );
+
     // Webhook management
     unsubs.push(
       chatAPI.on("webhook_created", (msg: WSMessage) => {
@@ -1389,7 +1435,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setGroupWebhooks, setGroupWebhookAuditLogs, addGroupWebhook, rotateGroupWebhookSecret, removeGroupWebhook, setIncomingCall, setActiveCall, setNotificationPrefs, setTranslation, setGroupInfoPanel, disconnect]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setGroupWebhooks, setGroupWebhookAuditLogs, addGroupWebhook, rotateGroupWebhookSecret, removeGroupWebhook, setIncomingCall, setActiveCall, setNotificationPrefs, setTranslation, updatePoll, setGroupInfoPanel, disconnect]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

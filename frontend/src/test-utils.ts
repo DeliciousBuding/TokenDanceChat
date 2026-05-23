@@ -53,6 +53,18 @@ export function mockI18n(overrides?: Record<string, string>) {
     // Lang
     "lang.label": "切换语言",
     "lang.switchTo": "English",
+    // Sidebar
+    "sidebar.adminDashboard": "Admin Dashboard",
+    "sidebar.closeSidebar": "Close sidebar",
+    "sidebar.clearSearch": "Clear search",
+    // Admin
+    "admin.totalMessages": "Total Messages",
+    "admin.activeConnections": "Active Connections",
+    "admin.registeredUsers": "Registered Users",
+    "admin.rooms": "Rooms",
+    "admin.groups": "Groups",
+    "admin.friends": "Friends",
+    "admin.serverStats": "TokenDanceChat Server Stats",
   };
   const map = { ...base, ...overrides };
   return {

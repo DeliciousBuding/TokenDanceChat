@@ -101,7 +101,18 @@ export interface TranslationDict {
     searchEmpty: string;
     aiAssistants: string;
     adminDashboard: string;
+    closeSidebar: string;
+    clearSearch: string;
     connecting: string;
+  };
+  admin: {
+    totalMessages: string;
+    activeConnections: string;
+    registeredUsers: string;
+    rooms: string;
+    groups: string;
+    friends: string;
+    serverStats: string;
   };
   transcript: {
     loading: string;
@@ -547,7 +558,18 @@ const zhCN: TranslationDict = {
     searchEmpty: "未找到匹配的对话",
     aiAssistants: "AI 助手",
     adminDashboard: "管理面板",
+    closeSidebar: "关闭侧边栏",
+    clearSearch: "清除搜索",
     connecting: "连接中...",
+  },
+  admin: {
+    totalMessages: "消息总数",
+    activeConnections: "活跃连接",
+    registeredUsers: "注册用户",
+    rooms: "房间",
+    groups: "群组",
+    friends: "好友",
+    serverStats: "TokenDanceChat 服务器状态",
   },
   transcript: {
     loading: "加载消息中...",
@@ -995,7 +1017,18 @@ const enUS: TranslationDict = {
     searchEmpty: "No matching conversations",
     aiAssistants: "AI Assistants",
     adminDashboard: "Admin Dashboard",
+    closeSidebar: "Close sidebar",
+    clearSearch: "Clear search",
     connecting: "Connecting...",
+  },
+  admin: {
+    totalMessages: "Total Messages",
+    activeConnections: "Active Connections",
+    registeredUsers: "Registered Users",
+    rooms: "Rooms",
+    groups: "Groups",
+    friends: "Friends",
+    serverStats: "TokenDanceChat Server Stats",
   },
   transcript: {
     loading: "Loading messages...",

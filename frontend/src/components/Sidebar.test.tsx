@@ -276,13 +276,13 @@ describe("Sidebar", () => {
           <Sidebar />
         </I18nProvider>,
       );
-      const closeBtn = container.querySelector('[aria-label="Close sidebar"]');
+      const closeBtn = container.querySelector('[aria-label="关闭侧边栏"]');
       expect(closeBtn).toBeNull();
     });
 
     it("传入 onClose 时显示关闭按钮", () => {
       renderSidebar({ onClose: vi.fn() });
-      expect(screen.getByLabelText("Close sidebar")).toBeTruthy();
+      expect(screen.getByLabelText("关闭侧边栏")).toBeTruthy();
     });
   });
 
@@ -609,7 +609,7 @@ describe("Sidebar", () => {
       fireEvent.change(input, { target: { value: "test" } });
 
       // Clear button should appear
-      const clearBtn = screen.getByLabelText("Clear search");
+      const clearBtn = screen.getByLabelText("清除搜索");
       expect(clearBtn).toBeTruthy();
 
       // Click clear

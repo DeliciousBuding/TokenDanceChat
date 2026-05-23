@@ -42,6 +42,15 @@ export function AdminPanel({ open, onClose }: Props) {
 
   if (!open) return null;
 
+  const statLabels: Record<string, string> = {
+    messages: t("admin.totalMessages"),
+    connections: t("admin.activeConnections"),
+    users: t("admin.registeredUsers"),
+    rooms: t("admin.rooms"),
+    groups: t("admin.groups"),
+    friends: t("admin.friends"),
+  };
+
   const cards = [
     { key: "messages", icon: MessageSquare, value: stats?.total_messages ?? "-", color: "text-blue-400" },
     { key: "connections", icon: Activity, value: stats?.active_connections ?? "-", color: "text-green-400" },
@@ -59,7 +68,7 @@ export function AdminPanel({ open, onClose }: Props) {
       <div className="animate-scale-in rounded-xl border border-border bg-card shadow-2xl w-[400px] max-h-[520px] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h2 className="text-sm font-semibold text-foreground">Admin Dashboard</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("sidebar.adminDashboard")}</h2>
           <button
             onClick={onClose}
             className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
@@ -89,7 +98,7 @@ export function AdminPanel({ open, onClose }: Props) {
                   <div className="flex items-center gap-2 mb-3">
                     <Icon className={cn("h-4 w-4", color)} />
                     <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                      {key}
+                      {statLabels[key]}
                     </span>
                   </div>
                   <div className="text-2xl font-bold text-foreground tabular-nums">
@@ -104,7 +113,7 @@ export function AdminPanel({ open, onClose }: Props) {
         {/* Footer */}
         <div className="border-t border-border px-4 py-2 text-center">
           <span className="text-[10px] text-muted-foreground/40">
-            TokenDanceChat Server Stats
+            {t("admin.serverStats")}
           </span>
         </div>
       </div>
