@@ -1669,9 +1669,9 @@ func TestIsReservedUsername(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.username, func(t *testing.T) {
-			result := isReservedUsername(tc.username)
+			result := IsReservedUsername(tc.username)
 			if result != tc.reserved {
-				t.Errorf("isReservedUsername(%q) = %v, want %v", tc.username, result, tc.reserved)
+				t.Errorf("IsReservedUsername(%q) = %v, want %v", tc.username, result, tc.reserved)
 			}
 		})
 	}

@@ -298,7 +298,7 @@ func (c *Client) handleJoin(msg Message) {
 	}
 
 	// Block reserved usernames.
-	if isReservedUsername(username) {
+	if IsReservedUsername(username) {
 		errMsg, _ := json.Marshal(Message{
 			Type:      "error",
 			Content:   "username is reserved",
@@ -2101,7 +2101,7 @@ func sanitizeBotContent(content string) string {
 }
 
 // isReservedUsername blocks system and infrastructure usernames.
-func isReservedUsername(username string) bool {
+func IsReservedUsername(username string) bool {
 	lower := strings.ToLower(username)
 	reserved := []string{"system", "server", "admin", "moderator", "mod", "root", "null", "undefined", "everyone", "all", "chat", "here", "channel"}
 	for _, r := range reserved {

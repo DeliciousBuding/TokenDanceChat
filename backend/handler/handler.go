@@ -156,6 +156,11 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 
 // HealthCheck handles GET /api/health.
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
 	dbStatus := "ok"
 	if err := h.store.Ping(); err != nil {
 		dbStatus = "error"
@@ -956,6 +961,11 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid username: 1-20 chars, letters, digits, underscore, or Chinese", "INVALID_USERNAME", requestID)
 		return
 	}
+
+		if hub.IsReservedUsername(username) {
+			writeJSONError(w, http.StatusBadRequest, "username is reserved", "RESERVED_USERNAME", requestID)
+			return
+		}
 
 	if len(password) < 6 {
 		writeJSONError(w, http.StatusBadRequest, "password must be at least 6 characters", "WEAK_PASSWORD", requestID)
