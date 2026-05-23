@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 875 前端 / 50 文件 / 51.86%+ 行覆盖率 / E2E 98/101 (7 group-call pre-existing)
+发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 896 前端 / 50 文件 / 51.86%+ 行覆盖率 / E2E 105/108 / Backend 6/6 PASS
 
 ## 当前目标
 
@@ -48,14 +48,19 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 性能优化 + UI 打磨 + 工程基建
 
-状态：持续推进。813 tests / 50 files / tsc 0 / ESLint 0 / CI 就绪 / coverage 51.86% / E2E 94/101。
+状态：持续推进。896 tests / 50 files / tsc 0 / ESLint 0 / CI 就绪 / coverage 51.86%+ / E2E 105/108 / Backend 6/6 PASS。
 
 - [x] SW 缓存修复：CACHE_NAME tdchat-v3 + stale-while-revalidate 策略，防止部署后浏览器加载旧 JS/CSS。
 - [x] api.ts connect 竞态修复：connectGeneration 计数器替代 intentionalClose 布尔值，消除旧 onclose 在新 onopen 后触发的竞态。
 - [x] E2E 修复：back button label "Back" → "返回"（zh-CN context），3 个测试恢复。
 - [x] Group-call E2E 邀请接受：acceptGroupInvite helper，member 接受邀请后群组通话按钮出现。4/7 通过。
 - [x] 测试覆盖扩展：useWebSocket 3.37%→44.56%（+30 tests），JoinScreen 47.29%→81.08%（+18 tests），ChatInput +14 tests（875 total）。
-- [x] PM 审计修复：AI 助手默认展开、zh-CN publicChatSub 中文化、ChatInput disconnect 改用 t()。
+- [x] PM 审计全修复 (P1+P2)：AI 助手默认展开、文件上传错误提示、麦克风权限反馈、Sidebar 空状态 CTA 提示、分页超时重试按钮、移动端工具栏按钮可见、zh-CN 字符串全部中文化、录音提示 i18n。
+- [x] Utils i18n 重构：formatTime/formatDate/formatLastSeen 从 lang 参数改为 t() 函数，消除 8 处内联双语三元，新增 profile.today/yesterday 键。
+- [x] E2E 真实用户流：7 tests（emoji reaction、message edit、search、settings、GIF picker）。
+- [x] MessageBubble 测试 +21（代码块、语音消息、GIF/贴纸、编辑标记、搜索高亮、回复预览、转发标记、删除消息 — 覆盖率 32%+）。
+- [x] 后端测试扩展 +12：handler 边界用例（CORS、rate limit、login/register/DM/group/upload）、ws 边界、hub 边界（含 Stop 幂等性验证）。
+- [x] 交叉审查驱动修复：api.ts gen guard 补全（onerror/onopen/onmessage/timeout）、ReadReceipt t 作用域、VideoCall formatTime 参数数量、SW activate clients.claim()。
 - [x] 容器重启修复生产 WebSocket 连接堆积问题。
 - [x] E2E production fixes x3（target 47/52）。
 - [x] nginx production fix：agenthub-chat.conf 冲突修复。
@@ -198,13 +203,11 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 47/52 pass（3 fixes pending） |
 | 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 794 tests, 51.86% lines |
 | 2026-05-24 | `cd backend; go test ./...` | PASS |
-| 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 813 tests |
-| 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 875 tests |
-| 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 98/101 pass（3 group-call timing, 17 skipped） |
-| 2026-05-24 | `cd backend; go test ./...` | PASS |
-| 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 94/101 pass（7 group-call pre-existing, 17 skipped） |
-| 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 794 tests, 51.86% lines |
-| 2026-05-24 | `cd backend; go test ./...` | PASS |
+| 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 896 tests |
+| 2026-05-24 | `cd backend; go test ./...` | PASS, 6/6 (handler +12 tests) |
+| 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 105/108 pass（3 group-call timing, 17 skipped, +7 real-user-flows） |
+| 2026-05-24 | `cd frontend; npx tsc --noEmit` | PASS（0 errors on production code） |
+| 2026-05-24 | `git checkout master && git merge dev && git push` | Merged (2x), 7 files +707/-13 |
 
 ## Review Gates
 
