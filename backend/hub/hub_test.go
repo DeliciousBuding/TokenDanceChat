@@ -4276,3 +4276,165 @@ func TestValidateGroupName_EdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// --- IsReservedUsername edge cases ---
+
+// TestIsReservedUsernameEdgeCases tests empty string, special characters,
+// and Unicode that should not be reserved.
+func TestIsReservedUsernameEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		username string
+		want     bool
+	}{
+		// Empty string is not reserved.
+		{"empty string", "", false},
+		// Mixed case of reserved words.
+		{"mixed case System", "SyStEm", true},
+		{"mixed case Admin", "AdMiN", true},
+		{"mixed case Moderator", "MoDeRaToR", true},
+		{"mixed case Root", "RoOt", true},
+		{"mixed case Null", "NuLl", true},
+		{"mixed case Undefined", "UnDeFiNeD", true},
+		{"mixed case Everyone", "EvErYoNe", true},
+		{"mixed case All", "AlL", true},
+		{"mixed case Chat", "ChAt", true},
+		{"mixed case Here", "HeRe", true},
+		{"mixed case Channel", "ChAnNeL", true},
+		// Special characters only (should not be reserved).
+		{"special chars only", "!@#$%", false},
+		// Unicode chars (should not be reserved).
+		{"unicode smiley", "😀", false},
+		{"chinese system", "系统", false},
+		// Whitespace-like strings.
+		{"spaces", "  system  ", false},
+		// Very long string.
+		{"very long", "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz", false},
+		// Substrings of reserved words.
+		{"prefix of reserved", "sys", false},
+		{"suffix of reserved", "dmin", false},
+		{"infix of reserved", "dmi", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := IsReservedUsername(tc.username)
+			if result != tc.want {
+				t.Errorf("IsReservedUsername(%q) = %v, want %v", tc.username, result, tc.want)
+			}
+		})
+	}
+}
+
+// --- Hub.Stop() idempotency ---
+
+// TestHubStopIdempotent verifies that calling Hub.Stop() multiple times
+// is safe and does not panic or hang.
+func TestHubStopIdempotent(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	// First stop should close the done channel.
+	h.Stop()
+
+	// Second stop should be a no-op via sync.Once.
+	// This must not panic or hang.
+	h.Stop()
+
+	// Third stop should also be safe.
+	h.Stop()
+
+	// Verify the hub is still usable (no crash).
+	// ConnectionCount should work after Stop.
+	count := h.ConnectionCount()
+	if count < 0 {
+		t.Errorf("expected ConnectionCount >= 0 after Stop, got %d", count)
+	}
+
+	// Shutdown should also be safe after multiple Stops.
+	h.Shutdown()
+	h.Shutdown()
+}
+
+// --- ConnectionCount after clients disconnect ---
+
+// TestConnectionCountAfterDisconnect verifies that ConnectionCount
+// decreases correctly when clients disconnect (unregister).
+func TestConnectionCountAfterDisconnect(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Initially zero.
+	if h.ConnectionCount() != 0 {
+		t.Fatalf("expected 0 connections initially, got %d", h.ConnectionCount())
+	}
+
+	// Register 3 clients.
+	clients := make([]*Client, 3)
+	for i := 0; i < 3; i++ {
+		clients[i] = &Client{
+			username: "user_" + string(rune('a'+i)),
+			send:     make(chan []byte, 1),
+		}
+		h.register <- clients[i]
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	if h.ConnectionCount() != 3 {
+		t.Fatalf("expected 3 connections, got %d", h.ConnectionCount())
+	}
+
+	// Unregister one at a time and verify count.
+	for i := 0; i < 3; i++ {
+		before := h.ConnectionCount()
+		h.unregister <- clients[i]
+		time.Sleep(10 * time.Millisecond)
+		after := h.ConnectionCount()
+
+		if after != before-1 {
+			t.Errorf("after unregister #%d: expected %d connections, got %d",
+				i+1, before-1, after)
+		}
+	}
+
+	if h.ConnectionCount() != 0 {
+		t.Errorf("expected 0 connections after all unregister, got %d", h.ConnectionCount())
+	}
+}
+
+// TestConnectionCountAfterAllDisconnect verifies that clearing all clients
+// results in ConnectionCount returning 0.
+func TestConnectionCountAfterAllDisconnect(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Register 5 clients.
+	clients := make([]*Client, 5)
+	for i := 0; i < 5; i++ {
+		clients[i] = &Client{
+			username: "u" + string(rune('0'+i)),
+			send:     make(chan []byte, 1),
+		}
+		h.register <- clients[i]
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	if h.ConnectionCount() != 5 {
+		t.Fatalf("expected 5 connections, got %d", h.ConnectionCount())
+	}
+
+	// Disconnect all.
+	for i := 0; i < 5; i++ {
+		h.unregister <- clients[i]
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	if h.ConnectionCount() != 0 {
+		t.Errorf("expected 0 connections after all disconnect, got %d", h.ConnectionCount())
+	}
+}

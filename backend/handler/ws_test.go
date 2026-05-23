@@ -207,3 +207,76 @@ func TestCheckOriginEmptyAllowedOrigins(t *testing.T) {
 		}
 	})
 }
+
+// TestWebSocketUpgradeMissingOrigin verifies that a WebSocket upgrade
+// request with no Origin header (same-origin) is allowed by CheckOrigin.
+func TestWebSocketUpgradeMissingOrigin(t *testing.T) {
+	os.Unsetenv("CHAT_ALLOWED_ORIGINS")
+
+	// Create a request with no Origin header.
+	req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
+	// No Origin header set.
+
+	got := upgrader.CheckOrigin(req)
+	if !got {
+		t.Error("expected CheckOrigin to return true for missing Origin header (same-origin)")
+	}
+}
+
+// TestWebSocketUpgradeDisallowedOrigin verifies that a WebSocket upgrade
+// request with a disallowed Origin header is rejected by CheckOrigin.
+func TestWebSocketUpgradeDisallowedOrigin(t *testing.T) {
+	os.Unsetenv("CHAT_ALLOWED_ORIGINS")
+
+	req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
+	req.Header.Set("Origin", "https://evil.com")
+
+	got := upgrader.CheckOrigin(req)
+	if got {
+		t.Error("expected CheckOrigin to return false for disallowed origin")
+	}
+}
+
+// TestWSAllowExhaustion verifies that the WSAllow function returns false
+// after 50 successful calls from the same IP (rate limiter exhaustion).
+func TestWSAllowExhaustion(t *testing.T) {
+	ResetRateLimiter()
+
+	ip := "203.0.113.42"
+
+	// First 50 calls should succeed.
+	for i := 0; i < 50; i++ {
+		if !WSAllow(ip) {
+			t.Errorf("expected WSAllow to return true for request %d", i+1)
+		}
+	}
+
+	// The 51st call should fail.
+	if WSAllow(ip) {
+		t.Error("expected WSAllow to return false on 51st call (rate limiter exhausted)")
+	}
+}
+
+// TestWSAllowMultipleIPs verifies that different IPs have independent
+// WS rate limit counters.
+func TestWSAllowMultipleIPs(t *testing.T) {
+	ResetRateLimiter()
+
+	ip1 := "203.0.113.100"
+	ip2 := "203.0.113.200"
+
+	// Saturate ip1 (50 WS requests).
+	for i := 0; i < 50; i++ {
+		WSAllow(ip1)
+	}
+
+	// ip1 should now be blocked.
+	if WSAllow(ip1) {
+		t.Error("expected ip1 to be rate-limited after 50 WS requests")
+	}
+
+	// ip2 should still be allowed (independent counter).
+	if !WSAllow(ip2) {
+		t.Error("expected ip2 to NOT be rate-limited (independent counter)")
+	}
+}

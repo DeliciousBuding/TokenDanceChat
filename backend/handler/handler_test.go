@@ -2968,3 +2968,180 @@ func TestLoggingMiddlewarePreservesSecurityHeaders(t *testing.T) {
 		t.Errorf("expected X-Frame-Options DENY after logging middleware, got %q", got)
 	}
 }
+
+// --- Register with invalid invite code format ---
+
+// mockStoreInvalidInvite is a mockStore variant that returns an
+// "invalid invite code" error from RegisterUser.
+type mockStoreInvalidInvite struct {
+	mockStore
+}
+
+func (m *mockStoreInvalidInvite) RegisterUser(username, passwordHash, inviteCode string) error {
+	return errors.New("invalid invite code: bad format")
+}
+
+func newTestHandlerWithInvalidInvite() *Handler {
+	ms := &mockStoreInvalidInvite{}
+	h := hub.New(ms, nil, nil, "")
+	go h.Run()
+	return New(h, ms, "/tmp/test-uploads")
+}
+
+// TestRegisterInvalidInviteCode verifies that Register returns 400 with
+// code INVALID_INVITE_CODE when the store rejects the invite code.
+func TestRegisterInvalidInviteCode(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandlerWithInvalidInvite()
+
+	body := `{"username":"alice","password":"secret123","invite_code":"BADCODE"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.70:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Register(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for invalid invite code, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "INVALID_INVITE_CODE" {
+		t.Errorf("expected code INVALID_INVITE_CODE, got %q", result["code"])
+	}
+}
+
+// TestHealthCheckAllKeys verifies that the health endpoint JSON response
+// contains all three expected keys: status, service, and db.
+func TestHealthCheckAllKeys(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	w := httptest.NewRecorder()
+
+	h.HealthCheck(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	// Verify all three expected keys.
+	expectedKeys := map[string]string{
+		"status":  "ok",
+		"service": "tokendancechat",
+		"db":      "ok",
+	}
+	for key, wantVal := range expectedKeys {
+		got, ok := body[key]
+		if !ok {
+			t.Errorf("missing key %q in health response", key)
+			continue
+		}
+		if got != wantVal {
+			t.Errorf("health[%q] = %v, want %q", key, got, wantVal)
+		}
+	}
+
+	// Verify no unexpected keys.
+	if len(body) != len(expectedKeys) {
+		t.Errorf("expected %d keys in health response, got %d", len(expectedKeys), len(body))
+	}
+}
+
+// TestCORSPreflightOnAPIEndpoint verifies that an OPTIONS request to an
+// API endpoint returns 204 with proper CORS headers.
+func TestCORSPreflightOnAPIEndpoint(t *testing.T) {
+	corsHandler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodOptions, "/api/health", nil)
+	req.Header.Set("Origin", "https://chat.example.com")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	w := httptest.NewRecorder()
+
+	corsHandler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("expected status 204 for OPTIONS preflight, got %d", resp.StatusCode)
+	}
+
+	if resp.Header.Get("Access-Control-Allow-Methods") != "GET, POST, OPTIONS" {
+		t.Errorf("missing or wrong Access-Control-Allow-Methods: %q",
+			resp.Header.Get("Access-Control-Allow-Methods"))
+	}
+
+	if resp.Header.Get("Access-Control-Allow-Headers") == "" {
+		t.Error("expected Access-Control-Allow-Headers to be set on preflight")
+	}
+}
+
+// TestRateLimitMiddlewareReturns429 verifies that the API rate limit
+// middleware returns HTTP 429 with code RATE_LIMITED and Retry-After
+// header after 30 requests from the same IP.
+func TestRateLimitMiddlewareReturns429(t *testing.T) {
+	ResetRateLimiter()
+
+	wrapped := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+
+	ip := "203.0.113.200:12345"
+
+	// First 30 requests should pass.
+	for i := 0; i < 30; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		req.RemoteAddr = ip
+		w := httptest.NewRecorder()
+		wrapped.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("request %d: expected 200, got %d", i+1, w.Code)
+		}
+	}
+
+	// 31st request should return 429.
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.RemoteAddr = ip
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("expected 429 Too Many Requests, got %d", w.Code)
+	}
+
+	if w.Header().Get("Retry-After") != "60" {
+		t.Errorf("expected Retry-After: 60, got %q", w.Header().Get("Retry-After"))
+	}
+
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "RATE_LIMITED") {
+		t.Errorf("expected response body to contain RATE_LIMITED, got %q", body)
+	}
+}
