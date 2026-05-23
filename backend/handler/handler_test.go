@@ -1258,3 +1258,196 @@ func TestAdminStatsHandler(t *testing.T) {
 		}
 	}
 }
+
+// TestInviteGenerate verifies that POST /api/invite/generate with a valid body
+// returns 200 and a non-empty invite code.
+func TestInviteGenerate(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	body := `{"username":"alice","max_uses":3}`
+	req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.1:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.InviteGenerate(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, w.Body.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	code, ok := result["code"].(string)
+	if !ok {
+		t.Fatal("expected 'code' field of type string in response")
+	}
+	if code == "" {
+		t.Error("expected non-empty invite code")
+	}
+	if code != "TESTCODE" {
+		t.Errorf("expected code 'TESTCODE', got %q", code)
+	}
+}
+
+// TestInviteGenerateMissingUsername verifies that POST /api/invite/generate
+// without a username returns 400 with code MISSING_USERNAME.
+func TestInviteGenerateMissingUsername(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	body := `{"max_uses":3}`
+	req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.2:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.InviteGenerate(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "MISSING_USERNAME" {
+		t.Errorf("expected code MISSING_USERNAME, got %q", result["code"])
+	}
+}
+
+// TestInviteList verifies that GET /api/invite/list returns 200 and a JSON
+// response containing a "codes" key.
+func TestInviteList(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/invite/list?username=alice", nil)
+	w := httptest.NewRecorder()
+
+	h.InviteList(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, w.Body.String())
+	}
+
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	if _, ok := result["codes"]; !ok {
+		t.Error("expected 'codes' key in response")
+	}
+}
+
+// TestInviteListMissingUsername verifies that GET /api/invite/list without a
+// username query parameter returns 400.
+func TestInviteListMissingUsername(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/invite/list", nil)
+	w := httptest.NewRecorder()
+
+	h.InviteList(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "MISSING_USERNAME" {
+		t.Errorf("expected code MISSING_USERNAME, got %q", result["code"])
+	}
+}
+
+// TestExportMessagesJSON verifies that GET /api/export returns 200, sets
+// Content-Disposition header, and returns application/json content.
+func TestExportMessagesJSON(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=public&username=alice", nil)
+	w := httptest.NewRecorder()
+
+	h.ExportMessages(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, w.Body.String())
+	}
+
+	cd := resp.Header.Get("Content-Disposition")
+	if cd == "" {
+		t.Error("expected Content-Disposition header")
+	}
+	if !strings.Contains(cd, "attachment") {
+		t.Errorf("expected Content-Disposition to contain 'attachment', got %q", cd)
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if !strings.Contains(ct, "application/json") {
+		t.Errorf("expected Content-Type to contain application/json, got %q", ct)
+	}
+}
+
+// TestExportMessagesText verifies that GET /api/export?format=text returns 200
+// and text/plain content with a header and export metadata.
+func TestExportMessagesText(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=public&format=text&username=alice", nil)
+	w := httptest.NewRecorder()
+
+	h.ExportMessages(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, w.Body.String())
+	}
+
+	cd := resp.Header.Get("Content-Disposition")
+	if cd == "" {
+		t.Error("expected Content-Disposition header")
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if !strings.Contains(ct, "text/plain") {
+		t.Errorf("expected Content-Type to contain text/plain, got %q", ct)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+	bodyStr := string(body)
+	if !strings.Contains(bodyStr, "TokenDanceChat Export") {
+		t.Error("expected text export to contain 'TokenDanceChat Export' header")
+	}
+}
