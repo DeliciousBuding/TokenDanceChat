@@ -164,15 +164,17 @@ test.describe('游客加入聊天（需要后端）', () => {
   });
 
   test('重复用户名被拒绝', async ({ page }) => {
+    const dupName = `e2e_dup_${Math.random().toString(36).slice(2, 6)}`;
+
     const page1 = await page.context().newPage();
     await setupPage(page1);
     await page1.goto('/');
-    await page1.getByPlaceholder('你的用户名...').fill('e2e_dup_test');
+    await page1.getByPlaceholder('你的用户名...').fill(dupName);
     await page1.getByRole('button', { name: '游客加入' }).click();
     await expect(page1.locator('textarea').first()).toBeVisible({ timeout: 10000 });
 
     await page.goto('/');
-    await page.getByPlaceholder('你的用户名...').fill('e2e_dup_test');
+    await page.getByPlaceholder('你的用户名...').fill(dupName);
     await page.getByRole('button', { name: '游客加入' }).click();
 
     const error = page.getByRole('alert');
