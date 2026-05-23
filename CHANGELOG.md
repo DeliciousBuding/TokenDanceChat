@@ -1,5 +1,20 @@
 # Changelog
 
+> **累计**: 20+ commits, 30+ features/fixes, 5 skills (verify, pm-audit, deploy, cross-review, i18n-scan)
+
+## v0.2.9 (2026-05-24)
+
+### Added
+- Poll 前端集成：创建/投票/结果展示 UI，WS handlers + store + MessageBubble 渲染，typed WebSocket event 前后端闭环。
+- AdminPanel 完整 i18n：所有管理界面文案国际化，中英文覆盖。
+- a11y i18n 补全：28 个无障碍翻译键，覆盖 ~20 个文件。
+- i18n-scan skill：i18n 扫描、键值校验、未翻译检测 SOP（`.agents/skills/i18n-scan.md`），已执行并通过。
+- E2E 测试套件扩展：auth、dm、group、poll、reconnect、sidebar、webhook 共 5+ 套。
+
+### Changed
+- 前端测试从 627 扩展至 679（+52 tests），后端测试新增 30+ tests（main 模块集成测试 + media 模块 focused 测试）。
+- 性能优化：lastPreviews O(1) 查找、replyCounts 缓存、reaction/read_by O(1) Map 预索引。
+
 ## v0.2.8 (2026-05-23)
 
 ### Added

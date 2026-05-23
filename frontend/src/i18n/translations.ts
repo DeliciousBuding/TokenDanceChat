@@ -33,13 +33,10 @@ export interface TranslationDict {
     invalidCode: string;
     codeUsed: string;
     fillAllFields: string;
-    passwordsMatch: string;
-    registerSuccess: string;
     passwordMinLength: string;
     passwordMaxLength: string;
     confirmNotMatch: string;
     loginFailed: string;
-    registerFailed: string;
   };
   invite: {
     inviteCodes: string;
@@ -47,7 +44,6 @@ export interface TranslationDict {
     maxUses: string;
     copyCode: string;
     noCodes: string;
-    codeCopied: string;
     usesLeft: string;
   };
   chat: {
@@ -68,7 +64,6 @@ export interface TranslationDict {
     publicChatSub: string;
     onlineUsers: string;
     emptyState: string;
-    connectedAs: string;
     you: string;
     friends: string;
     friendsOnline: string;
@@ -89,10 +84,7 @@ export interface TranslationDict {
     pinned: string;
     pinConversation: string;
     unpinConversation: string;
-    muteConversation: string;
     unmuteConversation: string;
-    muted: string;
-    archived: string;
     archivedSection: string;
     archiveConversation: string;
     unarchiveConversation: string;
@@ -118,7 +110,6 @@ export interface TranslationDict {
     loading: string;
     emptyTitle: string;
     emptyDescription: string;
-    scrollToBottom: string;
     newMessages: string;
     loadingOlder: string;
     newMessagesDivider: string;
@@ -139,7 +130,6 @@ export interface TranslationDict {
     contextCancel: string;
     selectAll: string;
     copySelected: string;
-    copiedCount: string;
   };
   input: {
     placeholder: string;
@@ -149,28 +139,22 @@ export interface TranslationDict {
     groupPlaceholder: string;
     pastedImage: string;
     sendImage: string;
-    recording: string;
-    dropFiles: string;
     escapeToCancel: string;
     cancel: string;
     save: string;
     fileTooLarge: string;
     uploadFailed: string;
     editingMessage: string;
-    notConnected: string;
   };
   message: {
     edited: string;
     forward: string;
     copy: string;
     delete: string;
-    select: string;
     read: string;
     readBy: string;
     sent: string;
     copied: string;
-    deleteConfirm: string;
-    deleteWarning: string;
     edit: string;
     pin: string;
     react: string;
@@ -217,7 +201,6 @@ export interface TranslationDict {
     selectMembers: string;
     create: string;
     cancel: string;
-    created: string;
     nameErrorEmpty: string;
     nameErrorTooLong: string;
     noUsersAvailable: string;
@@ -235,9 +218,7 @@ export interface TranslationDict {
     leaveGroup: string;
     leaveGroupConfirm: string;
     kickConfirm: string;
-    noPermission: string;
     renamePlaceholder: string;
-    groupCreatedAt: string;
     webhooks: string;
     webhookDescription: string;
     createWebhook: string;
@@ -284,8 +265,6 @@ export interface TranslationDict {
     save: string;
     cancel: string;
     avatarUpload: string;
-    online: string;
-    offline: string;
     lastSeen: string;
     justNow: string;
     minutesAgo: string;
@@ -314,17 +293,12 @@ export interface TranslationDict {
     objects: string;
     misc: string;
     custom: string;
-    addCustomEmoji: string;
-    emojiName: string;
-    emojiNamePlaceholder: string;
     uploadEmoji: string;
     deleteEmoji: string;
     noCustomEmoji: string;
   };
   model: {
     selectModel: string;
-    closeSelector: string;
-    selected: string;
   };
   settings: {
     sound: string;
@@ -351,21 +325,13 @@ export interface TranslationDict {
     themeSystem: string;
     testSound: string;
     exportData: string;
-    scheduledCount: string;
     myAccount: string;
     openSettings: string;
-    title: string;
   };
   folders: {
-    create: string;
-    delete: string;
-    rename: string;
     addToFolder: string;
     removeFromFolder: string;
-    newFolder: string;
-    folderName: string;
     noFolders: string;
-    manageFolders: string;
   };
   slash: {
     me: string;
@@ -397,16 +363,11 @@ export interface TranslationDict {
     cancelSchedule: string;
     scheduledMessages: string;
     noScheduled: string;
-    scheduledFor: string;
     today: string;
     tomorrow: string;
-    pickDateTime: string;
     confirmSchedule: string;
-    cancelled: string;
-    sentToast: string;
   };
   export: {
-    exportChat: string;
     exportJson: string;
     exportText: string;
     exportSuccess: string;
@@ -429,8 +390,6 @@ export interface TranslationDict {
   call: {
     incomingCall: string;
     calling: string;
-    callRejected: string;
-    missedCall: string;
     voiceCall: string;
     videoCall: string;
     groupCall: string;
@@ -443,11 +402,9 @@ export interface TranslationDict {
     switchCamera: string;
     acceptCall: string;
     rejectCall: string;
-    remoteVideoOff: string;
     callEnded: string;
     joiningRoom: string;
     participants: string;
-    leaveRoom: string;
   };
   poll: {
     closed: string;
@@ -521,13 +478,10 @@ const zhCN: TranslationDict = {
     invalidCode: "邀请码无效或已过期",
     codeUsed: "邀请码已达最大使用次数",
     fillAllFields: "请填写所有字段后点击注册",
-    passwordsMatch: "两次输入的密码不一致",
-    registerSuccess: "注册成功",
     passwordMinLength: "密码至少需要6个字符",
     passwordMaxLength: "密码不能超过72个字符",
     confirmNotMatch: "两次输入的密码不一致",
     loginFailed: "用户名或密码错误",
-    registerFailed: "注册失败，请稍后重试",
   },
   invite: {
     inviteCodes: "邀请码管理",
@@ -535,7 +489,6 @@ const zhCN: TranslationDict = {
     maxUses: "最大使用次数",
     copyCode: "复制",
     noCodes: "还没有生成邀请码",
-    codeCopied: "邀请码已复制到剪贴板",
     usesLeft: "{{used}}/{{max}}",
   },
   chat: {
@@ -556,7 +509,6 @@ const zhCN: TranslationDict = {
     publicChatSub: "Public Chat Room",
     onlineUsers: "在线用户",
     emptyState: "暂无在线用户",
-    connectedAs: "已连接为",
     you: "你",
     friends: "好友",
     friendsOnline: "好友在线",
@@ -577,10 +529,7 @@ const zhCN: TranslationDict = {
     pinned: "置顶",
     pinConversation: "置顶会话",
     unpinConversation: "取消置顶",
-    muteConversation: "免打扰",
     unmuteConversation: "取消免打扰",
-    muted: "已静音",
-    archived: "已归档",
     archivedSection: "已归档会话",
     archiveConversation: "归档会话",
     unarchiveConversation: "取消归档",
@@ -606,7 +555,6 @@ const zhCN: TranslationDict = {
     loading: "加载消息中...",
     emptyTitle: "暂无消息",
     emptyDescription: "成为第一个发送消息的人吧！",
-    scrollToBottom: "回到底部",
     newMessages: "{{count}} 条新消息",
     loadingOlder: "加载更早的消息...",
     newMessagesDivider: "新消息",
@@ -627,7 +575,6 @@ const zhCN: TranslationDict = {
     contextCancel: "取消",
     selectAll: "全选",
     copySelected: "复制选中",
-    copiedCount: "已复制 {{count}} 条消息",
   },
   input: {
     placeholder: "输入消息... (Shift+Enter 换行)",
@@ -637,28 +584,22 @@ const zhCN: TranslationDict = {
     groupPlaceholder: "发送消息到 {{name}}...",
     pastedImage: "已粘贴图片",
     sendImage: "发送图片",
-    recording: "正在录制语音消息...",
-    dropFiles: "拖拽文件到这里",
     escapeToCancel: "按 Esc 取消",
     cancel: "取消",
     save: "保存",
     fileTooLarge: "文件过大（最大 50MB）",
     uploadFailed: "上传失败",
     editingMessage: "编辑消息",
-    notConnected: "未连接 — 重新连接后重试",
   },
   message: {
     edited: "（已编辑）",
     forward: "转发",
     copy: "复制",
     delete: "删除",
-    select: "选择",
     read: "已读",
     readBy: "已读用户",
     sent: "已发送",
     copied: "已复制",
-    deleteConfirm: "确认删除这条消息？",
-    deleteWarning: "此操作不可撤销。",
     edit: "编辑",
     pin: "置顶",
     react: "添加表情",
@@ -705,7 +646,6 @@ const zhCN: TranslationDict = {
     selectMembers: "选择成员",
     create: "创建",
     cancel: "取消",
-    created: "群组 {{name}} 已创建",
     nameErrorEmpty: "群组名称不能为空",
     nameErrorTooLong: "群组名称过长（最多30个字符）",
     noUsersAvailable: "没有好友或在线用户可添加",
@@ -722,9 +662,7 @@ const zhCN: TranslationDict = {
     leaveGroup: "退出群组",
     leaveGroupConfirm: "确定要退出群组吗？",
     kickConfirm: "确定要踢出 {{name}} 吗？",
-    noPermission: "你没有权限执行此操作",
     renamePlaceholder: "新群组名称...",
-    groupCreatedAt: "创建时间",
     webhooks: "传入 Webhook",
     webhookDescription: "让外部系统向本群发送消息",
     createWebhook: "新建",
@@ -771,8 +709,6 @@ const zhCN: TranslationDict = {
     save: "保存",
     cancel: "取消",
     avatarUpload: "上传头像",
-    online: "在线",
-    offline: "离线",
     lastSeen: "最后在线 {{time}}",
     justNow: "刚刚",
     minutesAgo: "{{n}}分钟前",
@@ -801,17 +737,12 @@ const zhCN: TranslationDict = {
     objects: "物品",
     misc: "其他",
     custom: "自定义表情",
-    addCustomEmoji: "添加自定义表情",
-    emojiName: "表情名称",
-    emojiNamePlaceholder: "输入表情名称...",
     uploadEmoji: "上传表情",
     deleteEmoji: "删除表情",
     noCustomEmoji: "暂无自定义表情",
   },
   model: {
     selectModel: "选择模型",
-    closeSelector: "关闭",
-    selected: "已选择",
   },
   settings: {
     sound: "音效",
@@ -838,21 +769,13 @@ const zhCN: TranslationDict = {
     themeSystem: "跟随系统",
     testSound: "测试提示音",
     exportData: "导出聊天记录",
-    scheduledCount: "{{n}} 条定时消息",
     myAccount: "我的账号",
     openSettings: "打开设置",
-    title: "设置",
   },
   folders: {
-    create: "新建文件夹",
-    delete: "删除文件夹",
-    rename: "重命名",
     addToFolder: "添加到文件夹",
     removeFromFolder: "从文件夹移除",
-    newFolder: "文件夹名称",
-    folderName: "名称",
     noFolders: "暂无文件夹",
-    manageFolders: "管理文件夹",
   },
   slash: {
     me: "以动作方式发送消息",
@@ -884,16 +807,11 @@ const zhCN: TranslationDict = {
     cancelSchedule: "取消定时",
     scheduledMessages: "定时消息",
     noScheduled: "没有定时消息",
-    scheduledFor: "计划于 {{time}} 发送",
     today: "今天",
     tomorrow: "明天",
-    pickDateTime: "选择日期和时间",
     confirmSchedule: "确认定时",
-    cancelled: "已取消定时消息",
-    sentToast: "定时消息已发送计划",
   },
   export: {
-    exportChat: "导出聊天记录",
     exportJson: "导出为 JSON",
     exportText: "导出为文本",
     exportSuccess: "聊天记录导出成功",
@@ -916,8 +834,6 @@ const zhCN: TranslationDict = {
   call: {
     incomingCall: "{{name}} 正在呼叫你",
     calling: "正在呼叫 {{name}}...",
-    callRejected: "通话已拒绝",
-    missedCall: "未接来电",
     voiceCall: "语音通话",
     videoCall: "视频通话",
     groupCall: "群组通话",
@@ -930,11 +846,9 @@ const zhCN: TranslationDict = {
     switchCamera: "切换摄像头",
     acceptCall: "接听",
     rejectCall: "拒绝",
-    remoteVideoOff: "对方已关闭摄像头",
     callEnded: "通话已结束",
     joiningRoom: "正在加入通话...",
     participants: "人",
-    leaveRoom: "离开通话",
   },
   poll: {
     closed: "投票已关闭",
@@ -1011,13 +925,10 @@ const enUS: TranslationDict = {
     invalidCode: "Invalid or expired invite code",
     codeUsed: "Invite code has reached maximum uses",
     fillAllFields: "Please fill in all fields to register",
-    passwordsMatch: "Passwords do not match",
-    registerSuccess: "Registration successful",
     passwordMinLength: "Password must be at least 6 characters",
     passwordMaxLength: "Password must be at most 72 characters",
     confirmNotMatch: "Passwords do not match",
     loginFailed: "Invalid username or password",
-    registerFailed: "Registration failed, please try again later",
   },
   invite: {
     inviteCodes: "Invite Codes",
@@ -1025,7 +936,6 @@ const enUS: TranslationDict = {
     maxUses: "Max Uses",
     copyCode: "Copy",
     noCodes: "No invite codes generated yet",
-    codeCopied: "Invite code copied to clipboard",
     usesLeft: "{{used}}/{{max}}",
   },
   chat: {
@@ -1046,7 +956,6 @@ const enUS: TranslationDict = {
     publicChatSub: "Public Chat Room",
     onlineUsers: "Online Users",
     emptyState: "No users online",
-    connectedAs: "Connected as",
     you: "You",
     friends: "Friends",
     friendsOnline: "Friends Online",
@@ -1067,10 +976,7 @@ const enUS: TranslationDict = {
     pinned: "Pinned",
     pinConversation: "Pin conversation",
     unpinConversation: "Unpin conversation",
-    muteConversation: "Mute",
     unmuteConversation: "Unmute",
-    muted: "Muted",
-    archived: "Archived",
     archivedSection: "Archived",
     archiveConversation: "Archive",
     unarchiveConversation: "Unarchive",
@@ -1096,7 +1002,6 @@ const enUS: TranslationDict = {
     loading: "Loading messages...",
     emptyTitle: "No messages yet",
     emptyDescription: "Be the first to send a message!",
-    scrollToBottom: "Scroll to bottom",
     newMessages: "{{count}} new messages",
     loadingOlder: "Loading older messages...",
     newMessagesDivider: "New messages",
@@ -1117,7 +1022,6 @@ const enUS: TranslationDict = {
     contextCancel: "Cancel",
     selectAll: "Select All",
     copySelected: "Copy Selected",
-    copiedCount: "Copied {{count}} messages",
   },
   input: {
     placeholder: "Type a message... (Shift+Enter for new line)",
@@ -1127,28 +1031,22 @@ const enUS: TranslationDict = {
     groupPlaceholder: "Send message to {{name}}...",
     pastedImage: "Pasted image",
     sendImage: "Send image",
-    recording: "Recording voice message...",
-    dropFiles: "Drop files here",
     escapeToCancel: "Escape to cancel",
     cancel: "Cancel",
     save: "Save",
     fileTooLarge: "File too large (max 50MB)",
     uploadFailed: "Upload failed",
     editingMessage: "Edit message",
-    notConnected: "Not connected — retrying...",
   },
   message: {
     edited: "(edited)",
     forward: "Forward",
     copy: "Copy",
     delete: "Delete",
-    select: "Select",
     read: "Read",
     readBy: "Read by",
     sent: "Sent",
     copied: "Copied",
-    deleteConfirm: "Delete message?",
-    deleteWarning: "This cannot be undone.",
     edit: "Edit",
     pin: "Pin",
     react: "React",
@@ -1195,7 +1093,6 @@ const enUS: TranslationDict = {
     selectMembers: "Select members",
     create: "Create",
     cancel: "Cancel",
-    created: "Group {{name}} created",
     nameErrorEmpty: "Group name cannot be empty",
     nameErrorTooLong: "Group name too long (max 30 chars)",
     noUsersAvailable: "No friends or online users to add",
@@ -1212,9 +1109,7 @@ const enUS: TranslationDict = {
     leaveGroup: "Leave group",
     leaveGroupConfirm: "Are you sure you want to leave the group?",
     kickConfirm: "Kick {{name}} from the group?",
-    noPermission: "You don't have permission to do this",
     renamePlaceholder: "New group name...",
-    groupCreatedAt: "Created",
     webhooks: "Incoming Webhooks",
     webhookDescription: "Let external systems post into this group",
     createWebhook: "New",
@@ -1261,8 +1156,6 @@ const enUS: TranslationDict = {
     save: "Save",
     cancel: "Cancel",
     avatarUpload: "Upload Avatar",
-    online: "Online",
-    offline: "Offline",
     lastSeen: "Last seen {{time}}",
     justNow: "just now",
     minutesAgo: "{{n}}m ago",
@@ -1291,17 +1184,12 @@ const enUS: TranslationDict = {
     objects: "Objects",
     misc: "Misc",
     custom: "Custom Emoji",
-    addCustomEmoji: "Add Custom Emoji",
-    emojiName: "Emoji Name",
-    emojiNamePlaceholder: "Enter emoji name...",
     uploadEmoji: "Upload Emoji",
     deleteEmoji: "Delete Emoji",
     noCustomEmoji: "No custom emojis",
   },
   model: {
     selectModel: "Select Model",
-    closeSelector: "Close",
-    selected: "Selected",
   },
   settings: {
     sound: "Sound",
@@ -1328,21 +1216,13 @@ const enUS: TranslationDict = {
     themeSystem: "System",
     testSound: "Test sound",
     exportData: "Export chat history",
-    scheduledCount: "{{n}} scheduled",
     myAccount: "My Account",
     openSettings: "Open Settings",
-    title: "Settings",
   },
   folders: {
-    create: "New Folder",
-    delete: "Delete Folder",
-    rename: "Rename",
     addToFolder: "Add to Folder",
     removeFromFolder: "Remove from Folder",
-    newFolder: "Folder name",
-    folderName: "Name",
     noFolders: "No folders",
-    manageFolders: "Manage Folders",
   },
   slash: {
     me: "Send as action message",
@@ -1374,16 +1254,11 @@ const enUS: TranslationDict = {
     cancelSchedule: "Cancel Schedule",
     scheduledMessages: "Scheduled Messages",
     noScheduled: "No scheduled messages",
-    scheduledFor: "Scheduled for {{time}}",
     today: "Today",
     tomorrow: "Tomorrow",
-    pickDateTime: "Pick date and time",
     confirmSchedule: "Confirm Schedule",
-    cancelled: "Scheduled message cancelled",
-    sentToast: "Scheduled message queued",
   },
   export: {
-    exportChat: "Export Chat",
     exportJson: "Export as JSON",
     exportText: "Export as Text",
     exportSuccess: "Chat exported successfully",
@@ -1406,8 +1281,6 @@ const enUS: TranslationDict = {
   call: {
     incomingCall: "{{name}} is calling you",
     calling: "Calling {{name}}...",
-    callRejected: "Call rejected",
-    missedCall: "Missed call",
     voiceCall: "Voice Call",
     videoCall: "Video Call",
     groupCall: "Group Call",
@@ -1420,11 +1293,9 @@ const enUS: TranslationDict = {
     switchCamera: "Switch Camera",
     acceptCall: "Accept",
     rejectCall: "Reject",
-    remoteVideoOff: "Camera is off",
     callEnded: "Call ended",
     joiningRoom: "Joining call...",
     participants: "participants",
-    leaveRoom: "Leave Call",
   },
   poll: {
     closed: "Poll closed",
