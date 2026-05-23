@@ -1037,3 +1037,224 @@ func TestCSPHeaders(t *testing.T) {
 		}
 	}
 }
+
+// TestUploadRejectsInvalidFileType verifies that uploading a file with an
+// unsupported extension (e.g. .exe) returns HTTP 400.
+func TestUploadRejectsInvalidFileType(t *testing.T) {
+	h := newTestHandler()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "malware.exe")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	if _, err := part.Write([]byte("evil payload")); err != nil {
+		t.Fatalf("failed to write test payload: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	h.UploadImage(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for .exe upload, got %d", resp.StatusCode)
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if payload["code"] != "INVALID_FILE_TYPE" {
+		t.Errorf("expected code INVALID_FILE_TYPE, got %q", payload["code"])
+	}
+}
+
+// TestUploadRejectsMissingFileField verifies that POST without a "file" form
+// field returns HTTP 400.
+func TestUploadRejectsMissingFileField(t *testing.T) {
+	h := newTestHandler()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	// Write a non-file field instead.
+	if err := writer.WriteField("username", "testuser"); err != nil {
+		t.Fatalf("failed to write field: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	h.UploadImage(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for missing file field, got %d", resp.StatusCode)
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if payload["code"] != "MISSING_FILE" {
+		t.Errorf("expected code MISSING_FILE, got %q", payload["code"])
+	}
+}
+
+// TestCORSubdomainWildcard verifies that the CORS middleware supports the
+// subdomain wildcard pattern: setting CHAT_ALLOWED_ORIGINS=.example.com
+// allows any *.example.com origin.
+func TestCORSubdomainWildcard(t *testing.T) {
+	os.Setenv("CHAT_ALLOWED_ORIGINS", ".example.com")
+	defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
+
+	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+
+	t.Run("subdomain allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Origin", "https://app.example.com")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		if resp.Header.Get("Access-Control-Allow-Origin") != "https://app.example.com" {
+			t.Errorf("expected https://app.example.com, got %q",
+				resp.Header.Get("Access-Control-Allow-Origin"))
+		}
+	})
+
+	t.Run("nested subdomain allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Origin", "https://chat.dev.example.com")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		if resp.Header.Get("Access-Control-Allow-Origin") != "https://chat.dev.example.com" {
+			t.Errorf("expected https://chat.dev.example.com, got %q",
+				resp.Header.Get("Access-Control-Allow-Origin"))
+		}
+	})
+
+	t.Run("bare domain without subdomain disallowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Origin", "https://example.com")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+			t.Error("should not set Access-Control-Allow-Origin for bare .example.com wildcard")
+		}
+	})
+}
+
+// TestStatsHandler verifies that GET /api/stats returns the expected JSON
+// structure with connections, messages_total, uptime_seconds, and started_at.
+func TestStatsHandler(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+	w := httptest.NewRecorder()
+
+	h.Stats(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	// Verify required fields exist.
+	requiredFields := []string{"connections", "messages_total", "uptime_seconds", "dropped_messages", "started_at"}
+	for _, field := range requiredFields {
+		if _, ok := body[field]; !ok {
+			t.Errorf("missing field %q in stats response", field)
+		}
+	}
+
+	// connections should be a number (float64 from JSON decode).
+	if _, ok := body["connections"].(float64); !ok {
+		t.Errorf("expected connections to be a number, got %T", body["connections"])
+	}
+
+	// started_at should be a non-empty string.
+	startedAt, _ := body["started_at"].(string)
+	if startedAt == "" {
+		t.Error("expected started_at to be a non-empty string")
+	}
+}
+
+// TestAdminStatsHandler verifies that GET /api/admin/stats returns the
+// expected dashboard keys with all expected numeric fields.
+func TestAdminStatsHandler(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/stats", nil)
+	w := httptest.NewRecorder()
+
+	h.AdminStats(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	// Verify all expected dashboard fields exist.
+	expectedFields := []string{
+		"total_messages", "active_connections", "rooms",
+		"groups", "friends", "registered_users",
+	}
+	for _, field := range expectedFields {
+		if _, ok := body[field]; !ok {
+			t.Errorf("missing field %q in admin stats response", field)
+		}
+	}
+}
