@@ -32,7 +32,7 @@ TokenDanceChat 聚焦于该系统中 IM 和 Hub 侧。它使用常规聊天产�
 | Agent 能否像 IM 参与者一样自然？ | TokenBot 与 PicoClaw 通过 @提及、类 DM 入口、流式回复及模型/供应商 UI 暴露给用户。 |
 | 外部系统能否安全进入 Hub 会话？ | 群组 webhook 验证群主/管理员控制事件、一次性高熵密钥、脱敏列表、加盐 HMAC 密钥哈希以及 constant-time HTTP 入口校验。 |
 | 类型化 Hub 角色数据能否驱动客户端管理员 UX？ | `group_info.group_members` 在真实 WebSocket 往返后携带 owner/admin/member 角色，React 客户端在展示群组管理员与 Webhook 控制项之前标准化该数据。 |
-| Hub 媒体能否在不改变聊天界面的情况下外置存储？ | `backend/handler` 保持同源 `/uploads/...` URL，同时在本地磁盘、WebDAV 与 S3 兼容对象存储之间切换，适配 production-server 式部署；前端永远不会收到 bucket URL 或存储凭据。 |
+| Hub 媒体能否在不改变聊天界面的情况下外置存储？ | `backend/handler` 保持同源 `/uploads/...` URL，同时在本地磁盘、WebDAV 与 S3 兼容对象存储之间切换，适配生产环境 S3 部署；前端永远不会收到 bucket URL 或存储凭据。 |
 | 哪些功能属于产品打磨，哪些是平台原语？ | 聊天文件夹、通话房间、消息翻译、GIF、自定义 emoji、设置以及 PWA 行为，用于区分可复用的平台模式与仅用于 Demo 的打磨。 |
 
 ## 与 AgentHub 的关系

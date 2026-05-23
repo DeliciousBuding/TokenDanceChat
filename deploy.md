@@ -68,9 +68,9 @@ setTimeout(() => process.exit(1), 10000);
 "
 ```
 
-## 4. production-server/S3-compatible 媒体存储
+## 4. S3-compatible 媒体存储
 
-production-server 部署不要把上传文件绑死在容器本地盘。生产形态优先使用 S3-compatible 对象存储，后端继续通过同源 `/uploads/...` 代理读取，前端不需要知道真实 bucket 或对象存储域名。
+生产部署不要把上传文件绑死在容器本地盘。生产形态优先使用 S3-compatible 对象存储，后端继续通过同源 `/uploads/...` 代理读取，前端不需要知道真实 bucket 或对象存储域名。
 
 S3 配置存在时优先于 WebDAV；未配置 S3 时才回退到 WebDAV；两者都未配置时使用 `CHAT_DB_PATH` 同级的本地 `uploads/` 目录。
 
@@ -87,14 +87,14 @@ CHAT_MEDIA_S3_FORCE_PATH_STYLE=false
 
 约束：
 
-- 不在公开文档提交 production-server 真实端点、bucket、Access Key、Secret Key、容器名、内网端口或部署日志。
+- 不在公开文档提交真实端点、bucket、Access Key、Secret Key、容器名、内网端口或部署日志。
 - `CHAT_MEDIA_S3_PREFIX` 下同时承载普通上传和 `emojis/` 自定义表情子路径。
 - 对象 key 会拒绝 `..`、空段和路径穿越；同源 URL 仍保持 `/uploads/{file}` 与 `/uploads/emojis/{file}`。
 - 如对象存储要求 path-style URL，将 `CHAT_MEDIA_S3_FORCE_PATH_STYLE=true`。
 - `CHAT_MEDIA_S3_SESSION_TOKEN` 只在使用临时凭证时设置；长期凭证不要写入仓库或前端构建环境。
 - S3 初始化失败会阻止后端启动；未配置 S3 时才会回退到 WebDAV 或本地存储。生产不要依赖静默降级。
 
-production-server/S3 验证清单：
+S3 验证清单：
 
 ```bash
 # 1. 健康检查必须正常。

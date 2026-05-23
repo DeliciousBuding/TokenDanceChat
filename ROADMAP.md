@@ -73,7 +73,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] 将自定义 emoji 上传/服务路径迁移到共享 `MediaStore` 抽象。
 - [x] 加固 media key 以拒绝空段、`.`、`..` 和路径穿越，覆盖 local/WebDAV/S3 访问。
 - [x] 为 S3 PUT/GET、emoji 媒体存储、emoji 服务和穿越拒绝添加 focused 后端测试。
-- [x] 记录 production-server/S3-compatible 部署形态，不含私有 hostname、bucket、key、端口或日志。
+- [x] 记录 S3-compatible 部署形态，不含私有 hostname、bucket、key、端口或日志。
 - [x] 添加 Docker runtime HEALTHCHECK 探针 `/api/health`，跟随 `CHAT_ADDR`（包括非默认部署监听地址）。
 - [x] 将 light mode 设为首次运行的默认姿态，面向飞书/Lark 风格验收。
 - [x] 重做移动端 composer，Markdown 工具收起为图标，textarea 保持可用。
