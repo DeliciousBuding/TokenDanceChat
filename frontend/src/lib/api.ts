@@ -412,7 +412,7 @@ class ChatAPI {
   private reconnectMaxDelay = 30000;
   private reconnectUsername: string | null = null;
   private wasReconnecting = false;
-  private intentionalClose = false;
+  private connectGeneration = 0;
   private pendingJoin:
     | {
         resolve: () => void;
@@ -426,11 +426,8 @@ class ChatAPI {
 
   connect(username: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Keep intentionalClose=true until the new socket opens, so the old
-      // socket's onclose handler (which fires asynchronously after close())
-      // won't trigger a duplicate attemptReconnect().
-      this.intentionalClose = true;
       this.ws?.close();
+      const gen = ++this.connectGeneration;
       this.reconnectUsername = username;
       this.pendingJoin = { resolve, reject };
       this.ws = new WebSocket(this.url);
@@ -446,7 +443,6 @@ class ChatAPI {
       }, 15000);
 
       this.ws.onopen = () => {
-        this.intentionalClose = false;
         clearTimeout(timeout);
         if (!this.pendingJoin) return; // Timed out, ignore.
         this.reconnectAttempt = 0;
@@ -494,6 +490,8 @@ class ChatAPI {
       };
 
       this.ws.onclose = () => {
+        // Stale close from a previous socket — ignore.
+        if (gen !== this.connectGeneration) return;
         if (this.pendingJoin) {
           clearTimeout(timeout);
           this.pendingJoin.reject(
@@ -501,9 +499,7 @@ class ChatAPI {
           );
           this.pendingJoin = null;
         }
-        if (!this.intentionalClose) {
-          this.attemptReconnect();
-        }
+        this.attemptReconnect();
       };
 
       this.ws.onerror = () => {
@@ -1027,7 +1023,7 @@ class ChatAPI {
   }
 
   disconnect(): void {
-    this.intentionalClose = true;
+    ++this.connectGeneration; // Stale onclose from old socket will be ignored
     this.wasReconnecting = false;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

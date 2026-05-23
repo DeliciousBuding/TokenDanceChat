@@ -1,4 +1,4 @@
-const CACHE_NAME = "tdchat-v2";
+const CACHE_NAME = "tdchat-v3";
 const STATIC_ASSETS = [
   "/offline.html",
   "/manifest.json",
@@ -49,7 +49,7 @@ function isNavigationRequest(request, url) {
   );
 }
 
-// Fetch: network-first for API, cache-first for static
+// Fetch: network-first for nav/API, stale-while-revalidate for static
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
@@ -71,9 +71,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets: cache-first
+  // Static assets: stale-while-revalidate (fast loads + auto-update)
   if (isStaticAsset(url)) {
-    event.respondWith(cacheFirst(event.request));
+    event.respondWith(staleWhileRevalidate(event.request));
     return;
   }
 
@@ -95,17 +95,18 @@ async function networkFirst(request) {
   }
 }
 
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    return caches.match("/offline.html");
-  }
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+
+  const fetchPromise = fetch(request)
+    .then((response) => {
+      if (response.ok) {
+        cache.put(request, response.clone());
+      }
+      return response;
+    })
+    .catch(() => cached || caches.match("/offline.html"));
+
+  return cached || fetchPromise;
 }
