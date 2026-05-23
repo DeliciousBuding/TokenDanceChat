@@ -169,6 +169,7 @@ export interface TranslationDict {
     connectionLost: string;
     reconnecting: string;
     reconnected: string;
+    disconnected: string;
     reconnectFailed: string;
     kicked: string;
     typing: string;
@@ -506,7 +507,7 @@ const zhCN: TranslationDict = {
   },
   sidebar: {
     publicChat: "公共聊天",
-    publicChatSub: "Public Chat Room",
+    publicChatSub: "公共聊天室",
     onlineUsers: "在线用户",
     emptyState: "暂无在线用户",
     you: "你",
@@ -614,6 +615,7 @@ const zhCN: TranslationDict = {
     connectionLost: "连接已断开，正在尝试重新连接...",
     reconnecting: "正在重新连接 (第 {{attempt}} 次)...",
     reconnected: "已重新连接",
+    disconnected: "未连接 — 重新连接后重试",
     reconnectFailed: "连接已断开，请刷新页面。",
     kicked: "您的账号已在其他地方登录，当前连接已断开。",
     typing: "{{username}} 正在输入...",
@@ -1061,6 +1063,7 @@ const enUS: TranslationDict = {
     connectionLost: "Connection lost, attempting to reconnect...",
     reconnecting: "Reconnecting (attempt {{attempt}})...",
     reconnected: "Reconnected",
+    disconnected: "Not connected — retrying...",
     reconnectFailed: "Connection lost. Please reload the page.",
     kicked: "Your account was logged in elsewhere. This connection has been closed.",
     typing: "{{username}} is typing...",

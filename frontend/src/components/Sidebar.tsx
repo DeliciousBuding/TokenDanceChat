@@ -398,7 +398,7 @@ export function Sidebar({
   // ---- P1 improvements ----
 
   // Fix 1: AI Assistants collapsible section
-  const [aiAssistantsExpanded, setAiAssistantsExpanded] = useState(false);
+  const [aiAssistantsExpanded, setAiAssistantsExpanded] = useState(true);
 
   // Fix 2: Conversation search/filter
   const [searchQuery, setSearchQuery] = useState("");
