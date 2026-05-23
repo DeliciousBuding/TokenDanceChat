@@ -3736,7 +3736,6 @@ func TestGroupAddMember(t *testing.T) {
 // creates a group, invites Bob who accepts. Bob then leaves the group
 // and both receive group_leave notifications.
 func TestGroupRemoveMember(t *testing.T) {
-	t.Skip("group_leave confirmation timing — group_leave handler sends group_member_left via c.send but c.hub.RemoveGroupMember runs before confirmation is drained")
 	h := newTestHandler()
 	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
 	defer srv.Close()
