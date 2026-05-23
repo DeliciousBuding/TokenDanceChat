@@ -46,7 +46,7 @@
 - 无 `Permissions-Policy`（传感器/设备访问风险）
 
 **修复**: 在 `backend\handler\handler.go` 中新增 `SecurityHeadersMiddleware`，设置：
-- `Content-Security-Policy`: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; font-src 'self'; base-uri 'self'; form-action 'self'`
+- `Content-Security-Policy`: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: https:; font-src 'self'; base-uri 'self'; form-action 'self'`
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
@@ -54,7 +54,7 @@
 - `X-XSS-Protection: 0`（已废弃，但为旧浏览器纵深防御保留）
 
 中间件按顺序应用：Logging → SecurityHeaders → CORS。
-**状态**: 已在 `backend\handler\handler.go:59-72` 修复，在 `backend\main.go:50` 应用。
+**状态**: 已在 `backend\handler\handler.go:115-127` 修复，在 `backend\main.go:301` 应用。
 
 ---
 
@@ -80,17 +80,16 @@
 
 **位置**: `backend\hub\client.go:144-156`（原始版本）
 **说明**: 后端仅检查内容是否为空（`msg.Content == ""`）。未在服务端强制长度限制。虽然前端通过 `maxLength={2000}` 限制输入为 2000 字符，但恶意 WebSocket 客户端可直接发送超大消息轻易绕过。这可能导致 SQLite 数据库膨胀，并在 JSON 序列化/广播期间消耗过量内存。
-**修复**: 新增 `sanitizeContent()` 函数，剥离 null 字节、修剪空白、强制 2000 字符最大长度限制。在 `handleChatMessage()` 中存储和广播前应用。
-**状态**: 已在 `backend\hub\client.go:263-277` 修复。
+**修复**: 新增 `sanitizeContent()` 函数，剥离 null 字节、HTML 标签与 `javascript:` 协议字符串、修剪空白、强制 2000 字符最大长度限制。在 `handleChatMessage()` 中存储和广播前应用。
+**状态**: 已在 `backend\hub\client.go:2076-2092` 修复。
 
 ---
 
-### M-01: WebSocket Origin 检查允许所有来源
+### M-01: WebSocket Origin 检查限制 [已改进]
 
 **位置**: `backend\handler\ws.go:16-18`
-**说明**: `CheckOrigin` 对所有来源返回 `true`。这会导致跨站 WebSocket 劫持 (CSWSH) —— 任何网站都可以打开到服务器的 WebSocket 并静默地以用户身份收发消息。对于无认证的 Demo 这是有意设计，但在生产环境应加以限制。
-**生产环境建议**: 对照允许域名白名单检查 `Origin` 头。对于单域部署，验证 `r.Header.Get("Origin")` 与预期域名匹配。
-**状态**: Demo 阶段接受。已在 deploy.md 备注中记录。
+**说明**: `CheckOrigin` 现已验证同源请求，支持通过 `CHAT_ALLOWED_ORIGINS` 环境变量配置额外允许的域名（逗号分隔），并保留对 `vectorcontrol.tech` 子域名的历史兼容白名单。不再对任意来源放行，降低了跨站 WebSocket 劫持 (CSWSH) 风险。
+**状态**: 已改进。如需更严格的单域名锁定，可在 `CHAT_ALLOWED_ORIGINS` 中仅配置生产域名。
 
 ---
 
@@ -112,12 +111,12 @@
 
 ---
 
-### M-04: rehype-raw 已导入但未使用
+### M-04: rehype-raw 依赖已移除 [已修复]
 
-**位置**: `frontend\package.json:19`
-**说明**: `rehype-raw`（v7.0.0）列为依赖，但未在任何组件中导入或使用。`react-markdown` 未传入 `rehypePlugins={[rehypeRaw]}`。这是死代码，增加了一个不必要的依赖及其自身安全面。若意外激活，`rehype-raw` 会解析 Markdown 中的原始 HTML，产生 XSS 向量。
-**建议**: 从 `package.json` 依赖中移除 `rehype-raw`。除非明确需要 HTML 渲染并配合适当净化（通过 `rehype-sanitize`），否则不要将其加入 `react-markdown` 的 rehype 插件链。
-**状态**: 建议清理。
+**位置**: `frontend\package.json`
+**说明**: `rehype-raw`（v7.0.0）此前列为依赖但未在任何组件中导入或使用。这是死代码，增加了一个不必要的依赖及其自身安全面。若意外激活，`rehype-raw` 会解析 Markdown 中的原始 HTML，产生 XSS 向量。
+**修复**: `rehype-raw` 已从 `package.json` 依赖中移除。
+**状态**: 已修复。
 
 ---
 

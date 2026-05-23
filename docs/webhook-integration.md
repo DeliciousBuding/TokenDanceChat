@@ -16,7 +16,6 @@
 - 前端群组管理员控件依赖 `group_info.group_members` 角色数据；客户端在决定是否展示 Webhook 管理前应对其标准化。
 - Webhook 密钥在 SQLite 中以带版本号的加盐 HMAC 哈希形式持久化，并使用 constant-time 比较进行验证。
 - 现有明文 webhook 行在 store 启动时迁移为哈希。
-- 生产环境后续工作：密钥轮换以及创建/删除事件的审计日志。
 
 ## WebSocket 控制事件
 
@@ -101,6 +100,68 @@
   "id": "webhook-id"
 }
 ```
+
+### 密钥轮换
+
+客户端请求：
+
+```json
+{
+  "type": "webhook_rotate",
+  "group": "team",
+  "id": "webhook-id"
+}
+```
+
+服务器响应至发起者：
+
+```json
+{
+  "type": "webhook_rotated",
+  "group": "team",
+  "id": "webhook-id",
+  "content": "webhook-path",
+  "secret": "new-secret-shown-once"
+}
+```
+
+- 旧密钥立即失效，后续使用旧密钥的 HTTP POST 请求将被拒绝。
+- 仅群主或管理员可轮换。
+- 新密钥仅在此 `webhook_rotated` 响应中一次性返回，不会出现在 `webhook_list` 或其他事件中。
+
+### 审计日志
+
+客户端请求：
+
+```json
+{
+  "type": "webhook_audit_list",
+  "group": "team"
+}
+```
+
+服务器响应：
+
+```json
+{
+  "type": "webhook_audit_list",
+  "group": "team",
+  "audit_logs": [
+    {
+      "id": "audit-log-id",
+      "webhook_id": "webhook-id",
+      "group_name": "team",
+      "action": "created",
+      "actor": "alice",
+      "created_at": 1760000000000
+    }
+  ]
+}
+```
+
+- `action` 取值：`created`、`rotated`、`deleted`。
+- 审计日志绝不包含密钥哈希或 webhook metadata。
+- 仅群主或管理员可查看审计日志。
 
 ## HTTP 消息入口
 
