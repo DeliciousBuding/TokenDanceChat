@@ -1,6 +1,8 @@
 package store
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -543,3 +545,79 @@ func TestConcurrentInsert(t *testing.T) {
 		t.Errorf("expected %d messages after concurrent inserts got %d", numGoroutines, len(msgs))
 	}
 }
+
+// ── Password hashing (bcrypt) ──
+
+func TestHashPasswordUsesBcrypt(t *testing.T) {
+	h := hashPassword("my-secret-password")
+	if !strings.HasPrefix(h, "$2a$") {
+		t.Errorf("expected bcrypt hash (starts with $2a$), got: %s", h[:20]+"...")
+	}
+	// Bcrypt hashes are exactly 60 chars
+	if len(h) != 60 {
+		t.Errorf("expected 60-char bcrypt hash, got %d chars", len(h))
+	}
+}
+
+func TestCheckPasswordBcrypt(t *testing.T) {
+	h := hashPassword("test-password-123")
+	ok, upgrade := checkPassword(h, "test-password-123")
+	if !ok {
+		t.Error("bcrypt checkPassword should return true for correct password")
+	}
+	if upgrade != "" {
+		t.Error("bcrypt checkPassword should not return upgrade hash for bcrypt input")
+	}
+}
+
+func TestCheckPasswordBcryptWrongPassword(t *testing.T) {
+	h := hashPassword("correct-password")
+	ok, _ := checkPassword(h, "wrong-password")
+	if ok {
+		t.Error("checkPassword should return false for wrong password")
+	}
+}
+
+func TestCheckPasswordLegacySHA256Upgrade(t *testing.T) {
+	// Simulate the old SHA-256 format: "hexSalt:hexHash"
+	salt := make([]byte, 16)
+	for i := range salt {
+		salt[i] = byte(i)
+	}
+	password := "legacy-password"
+	h := sha256.Sum256(append(salt, []byte(password)...))
+	legacy := hex.EncodeToString(salt) + ":" + hex.EncodeToString(h[:])
+
+	ok, upgrade := checkPassword(legacy, password)
+	if !ok {
+		t.Error("checkPassword should verify legacy SHA-256 hash")
+	}
+	if upgrade == "" {
+		t.Error("checkPassword should return upgrade hash for legacy SHA-256")
+	}
+	if !strings.HasPrefix(upgrade, "$2a$") {
+		t.Errorf("upgrade hash should be bcrypt, got: %s", upgrade[:20]+"...")
+	}
+
+	// Verify the upgrade hash works
+	ok2, _ := checkPassword(upgrade, password)
+	if !ok2 {
+		t.Error("checkPassword should verify upgraded bcrypt hash")
+	}
+}
+
+func TestCheckPasswordLegacyWrongPassword(t *testing.T) {
+	salt := make([]byte, 16)
+	password := "real-password"
+	h := sha256.Sum256(append(salt, []byte(password)...))
+	legacy := hex.EncodeToString(salt) + ":" + hex.EncodeToString(h[:])
+
+	ok, upgrade := checkPassword(legacy, "wrong-password")
+	if ok {
+		t.Error("checkPassword should return false for wrong password on legacy hash")
+	}
+	if upgrade != "" {
+		t.Error("checkPassword should not return upgrade for wrong password")
+	}
+}
+
