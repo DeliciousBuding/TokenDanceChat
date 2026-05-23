@@ -482,8 +482,9 @@ describe("chatStore", () => {
     });
 
     it("persists lastReadTimestamps across state changes", () => {
+      useChatStore.getState().setUsername("Alice");
       useChatStore.getState().markConversationRead("dm:Bob");
-      const stored = JSON.parse(localStorage.getItem("tokendance:lastReadTimestamps") || "{}");
+      const stored = JSON.parse(localStorage.getItem("tokendance:lastReadTimestamps:Alice") || "{}");
       expect(stored["dm:Bob"]).toBeGreaterThan(0);
     });
   });

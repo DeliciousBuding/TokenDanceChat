@@ -2,11 +2,14 @@ import { create } from "zustand";
 import type { ChatMessage, RoomInfo, UserStatus, ScheduledMessage, CustomEmoji, ChatFolder } from "@/lib/api";
 
 const MESSAGE_CAP = 500;
-const LS_LAST_READ_KEY = "tokendance:lastReadTimestamps";
 
-function loadLastReadTimestamps(): Record<string, number> {
+function getLSLastReadKey(username: string): string {
+  return `tokendance:lastReadTimestamps:${username}`;
+}
+
+function loadLastReadTimestamps(username: string): Record<string, number> {
   try {
-    const raw = localStorage.getItem(LS_LAST_READ_KEY);
+    const raw = localStorage.getItem(getLSLastReadKey(username));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -313,7 +316,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pendingImage: null,
   unreadCount: 0,
   unreadByConversation: {},
-  lastReadTimestamps: loadLastReadTimestamps(),
+  lastReadTimestamps: loadLastReadTimestamps(""),
   latestMention: null,
   blockedUsers: [],
   pinnedMessages: [],
@@ -334,7 +337,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeCall: null,
 
   setView: (view) => set({ view }),
-  setUsername: (username) => set({ username }),
+  setUsername: (username) => set({ username, lastReadTimestamps: loadLastReadTimestamps(username) }),
   setConnected: (connected) => set({ connected }),
   setGuest: (isGuest) => set({ isGuest }),
   addMessage: (message) =>
@@ -411,7 +414,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             : "public";
       const nextTimestamps = { ...state.lastReadTimestamps, [oldKey]: Date.now() };
       try {
-        localStorage.setItem(LS_LAST_READ_KEY, JSON.stringify(nextTimestamps));
+        localStorage.setItem(getLSLastReadKey(state.username), JSON.stringify(nextTimestamps));
       } catch { /* quota exceeded */ }
       return { currentChat, pendingImage: null, lastReadTimestamps: nextTimestamps };
     }),
@@ -511,18 +514,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       delete next[key];
       const nextTimestamps = { ...state.lastReadTimestamps, [key]: Date.now() };
       try {
-        localStorage.setItem(LS_LAST_READ_KEY, JSON.stringify(nextTimestamps));
+        localStorage.setItem(getLSLastReadKey(state.username), JSON.stringify(nextTimestamps));
       } catch { /* quota exceeded */ }
       return { unreadByConversation: next, lastReadTimestamps: nextTimestamps };
     }),
   clearAllConversationUnreads: () => set({ unreadByConversation: {} }),
   markConversationRead: (key) =>
     set((state) => {
-      const next = { ...state.lastReadTimestamps, [key]: Date.now() };
+      const nextTimestamps = { ...state.lastReadTimestamps, [key]: Date.now() };
       try {
-        localStorage.setItem(LS_LAST_READ_KEY, JSON.stringify(next));
+        localStorage.setItem(getLSLastReadKey(state.username), JSON.stringify(nextTimestamps));
       } catch { /* quota exceeded */ }
-      return { lastReadTimestamps: next };
+      const nextUnread = { ...state.unreadByConversation };
+      delete nextUnread[key];
+      return { lastReadTimestamps: nextTimestamps, unreadByConversation: nextUnread };
     }),
   updateMessageReactions: (messageId, reactions) =>
     set((state) => ({
@@ -766,7 +771,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setActiveCall: (activeCall) => set({ activeCall }),
   setTranslation: (messageId, text) =>
     set((state) => ({ translations: { ...state.translations, [messageId]: text } })),
-  reset: () =>
+  reset: () => {
+    const state = get();
+    if (state.username) {
+      try {
+        localStorage.removeItem(getLSLastReadKey(state.username));
+      } catch { /* ignore */ }
+    }
     set({
       view: "join",
       username: "",
@@ -810,5 +821,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       translations: {},
       incomingCall: null,
       activeCall: null,
-    }),
+    });
+  },
 }));

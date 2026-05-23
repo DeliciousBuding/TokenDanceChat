@@ -47,13 +47,14 @@ describe("formatTime", () => {
     expect(formatTime(fiveDaysAgo)).toBe(`${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
   });
 
-  it("不同年份也显示MM-DD", () => {
+  it("不同年份显示YY-MM-DD", () => {
     // Create a timestamp in the previous year
     const now = new Date();
     const lastYear = new Date(now.getFullYear() - 1, 5, 15, 12, 0, 0);
     const pad = (n: number) => String(n).padStart(2, "0");
+    const yy = String(lastYear.getFullYear()).slice(-2);
     expect(formatTime(lastYear.getTime())).toBe(
-      `${pad(lastYear.getMonth() + 1)}-${pad(lastYear.getDate())}`,
+      `${yy}-${pad(lastYear.getMonth() + 1)}-${pad(lastYear.getDate())}`,
     );
   });
 });

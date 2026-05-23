@@ -104,6 +104,7 @@ export interface TranslationDict {
     newMessages: string;
     loadingOlder: string;
     newMessagesDivider: string;
+    olderMessages: string;
     emptyDmTitle: string;
     emptyDmDescription: string;
     emptyGroupTitle: string;
@@ -182,6 +183,9 @@ export interface TranslationDict {
   };
   lang: {
     switchTo: string;
+    label: string;
+  };
+  more: {
     label: string;
   };
   group: {
@@ -528,6 +532,7 @@ const zhCN: TranslationDict = {
     newMessages: "{{count}} 条新消息",
     loadingOlder: "加载更早的消息...",
     newMessagesDivider: "新消息",
+    olderMessages: "更早的消息",
     emptyDmTitle: "暂无消息",
     emptyDmDescription: "向 {{username}} 发送第一条消息吧！",
     emptyGroupTitle: "群聊已就绪",
@@ -607,6 +612,9 @@ const zhCN: TranslationDict = {
   lang: {
     switchTo: "English",
     label: "切换语言",
+  },
+  more: {
+    label: "更多",
   },
   group: {
     createTitle: "创建群组",
@@ -954,6 +962,7 @@ const enUS: TranslationDict = {
     newMessages: "{{count}} new messages",
     loadingOlder: "Loading older messages...",
     newMessagesDivider: "New messages",
+    olderMessages: "Older messages",
     emptyDmTitle: "No messages yet",
     emptyDmDescription: "Send your first message to {{username}}!",
     emptyGroupTitle: "Group is ready",
@@ -1033,6 +1042,9 @@ const enUS: TranslationDict = {
   lang: {
     switchTo: "中文",
     label: "Switch language",
+  },
+  more: {
+    label: "More",
   },
   group: {
     createTitle: "Create Group",

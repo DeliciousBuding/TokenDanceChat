@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from "react";
-import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings, Download, Info, Phone, Video, Search, MoreHorizontal } from "lucide-react";
+import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings, Download, Info, Phone, Video, Search, MoreHorizontal, Moon, Sun, Monitor } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { MessageTranscript } from "./MessageTranscript";
 import { ChatInput } from "./ChatInput";
@@ -34,8 +34,8 @@ export function ChatLayout() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [threadParent, setThreadParent] = useState<ChatMessage | null>(null);
   const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
-  const [exportOpen, setExportOpen] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [exportToast, setExportToast] = useState<string | null>(null);
   const [conversationSearchOpen, setConversationSearchOpen] = useState(false);
   const [searchHighlight, setSearchHighlight] = useState("");
@@ -194,14 +194,26 @@ export function ChatLayout() {
         window.dispatchEvent(new CustomEvent("tdchat:close-emoji-picker"));
         // Close mobile sidebar
         setSidebarOpen(false);
-        // Close export dropdown
-        setExportOpen(false);
         setMobileActionsOpen(false);
+        setShowMoreMenu(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Close more menu on click outside
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-more-menu]")) {
+        setShowMoreMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMoreMenu]);
 
   const toggleLang = useCallback(() => {
     const next: Language = lang === "zh-CN" ? "en-US" : "zh-CN";
@@ -263,7 +275,6 @@ export function ChatLayout() {
   }, []);
 
   const handleExport = useCallback(async (format: 'json' | 'text') => {
-    setExportOpen(false);
     try {
       const conversationKey =
         currentChat.type === "dm" ? `dm:${currentChat.username}` :
@@ -646,15 +657,79 @@ export function ChatLayout() {
                 {t("call.groupCall")}
               </button>
             )}
-            <button
-              onClick={toggleLang}
-              aria-label={t("lang.label")}
-              className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
-            >
-              <Globe className="h-4 w-4" />
-              {t("lang.switchTo")}
-            </button>
-            <ThemeToggle />
+            {/* More dropdown (desktop) */}
+            <div className="relative" data-more-menu>
+              <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                aria-label={t("more.label")}
+                className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+                {t("more.label")}
+              </button>
+              {showMoreMenu && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-md shadow-md min-w-[180px] py-1">
+                  <button
+                    onClick={() => { toggleLang(); setShowMoreMenu(false); }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
+                  >
+                    <Globe className="h-4 w-4" />
+                    {t("lang.switchTo")}
+                  </button>
+                  {(() => {
+                    const stored = localStorage.getItem("tdchat-theme") || "light";
+                    const theme = ["light", "dark", "system"].includes(stored) ? stored : "light";
+                    const ThemeIcon = theme === "dark" ? Moon : theme === "system" ? Monitor : Sun;
+                    const labels: Record<string, string> = {
+                      light: t("settings.themeLight"),
+                      dark: t("settings.themeDark"),
+                      system: t("settings.themeSystem"),
+                    };
+                    return (
+                      <button
+                        onClick={() => {
+                          const cycle = ["light", "dark", "system"];
+                          const cur = localStorage.getItem("tdchat-theme") || "light";
+                          const idx = cycle.indexOf(cur);
+                          const next = cycle[(idx + 1) % cycle.length] || "light";
+                          localStorage.setItem("tdchat-theme", next);
+                          const root = document.documentElement;
+                          if (next === "light") { root.classList.remove("dark"); root.classList.add("light"); }
+                          else if (next === "dark") { root.classList.add("dark"); root.classList.remove("light"); }
+                          else { const pd = window.matchMedia("(prefers-color-scheme: dark)").matches; root.classList.toggle("dark", pd); root.classList.remove("light"); }
+                          setShowMoreMenu(false);
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
+                      >
+                        <ThemeIcon className="h-4 w-4" />
+                        {labels[theme]}
+                      </button>
+                    );
+                  })()}
+                  <button
+                    onClick={() => { handleExport("json"); setShowMoreMenu(false); }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
+                  >
+                    <Download className="h-4 w-4" />
+                    {t("export.exportJson")}
+                  </button>
+                  <button
+                    onClick={() => { handleExport("text"); setShowMoreMenu(false); }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
+                  >
+                    <Download className="h-4 w-4" />
+                    {t("export.exportText")}
+                  </button>
+                  <button
+                    onClick={() => { setSettingsOpen(true); setShowMoreMenu(false); }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
+                  >
+                    <Settings className="h-4 w-4" />
+                    {t("settings.openSettings")}
+                  </button>
+                </div>
+              )}
+            </div>
             {/* Search button (desktop) */}
             <button
               onClick={() => setConversationSearchOpen((prev) => !prev)}
@@ -663,41 +738,6 @@ export function ChatLayout() {
             >
               <Search className="h-4 w-4" />
               {t("search.pressCtrlF")}
-            </button>
-            {/* Export button (desktop) */}
-            <div className="relative">
-              <button
-                onClick={() => setExportOpen(!exportOpen)}
-                aria-label={t("export.exportChat")}
-                className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
-              >
-                <Download className="h-4 w-4" />
-                {t("export.exportChat")}
-              </button>
-              {exportOpen && (
-                <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded-xl border border-border bg-card shadow-xl py-1 animate-scale-in origin-top-right">
-                  <button
-                    onClick={() => handleExport("json")}
-                    className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
-                  >
-                    {t("export.exportJson")}
-                  </button>
-                  <button
-                    onClick={() => handleExport("text")}
-                    className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
-                  >
-                    {t("export.exportText")}
-                  </button>
-                </div>
-              )}
-            </div>
-            <button
-              onClick={() => setSettingsOpen(true)}
-              aria-label={t("settings.openSettings")}
-              className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
-            >
-              <Settings className="h-4 w-4" />
-              {t("settings.openSettings")}
             </button>
             <ScheduledMessagesPanel roomId={currentRoomID} />
             <button

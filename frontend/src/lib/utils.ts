@@ -24,7 +24,13 @@ export function formatTime(timestamp: number): string {
     return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
-  // Older: "MM-DD"
+  // Different year: "YY-MM-DD"
+  if (date.getFullYear() !== new Date().getFullYear()) {
+    const yy = date.getFullYear().toString().slice(-2);
+    return `${yy}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  // Same year, older: "MM-DD"
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
