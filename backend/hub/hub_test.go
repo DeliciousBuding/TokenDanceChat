@@ -1578,3 +1578,489 @@ func TestHandleCustomEmojiAddAndList(t *testing.T) {
 		t.Fatalf("expected INVALID_EMOJI error, got type=%q code=%q", got.Type, got.ErrorCode)
 	}
 }
+
+func TestValidateGroupName(t *testing.T) {
+	tests := []struct {
+		name      string
+		groupName string
+		valid     bool
+	}{
+		// Valid cases.
+		{name: "simple english", groupName: "developers", valid: true},
+		{name: "with hyphens", groupName: "dev-team", valid: true},
+		{name: "with spaces", groupName: "Dev Team", valid: true},
+		{name: "chinese", groupName: "开发团队", valid: true},
+		{name: "mixed cn and en", groupName: "Dev开发_Group", valid: true},
+		{name: "single char", groupName: "a", valid: true},
+		{name: "exactly 30 chars", groupName: "123456789012345678901234567890", valid: true},
+
+		// Invalid cases.
+		{name: "empty", groupName: "", valid: false},
+		{name: "31 chars too long", groupName: "1234567890123456789012345678901", valid: false},
+		{name: "special char @", groupName: "dev@team", valid: false},
+		{name: "special char #", groupName: "dev#team", valid: false},
+		{name: "emoji", groupName: "team\xf0\x9f\x98\x80", valid: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ValidateGroupName(tc.groupName)
+			if result != tc.valid {
+				t.Errorf("ValidateGroupName(%q) = %v, want %v", tc.groupName, result, tc.valid)
+			}
+		})
+	}
+}
+
+func TestIsReservedUsername(t *testing.T) {
+	tests := []struct {
+		username string
+		reserved bool
+	}{
+		// Reserved names (exact match, case insensitive).
+		{"system", true},
+		{"System", true},
+		{"SYSTEM", true},
+		{"server", true},
+		{"admin", true},
+		{"Admin", true},
+		{"moderator", true},
+		{"mod", true},
+		{"root", true},
+		{"null", true},
+		{"NULL", true},
+		{"undefined", true},
+		{"everyone", true},
+		{"all", true},
+		{"chat", true},
+		{"here", true},
+		{"channel", true},
+
+		// Non-reserved names.
+		{"alice", false},
+		{"bob", false},
+		{"test_user", false},
+		{"张三", false},
+		{"administrator", false},
+		{"system_admin", false},
+		{"moderators", false},
+		{"rooter", false},
+		{"chatroom", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.username, func(t *testing.T) {
+			result := isReservedUsername(tc.username)
+			if result != tc.reserved {
+				t.Errorf("isReservedUsername(%q) = %v, want %v", tc.username, result, tc.reserved)
+			}
+		})
+	}
+}
+
+func TestExecuteHubCommand(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "", "TestAgent")
+
+	t.Run("online_users", func(t *testing.T) {
+		resp := h.ExecuteHubCommand(HubCommand{Type: "online_users"})
+		if !resp.Success {
+			t.Error("expected success for online_users")
+		}
+		if resp.Type != "online_users" {
+			t.Errorf("type = %q, want online_users", resp.Type)
+		}
+		online, ok := resp.Data["online"].([]string)
+		if !ok {
+			t.Fatal("expected online to be []string in data")
+		}
+		if len(online) != 0 {
+			t.Errorf("expected 0 online users initially, got %d", len(online))
+		}
+		count, ok := resp.Data["count"].(int)
+		if !ok || count != 0 {
+			t.Errorf("expected count=0, got count=%v", resp.Data["count"])
+		}
+	})
+
+	t.Run("history", func(t *testing.T) {
+		ms.messages = append(ms.messages, StoredMessage{
+			ID: "msg-1", Username: "alice", Content: "hello", Timestamp: 1000,
+		})
+		resp := h.ExecuteHubCommand(HubCommand{Type: "history", Limit: 10})
+		if !resp.Success {
+			t.Error("expected success for history command")
+		}
+		if resp.Type != "history" {
+			t.Errorf("type = %q, want history", resp.Type)
+		}
+	})
+
+	t.Run("history with room_id", func(t *testing.T) {
+		resp := h.ExecuteHubCommand(HubCommand{
+			Type:   "history",
+			RoomID: "room-1",
+			Limit:  5,
+		})
+		if !resp.Success {
+			t.Error("expected success for history with room_id")
+		}
+		if resp.Data["room_id"] != "room-1" {
+			t.Errorf("room_id = %v, want room-1", resp.Data["room_id"])
+		}
+	})
+
+	t.Run("history limit cap", func(t *testing.T) {
+		resp := h.ExecuteHubCommand(HubCommand{Type: "history", Limit: 500})
+		if !resp.Success {
+			t.Error("expected success even with excessive limit")
+		}
+	})
+
+	t.Run("send_dm", func(t *testing.T) {
+		resp := h.ExecuteHubCommand(HubCommand{
+			Type:    "send_dm",
+			ToUser:  "alice",
+			Content: "hello from test agent",
+		})
+		if !resp.Success {
+			t.Errorf("expected success for send_dm, got error: %s", resp.Error)
+		}
+		if resp.Type != "send_dm" {
+			t.Errorf("type = %q, want send_dm", resp.Type)
+		}
+	})
+
+	t.Run("send_dm with custom from param", func(t *testing.T) {
+		resp := h.ExecuteHubCommand(HubCommand{
+			Type:    "send_dm",
+			ToUser:  "bob",
+			Content: "custom sender message",
+			Params:  map[string]any{"from": "CustomBot"},
+		})
+		if !resp.Success {
+			t.Errorf("expected success with custom from, got error: %s", resp.Error)
+		}
+	})
+
+	t.Run("send_dm empty content", func(t *testing.T) {
+		resp := h.ExecuteHubCommand(HubCommand{
+			Type:    "send_dm",
+			ToUser:  "alice",
+			Content: "",
+		})
+		if resp.Success {
+			t.Error("expected failure for send_dm with empty content")
+		}
+	})
+
+	t.Run("unknown command", func(t *testing.T) {
+		resp := h.ExecuteHubCommand(HubCommand{Type: "invalid_cmd"})
+		if resp.Success {
+			t.Error("expected failure for unknown command")
+		}
+		if resp.Type != "invalid_cmd" {
+			t.Errorf("type = %q, want invalid_cmd", resp.Type)
+		}
+		if resp.Error == "" {
+			t.Error("expected non-empty error message for unknown command")
+		}
+	})
+}
+
+func TestParseMentions(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected []string
+	}{
+		{name: "single mention", content: "@alice hello", expected: []string{"alice"}},
+		{name: "multiple mentions", content: "@alice @bob hi", expected: []string{"alice", "bob"}},
+		{name: "no mentions", content: "hello world", expected: nil},
+		{name: "chinese name", content: "@张三 你好", expected: []string{"张三"}},
+		{name: "duplicate mention deduped", content: "@alice @alice hi", expected: []string{"alice"}},
+		{name: "mixed latin and chinese", content: "@alice and @bob and @张三", expected: []string{"alice", "bob", "张三"}},
+		{name: "at sign with space no match", content: "hello @ world", expected: nil},
+		{name: "underscore in name", content: "@user_name hi", expected: []string{"user_name"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := parseMentions(tc.content)
+			if len(result) != len(tc.expected) {
+				t.Fatalf("parseMentions(%q) = %v (len=%d), want %v (len=%d)", tc.content, result, len(result), tc.expected, len(tc.expected))
+			}
+			for i, v := range result {
+				if v != tc.expected[i] {
+					t.Errorf("parseMentions(%q)[%d] = %q, want %q", tc.content, i, v, tc.expected[i])
+				}
+			}
+		})
+	}
+}
+
+func TestContainsAllMention(t *testing.T) {
+	tests := []struct {
+		content  string
+		expected bool
+	}{
+		{"@all hello", true},
+		{"@everyone hi", true},
+		{"@here check", true},
+		{"@channel update", true},
+		{"@ALL hands", true},
+		{"@Everyone welcome", true},
+		{"@Here test", true},
+		{"@Channel news", true},
+		{"hello @alice", false},
+		{"no mention here", false},
+		{"", false},
+		{"@allhands", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.content, func(t *testing.T) {
+			result := containsAllMention(tc.content)
+			if result != tc.expected {
+				t.Errorf("containsAllMention(%q) = %v, want %v", tc.content, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestAssistantMentionTargetKeywordTriggers(t *testing.T) {
+	tests := []struct {
+		name      string
+		content   string
+		wantToken bool
+		wantAgent bool
+	}{
+		{
+			name:      "keyword help triggers TokenBot",
+			content:   "I need help",
+			wantToken: true,
+		},
+		{
+			name:      "keyword 帮助 triggers TokenBot",
+			content:   "我需要帮助",
+			wantToken: true,
+		},
+		{
+			name:      "keyword bot triggers TokenBot",
+			content:   "is bot working",
+			wantToken: true,
+		},
+		{
+			name:      "keyword 机器人 triggers TokenBot",
+			content:   "机器人你好",
+			wantToken: true,
+		},
+		{
+			name:      "keyword 任务 triggers PicoClaw",
+			content:   "创建一个任务",
+			wantAgent: true,
+		},
+		{
+			name:      "keyword 分析 triggers PicoClaw",
+			content:   "分析一下这个问题",
+			wantAgent: true,
+		},
+		{
+			name:      "keyword 帮我 triggers PicoClaw",
+			content:   "帮我写一段代码",
+			wantAgent: true,
+		},
+		{
+			name:      "keyword summarize triggers PicoClaw",
+			content:   "summarize this document",
+			wantAgent: true,
+		},
+		{
+			name:      "keyword translate triggers PicoClaw",
+			content:   "translate to Chinese",
+			wantAgent: true,
+		},
+		{
+			name:      "keyword search triggers PicoClaw",
+			content:   "search for information",
+			wantAgent: true,
+		},
+		{
+			name:      "keyword generate triggers PicoClaw",
+			content:   "generate a report",
+			wantAgent: true,
+		},
+		{
+			name:      "keyword write triggers PicoClaw",
+			content:   "write a poem",
+			wantAgent: true,
+		},
+		{
+			name:      "keyword code triggers PicoClaw",
+			content:   "write some code",
+			wantAgent: true,
+		},
+		{
+			name:    "no trigger words at all",
+			content: "hello how are you today",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := assistantMentionTarget(tc.content, "TokenBot", "PicoClaw")
+			if got.TokenBot != tc.wantToken {
+				t.Errorf("TokenBot target = %v, want %v (content=%q)", got.TokenBot, tc.wantToken, tc.content)
+			}
+			if got.Agent != tc.wantAgent {
+				t.Errorf("Agent target = %v, want %v (content=%q)", got.Agent, tc.wantAgent, tc.content)
+			}
+		})
+	}
+}
+
+func TestSanitizeContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantLen int
+		wantStr string
+	}{
+		{
+			name:    "normal content passes through",
+			input:   "Hello, world!",
+			wantStr: "Hello, world!",
+		},
+		{
+			name:    "null bytes are stripped",
+			input:   "Hello\x00World",
+			wantStr: "HelloWorld",
+		},
+		{
+			name:    "HTML tags are stripped",
+			input:   "<script>alert('xss')</script>hello",
+			wantStr: "alert('xss')hello",
+		},
+		{
+			name:    "whitespace is trimmed",
+			input:   "  trimmed  ",
+			wantStr: "trimmed",
+		},
+		{
+			name:    "javascript protocol removed",
+			input:   "javascript:alert(1)",
+			wantStr: "alert(1)",
+		},
+		{
+			name:    "long content truncated",
+			input:   strings.Repeat("x", maxContentLength+100),
+			wantLen: maxContentLength,
+		},
+		{
+			name:    "whitespace only becomes empty",
+			input:   "   ",
+			wantStr: "",
+		},
+		{
+			name:    "HTML tag wrapping stripped",
+			input:   "<a href='javascript:void(0)'>click</a>",
+			wantStr: "click",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := sanitizeContent(tc.input)
+			if tc.wantStr != "" {
+				if result != tc.wantStr {
+					t.Errorf("sanitizeContent(%q) = %q, want %q", tc.input, result, tc.wantStr)
+				}
+			} else if tc.wantLen > 0 {
+				if len([]rune(result)) != tc.wantLen {
+					t.Errorf("sanitizeContent rune length = %d, want %d", len([]rune(result)), tc.wantLen)
+				}
+			}
+		})
+	}
+}
+
+func TestIsAssistantAlias(t *testing.T) {
+	tests := []struct {
+		name      string
+		mention   string
+		canonical string
+		aliases   []string
+		expected  bool
+	}{
+		{
+			name:      "exact canonical match",
+			mention:   "TokenBot",
+			canonical: "TokenBot",
+			expected:  true,
+		},
+		{
+			name:      "case insensitive canonical",
+			mention:   "tokenbot",
+			canonical: "TokenBot",
+			expected:  true,
+		},
+		{
+			name:      "alias match",
+			mention:   "bot",
+			canonical: "TokenBot",
+			aliases:   []string{"bot", "tokenbot"},
+			expected:  true,
+		},
+		{
+			name:      "alias case insensitive",
+			mention:   "BOT",
+			canonical: "TokenBot",
+			aliases:   []string{"bot"},
+			expected:  true,
+		},
+		{
+			name:      "no match",
+			mention:   "alice",
+			canonical: "TokenBot",
+			aliases:   []string{"bot"},
+			expected:  false,
+		},
+		{
+			name:      "empty canonical alias still works",
+			mention:   "bot",
+			canonical: "",
+			aliases:   []string{"bot"},
+			expected:  true,
+		},
+		{
+			name:      "empty mention does not match",
+			mention:   "",
+			canonical: "TokenBot",
+			expected:  false,
+		},
+		{
+			name:      "pico claw alias",
+			mention:   "picoclaw",
+			canonical: "PicoClaw",
+			aliases:   []string{"claw", "picoclaw"},
+			expected:  true,
+		},
+		{
+			name:      "claw alias for pico",
+			mention:   "claw",
+			canonical: "PicoClaw",
+			aliases:   []string{"claw"},
+			expected:  true,
+		},
+		{
+			name:      "partial substring does not match",
+			mention:   "token",
+			canonical: "TokenBot",
+			aliases:   []string{"bot"},
+			expected:  false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := isAssistantAlias(tc.mention, tc.canonical, tc.aliases...)
+			if result != tc.expected {
+				t.Errorf("isAssistantAlias(%q, %q, %v) = %v, want %v",
+					tc.mention, tc.canonical, tc.aliases, result, tc.expected)
+			}
+		})
+	}
+}
