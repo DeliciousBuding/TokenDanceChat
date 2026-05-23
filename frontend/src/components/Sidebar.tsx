@@ -722,6 +722,9 @@ export function Sidebar({
               <span className="text-[11px] text-muted-foreground/35 italic">
                 {t("sidebar.noDMs")}
               </span>
+              <span className="block text-[10px] text-muted-foreground/25 mt-0.5">
+                {t("sidebar.noDMsHint")}
+              </span>
             </div>
           )}
 
@@ -792,6 +795,9 @@ export function Sidebar({
                 <span className="text-[10px] text-muted-foreground/35 italic">
                   {t("sidebar.noGroups")}
                 </span>
+                <span className="block text-[10px] text-muted-foreground/25 mt-0.5">
+                  {t("sidebar.noGroupsHint")}
+                </span>
               </div>
             )}
           </div>
@@ -855,6 +861,9 @@ export function Sidebar({
                   <div className="px-2 py-0.5">
                     <span className="text-[10px] text-muted-foreground/35 italic">
                       {t("sidebar.noFriends")}
+                    </span>
+                    <span className="block text-[10px] text-muted-foreground/25 mt-0.5">
+                      {t("sidebar.noFriendsHint")}
                     </span>
                   </div>
                 )}

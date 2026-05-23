@@ -101,6 +101,7 @@ export function MessageTranscript({
   const [showAllMessages, setShowAllMessages] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [paginationError, setPaginationError] = useState(false);
   const hasMoreRef = useRef(true);
   const prevConversationRef = useRef("");
   const pendingScrollRestore = useRef(0);
@@ -122,6 +123,7 @@ export function MessageTranscript({
       pendingScrollRestore.current = 0;
       firstMessageIdBeforeLoad.current = "";
       setLoadingOlder(false);
+      setPaginationError(false);
     }
   }, [conversationKey, setLoadingOlder]);
 
@@ -132,6 +134,7 @@ export function MessageTranscript({
       pendingScrollRestore.current = 0;
       firstMessageIdBeforeLoad.current = "";
       setLoadingOlder(false);
+      setPaginationError(false);
     };
     window.addEventListener("tdchat:no-more-history", handler);
     return () => window.removeEventListener("tdchat:no-more-history", handler);
@@ -210,12 +213,13 @@ export function MessageTranscript({
         pendingScrollRestore.current = container.scrollHeight;
         firstMessageIdBeforeLoad.current = effectiveMessages[0]?.id ?? "";
         chatAPI.sendLoadHistory(oldest.timestamp);
-        // Safety timeout: clear loadingOlder if server never responds
+        // Safety timeout: clear loadingOlder and show error if server never responds
         setTimeout(() => {
           setLoadingOlder((prev) => {
             if (prev) {
               pendingScrollRestore.current = 0;
               firstMessageIdBeforeLoad.current = "";
+              setPaginationError(true);
               return false;
             }
             return prev;
@@ -605,6 +609,34 @@ export function MessageTranscript({
             </svg>
             {t("transcript.loadingOlder")}
           </div>
+        </div>
+      )}
+
+      {paginationError && !loadingOlder && (
+        <div className="flex justify-center py-3">
+          <button
+            onClick={() => {
+              setPaginationError(false);
+              const oldest = effectiveMessages[0];
+              if (oldest) {
+                setLoadingOlder(true);
+                chatAPI.sendLoadHistory(oldest.timestamp);
+                setTimeout(() => {
+                  setLoadingOlder((prev) => {
+                    if (prev) {
+                      setPaginationError(true);
+                      return false;
+                    }
+                    return prev;
+                  });
+                }, 5000);
+              }
+            }}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground/50 hover:text-primary transition-colors"
+          >
+            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><path d="M21 3v5h-5"/></svg>
+            {t("transcript.loadErrorRetry")}
+          </button>
         </div>
       )}
 
