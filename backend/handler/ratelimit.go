@@ -10,10 +10,11 @@ import (
 )
 
 // rateLimiter tracks per-IP request timestamps in a sliding window.
-// Separate buckets for WebSocket upgrades (stricter) and REST API calls.
+// Separate buckets for WebSocket upgrades (stricter), REST API calls, and auth endpoints.
 type rateLimiter struct {
-	wsEntries  sync.Map // IP string -> *rateLimitEntry
-	apiEntries sync.Map // IP string -> *rateLimitEntry
+	wsEntries   sync.Map // IP string -> *rateLimitEntry
+	apiEntries  sync.Map // IP string -> *rateLimitEntry
+	authEntries sync.Map // IP string -> *rateLimitEntry
 }
 
 // rateLimitEntry holds a mutex-protected slice of request timestamps for one IP.
@@ -23,10 +24,12 @@ type rateLimitEntry struct {
 }
 
 const (
-	wsMaxPerWindow  = 30
-	wsWindow        = 10 * time.Second
-	apiMaxPerWindow = 30
-	apiWindow       = 1 * time.Minute
+	wsMaxPerWindow   = 30
+	wsWindow         = 10 * time.Second
+	apiMaxPerWindow  = 30
+	apiWindow        = 1 * time.Minute
+	authMaxPerWindow = 5
+	authWindow       = 1 * time.Minute
 )
 
 var rl = &rateLimiter{}
@@ -34,6 +37,11 @@ var rl = &rateLimiter{}
 // allowWS checks whether a WebSocket upgrade is allowed for the given IP.
 func (r *rateLimiter) allowWS(ip string) bool {
 	return r.allow(&r.wsEntries, ip, wsMaxPerWindow, wsWindow)
+}
+
+// allowAuth checks whether an auth endpoint request (login/register) is allowed.
+func (r *rateLimiter) allowAuth(ip string) bool {
+	return r.allow(&r.authEntries, ip, authMaxPerWindow, authWindow)
 }
 
 // allowAPI checks whether a REST API request is allowed for the given IP.
@@ -107,6 +115,12 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 // Returns false when the per-IP rate limit (5 per 10 s) is exceeded.
 func WSAllow(ip string) bool {
 	return rl.allowWS(ip)
+}
+
+// AuthAllow checks whether an auth endpoint request (login/register) is allowed
+// for a given IP. Returns false when the rate limit (5 per minute) is exceeded.
+func AuthAllow(ip string) bool {
+	return rl.allowAuth(ip)
 }
 
 // ResetRateLimiter clears all rate limiter state. Use in tests to avoid

@@ -129,6 +129,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
               autoFocus
               maxLength={20}
               disabled={loading}
+              autoComplete="username"
               aria-label={t("auth.username")}
               className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
             />
@@ -149,6 +150,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
               placeholder="••••••"
               maxLength={128}
               disabled={loading}
+              autoComplete="new-password"
               aria-label={t("auth.password")}
               className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
             />
@@ -169,6 +171,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
               placeholder="••••••"
               maxLength={128}
               disabled={loading}
+              autoComplete="new-password"
               aria-label={t("auth.confirmPassword")}
               className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
             />
@@ -189,6 +192,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
               placeholder="ABCD1234"
               maxLength={20}
               disabled={loading}
+              autoComplete="off"
               aria-label={t("auth.inviteCode")}
               className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
             />
