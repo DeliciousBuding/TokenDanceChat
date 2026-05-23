@@ -1451,3 +1451,429 @@ func TestExportMessagesText(t *testing.T) {
 		t.Error("expected text export to contain 'TokenDanceChat Export' header")
 	}
 }
+
+// failingMediaStore is a MediaStore that returns os.ErrNotExist from Open,
+// used to test ServeUpload/ServeEmoji not-found paths without real files.
+type failingMediaStore struct{}
+
+func (f *failingMediaStore) Save(ctx context.Context, filename, contentType string, body io.Reader) error {
+	return errors.New("not implemented")
+}
+
+func (f *failingMediaStore) Open(ctx context.Context, filename string) (*StoredMedia, error) {
+	return nil, os.ErrNotExist
+}
+
+// --- UploadImage edge cases ---
+
+func TestUploadImageWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/upload", nil)
+	w := httptest.NewRecorder()
+	h.UploadImage(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET /api/upload, got %d", w.Code)
+	}
+}
+
+// --- ServeUpload edge cases ---
+
+func TestServeUploadRootPath(t *testing.T) {
+	h := newTestHandler()
+	h.mediaStore = &failingMediaStore{}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	h.ServeUpload(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for /, got %d", w.Code)
+	}
+}
+
+func TestServeUploadNonexistentFile(t *testing.T) {
+	h := newTestHandler()
+	h.mediaStore = &failingMediaStore{}
+
+	req := httptest.NewRequest(http.MethodGet, "/uploads/nonexistent.png", nil)
+	w := httptest.NewRecorder()
+	h.ServeUpload(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for nonexistent file, got %d", w.Code)
+	}
+}
+
+// --- LinkPreview edge cases ---
+
+func TestLinkPreviewMissingURL(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/link-preview", nil)
+	w := httptest.NewRecorder()
+	h.LinkPreview(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing url, got %d", w.Code)
+	}
+}
+
+func TestLinkPreviewInvalidURL(t *testing.T) {
+	h := newTestHandler()
+
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{"non-https scheme", "http://example.com"},
+		{"no scheme", "example.com/path"},
+		{"empty host with scheme", "https:///path"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/link-preview?url="+tt.url, nil)
+			w := httptest.NewRecorder()
+			h.LinkPreview(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("expected 400 for %q, got %d", tt.url, w.Code)
+			}
+		})
+	}
+}
+
+func TestLinkPreviewWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/link-preview", nil)
+	w := httptest.NewRecorder()
+	h.LinkPreview(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/link-preview, got %d", w.Code)
+	}
+}
+
+// --- Giphy edge cases ---
+
+func TestGiphySearchMissingQuery(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/giphy/search", nil)
+	w := httptest.NewRecorder()
+	h.GiphySearch(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing q, got %d", w.Code)
+	}
+}
+
+func TestGiphySearchWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/giphy/search", nil)
+	w := httptest.NewRecorder()
+	h.GiphySearch(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/giphy/search, got %d", w.Code)
+	}
+}
+
+func TestGiphyTrendingWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/giphy/trending", nil)
+	w := httptest.NewRecorder()
+	h.GiphyTrending(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/giphy/trending, got %d", w.Code)
+	}
+}
+
+// --- Search edge cases ---
+
+func TestSearchMissingQuery(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/search", nil)
+	w := httptest.NewRecorder()
+	h.Search(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing q, got %d", w.Code)
+	}
+}
+
+func TestSearchWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/search", nil)
+	w := httptest.NewRecorder()
+	h.Search(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/search, got %d", w.Code)
+	}
+}
+
+// --- Stats / AdminStats edge cases ---
+
+func TestStatsWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/stats", nil)
+	w := httptest.NewRecorder()
+	h.Stats(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/stats, got %d", w.Code)
+	}
+}
+
+func TestAdminStatsWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/stats", nil)
+	w := httptest.NewRecorder()
+	h.AdminStats(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/admin/stats, got %d", w.Code)
+	}
+}
+
+// --- Auth endpoint edge cases ---
+
+func TestRegisterWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/register", nil)
+	w := httptest.NewRecorder()
+	h.Register(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET /api/register, got %d", w.Code)
+	}
+}
+
+func TestLoginWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/login", nil)
+	w := httptest.NewRecorder()
+	h.Login(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET /api/login, got %d", w.Code)
+	}
+}
+
+// --- Export edge cases ---
+
+func TestExportMessagesInvalidFormat(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=public&format=pdf&username=alice", nil)
+	w := httptest.NewRecorder()
+	h.ExportMessages(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid format, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestExportMessagesMissingUsernameForDM(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=dm:bob", nil)
+	w := httptest.NewRecorder()
+	h.ExportMessages(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for DM export without username, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestExportMessagesWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/export", nil)
+	w := httptest.NewRecorder()
+	h.ExportMessages(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/export, got %d", w.Code)
+	}
+}
+
+// --- Invite endpoint edge cases ---
+
+func TestInviteGenerateWrongMethod(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/invite/generate", nil)
+	w := httptest.NewRecorder()
+	h.InviteGenerate(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET /api/invite/generate, got %d", w.Code)
+	}
+}
+
+func TestInviteListWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/invite/list", nil)
+	w := httptest.NewRecorder()
+	h.InviteList(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/invite/list, got %d", w.Code)
+	}
+}
+
+// --- Webhook handler edge cases ---
+
+func TestWebhookHandlerWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/webhook/test-hook", nil)
+	w := httptest.NewRecorder()
+	h.WebhookHandler(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET /api/webhook, got %d", w.Code)
+	}
+}
+
+func TestWebhookHandlerMissingURL(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/webhook/", nil)
+	w := httptest.NewRecorder()
+	h.WebhookHandler(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing webhook URL, got %d", w.Code)
+	}
+}
+
+// --- GetMessages / GetOnlineUsers edge cases ---
+
+func TestGetMessagesWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/messages", nil)
+	w := httptest.NewRecorder()
+	h.GetMessages(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/messages, got %d", w.Code)
+	}
+}
+
+func TestGetOnlineUsersWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users/online", nil)
+	w := httptest.NewRecorder()
+	h.GetOnlineUsers(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST /api/users/online, got %d", w.Code)
+	}
+}
+
+func TestGetMessagesWithLimitParam(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/messages?limit=50", nil)
+	w := httptest.NewRecorder()
+	h.GetMessages(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// --- Helper function tests ---
+
+func TestContentTypeForFilename(t *testing.T) {
+	tests := []struct {
+		filename string
+		want     string
+	}{
+		{"photo.png", "image/png"},
+		{"photo.jpg", "image/jpeg"},
+		{"photo.jpeg", "image/jpeg"},
+		{"photo.gif", "image/gif"},
+		{"photo.webp", "image/webp"},
+		{"video.webm", "audio/webm"},
+		{"audio.ogg", "audio/ogg"},
+		{"audio.mp3", "audio/mpeg"},
+		{"audio.wav", "audio/wav"},
+		{"audio.m4a", "audio/mp4"},
+		{"file.pdf", "application/pdf"},
+		{"file.txt", "text/plain; charset=utf-8"},
+		{"unknown.xyz", "application/octet-stream"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.filename, func(t *testing.T) {
+			got := contentTypeForFilename(tt.filename)
+			if got != tt.want {
+				t.Errorf("contentTypeForFilename(%q) = %q, want %q", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsPrivateHost(t *testing.T) {
+	tests := []struct {
+		host string
+		want bool
+	}{
+		{"127.0.0.1", true},
+		{"192.168.1.1", true},
+		{"10.0.0.1", true},
+		{"172.16.0.1", true},
+		{"0.0.0.0", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.host, func(t *testing.T) {
+			got := isPrivateHost(tt.host)
+			if got != tt.want {
+				t.Errorf("isPrivateHost(%q) = %v, want %v", tt.host, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSanitizeExportName(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"empty", "", "public"},
+		{"spaces", "Public Chat", "Public_Chat"},
+		{"slash", "test/name", "test_name"},
+		{"angle brackets", "a<b>c", "a_b_c"},
+		{"colon", "test:file", "test_file"},
+		{"chinese chars", "测试", "测试"},
+		{"special chars", "Hello@World!", "Hello_World_"},
+		{"alphanumeric and dash", "chat-2024_01", "chat-2024_01"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeExportName(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeExportName(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
