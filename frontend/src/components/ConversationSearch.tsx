@@ -37,7 +37,7 @@ function renderSnippet(content: string, query: string): React.ReactNode {
 }
 
 export function ConversationSearch({ open, onClose, onHighlightChange }: ConversationSearchProps) {
-  const { t, lang } = useTranslation();
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);

@@ -787,7 +787,7 @@ export function VideoCall({ onClose }: Props) {
         <div className="text-center text-white">
           <PhoneOff className="h-16 w-16 mx-auto mb-4 text-red-500" />
           <h2 className="text-xl font-semibold">{t("call.callEnded")}</h2>
-          <p className="text-sm text-white/60 mt-1">{formatTime(elapsed, t)}</p>
+          <p className="text-sm text-white/60 mt-1">{formatTime(elapsed)}</p>
         </div>
       </div>
     );
