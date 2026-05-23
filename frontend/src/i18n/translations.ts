@@ -438,6 +438,12 @@ export interface TranslationDict {
     participants: string;
     leaveRoom: string;
   };
+  poll: {
+    closed: string;
+    finalResults: string;
+    vote: string;
+    votes: string;
+  };
 }
 
 const zhCN: TranslationDict = {
@@ -876,6 +882,12 @@ const zhCN: TranslationDict = {
     joiningRoom: "正在加入通话...",
     participants: "人",
     leaveRoom: "离开通话",
+  },
+  poll: {
+    closed: "投票已关闭",
+    finalResults: "最终结果",
+    vote: "投票",
+    votes: "{{count}} 票",
   },
 
 };
@@ -1318,6 +1330,12 @@ const enUS: TranslationDict = {
     joiningRoom: "Joining call...",
     participants: "participants",
     leaveRoom: "Leave Call",
+  },
+  poll: {
+    closed: "Poll closed",
+    finalResults: "Final Results",
+    vote: "Vote",
+    votes: "{{count}} votes",
   },
 
 };
