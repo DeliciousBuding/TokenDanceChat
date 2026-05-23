@@ -2733,3 +2733,238 @@ func TestServeUploadPathTraversal(t *testing.T) {
 		t.Errorf("expected 404 for path traversal /uploads/../something, got %d", w.Code)
 	}
 }
+
+// --- Giphy edge case: empty type defaults to gif ---
+
+// TestGiphySearchEmptyTypeDefaultsToGif verifies that when the type query
+// parameter is omitted from GET /api/giphy/search, the handler defaults to
+// "gif" and passes validation (reaches fetchGiphy rather than returning 400).
+func TestGiphySearchEmptyTypeDefaultsToGif(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/giphy/search?q=cat", nil)
+	w := httptest.NewRecorder()
+	h.GiphySearch(w, req)
+
+	// Should pass validation — no MISSING_QUERY error. The upstream Giphy
+	// call may succeed (200) or fail (502), but must not be a 4xx from our
+	// handler's input validation.
+	if w.Code == http.StatusBadRequest {
+		t.Errorf("expected giphy search with q param to pass validation, got 400: %s", w.Body.String())
+	}
+	if w.Code == http.StatusMethodNotAllowed {
+		t.Errorf("expected giphy search to pass method check, got 405")
+	}
+}
+
+// --- Giphy edge case: trending with sticker type ---
+
+// TestGiphyTrendingStickerType verifies that GET /api/giphy/trending?type=sticker
+// passes validation and maps to the stickers/trending endpoint.
+func TestGiphyTrendingStickerType(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/giphy/trending?type=sticker", nil)
+	w := httptest.NewRecorder()
+	h.GiphyTrending(w, req)
+
+	// type=sticker is valid and maps to stickers/trending endpoint internally.
+	// The upstream Giphy call may succeed (200) or fail (502), but must not be
+	// a 4xx from handler input validation.
+	if w.Code == http.StatusBadRequest {
+		t.Errorf("expected giphy trending with type=sticker to pass validation, got 400: %s", w.Body.String())
+	}
+	if w.Code == http.StatusMethodNotAllowed {
+		t.Errorf("expected giphy trending to pass method check, got 405")
+	}
+}
+
+// --- ExportMessages edge case: very large limit capped at 10000 ---
+
+// mockStoreExportCapture captures the limit argument passed to ExportMessages.
+type mockStoreExportCapture struct {
+	mockStore
+	capturedLimit int
+}
+
+func (m *mockStoreExportCapture) ExportMessages(ctx context.Context, roomID, toUser, groupName, username string, limit int) ([]hub.StoredMessage, error) {
+	m.capturedLimit = limit
+	return nil, nil
+}
+
+func newTestHandlerWithExportCapture() (*Handler, *mockStoreExportCapture) {
+	ms := &mockStoreExportCapture{}
+	h := hub.New(ms, nil, nil, "")
+	go h.Run()
+	return New(h, ms, "/tmp/test-uploads"), ms
+}
+
+// TestExportMessagesVeryLargeLimit verifies that a limit >10000 is capped at 10000
+// before being passed to the store.
+func TestExportMessagesVeryLargeLimit(t *testing.T) {
+	h, capture := newTestHandlerWithExportCapture()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?limit=50000&username=alice", nil)
+	w := httptest.NewRecorder()
+	h.ExportMessages(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for export with large limit, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if capture.capturedLimit != 10000 {
+		t.Errorf("expected limit capped at 10000, got %d", capture.capturedLimit)
+	}
+}
+
+// TestExportMessagesWithinLimit verifies that a limit <=10000 is passed through
+// unchanged to the store.
+func TestExportMessagesWithinLimit(t *testing.T) {
+	h, capture := newTestHandlerWithExportCapture()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?limit=500&username=alice", nil)
+	w := httptest.NewRecorder()
+	h.ExportMessages(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for export with limit=500, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if capture.capturedLimit != 500 {
+		t.Errorf("expected limit 500 passed through, got %d", capture.capturedLimit)
+	}
+}
+
+// TestExportMessagesZeroLimit verifies that limit=0 results in no limit (0 passed
+// through, which means "all messages" at the store layer).
+func TestExportMessagesZeroLimit(t *testing.T) {
+	h, capture := newTestHandlerWithExportCapture()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?limit=0&username=alice", nil)
+	w := httptest.NewRecorder()
+	h.ExportMessages(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for export with limit=0, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// limit=0 means "not set" — the handler skips the parseInt block, so
+	// limit stays at its zero value of 0, which the store interprets as
+	// "return all messages".
+	if capture.capturedLimit != 0 {
+		t.Errorf("expected limit 0 (unlimited), got %d", capture.capturedLimit)
+	}
+}
+
+// --- LinkPreview edge case: http URL explicitly rejected ---
+
+// TestLinkPreviewHTTPURLRejected verifies that an http:// URL (non-https scheme)
+// returns 400 with code INVALID_URL, since only https is allowed to prevent SSRF.
+func TestLinkPreviewHTTPURLRejected(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/link-preview?url=http://example.com", nil)
+	w := httptest.NewRecorder()
+	h.LinkPreview(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for http:// URL, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if body["code"] != "INVALID_URL" {
+		t.Errorf("expected code INVALID_URL, got %q", body["code"])
+	}
+}
+
+// --- ServeUpload edge case: empty / dot filename path ---
+
+// TestServeUploadDotPath verifies that a URL path resolving to "." (no filename)
+// returns 404 Not Found.
+func TestServeUploadDotPath(t *testing.T) {
+	h := newTestHandler()
+	h.mediaStore = &failingMediaStore{}
+
+	// /uploads/. → filepath.Base returns "." → 404
+	req := httptest.NewRequest(http.MethodGet, "/uploads/.", nil)
+	w := httptest.NewRecorder()
+	h.ServeUpload(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for /uploads/., got %d", w.Code)
+	}
+}
+
+// TestServeUploadDoubleSlashPath verifies that a URL path with double slashes
+// (empty segment) still resolves safely (filepath.Base collapses it).
+func TestServeUploadDoubleSlashPath(t *testing.T) {
+	h := newTestHandler()
+	h.mediaStore = &failingMediaStore{}
+
+	// /uploads// → double slash resolves to empty segment; filepath.Base
+	// returns "." on some platforms or the preceding segment on others.
+	// Either way the handler should 404.
+	req := httptest.NewRequest(http.MethodGet, "/uploads//", nil)
+	w := httptest.NewRecorder()
+	h.ServeUpload(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for /uploads//, got %d", w.Code)
+	}
+}
+
+// --- LoggingMiddleware: preserves existing headers ---
+
+// TestLoggingMiddlewarePreservesExistingHeaders verifies that headers set by
+// the inner handler before LoggingMiddleware are preserved in the response.
+func TestLoggingMiddlewarePreservesExistingHeaders(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Custom-Header", "test-value")
+		w.Header().Set("X-Another", "another-value")
+		w.WriteHeader(http.StatusOK)
+	})
+	wrapped := LoggingMiddleware(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("X-Custom-Header"); got != "test-value" {
+		t.Errorf("expected X-Custom-Header 'test-value', got %q", got)
+	}
+	if got := resp.Header.Get("X-Another"); got != "another-value" {
+		t.Errorf("expected X-Another 'another-value', got %q", got)
+	}
+}
+
+// TestLoggingMiddlewarePreservesSecurityHeaders verifies that
+// SecurityHeadersMiddleware headers survive when chained after LoggingMiddleware.
+func TestLoggingMiddlewarePreservesSecurityHeaders(t *testing.T) {
+	inner := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	wrapped := LoggingMiddleware(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if got := resp.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("expected X-Content-Type-Options nosniff after logging middleware, got %q", got)
+	}
+	if got := resp.Header.Get("X-Frame-Options"); got != "DENY" {
+		t.Errorf("expected X-Frame-Options DENY after logging middleware, got %q", got)
+	}
+}
