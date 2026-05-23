@@ -950,7 +950,7 @@ export function ChatLayout() {
 
         {/* Message transcript */}
         <div className="relative flex-1 overflow-hidden flex flex-col">
-          <div className={cn("flex-1 min-h-0 transition-opacity duration-150", convFade ? "opacity-40" : "opacity-100")}>
+          <div className={cn("flex-1 min-h-0 flex flex-col overflow-hidden transition-opacity duration-150", convFade ? "opacity-40" : "opacity-100")}>
             <ErrorBoundary fallback={<div className="flex items-center justify-center h-full text-sm text-muted-foreground/50">Chat transcript unavailable</div>}>
               <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} onOpenThread={handleOpenThread} highlight={searchHighlight} scrollContainerRef={transcriptContainerRef} />
             </ErrorBoundary>
