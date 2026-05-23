@@ -94,7 +94,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 后续产品任务
 
-1. 群组视频通话浏览器 smoke/E2E（双会话或 mock WebRTC/media 边界）。
+1. 群组视频通话浏览器 smoke/E2E（双会话或 mock WebRTC/media 边界）。~~（store 逻辑已覆盖：participants 计算、isGroupCall/groupName 设置与清除）~~
 2. ~~消息输入对等增强：上箭头编辑上一条消息、slash commands、emoji 快捷码展开。~~（已实现，已补测）
 3. 消息列表打磨：~~日期分隔线、timestamp hover~~（已实现）、更流畅的新消息和会话切换过渡。
 4. 管理/安全界面：2FA 方案、管理仪表盘、audit log 设计、邀请码管理加固。
