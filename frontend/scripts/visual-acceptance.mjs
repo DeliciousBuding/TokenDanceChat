@@ -123,6 +123,15 @@ async function openGroupInfoPanel(page) {
     state: "visible",
     timeout: 10000,
   });
+  // Create a webhook so the rotation button and audit row become visible.
+  const createBtn = page.locator("[data-visual='group-info-webhook-create']");
+  if (await createBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await createBtn.click();
+    await page.locator("[data-visual='group-info-webhook-created-secret']").waitFor({
+      state: "visible",
+      timeout: 10000,
+    });
+  }
   await page.waitForTimeout(500);
 }
 
@@ -231,6 +240,21 @@ async function collectMetrics(page, scenario, errors) {
       const groupInfoMemberRows = groupInfoPanel
         ? Array.from(groupInfoPanel.querySelectorAll("[data-visual='group-info-member']")).filter(isVisible)
         : [];
+      const groupInfoWebhookRows = groupInfoPanel
+        ? Array.from(groupInfoPanel.querySelectorAll("[data-visual='group-info-webhook-row']")).filter(isVisible)
+        : [];
+      const groupInfoWebhookCreatedSecret = groupInfoPanel
+        ? Boolean(groupInfoPanel.querySelector("[data-visual='group-info-webhook-created-secret']"))
+        : false;
+      const groupInfoWebhookRotate = groupInfoPanel
+        ? Array.from(groupInfoPanel.querySelectorAll("[data-visual='group-info-webhook-rotate']")).filter(isVisible)
+        : [];
+      const groupInfoWebhookAudit = groupInfoPanel
+        ? Boolean(groupInfoPanel.querySelector("[data-visual='group-info-webhook-audit']"))
+        : false;
+      const groupInfoWebhookAuditLogs = groupInfoPanel
+        ? Array.from(groupInfoPanel.querySelectorAll("[data-visual='group-info-webhook-audit-log']")).filter(isVisible)
+        : [];
       const groupEmptyState = document.querySelector("[data-visual='group-empty-state']");
       const groupEmptyStateRect = groupEmptyState && isVisible(groupEmptyState)
         ? groupEmptyState.getBoundingClientRect()
@@ -329,6 +353,11 @@ async function collectMetrics(page, scenario, errors) {
                   }
                 : null,
               webhookSectionVisible: Boolean(groupInfoWebhooks && isVisible(groupInfoWebhooks)),
+              webhookRows: groupInfoWebhookRows.length,
+              webhookCreatedSecretVisible: groupInfoWebhookCreatedSecret,
+              webhookRotateButtons: groupInfoWebhookRotate.length,
+              webhookAuditVisible: groupInfoWebhookAudit,
+              webhookAuditLogs: groupInfoWebhookAuditLogs.length,
               memberRows: groupInfoMemberRows.length,
               smallControls: groupInfoSmallControls,
             }
@@ -423,6 +452,21 @@ function scenarioIssues(metrics) {
       if (metrics.groupInfoPanel.smallControls.length > 0) {
         issues.push(`group info small controls (${metrics.groupInfoPanel.smallControls.length})`);
       }
+      if (metrics.groupInfoPanel.webhookRows < 1) {
+        issues.push('group info webhook row missing');
+      }
+      if (!metrics.groupInfoPanel.webhookCreatedSecretVisible) {
+        issues.push('group info webhook created secret not visible');
+      }
+      if (metrics.groupInfoPanel.webhookRotateButtons < 1) {
+        issues.push('group info webhook rotate button missing');
+      }
+      if (!metrics.groupInfoPanel.webhookAuditVisible) {
+        issues.push('group info webhook audit section not visible');
+      }
+      if (metrics.groupInfoPanel.webhookAuditLogs < 1) {
+        issues.push('group info webhook audit log missing');
+      }
     }
   }
   return issues;
@@ -478,7 +522,7 @@ async function main() {
         `smallControls=${result.smallControls.length} sidebarModels=${result.sidebar?.modelCards ?? "n/a"} ` +
         `sidebarOnlineTop=${result.sidebar?.onlineUsersTop ?? "n/a"} ` +
         `groupPanel=${result.groupInfoPanel?.width ?? "n/a"}px ` +
-        `groupSmallControls=${result.groupInfoPanel?.smallControls?.length ?? "n/a"}${issueText}`,
+        `groupSmallControls=${result.groupInfoPanel?.smallControls?.length ?? "n/a"} webhookRows=${result.groupInfoPanel?.webhookRows ?? "n/a"} webhookRotate=${result.groupInfoPanel?.webhookRotateButtons ?? "n/a"} auditLogs=${result.groupInfoPanel?.webhookAuditLogs ?? "n/a"}${issueText}`,
       );
   }
   console.log(`Metrics: ${reportPath}`);

@@ -258,8 +258,12 @@ func (c *Client) ReadPump() {
 			c.handleWebhookCreate(msg)
 		case "webhook_delete":
 			c.handleWebhookDelete(msg)
+		case "webhook_rotate":
+			c.handleWebhookRotate(msg)
 		case "webhook_list":
 			c.handleWebhookList(msg)
+		case "webhook_audit_list":
+			c.handleWebhookAuditList(msg)
 		default:
 			log.Printf("unknown message type: %s", msg.Type)
 		}
@@ -3679,7 +3683,7 @@ func (c *Client) handleWebhookDelete(msg Message) {
 		return
 	}
 
-	if err := c.hub.store.DeleteWebhook(webhookID, groupName); err != nil {
+	if err := c.hub.store.DeleteWebhook(webhookID, groupName, c.username); err != nil {
 		log.Printf("webhook_delete: error: %v", err)
 		return
 	}
@@ -3688,6 +3692,43 @@ func (c *Client) handleWebhookDelete(msg Message) {
 		Type:  "webhook_deleted",
 		Group: groupName,
 		ID:    webhookID,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
+}
+
+func (c *Client) handleWebhookRotate(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	webhookID := msg.ID
+	if groupName == "" || webhookID == "" {
+		return
+	}
+
+	role, _ := c.hub.store.GetGroupMemberRole(groupName, c.username)
+	if role != "owner" && role != "admin" {
+		return
+	}
+
+	secret := generateWebhookSecret()
+	webhook, err := c.hub.store.RotateWebhookSecret(webhookID, groupName, secret, c.username)
+	if err != nil || webhook == nil {
+		log.Printf("webhook_rotate: error: %v", err)
+		return
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type:      "webhook_rotated",
+		Group:     groupName,
+		ID:        webhook.ID,
+		Content:   webhook.URL,
+		Secret:    secret,
+		RotatedAt: webhook.RotatedAt,
+		RotatedBy: webhook.RotatedBy,
 	})
 	select {
 	case c.send <- resp:
@@ -3722,12 +3763,15 @@ func (c *Client) handleWebhookList(msg Message) {
 		URL       string `json:"url"`
 		CreatedBy string `json:"created_by"`
 		CreatedAt int64  `json:"created_at"`
+		RotatedAt int64  `json:"rotated_at,omitempty"`
+		RotatedBy string `json:"rotated_by,omitempty"`
 	}
 	var safe []safeWebhook
 	for _, w := range webhooks {
 		safe = append(safe, safeWebhook{
 			ID: w.ID, GroupName: w.GroupName, URL: w.URL,
 			CreatedBy: w.CreatedBy, CreatedAt: w.CreatedAt,
+			RotatedAt: w.RotatedAt, RotatedBy: w.RotatedBy,
 		})
 	}
 
@@ -3735,6 +3779,53 @@ func (c *Client) handleWebhookList(msg Message) {
 		Type:     "webhook_list",
 		Group:    groupName,
 		Webhooks: safe,
+	})
+	select {
+	case c.send <- resp:
+	default:
+	}
+}
+
+func (c *Client) handleWebhookAuditList(msg Message) {
+	if c.username == "" {
+		return
+	}
+	groupName := msg.Group
+	if groupName == "" {
+		return
+	}
+
+	role, _ := c.hub.store.GetGroupMemberRole(groupName, c.username)
+	if role != "owner" && role != "admin" {
+		return
+	}
+
+	logs, err := c.hub.store.ListWebhookAuditLogs(groupName, 50)
+	if err != nil {
+		log.Printf("webhook_audit_list: error: %v", err)
+		return
+	}
+
+	type safeAuditLog struct {
+		ID        string `json:"id"`
+		WebhookID string `json:"webhook_id"`
+		GroupName string `json:"group_name"`
+		Action    string `json:"action"`
+		Actor     string `json:"actor"`
+		CreatedAt int64  `json:"created_at"`
+	}
+	safe := make([]safeAuditLog, 0, len(logs))
+	for _, item := range logs {
+		safe = append(safe, safeAuditLog{
+			ID: item.ID, WebhookID: item.WebhookID, GroupName: item.GroupName,
+			Action: item.Action, Actor: item.Actor, CreatedAt: item.CreatedAt,
+		})
+	}
+
+	resp, _ := json.Marshal(Message{
+		Type:      "webhook_audit_list",
+		Group:     groupName,
+		AuditLogs: safe,
 	})
 	select {
 	case c.send <- resp:

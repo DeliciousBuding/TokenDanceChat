@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -424,6 +425,82 @@ func TestWebhookPlaintextSecretMigrationHashesExistingRows(t *testing.T) {
 	}
 	if webhook.ID != "legacy-wh" {
 		t.Fatalf("verified migrated webhook id = %q, want legacy-wh", webhook.ID)
+	}
+}
+
+func TestRotateWebhookSecretInvalidatesOldSecretAndAudits(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	const (
+		oldSecret = "old-webhook-secret"
+		newSecret = "new-webhook-secret"
+	)
+	if err := s.CreateWebhook("wh-1", "team", "wh-url", oldSecret, "alice"); err != nil {
+		t.Fatalf("CreateWebhook returned error: %v", err)
+	}
+
+	rotated, err := s.RotateWebhookSecret("wh-1", "team", newSecret, "bob")
+	if err != nil {
+		t.Fatalf("RotateWebhookSecret returned error: %v", err)
+	}
+	if rotated.RotatedBy != "bob" {
+		t.Fatalf("RotatedBy = %q, want bob", rotated.RotatedBy)
+	}
+	if rotated.RotatedAt == 0 {
+		t.Fatal("expected non-zero RotatedAt")
+	}
+
+	if _, ok, err := s.VerifyWebhookSecret("wh-url", oldSecret); err != nil {
+		t.Fatalf("VerifyWebhookSecret returned error for old secret: %v", err)
+	} else if ok {
+		t.Fatal("old webhook secret still verifies after rotation")
+	}
+	if _, ok, err := s.VerifyWebhookSecret("wh-url", newSecret); err != nil {
+		t.Fatalf("VerifyWebhookSecret returned error for new secret: %v", err)
+	} else if !ok {
+		t.Fatal("new webhook secret did not verify after rotation")
+	}
+
+	webhooks, err := s.ListWebhooks("team")
+	if err != nil {
+		t.Fatalf("ListWebhooks returned error: %v", err)
+	}
+	if len(webhooks) != 1 {
+		t.Fatalf("expected 1 webhook, got %d", len(webhooks))
+	}
+	if webhooks[0].RotatedBy != "bob" || webhooks[0].RotatedAt == 0 {
+		t.Fatalf("webhook rotation metadata not listed: %+v", webhooks[0])
+	}
+
+	if err := s.DeleteWebhook("wh-1", "team", "carol"); err != nil {
+		t.Fatalf("DeleteWebhook returned error: %v", err)
+	}
+
+	logs, err := s.ListWebhookAuditLogs("team", 10)
+	if err != nil {
+		t.Fatalf("ListWebhookAuditLogs returned error: %v", err)
+	}
+	seen := map[string]string{}
+	for _, item := range logs {
+		seen[item.Action] = item.Actor
+	}
+	for action, actor := range map[string]string{"created": "alice", "rotated": "bob", "deleted": "carol"} {
+		if seen[action] != actor {
+			t.Fatalf("audit action %q actor = %q, want %q; logs=%+v", action, seen[action], actor, logs)
+		}
+	}
+
+	encoded, err := json.Marshal(logs)
+	if err != nil {
+		t.Fatalf("failed to marshal audit logs: %v", err)
+	}
+	raw := string(encoded)
+	if strings.Contains(raw, oldSecret) || strings.Contains(raw, newSecret) || strings.Contains(raw, "whsec_sha256:") {
+		t.Fatalf("audit logs leaked secret material: %s", raw)
 	}
 }
 

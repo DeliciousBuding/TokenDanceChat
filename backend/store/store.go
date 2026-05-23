@@ -125,6 +125,19 @@ type Webhook struct {
 	Secret    string `json:"-"` // Persisted versioned secret hash; never serialized.
 	CreatedBy string `json:"created_by"`
 	CreatedAt int64  `json:"created_at"`
+	RotatedAt int64  `json:"rotated_at,omitempty"`
+	RotatedBy string `json:"rotated_by,omitempty"`
+}
+
+// WebhookAuditLog is an append-only security event for group webhook lifecycle changes.
+type WebhookAuditLog struct {
+	ID        string `json:"id"`
+	WebhookID string `json:"webhook_id"`
+	GroupName string `json:"group_name"`
+	Action    string `json:"action"`
+	Actor     string `json:"actor"`
+	CreatedAt int64  `json:"created_at"`
+	Metadata  string `json:"-"`
 }
 
 // GroupMemberInfo represents a member with their role in a group.
@@ -403,8 +416,21 @@ func (s *Store) migrate() error {
 				url TEXT NOT NULL,
 				secret TEXT NOT NULL,
 				created_by TEXT NOT NULL,
-				created_at INTEGER NOT NULL
+				created_at INTEGER NOT NULL,
+				rotated_at INTEGER NOT NULL DEFAULT 0,
+				rotated_by TEXT NOT NULL DEFAULT ''
 			);
+			CREATE TABLE IF NOT EXISTS webhook_audit_logs (
+				id TEXT PRIMARY KEY,
+				webhook_id TEXT NOT NULL,
+				group_name TEXT NOT NULL,
+				action TEXT NOT NULL,
+				actor TEXT NOT NULL,
+				created_at INTEGER NOT NULL,
+				metadata TEXT NOT NULL DEFAULT ''
+			);
+			CREATE INDEX IF NOT EXISTS idx_webhooks_group_created ON webhooks(group_name, created_at);
+			CREATE INDEX IF NOT EXISTS idx_webhook_audit_group_created ON webhook_audit_logs(group_name, created_at DESC);
 			`
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -435,6 +461,29 @@ func (s *Store) migrate() error {
 	}
 	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN thread_id TEXT DEFAULT ''"); err != nil {
 		log.Printf("store: migrate add column thread_id: %v", err)
+	}
+	if _, err := s.db.Exec("ALTER TABLE webhooks ADD COLUMN rotated_at INTEGER NOT NULL DEFAULT 0"); err != nil {
+		log.Printf("store: migrate add column rotated_at to webhooks: %v", err)
+	}
+	if _, err := s.db.Exec("ALTER TABLE webhooks ADD COLUMN rotated_by TEXT NOT NULL DEFAULT ''"); err != nil {
+		log.Printf("store: migrate add column rotated_by to webhooks: %v", err)
+	}
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS webhook_audit_logs (
+		id TEXT PRIMARY KEY,
+		webhook_id TEXT NOT NULL,
+		group_name TEXT NOT NULL,
+		action TEXT NOT NULL,
+		actor TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		metadata TEXT NOT NULL DEFAULT ''
+	)`); err != nil {
+		log.Printf("store: migrate create webhook_audit_logs: %v", err)
+	}
+	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_webhooks_group_created ON webhooks(group_name, created_at)"); err != nil {
+		log.Printf("store: idx_webhooks_group_created: %v", err)
+	}
+	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_webhook_audit_group_created ON webhook_audit_logs(group_name, created_at DESC)"); err != nil {
+		log.Printf("store: idx_webhook_audit_group_created: %v", err)
 	}
 
 	// Migration: add role column to group_members for existing DBs.
@@ -2336,19 +2385,82 @@ func (s *Store) CreateWebhook(id, groupName, url, secret, createdBy string) erro
 		return err
 	}
 	now := time.Now().UnixMilli()
-	_, err = s.db.Exec(
-		"INSERT INTO webhooks (id, group_name, url, secret, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(
+		"INSERT INTO webhooks (id, group_name, url, secret, created_by, created_at, rotated_at, rotated_by) VALUES (?, ?, ?, ?, ?, ?, 0, '')",
 		id, groupName, url, secretHash, createdBy, now,
-	)
-	return err
+	); err != nil {
+		return err
+	}
+	if err := insertWebhookAuditLog(tx, id, groupName, "created", createdBy, now, webhookAuditMetadata(url)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // DeleteWebhook removes a webhook by ID and group name.
-func (s *Store) DeleteWebhook(id, groupName string) error {
+func (s *Store) DeleteWebhook(id, groupName, deletedBy string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.Exec("DELETE FROM webhooks WHERE id = ? AND group_name = ?", id, groupName)
-	return err
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var url string
+	if err := tx.QueryRow("SELECT url FROM webhooks WHERE id = ? AND group_name = ?", id, groupName).Scan(&url); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM webhooks WHERE id = ? AND group_name = ?", id, groupName); err != nil {
+		return err
+	}
+	if err := insertWebhookAuditLog(tx, id, groupName, "deleted", deletedBy, time.Now().UnixMilli(), webhookAuditMetadata(url)); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RotateWebhookSecret replaces a webhook secret hash and records who rotated it.
+func (s *Store) RotateWebhookSecret(id, groupName, secret, rotatedBy string) (*Webhook, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	secretHash, err := hashWebhookSecret(secret)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UnixMilli()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var w Webhook
+	if err := tx.QueryRow(
+		"SELECT id, group_name, url, secret, created_by, created_at, rotated_at, rotated_by FROM webhooks WHERE id = ? AND group_name = ?",
+		id, groupName,
+	).Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt, &w.RotatedAt, &w.RotatedBy); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(
+		"UPDATE webhooks SET secret = ?, rotated_at = ?, rotated_by = ? WHERE id = ? AND group_name = ?",
+		secretHash, now, rotatedBy, id, groupName,
+	); err != nil {
+		return nil, err
+	}
+	if err := insertWebhookAuditLog(tx, id, groupName, "rotated", rotatedBy, now, webhookAuditMetadata(w.URL)); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	w.Secret = secretHash
+	w.RotatedAt = now
+	w.RotatedBy = rotatedBy
+	return &w, nil
 }
 
 // ListWebhooks returns all webhooks for a group.
@@ -2356,7 +2468,7 @@ func (s *Store) ListWebhooks(groupName string) ([]Webhook, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	rows, err := s.db.Query(
-		"SELECT id, group_name, url, secret, created_by, created_at FROM webhooks WHERE group_name = ? ORDER BY created_at",
+		"SELECT id, group_name, url, secret, created_by, created_at, rotated_at, rotated_by FROM webhooks WHERE group_name = ? ORDER BY created_at",
 		groupName,
 	)
 	if err != nil {
@@ -2366,7 +2478,7 @@ func (s *Store) ListWebhooks(groupName string) ([]Webhook, error) {
 	var result []Webhook
 	for rows.Next() {
 		var w Webhook
-		if err := rows.Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt); err != nil {
+		if err := rows.Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt, &w.RotatedAt, &w.RotatedBy); err != nil {
 			return nil, err
 		}
 		result = append(result, w)
@@ -2383,9 +2495,9 @@ func (s *Store) GetWebhookByURL(url string) (*Webhook, error) {
 	defer s.mu.RUnlock()
 	var w Webhook
 	err := s.db.QueryRow(
-		"SELECT id, group_name, url, secret, created_by, created_at FROM webhooks WHERE url = ?",
+		"SELECT id, group_name, url, secret, created_by, created_at, rotated_at, rotated_by FROM webhooks WHERE url = ?",
 		url,
-	).Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt)
+	).Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt, &w.RotatedAt, &w.RotatedBy)
 	if err != nil {
 		return nil, err
 	}
@@ -2399,14 +2511,63 @@ func (s *Store) VerifyWebhookSecret(url, secret string) (*Webhook, bool, error) 
 
 	var w Webhook
 	err := s.db.QueryRow(
-		"SELECT id, group_name, url, secret, created_by, created_at FROM webhooks WHERE url = ?",
+		"SELECT id, group_name, url, secret, created_by, created_at, rotated_at, rotated_by FROM webhooks WHERE url = ?",
 		url,
-	).Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt)
+	).Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt, &w.RotatedAt, &w.RotatedBy)
 	if err != nil {
 		return nil, false, err
 	}
 
 	return &w, verifyWebhookSecretHash(w.Secret, secret), nil
+}
+
+// ListWebhookAuditLogs returns recent webhook lifecycle events for a group.
+func (s *Store) ListWebhookAuditLogs(groupName string, limit int) ([]WebhookAuditLog, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	rows, err := s.db.Query(
+		`SELECT id, webhook_id, group_name, action, actor, created_at, metadata
+		FROM webhook_audit_logs
+		WHERE group_name = ?
+		ORDER BY created_at DESC
+		LIMIT ?`,
+		groupName, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []WebhookAuditLog
+	for rows.Next() {
+		var item WebhookAuditLog
+		if err := rows.Scan(&item.ID, &item.WebhookID, &item.GroupName, &item.Action, &item.Actor, &item.CreatedAt, &item.Metadata); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	if result == nil {
+		result = []WebhookAuditLog{}
+	}
+	return result, rows.Err()
+}
+
+func insertWebhookAuditLog(tx *sql.Tx, webhookID, groupName, action, actor string, createdAt int64, metadata string) error {
+	_, err := tx.Exec(
+		"INSERT INTO webhook_audit_logs (id, webhook_id, group_name, action, actor, created_at, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		uuid.New().String(), webhookID, groupName, action, actor, createdAt, metadata,
+	)
+	return err
+}
+
+func webhookAuditMetadata(url string) string {
+	payload, err := json.Marshal(map[string]string{"url": url})
+	if err != nil {
+		return "{}"
+	}
+	return string(payload)
 }
 
 func (s *Store) migrateWebhookSecrets() error {

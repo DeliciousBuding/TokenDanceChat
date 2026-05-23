@@ -973,8 +973,16 @@ class ChatAPI {
     this.send({ type: "webhook_delete", group: groupName, id });
   }
 
+  sendWebhookRotate(groupName: string, id: string): void {
+    this.send({ type: "webhook_rotate", group: groupName, id });
+  }
+
   sendWebhookList(groupName: string): void {
     this.send({ type: "webhook_list", group: groupName });
+  }
+
+  sendWebhookAuditList(groupName: string): void {
+    this.send({ type: "webhook_audit_list", group: groupName });
   }
 
   sendTranslateMessage(messageId: string, content: string, targetLang?: string): void {

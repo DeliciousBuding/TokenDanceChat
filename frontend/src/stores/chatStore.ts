@@ -64,10 +64,21 @@ export interface WebhookInfo {
   url: string;
   created_by: string;
   created_at: number;
+  rotated_at?: number;
+  rotated_by?: string;
 }
 
 export interface CreatedWebhookInfo extends WebhookInfo {
   secret: string;
+}
+
+export interface WebhookAuditLog {
+  id: string;
+  webhook_id: string;
+  group_name: string;
+  action: "created" | "rotated" | "deleted" | string;
+  actor: string;
+  created_at: number;
 }
 
 export interface IncomingCall {
@@ -174,6 +185,7 @@ interface ChatState {
   customEmojis: CustomEmoji[];
   folders: ChatFolder[];
   groupWebhooks: Record<string, WebhookInfo[]>;
+  groupWebhookAuditLogs: Record<string, WebhookAuditLog[]>;
   latestCreatedWebhook: CreatedWebhookInfo | null;
   translations: Record<string, string>; // messageId -> translated text
 
@@ -249,7 +261,9 @@ interface ChatState {
   addConversationToFolder: (folderId: string, key: string) => void;
   removeConversationFromFolder: (folderId: string, key: string) => void;
   setGroupWebhooks: (group: string, webhooks: WebhookInfo[]) => void;
+  setGroupWebhookAuditLogs: (group: string, logs: WebhookAuditLog[]) => void;
   addGroupWebhook: (group: string, webhook: CreatedWebhookInfo) => void;
+  rotateGroupWebhookSecret: (group: string, webhook: CreatedWebhookInfo) => void;
   removeGroupWebhook: (group: string, id: string) => void;
   clearLatestCreatedWebhook: () => void;
   setTranslation: (messageId: string, text: string) => void;
@@ -294,6 +308,7 @@ export const useChatStore = create<ChatState>((set) => ({
   customEmojis: [],
   folders: [],
   groupWebhooks: {},
+  groupWebhookAuditLogs: {},
   latestCreatedWebhook: null,
   translations: {},
   incomingCall: null,
@@ -596,7 +611,22 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
   setGroupWebhooks: (group, webhooks) =>
     set((state) => ({
-      groupWebhooks: { ...state.groupWebhooks, [group]: webhooks },
+      groupWebhooks: {
+        ...state.groupWebhooks,
+        [group]: webhooks.map((webhook) => ({
+          id: webhook.id,
+          group_name: webhook.group_name,
+          url: webhook.url,
+          created_by: webhook.created_by,
+          created_at: webhook.created_at,
+          rotated_at: webhook.rotated_at,
+          rotated_by: webhook.rotated_by,
+        })),
+      },
+    })),
+  setGroupWebhookAuditLogs: (group, logs) =>
+    set((state) => ({
+      groupWebhookAuditLogs: { ...state.groupWebhookAuditLogs, [group]: logs },
     })),
   addGroupWebhook: (group, webhook) =>
     set((state) => {
@@ -608,6 +638,8 @@ export const useChatStore = create<ChatState>((set) => ({
         url: webhook.url,
         created_by: webhook.created_by,
         created_at: webhook.created_at,
+        rotated_at: webhook.rotated_at,
+        rotated_by: webhook.rotated_by,
       };
       return {
         groupWebhooks: {
@@ -615,6 +647,28 @@ export const useChatStore = create<ChatState>((set) => ({
           [group]: [redactedWebhook, ...withoutDuplicate],
         },
         latestCreatedWebhook: webhook,
+      };
+    }),
+  rotateGroupWebhookSecret: (group, webhook) =>
+    set((state) => {
+      const existing = state.groupWebhooks[group] ?? [];
+      const previous = existing.find((w) => w.id === webhook.id);
+      const redactedWebhook: WebhookInfo = {
+        id: webhook.id,
+        group_name: webhook.group_name,
+        url: webhook.url,
+        created_by: webhook.created_by || previous?.created_by || "",
+        created_at: webhook.created_at || previous?.created_at || Date.now(),
+        rotated_at: webhook.rotated_at,
+        rotated_by: webhook.rotated_by,
+      };
+      const withoutDuplicate = existing.filter((w) => w.id !== webhook.id);
+      return {
+        groupWebhooks: {
+          ...state.groupWebhooks,
+          [group]: [redactedWebhook, ...withoutDuplicate],
+        },
+        latestCreatedWebhook: { ...redactedWebhook, secret: webhook.secret },
       };
     }),
   removeGroupWebhook: (group, id) =>
@@ -669,6 +723,7 @@ export const useChatStore = create<ChatState>((set) => ({
       customEmojis: [],
       folders: [],
       groupWebhooks: {},
+      groupWebhookAuditLogs: {},
       latestCreatedWebhook: null,
       translations: {},
       incomingCall: null,

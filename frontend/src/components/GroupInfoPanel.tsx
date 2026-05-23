@@ -12,8 +12,10 @@ import {
   Trash2,
   KeyRound,
   Webhook,
+  RotateCcw,
+  History,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatFullTime } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI } from "@/lib/api";
@@ -29,6 +31,7 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
     username,
     groups,
     groupWebhooks,
+    groupWebhookAuditLogs,
     latestCreatedWebhook,
     clearLatestCreatedWebhook,
   } = useChatStore();
@@ -65,6 +68,7 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
 
   const group = groupName ? groups[groupName] : undefined;
   const webhooks = groupName ? groupWebhooks[groupName] ?? [] : [];
+  const auditLogs = groupName ? groupWebhookAuditLogs[groupName] ?? [] : [];
   const createdWebhook =
     groupName && latestCreatedWebhook?.group_name === groupName
       ? latestCreatedWebhook
@@ -78,6 +82,7 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
   useEffect(() => {
     if (groupName && canManageWebhooks) {
       chatAPI.sendWebhookList(groupName);
+      chatAPI.sendWebhookAuditList(groupName);
     }
   }, [groupName, canManageWebhooks]);
 
@@ -100,6 +105,11 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
   const handleWebhookCreate = useCallback(() => {
     if (!groupName || !canManageWebhooks) return;
     chatAPI.sendWebhookCreate(groupName);
+  }, [groupName, canManageWebhooks]);
+
+  const handleWebhookRotate = useCallback((webhookID: string) => {
+    if (!groupName || !canManageWebhooks) return;
+    chatAPI.sendWebhookRotate(groupName, webhookID);
   }, [groupName, canManageWebhooks]);
 
   const handleWebhookDelete = useCallback((webhookID: string) => {
@@ -223,6 +233,16 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
     return `${window.location.origin}${path}`;
   };
 
+  const formatWebhookTime = (timestamp?: number) =>
+    timestamp ? formatFullTime(timestamp) : "-";
+
+  const webhookAuditLabel = (action: string) => {
+    if (action === "created") return t("group.webhookAuditCreated");
+    if (action === "rotated") return t("group.webhookAuditRotated");
+    if (action === "deleted") return t("group.webhookAuditDeleted");
+    return action;
+  };
+
   return (
     <>
       {/* Backdrop overlay */}
@@ -332,6 +352,7 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
               <button
                 type="button"
                 onClick={handleWebhookCreate}
+                data-visual="group-info-webhook-create"
                 className="inline-flex min-h-11 flex-shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
               >
                 <Plus className="h-4 w-4" />
@@ -340,7 +361,10 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
             </div>
 
             {createdWebhook && (
-              <div className="rounded-lg border border-primary/25 bg-primary/5 p-3">
+              <div
+                data-visual="group-info-webhook-created-secret"
+                className="rounded-lg border border-primary/25 bg-primary/5 p-3"
+              >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
                     <KeyRound className="h-4 w-4 flex-shrink-0 text-primary" />
@@ -380,7 +404,10 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
 
             <div className="space-y-1.5">
               {webhooks.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                <p
+                  data-visual="group-info-webhook-empty"
+                  className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground"
+                >
                   {t("group.noWebhooks")}
                 </p>
               ) : (
@@ -389,6 +416,7 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
                   return (
                     <div
                       key={webhook.id}
+                      data-visual="group-info-webhook-row"
                       className="rounded-lg border border-border bg-card/60 px-2.5 py-2.5"
                     >
                       <div className="flex items-center gap-2">
@@ -403,6 +431,7 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
                         <button
                           type="button"
                           onClick={() => handleCopy(displayURL)}
+                          data-visual="group-info-webhook-copy"
                           className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                           aria-label={t("group.copyWebhook")}
                         >
@@ -410,19 +439,94 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
                         </button>
                         <button
                           type="button"
+                          onClick={() => handleWebhookRotate(webhook.id)}
+                          data-visual="group-info-webhook-rotate"
+                          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                          aria-label={t("group.rotateWebhook")}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleWebhookDelete(webhook.id)}
+                          data-visual="group-info-webhook-delete"
                           className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           aria-label={t("group.deleteWebhook")}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
-                      <p className="mt-1.5 truncate text-[11px] text-muted-foreground">
-                        {t("group.webhookCreatedBy", { name: webhook.created_by || "-" })}
-                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-4 text-muted-foreground">
+                        <span className="truncate">
+                          {t("group.webhookCreatedBy", { name: webhook.created_by || "-" })}
+                        </span>
+                        {webhook.rotated_at ? (
+                          <span
+                            data-visual="group-info-webhook-rotated-meta"
+                            className="truncate"
+                            title={formatWebhookTime(webhook.rotated_at)}
+                          >
+                            {t("group.webhookRotatedBy", {
+                              name: webhook.rotated_by || "-",
+                              time: formatWebhookTime(webhook.rotated_at),
+                            })}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   );
                 })
+              )}
+            </div>
+
+            <div data-visual="group-info-webhook-audit" className="border-t border-border/50 pt-2">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <History className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                  <p className="text-xs font-semibold text-foreground">
+                    {t("group.webhookAudit")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  data-visual="group-info-webhook-audit-toggle"
+                  onClick={() => groupName && chatAPI.sendWebhookAuditList(groupName)}
+                  className="inline-flex min-h-11 flex-shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  {t("group.refreshWebhookAudit")}
+                </button>
+              </div>
+              {auditLogs.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                  {t("group.webhookAuditEmpty")}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {auditLogs.slice(0, 5).map((log) => (
+                    <div
+                      key={log.id}
+                      data-visual="group-info-webhook-audit-log"
+                      className="flex min-h-10 items-center justify-between gap-2 rounded-md bg-muted/35 px-2.5 py-1.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-foreground">
+                          {webhookAuditLabel(log.action)}
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {log.actor || "-"} · {log.webhook_id}
+                        </p>
+                      </div>
+                      <time
+                        className="flex-shrink-0 text-[11px] text-muted-foreground"
+                        dateTime={new Date(log.created_at).toISOString()}
+                        title={formatWebhookTime(log.created_at)}
+                      >
+                        {formatWebhookTime(log.created_at)}
+                      </time>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

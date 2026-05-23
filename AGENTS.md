@@ -41,6 +41,8 @@ Webhook at-rest security, media storage, and screenshot-driven UI acceptance are
 - Webhook secrets are generated as high-entropy one-time values, stored as versioned salted HMAC hashes in SQLite, and verified through constant-time comparison.
 - Legacy plaintext webhook rows are migrated to hashes at store startup.
 - HTTP webhook ingress verifies secrets through `store.VerifyWebhookSecret`; list responses remain owner/admin-only and redacted.
+- `webhook_rotate` invalidates old secrets immediately, writes an append-only audit log row (created/rotated/deleted), and returns a one-time new secret to the caller.
+- `webhook_audit_list` returns redacted audit events per group; audit log rows never contain secret hash or metadata via DTO.
 - `MediaStore` supports local disk, WebDAV, and S3-compatible storage.
 - S3-compatible media config is env-driven and preferred for production-server deployment shape.
 - Ordinary uploads and custom emoji both use safe media keys and same-origin `/uploads/...` routes.
@@ -59,12 +61,11 @@ Webhook at-rest security, media storage, and screenshot-driven UI acceptance are
 - Browser E2E now covers the complete Webhook ingress loop: group admin creates a one-time webhook in the UI, HTTP POSTs to the generated URL, and sees the external message appear in the group transcript.
 - Visual acceptance is backed by `npm run visual:acceptance`, real browser screenshots, metrics, and aesthetic review.
 - Generated `gpt-image-2` references may guide art direction, but cannot replace real browser screenshots for acceptance.
-- Current accepted clean-DB screenshot pass: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-53-00-860Z`.
+- Current accepted clean-DB screenshot pass: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-23T04-02-23-020Z`.
 - Tablet and mobile use the compact top bar until `lg`; 768px must not be forced into the desktop sidebar/header layout.
 
 Remaining follow-ups:
 
-- Add webhook secret rotation and audit logging design before production use.
 - Add group video call multi-browser smoke/e2e.
 
 ## Architecture Map
@@ -93,8 +94,8 @@ Run focused checks first, then broad checks before claiming completion.
 ```powershell
 # Backend focused webhook regression
 cd D:\Code\Projects\TokenDanceChat\backend
-go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"
-go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPlaintextSecretMigrationHashesExistingRows)"
+go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin|AuditListRedactsMetadataAndRequiresGroupAdmin)"
+go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPlaintextSecretMigrationHashesExistingRows|RotateWebhookSecretInvalidatesOldSecretAndAudits)"
 go test ./handler -run TestWebhookHandlerVerifiesHashedSecret
 
 # Backend focused media regression
