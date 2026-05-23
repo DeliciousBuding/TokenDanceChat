@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, Users, MessageSquare, Hash, Group, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/context";
 
 interface AdminStats {
   total_messages: number;
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function AdminPanel({ open, onClose }: Props) {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -61,7 +63,7 @@ export function AdminPanel({ open, onClose }: Props) {
           <button
             onClick={onClose}
             className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            aria-label="Close"
+            aria-label={t("thread.close")}
           >
             <X className="h-4 w-4" />
           </button>

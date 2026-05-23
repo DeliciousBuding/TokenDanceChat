@@ -798,6 +798,178 @@ func TestZeroValueMediaURLs(t *testing.T) {
 	}
 }
 
+// -------- 纯逻辑 / 构造函数测试 --------
+
+// TestNewValidConfig verifies New stores config correctly and sets defaults.
+func TestNewValidConfig(t *testing.T) {
+	cfg := Config{
+		WSURL: "ws://example.com/ws",
+		Token: "secret-token",
+	}
+	c := New(cfg)
+	if c == nil {
+		t.Fatal("New returned nil")
+	}
+	if c.cfg.WSURL != "ws://example.com/ws" {
+		t.Errorf("WSURL = %q, want ws://example.com/ws", c.cfg.WSURL)
+	}
+	if c.cfg.Token != "secret-token" {
+		t.Errorf("Token = %q, want secret-token", c.cfg.Token)
+	}
+	if c.maxBackoff != 30*time.Second {
+		t.Errorf("maxBackoff = %v, want 30s", c.maxBackoff)
+	}
+}
+
+// TestNewZeroConfig verifies New handles zero-value Config without panicking.
+func TestNewZeroConfig(t *testing.T) {
+	c := New(Config{})
+	if c == nil {
+		t.Fatal("New(Config{}) returned nil")
+	}
+	if c.cfg.WSURL != "" {
+		t.Errorf("WSURL = %q, want empty", c.cfg.WSURL)
+	}
+	if c.cfg.Token != "" {
+		t.Errorf("Token = %q, want empty", c.cfg.Token)
+	}
+	if c.maxBackoff != 30*time.Second {
+		t.Errorf("maxBackoff = %v, want 30s", c.maxBackoff)
+	}
+	if c.IsConnected() {
+		t.Error("expected IsConnected=false for zero-config client")
+	}
+}
+
+// TestResponseHandlerWaitAndDone verifies that Wait unblocks after done_
+// and that done_ is safe to call multiple times (idempotent).
+func TestResponseHandlerWaitAndDone(t *testing.T) {
+	handler := &ResponseHandler{done: make(chan struct{})}
+
+	done := make(chan bool, 1)
+	go func() {
+		handler.Wait()
+		done <- true
+	}()
+
+	// Signal completion.
+	handler.done_()
+
+	select {
+	case <-done:
+		// OK — Wait returned.
+	case <-time.After(1 * time.Second):
+		t.Fatal("Wait() did not return after done_()")
+	}
+
+	// Second done_ must not panic (idempotent via atomic.CompareAndSwap).
+	handler.done_()
+}
+
+// TestResponseHandlerDoubleDone verifies that calling done_ twice does not
+// double-close the channel.
+func TestResponseHandlerDoubleDone(t *testing.T) {
+	handler := &ResponseHandler{done: make(chan struct{})}
+	handler.done_()
+	// Must not panic.
+	handler.done_()
+	// Wait must return immediately.
+	handler.Wait()
+}
+
+// TestNormalizePayloadNilAndEmpty verifies normalizePayload is safe with nil
+// and empty payloads.
+func TestNormalizePayloadNilAndEmpty(t *testing.T) {
+	// Nil payload — must not panic, must preserve existing Content.
+	msg1 := Message{Content: "original", RoomID: "r1"}
+	msg1.normalizePayload()
+	if msg1.Content != "original" {
+		t.Errorf("Content changed after nil payload: %q", msg1.Content)
+	}
+	if msg1.RoomID != "r1" {
+		t.Errorf("RoomID changed after nil payload: %q", msg1.RoomID)
+	}
+
+	// Empty payload — must not panic.
+	msg2 := Message{Content: "keep", Payload: map[string]any{}}
+	msg2.normalizePayload()
+	if msg2.Content != "keep" {
+		t.Errorf("Content changed after empty payload: %q", msg2.Content)
+	}
+
+	// Payload with unrelated keys — must not overwrite.
+	msg3 := Message{Payload: map[string]any{"other": "value"}}
+	msg3.normalizePayload()
+	if msg3.Content != "" {
+		t.Errorf("Content = %q, want empty", msg3.Content)
+	}
+	if msg3.Thought != "" {
+		t.Errorf("Thought = %q, want empty", msg3.Thought)
+	}
+}
+
+// TestNormalizePayloadThoughtExtraction verifies thought field extraction
+// from payload, including kind-based and bool-based IsThought detection.
+func TestNormalizePayloadThoughtExtraction(t *testing.T) {
+	// thought as string.
+	msg1 := Message{Payload: map[string]any{"thought": "internal reasoning"}}
+	msg1.normalizePayload()
+	if msg1.Thought != "internal reasoning" {
+		t.Errorf("Thought = %q, want 'internal reasoning'", msg1.Thought)
+	}
+
+	// kind="thought" sets IsThought.
+	msg2 := Message{Payload: map[string]any{"kind": "thought"}}
+	msg2.normalizePayload()
+	if !msg2.IsThought {
+		t.Error("IsThought should be true when kind=thought")
+	}
+
+	// thought=true (bool) sets IsThought.
+	msg3 := Message{Payload: map[string]any{"thought": true}}
+	msg3.normalizePayload()
+	if !msg3.IsThought {
+		t.Error("IsThought should be true when thought=true (bool)")
+	}
+
+	// thought=false (bool) should NOT set IsThought.
+	msg4 := Message{Payload: map[string]any{"thought": false}}
+	msg4.normalizePayload()
+	if msg4.IsThought {
+		t.Error("IsThought should be false when thought=false (bool)")
+	}
+}
+
+// TestHealthCheckInvalidURL verifies HealthCheck returns an error for an
+// unreachable URL (pure-logic code path without real network side effects).
+func TestHealthCheckInvalidURL(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	err := HealthCheck(ctx, "http://127.0.0.1:0")
+	if err == nil {
+		t.Fatal("expected error for invalid health check URL")
+	}
+}
+
+// TestHealthCheckSuccess verifies HealthCheck succeeds against a healthy HTTP server.
+func TestHealthCheckSuccess(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if err := HealthCheck(ctx, server.URL); err != nil {
+		t.Fatalf("HealthCheck failed: %v", err)
+	}
+}
+
 // -------- 测试辅助类型 --------
 
 // syncBool 线程安全的布尔值。

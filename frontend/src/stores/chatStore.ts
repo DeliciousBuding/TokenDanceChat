@@ -290,7 +290,6 @@ interface ChatState {
   rotateGroupWebhookSecret: (group: string, webhook: CreatedWebhookInfo) => void;
   removeGroupWebhook: (group: string, id: string) => void;
   clearLatestCreatedWebhook: () => void;
-  getLastMessagePreview: (key: string) => { content: string; timestamp: number; sender: string } | null;
   setTranslation: (messageId: string, text: string) => void;
   setIncomingCall: (call: IncomingCall | null) => void;
   setActiveCall: (call: ActiveCall | null) => void;
@@ -800,9 +799,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return { groupWebhooks: nextWebhooks, latestCreatedWebhook: latest };
     }),
   clearLatestCreatedWebhook: () => set({ latestCreatedWebhook: null }),
-  getLastMessagePreview: (key: string) => {
-    return get().lastPreviews[key] || null;
-  },
   setIncomingCall: (incomingCall) => set({ incomingCall }),
   setActiveCall: (activeCall) => set({ activeCall }),
   setTranslation: (messageId, text) =>
