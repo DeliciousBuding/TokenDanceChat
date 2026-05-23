@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path"
 	"strings"
 	"testing"
@@ -401,7 +402,7 @@ func TestCORSMiddleware(t *testing.T) {
 		w.Write([]byte("ok"))
 	}))
 
-	t.Run("GET request adds CORS headers", func(t *testing.T) {
+	t.Run("same-origin adds CORS headers", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
 
@@ -410,17 +411,45 @@ func TestCORSMiddleware(t *testing.T) {
 		resp := w.Result()
 		defer resp.Body.Close()
 
-		if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
-			t.Error("missing Access-Control-Allow-Origin header")
+		if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+			t.Error("expected empty Access-Control-Allow-Origin for same-origin request")
 		}
 		if resp.Header.Get("Access-Control-Allow-Methods") != "GET, POST, OPTIONS" {
 			t.Error("missing or wrong Access-Control-Allow-Methods header")
 		}
-		if resp.Header.Get("Access-Control-Allow-Headers") != "Content-Type, Authorization" {
-			t.Error("missing or wrong Access-Control-Allow-Headers header")
+	})
+
+	t.Run("cross-origin allowed origin echoes back", func(t *testing.T) {
+		os.Setenv("CHAT_ALLOWED_ORIGINS", "example.com")
+		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Origin", "https://example.com")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		if resp.Header.Get("Access-Control-Allow-Origin") != "https://example.com" {
+			t.Errorf("expected https://example.com, got %q",
+				resp.Header.Get("Access-Control-Allow-Origin"))
 		}
-		if resp.Header.Get("Access-Control-Max-Age") != "86400" {
-			t.Error("missing or wrong Access-Control-Max-Age header")
+	})
+
+	t.Run("cross-origin disallowed does not set allow-origin", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Origin", "https://evil.com")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+			t.Error("should not set Access-Control-Allow-Origin for disallowed origin")
 		}
 	})
 
@@ -435,10 +464,6 @@ func TestCORSMiddleware(t *testing.T) {
 
 		if resp.StatusCode != http.StatusNoContent {
 			t.Errorf("expected status 204 for OPTIONS, got %d", resp.StatusCode)
-		}
-		// CORS headers should still be present on OPTIONS.
-		if resp.Header.Get("Access-Control-Allow-Origin") != "*" {
-			t.Error("missing CORS header on OPTIONS response")
 		}
 	})
 }

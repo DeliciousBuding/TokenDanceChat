@@ -95,10 +95,42 @@ func writeJSONError(w http.ResponseWriter, status int, msg, code, requestID stri
 	})
 }
 
-// CORSMiddleware wraps an http.Handler with CORS headers allowing all origins.
+// CORSMiddleware restricts cross-origin requests to explicitly allowed origins.
+// Uses CHAT_ALLOWED_ORIGINS env var (comma-separated, "*" for all, ".example.com" for subdomains).
+// When unset, only same-origin requests are allowed.
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		allow := origin == "" // same-origin requests don't send Origin
+		if !allow {
+			if originURL, err := url.Parse(origin); err == nil {
+				originHost := originURL.Hostname()
+				allowed := os.Getenv("CHAT_ALLOWED_ORIGINS")
+				if allowed == "*" {
+					allow = true
+				} else if allowed != "" {
+					for _, o := range strings.Split(allowed, ",") {
+						o = strings.TrimSpace(o)
+						if strings.EqualFold(originHost, o) || (strings.HasPrefix(o, ".") && strings.HasSuffix(originHost, o)) {
+							allow = true
+							break
+						}
+					}
+				}
+				// Legacy: allow vectorcontrol.tech subdomains.
+				if !allow && (strings.HasSuffix(originHost, ".vectorcontrol.tech") || originHost == "vectorcontrol.tech") {
+					allow = true
+				}
+			}
+		}
+
+		if allow {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			if origin != "" {
+				w.Header().Set("Vary", "Origin")
+			}
+		}
+
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Max-Age", "86400")
