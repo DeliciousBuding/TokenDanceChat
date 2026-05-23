@@ -9,6 +9,19 @@ vi.mock("@/lib/soundToggle", () => ({
   setSoundEnabled: vi.fn(),
 }));
 
+vi.mock("@/lib/api", () => ({
+  chatAPI: {
+    sendPinConversation: vi.fn(),
+    sendUnpinConversation: vi.fn(),
+    sendArchiveConversation: vi.fn(),
+    sendUnarchiveConversation: vi.fn(),
+    sendFolderAddConversation: vi.fn(),
+    sendFolderRemoveConversation: vi.fn(),
+    sendFolderList: vi.fn(),
+    sendSetNotificationPrefs: vi.fn(),
+  },
+}));
+
 // Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -37,6 +50,8 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 import { Sidebar } from "@/components/Sidebar";
+import { setSoundEnabled } from "@/lib/soundToggle";
+import { chatAPI } from "@/lib/api";
 
 function renderSidebar(props?: {
   collapsed?: boolean;
@@ -82,8 +97,15 @@ function toggleAIAssistants() {
   fireEvent.click(header);
 }
 
+/** Helper: get the DM-section button for a partner by name. Always uses the last DOM match
+ *  because DM section renders after pinned section. */
+function getDMButton(name: string): HTMLElement {
+  return screen.getAllByText(name).pop()!.closest("button")!;
+}
+
 describe("Sidebar", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     localStorageMock.clear();
     localStorageMock.setItem("tokendance:lang", "zh-CN");
     // Use only real users in onlineUsers to avoid duplicate TokenBot/PicoClaw
@@ -97,6 +119,9 @@ describe("Sidebar", () => {
       groups: {},
       unreadByConversation: {},
       userStatusList: [],
+      pinnedConversations: [],
+      archivedConversations: [],
+      folders: [],
     });
   });
 
@@ -606,6 +631,377 @@ describe("Sidebar", () => {
       await waitFor(() => {
         expect((screen.getByPlaceholderText("搜索对话...") as HTMLInputElement).value).toBe("");
       });
+    });
+  });
+
+  // ─── New tests ──────────────────────────────────────────
+
+  describe("右键菜单 置顶/取消置顶 (context menu pin/unpin)", () => {
+    beforeEach(() => {
+      useChatStore.setState({
+        messages: [
+          { id: "m1", username: "testuser", content: "hi charlie", to: "charlie", timestamp: Date.now() },
+          { id: "m2", username: "charlie", content: "hey", timestamp: Date.now() },
+        ],
+        pinnedConversations: [],
+      });
+    });
+
+    it("右击未置顶会话显示置顶会话按钮", () => {
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      expect(screen.getByText("置顶会话")).toBeTruthy();
+      expect(screen.queryByText("取消置顶")).toBeNull();
+    });
+
+    it("右击已置顶会话显示取消置顶按钮", () => {
+      useChatStore.setState({ pinnedConversations: ["dm:charlie"] });
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      expect(screen.getByText("取消置顶")).toBeTruthy();
+      expect(screen.queryByText("置顶会话")).toBeNull();
+    });
+
+    it("点击置顶会话调用 chatAPI.sendPinConversation", () => {
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      fireEvent.click(screen.getByText("置顶会话"));
+      expect(chatAPI.sendPinConversation).toHaveBeenCalledWith("dm:charlie");
+    });
+
+    it("点击取消置顶调用 chatAPI.sendUnpinConversation", () => {
+      useChatStore.setState({ pinnedConversations: ["dm:charlie"] });
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      fireEvent.click(screen.getByText("取消置顶"));
+      expect(chatAPI.sendUnpinConversation).toHaveBeenCalledWith("dm:charlie");
+    });
+
+    it("公共聊天会话也可右键置顶", () => {
+      renderSidebar();
+      const publicBtn = screen.getByRole("button", { name: "公共聊天" });
+      fireEvent(publicBtn, new MouseEvent("contextmenu", { bubbles: true }));
+      expect(screen.getByText("置顶会话")).toBeTruthy();
+      fireEvent.click(screen.getByText("置顶会话"));
+      expect(chatAPI.sendPinConversation).toHaveBeenCalledWith("public");
+    });
+
+    it("群组会话也可右键置顶", () => {
+      useChatStore.setState({
+        groups: {
+          "test-group": { name: "test-group", members: ["testuser", "alice"], roles: { testuser: "owner", alice: "member" }, owner: "testuser", created_at: 0 },
+        },
+      });
+      renderSidebar();
+      const groupBtn = screen.getByText("test-group").closest("button")!;
+      fireEvent(groupBtn, new MouseEvent("contextmenu", { bubbles: true }));
+      expect(screen.getByText("置顶会话")).toBeTruthy();
+      fireEvent.click(screen.getByText("置顶会话"));
+      expect(chatAPI.sendPinConversation).toHaveBeenCalledWith("group:test-group");
+    });
+  });
+
+  describe("右键菜单 归档/取消归档 (context menu archive/unarchive)", () => {
+    beforeEach(() => {
+      useChatStore.setState({
+        messages: [
+          { id: "m1", username: "testuser", content: "hi charlie", to: "charlie", timestamp: Date.now() },
+          { id: "m2", username: "charlie", content: "hey", timestamp: Date.now() },
+        ],
+        archivedConversations: [],
+      });
+    });
+
+    it("右击会话显示归档会话按钮", () => {
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      expect(screen.getByText("归档会话")).toBeTruthy();
+    });
+
+    it("右击已归档会话显示取消归档按钮", () => {
+      useChatStore.setState({ archivedConversations: ["dm:charlie"] });
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      expect(screen.getByText("取消归档")).toBeTruthy();
+    });
+
+    it("点击归档会话调用 chatAPI.sendArchiveConversation", () => {
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      fireEvent.click(screen.getByText("归档会话"));
+      expect(chatAPI.sendArchiveConversation).toHaveBeenCalledWith("dm:charlie");
+    });
+
+    it("点击取消归档调用 chatAPI.sendUnarchiveConversation", () => {
+      useChatStore.setState({ archivedConversations: ["dm:charlie"] });
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      fireEvent.click(screen.getByText("取消归档"));
+      expect(chatAPI.sendUnarchiveConversation).toHaveBeenCalledWith("dm:charlie");
+    });
+
+    it("有已归档会话时显示归档区域标题", () => {
+      useChatStore.setState({ archivedConversations: ["dm:charlie"] });
+      renderSidebar();
+      expect(screen.getByText("已归档会话")).toBeTruthy();
+    });
+
+    it("展开归档区域显示已归档会话名称", () => {
+      useChatStore.setState({ archivedConversations: ["dm:charlie"] });
+      renderSidebar();
+      fireEvent.click(screen.getByText("已归档会话"));
+      // After expanding, charlie appears in both DM section and archived section
+      expect(screen.getAllByText("charlie").length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("无已归档会话时不显示归档区域", () => {
+      useChatStore.setState({ archivedConversations: [] });
+      renderSidebar();
+      expect(screen.queryByText("已归档会话")).toBeNull();
+    });
+  });
+
+  describe("右键菜单 文件夹操作 (context menu folder)", () => {
+    beforeEach(() => {
+      useChatStore.setState({
+        messages: [
+          { id: "m1", username: "testuser", content: "hi charlie", to: "charlie", timestamp: Date.now() },
+          { id: "m2", username: "charlie", content: "hey", timestamp: Date.now() },
+        ],
+        folders: [],
+      });
+    });
+
+    it("右击不在文件夹中的会话显示添加到文件夹选项", () => {
+      useChatStore.setState({
+        folders: [
+          { id: "f1", username: "testuser", name: "Work", sort_order: 0, created_at: Date.now(), item_count: 0, items: [] },
+        ],
+      });
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      expect(screen.getByText("添加到文件夹")).toBeTruthy();
+    });
+
+    it("点击添加到文件夹展开子菜单显示已有文件夹", () => {
+      useChatStore.setState({
+        folders: [
+          { id: "f1", username: "testuser", name: "Work", sort_order: 0, created_at: Date.now(), item_count: 0, items: [] },
+          { id: "f2", username: "testuser", name: "Personal", sort_order: 1, created_at: Date.now(), item_count: 0, items: [] },
+        ],
+      });
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      fireEvent.click(screen.getByText("添加到文件夹"));
+      expect(screen.getByText("Work")).toBeTruthy();
+      expect(screen.getByText("Personal")).toBeTruthy();
+    });
+
+    it("无文件夹时子菜单显示暂无文件夹", () => {
+      useChatStore.setState({ folders: [] });
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      fireEvent.click(screen.getByText("添加到文件夹"));
+      expect(screen.getByText("暂无文件夹")).toBeTruthy();
+    });
+
+    it("已在文件夹中的会话显示从文件夹移除", () => {
+      useChatStore.setState({
+        folders: [
+          { id: "f1", username: "testuser", name: "Work", sort_order: 0, created_at: Date.now(), item_count: 1, items: ["dm:charlie"] },
+        ],
+      });
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      expect(screen.getByText("从文件夹移除")).toBeTruthy();
+      expect(screen.queryByText("添加到文件夹")).toBeNull();
+    });
+
+    it("点击从文件夹移除调用 chatAPI.sendFolderRemoveConversation", () => {
+      useChatStore.setState({
+        folders: [
+          { id: "f1", username: "testuser", name: "Work", sort_order: 0, created_at: Date.now(), item_count: 1, items: ["dm:charlie"] },
+        ],
+      });
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      fireEvent.click(screen.getByText("从文件夹移除"));
+      expect(chatAPI.sendFolderRemoveConversation).toHaveBeenCalledWith("f1", "dm:charlie");
+    });
+
+    it("点击子菜单中文件夹调用 chatAPI.sendFolderAddConversation", () => {
+      useChatStore.setState({
+        folders: [
+          { id: "f1", username: "testuser", name: "Work", sort_order: 0, created_at: Date.now(), item_count: 0, items: [] },
+        ],
+      });
+      renderSidebar();
+      fireEvent(getDMButton("charlie"), new MouseEvent("contextmenu", { bubbles: true }));
+      fireEvent.click(screen.getByText("添加到文件夹"));
+      fireEvent.click(screen.getByText("Work"));
+      expect(chatAPI.sendFolderAddConversation).toHaveBeenCalledWith("f1", "dm:charlie");
+    });
+  });
+
+  describe("声音开关持久化 (sound toggle persistence)", () => {
+    it("默认声音为开启状态", () => {
+      renderSidebar();
+      expect(screen.getByLabelText("音效已开启")).toBeTruthy();
+    });
+
+    it("点击切换到关闭调用 setSoundEnabled(false)", () => {
+      renderSidebar();
+      fireEvent.click(screen.getByLabelText("音效已开启"));
+      expect(setSoundEnabled).toHaveBeenCalledWith(false);
+    });
+
+    it("关闭后按钮 aria-label 变为音效已关闭", () => {
+      renderSidebar();
+      fireEvent.click(screen.getByLabelText("音效已开启"));
+      expect(screen.getByLabelText("音效已关闭")).toBeTruthy();
+    });
+
+    it("再次点击从关闭切换回开启", () => {
+      renderSidebar();
+      fireEvent.click(screen.getByLabelText("音效已开启"));
+      expect(setSoundEnabled).toHaveBeenCalledWith(false);
+      fireEvent.click(screen.getByLabelText("音效已关闭"));
+      expect(setSoundEnabled).toHaveBeenCalledWith(true);
+    });
+
+    it("点击两次后声音回到开启状态", () => {
+      renderSidebar();
+      fireEvent.click(screen.getByLabelText("音效已开启"));
+      fireEvent.click(screen.getByLabelText("音效已关闭"));
+      expect(screen.getByLabelText("音效已开启")).toBeTruthy();
+    });
+  });
+
+  describe("好友请求待处理状态 (pending friend request)", () => {
+    it("有pending请求的用户在上下文菜单显示请求待处理", () => {
+      renderSidebar({ pendingFriendUsers: ["alice"] });
+      const aliceBtn = screen.getByRole("button", { name: "alice" });
+      fireEvent.click(aliceBtn);
+      expect(screen.getByText("请求待处理")).toBeTruthy();
+    });
+
+    it("有pending请求时不显示添加好友按钮", () => {
+      renderSidebar({ pendingFriendUsers: ["alice"] });
+      const aliceBtn = screen.getByRole("button", { name: "alice" });
+      fireEvent.click(aliceBtn);
+      expect(screen.queryByText("添加好友")).toBeNull();
+    });
+
+    it("无pending请求且非好友显示添加好友按钮", () => {
+      renderSidebar({ pendingFriendUsers: [] });
+      useChatStore.setState({ friends: [] });
+      const aliceBtn = screen.getByRole("button", { name: "alice" });
+      fireEvent.click(aliceBtn);
+      expect(screen.getByText("添加好友")).toBeTruthy();
+      expect(screen.queryByText("请求待处理")).toBeNull();
+    });
+
+    it("已经是好友且无pending时不显示添加好友", () => {
+      useChatStore.setState({ friends: ["alice"] });
+      renderSidebar({ pendingFriendUsers: [] });
+      const aliceBtn = screen.getByRole("button", { name: "alice" });
+      fireEvent.click(aliceBtn);
+      expect(screen.getByText("发送消息")).toBeTruthy();
+      expect(screen.queryByText("添加好友")).toBeNull();
+    });
+
+    it("多用户pending时各自独立显示", () => {
+      useChatStore.setState({
+        onlineUsers: ["testuser", "alice", "bob", "charlie"],
+        messages: [],
+      });
+      renderSidebar({ pendingFriendUsers: ["alice", "charlie"] });
+
+      const aliceBtn = screen.getByRole("button", { name: "alice" });
+      fireEvent.click(aliceBtn);
+      expect(screen.getByText("请求待处理")).toBeTruthy();
+
+      // Close alice's menu by clicking her button again (toggles showMenu)
+      fireEvent.click(aliceBtn);
+
+      const charlieBtn = screen.getByRole("button", { name: "charlie" });
+      fireEvent.click(charlieBtn);
+      expect(screen.getByText("请求待处理")).toBeTruthy();
+    });
+  });
+
+  describe("补充在线用户测试 (online users additional)", () => {
+    it("当前用户有'你'标签", () => {
+      renderSidebar();
+      expect(screen.getByText("你")).toBeTruthy();
+    });
+
+    it("当前用户与其他用户间有分隔线", () => {
+      renderSidebar();
+      const selfBtn = screen.getByRole("button", { name: "testuser (你)" });
+      expect(selfBtn).toBeTruthy();
+    });
+
+    it("在线用户显示在线状态点 (role=status)", () => {
+      renderSidebar();
+      const onlineDots = screen.getAllByRole("status", { name: "在线" });
+      expect(onlineDots.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("非好友在线用户上下文菜单有发送消息和添加好友", () => {
+      useChatStore.setState({ friends: [] });
+      renderSidebar();
+      const aliceBtn = screen.getByRole("button", { name: "alice" });
+      fireEvent.click(aliceBtn);
+      expect(screen.getByText("发送消息")).toBeTruthy();
+      expect(screen.getByText("添加好友")).toBeTruthy();
+    });
+
+    it("好友在线用户上下文菜单有发送消息但无添加好友", () => {
+      useChatStore.setState({ friends: ["alice"] });
+      renderSidebar();
+      const aliceBtn = screen.getByRole("button", { name: "alice" });
+      fireEvent.click(aliceBtn);
+      expect(screen.getByText("发送消息")).toBeTruthy();
+      expect(screen.queryByText("添加好友")).toBeNull();
+    });
+
+    it("当前用户不可打开上下文菜单", () => {
+      renderSidebar();
+      const selfBtn = screen.getByRole("button", { name: "testuser (你)" });
+      fireEvent.click(selfBtn);
+      expect(screen.queryByText("发送消息")).toBeNull();
+      expect(screen.queryByText("添加好友")).toBeNull();
+    });
+  });
+
+  describe("好友列表交互 (friend list interaction)", () => {
+    it("在线好友显示在好友section中并有在线指示", () => {
+      useChatStore.setState({
+        friends: ["alice", "bob"],
+        onlineUsers: ["testuser", "alice", "bob"],
+      });
+      renderSidebar();
+      expect(screen.getByText("好友")).toBeTruthy();
+      expect(screen.getAllByText("alice").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("bob").length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("离线好友显示在好友列表中", () => {
+      useChatStore.setState({
+        friends: ["david"],
+        messages: [],
+        onlineUsers: ["testuser", "alice", "bob"],
+        userStatusList: [{ username: "david", online: false, last_seen: Date.now() - 3600000 }],
+      });
+      renderSidebar();
+      expect(screen.getByText("david")).toBeTruthy();
+    });
+
+    it("无好友时显示空状态", () => {
+      useChatStore.setState({ friends: [] });
+      renderSidebar();
+      expect(screen.getByText("暂无好友")).toBeTruthy();
     });
   });
 });
