@@ -301,13 +301,26 @@ export function MessageTranscript({
     : 0;
 
   // Count replies for each message.
+  // Cached via ref: thread replies are immutable once sent, so counts only
+  // change when effectiveMessages.length changes (new messages added/removed).
+  const prevMsgCountRef = useRef(0);
+  const cachedReplyCountsRef = useRef<Record<string, number>>({});
+
   const replyCounts = useMemo(() => {
+    if (effectiveMessages.length === prevMsgCountRef.current) {
+      return cachedReplyCountsRef.current;
+    }
     const counts: Record<string, number> = {};
     for (const m of effectiveMessages) {
       if (m.reply_to_id) {
         counts[m.reply_to_id] = (counts[m.reply_to_id] || 0) + 1;
       }
+      if (m.thread_id) {
+        counts[m.thread_id] = (counts[m.thread_id] || 0) + 1;
+      }
     }
+    prevMsgCountRef.current = effectiveMessages.length;
+    cachedReplyCountsRef.current = counts;
     return counts;
   }, [effectiveMessages]);
 

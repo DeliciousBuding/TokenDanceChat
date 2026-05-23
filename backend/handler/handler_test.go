@@ -2437,3 +2437,207 @@ func TestLocalMediaStoreSaveAndOpen(t *testing.T) {
 		t.Errorf("expected text/plain; charset=utf-8, got %s", media.ContentType)
 	}
 }
+
+// --- Register validation edge cases ---
+
+// TestRegisterPasswordTooShort verifies that registering with a password
+// shorter than 6 characters returns HTTP 400 with code WEAK_PASSWORD.
+func TestRegisterPasswordTooShort(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	body := `{"username":"alice","password":"12345","invite_code":"VALIDCODE"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.10:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Register(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for too-short password, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "WEAK_PASSWORD" {
+		t.Errorf("expected code WEAK_PASSWORD, got %q", result["code"])
+	}
+}
+
+// TestRegisterPasswordTooLong verifies that registering with a password
+// longer than 72 characters returns HTTP 400 with code PASSWORD_TOO_LONG.
+func TestRegisterPasswordTooLong(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	longPassword := strings.Repeat("a", 73)
+	body := `{"username":"alice","password":"` + longPassword + `","invite_code":"VALIDCODE"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.11:1234"
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Register(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for too-long password, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["code"] != "PASSWORD_TOO_LONG" {
+		t.Errorf("expected code PASSWORD_TOO_LONG, got %q", result["code"])
+	}
+}
+
+// TestRegisterInvalidUsername verifies that registering with invalid usernames
+// (special characters, too long) returns HTTP 400 with code INVALID_USERNAME.
+func TestRegisterInvalidUsername(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	tests := []struct {
+		name     string
+		username string
+	}{
+		{"special characters", "user@name"},
+		{"too long (>20 chars)", "abcdefghijklmnopqrstu"},
+		{"empty after trim", "   "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{"username":"` + tt.username + `","password":"secret123","invite_code":"VALIDCODE"}`
+			req := httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader(body))
+			req.RemoteAddr = "192.0.2.12:1234"
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			h.Register(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("expected status 400 for username %q, got %d", tt.username, resp.StatusCode)
+				return
+			}
+
+			var result map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				t.Fatalf("failed to decode JSON: %v", err)
+			}
+			if result["code"] != "INVALID_USERNAME" {
+				t.Errorf("expected code INVALID_USERNAME for %q, got %q", tt.username, result["code"])
+			}
+		})
+	}
+}
+
+// --- InviteGenerate default max_uses ---
+
+// mockStoreInviteCapture is a mockStore variant that captures the maxUses
+// argument passed to GenerateInviteCode.
+type mockStoreInviteCapture struct {
+	mockStore
+	capturedMaxUses int
+}
+
+func (m *mockStoreInviteCapture) GenerateInviteCode(creator string, maxUses int) (string, error) {
+	m.capturedMaxUses = maxUses
+	return "INVITEDEFAULT", nil
+}
+
+func newTestHandlerWithInviteCapture() (*Handler, *mockStoreInviteCapture) {
+	ms := &mockStoreInviteCapture{}
+	h := hub.New(ms, nil, nil, "")
+	go h.Run()
+	return New(h, ms, "/tmp/test-uploads"), ms
+}
+
+// TestInviteGenerateDefaultMaxUses verifies that when max_uses is omitted or set
+// to 0, the handler defaults it to 5 and passes that to the store.
+func TestInviteGenerateDefaultMaxUses(t *testing.T) {
+	t.Run("max_uses omitted", func(t *testing.T) {
+		ResetRateLimiter()
+		h, capture := newTestHandlerWithInviteCapture()
+
+		body := `{"username":"alice"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
+		req.RemoteAddr = "192.0.2.20:1234"
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		h.InviteGenerate(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, w.Body.String())
+		}
+
+		if capture.capturedMaxUses != 5 {
+			t.Errorf("expected default max_uses=5 when omitted, got %d", capture.capturedMaxUses)
+		}
+	})
+
+	t.Run("max_uses zero", func(t *testing.T) {
+		ResetRateLimiter()
+		h, capture := newTestHandlerWithInviteCapture()
+
+		body := `{"username":"alice","max_uses":0}`
+		req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
+		req.RemoteAddr = "192.0.2.21:1234"
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		h.InviteGenerate(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, w.Body.String())
+		}
+
+		if capture.capturedMaxUses != 5 {
+			t.Errorf("expected default max_uses=5 when zero, got %d", capture.capturedMaxUses)
+		}
+	})
+
+	t.Run("max_uses explicitly set", func(t *testing.T) {
+		ResetRateLimiter()
+		h, capture := newTestHandlerWithInviteCapture()
+
+		body := `{"username":"alice","max_uses":10}`
+		req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
+		req.RemoteAddr = "192.0.2.22:1234"
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		h.InviteGenerate(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, w.Body.String())
+		}
+
+		if capture.capturedMaxUses != 10 {
+			t.Errorf("expected max_uses=10 when explicitly set, got %d", capture.capturedMaxUses)
+		}
+	})
+}

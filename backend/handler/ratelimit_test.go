@@ -230,3 +230,51 @@ func TestWSAllow(t *testing.T) {
 		t.Error("expected WSAllow to return false on 51st call")
 	}
 }
+
+// TestAuthAllow verifies that AuthAllow permits up to 5 requests per minute
+// and rejects the 6th from the same IP.
+func TestAuthAllow(t *testing.T) {
+	ResetRateLimiter()
+	ip := "203.0.113.60"
+
+	// First 5 auth requests should be allowed.
+	for i := 0; i < 5; i++ {
+		if !AuthAllow(ip) {
+			t.Errorf("expected AuthAllow to return true for request %d", i+1)
+		}
+	}
+
+	// 6th request within the same window should be denied.
+	if AuthAllow(ip) {
+		t.Error("expected AuthAllow to return false on 6th request within window")
+	}
+}
+
+// TestAuthAllowWindowReset verifies that AuthAllow recovers after the rate-limit
+// window expires. Uses a short internal window to keep the test fast.
+func TestAuthAllowWindowReset(t *testing.T) {
+	rl := &rateLimiter{}
+	ip := "203.0.113.61"
+	shortWindow := 50 * time.Millisecond
+	maxRequests := 3
+
+	// Saturate the auth limit.
+	for i := 0; i < maxRequests; i++ {
+		if !rl.allow(&rl.authEntries, ip, maxRequests, shortWindow) {
+			t.Fatalf("expected allow to return true for request %d", i+1)
+		}
+	}
+
+	// Next request should be denied.
+	if rl.allow(&rl.authEntries, ip, maxRequests, shortWindow) {
+		t.Fatal("expected allow to return false after reaching limit")
+	}
+
+	// Wait for the window to expire.
+	time.Sleep(shortWindow + 10*time.Millisecond)
+
+	// After the window, requests should be allowed again.
+	if !rl.allow(&rl.authEntries, ip, maxRequests, shortWindow) {
+		t.Error("expected allow to return true after window expiration")
+	}
+}
