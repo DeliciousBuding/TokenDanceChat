@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 794 前端 / 50 文件 / 51.86% 行覆盖率 / E2E 47/52
+发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 813 前端 / 50 文件 / 51.86% 行覆盖率 / E2E 94/101 (7 group-call pre-existing)
 
 ## 当前目标
 
@@ -48,9 +48,12 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 性能优化 + UI 打磨 + 工程基建
 
-状态：持续推进。794 tests / 50 files / tsc 0 / ESLint 0 / CI 就绪 / coverage 51.86%。
+状态：持续推进。813 tests / 50 files / tsc 0 / ESLint 0 / CI 就绪 / coverage 51.86% / E2E 94/101。
 
-- [x] Store tests +7（BlockUser, SearchCustomEmojis, UpdateUserStatus, ThreadReplyCount）。
+- [x] SW 缓存修复：CACHE_NAME tdchat-v3 + stale-while-revalidate 策略，防止部署后浏览器加载旧 JS/CSS。
+- [x] api.ts connect 竞态修复：connectGeneration 计数器替代 intentionalClose 布尔值，消除旧 onclose 在新 onopen 后触发的竞态。
+- [x] E2E 修复：back button label "Back" → "返回"（zh-CN context），3 个测试恢复。
+- [x] 容器重启修复生产 WebSocket 连接堆积问题。
 - [x] E2E production fixes x3（target 47/52）。
 - [x] nginx production fix：agenthub-chat.conf 冲突修复。
 - [x] 前端测试从 237 → 779 (+542 tests / +31 文件 / 51.86% 行覆盖率)。
@@ -190,6 +193,10 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 779 tests, 51.86% lines |
 | 2026-05-24 | `cd backend; go test ./...` | PASS |
 | 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 47/52 pass（3 fixes pending） |
+| 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 794 tests, 51.86% lines |
+| 2026-05-24 | `cd backend; go test ./...` | PASS |
+| 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 813 tests |
+| 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 94/101 pass（7 group-call pre-existing, 17 skipped） |
 | 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 794 tests, 51.86% lines |
 | 2026-05-24 | `cd backend; go test ./...` | PASS |
 
