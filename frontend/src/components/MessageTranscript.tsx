@@ -780,7 +780,7 @@ export function MessageTranscript({
               <div className="flex items-center gap-3 px-4 py-1.5 sm:py-2">
                 <div className="h-px flex-1 bg-border/50" />
                 <span className="text-[11px] font-medium text-muted-foreground/40 whitespace-nowrap select-none">
-                  {formatDate(groupTs, lang)}
+                  {formatDate(groupTs, t)}
                 </span>
                 <div className="h-px flex-1 bg-border/50" />
               </div>

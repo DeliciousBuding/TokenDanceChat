@@ -201,6 +201,7 @@ const VoiceMessagePlayer = memo(function VoiceMessagePlayer({
   audioUrl: string;
   primaryColor: string;
 }) {
+  const { t } = useTranslation();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -959,7 +960,7 @@ export const MessageBubble = memo(function MessageBubble({
             )}
             {isOwn && !isGrouped && (
               <span className="text-xs text-muted-foreground/60" title={formatFullTime(message.timestamp)}>
-                {formatTime(message.timestamp, lang)}
+                {formatTime(message.timestamp, t)}
                 {message.edited && (
                   <span className="text-[10px] text-muted-foreground/40 ml-1">
                     {t("message.edited")}
@@ -974,7 +975,7 @@ export const MessageBubble = memo(function MessageBubble({
             )}
             {!isOwn && !isGrouped && (
               <span className="text-[10px] text-muted-foreground/50" title={formatFullTime(message.timestamp)}>
-                {formatTime(message.timestamp, lang)}
+                {formatTime(message.timestamp, t)}
                 {(message as ChatMessage).mention_all && (
                   <span className="text-[10px] text-amber-500/70 ml-1 font-medium">
                     @all
@@ -1227,7 +1228,7 @@ export const MessageBubble = memo(function MessageBubble({
               )}
               title={formatFullTime(message.timestamp)}
             >
-              {formatTime(message.timestamp, lang)}
+              {formatTime(message.timestamp, t)}
               {message.edited && (
                 <span className="text-[10px] text-muted-foreground/40 ml-1">
                   (edited)

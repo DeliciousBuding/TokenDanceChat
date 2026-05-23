@@ -787,7 +787,7 @@ export function VideoCall({ onClose }: Props) {
         <div className="text-center text-white">
           <PhoneOff className="h-16 w-16 mx-auto mb-4 text-red-500" />
           <h2 className="text-xl font-semibold">{t("call.callEnded")}</h2>
-          <p className="text-sm text-white/60 mt-1">{formatTime(elapsed)}</p>
+          <p className="text-sm text-white/60 mt-1">{formatTime(elapsed, t)}</p>
         </div>
       </div>
     );
@@ -840,7 +840,7 @@ export function VideoCall({ onClose }: Props) {
         {/* Timer + participant count */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
           <span className="text-white text-sm font-mono bg-black/50 px-3 py-1 rounded-full">
-            {formatTime(elapsed)}
+            {formatTime(elapsed, t)}
           </span>
           {isGrp && peerCount > 0 && (
             <span className="text-white/80 text-xs bg-black/50 px-2 py-1 rounded-full flex items-center gap-1">

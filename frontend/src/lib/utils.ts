@@ -1,11 +1,13 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+export type TFunction = (key: string, params?: Record<string, string | number>) => string;
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatTime(timestamp: number, lang: string = "zh-CN"): string {
+export function formatTime(timestamp: number, t: TFunction): string {
   const date = new Date(timestamp);
   const now = Date.now();
   const diffMs = now - date.getTime();
@@ -14,10 +16,10 @@ export function formatTime(timestamp: number, lang: string = "zh-CN"): string {
   const diffHour = Math.floor(diffMin / 60);
 
   // Less than 1 minute
-  if (diffSec < 60) return lang === "zh-CN" ? "刚刚" : "just now";
+  if (diffSec < 60) return t("profile.justNow");
 
   // Less than 1 hour
-  if (diffMin < 60) return lang === "zh-CN" ? `${diffMin}分钟前` : `${diffMin}m ago`;
+  if (diffMin < 60) return t("profile.minutesAgo", { n: String(diffMin) });
 
   // Less than 4 hours: "HH:mm"
   if (diffHour < 4) {
@@ -39,17 +41,17 @@ export function formatFullTime(timestamp: number): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function formatDate(timestamp: number, lang: string = "zh-CN"): string {
+export function formatDate(timestamp: number, t: TFunction): string {
   const date = new Date(timestamp);
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
   if (date.toDateString() === today.toDateString()) {
-    return lang === "en-US" ? "Today" : "今天";
+    return t("profile.today");
   }
   if (date.toDateString() === yesterday.toDateString()) {
-    return lang === "en-US" ? "Yesterday" : "昨天";
+    return t("profile.yesterday");
   }
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
@@ -89,7 +91,7 @@ export function usernameHue(username: string): number {
 /**
  * Formats a "last seen" timestamp into a human-readable relative time string.
  */
-export function formatLastSeen(lastSeenTs: number, lang: string = "zh-CN"): string {
+export function formatLastSeen(lastSeenTs: number, t: TFunction): string {
   const now = Date.now();
   const diffMs = now - lastSeenTs;
   const diffSec = Math.floor(diffMs / 1000);
@@ -97,9 +99,9 @@ export function formatLastSeen(lastSeenTs: number, lang: string = "zh-CN"): stri
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSec < 60) return lang === "zh-CN" ? "刚刚" : "just now";
-  if (diffMin < 60) return lang === "zh-CN" ? `${diffMin}分钟前` : `${diffMin}m ago`;
-  if (diffHour < 24) return lang === "zh-CN" ? `${diffHour}小时前` : `${diffHour}h ago`;
-  if (diffDay < 30) return lang === "zh-CN" ? `${diffDay}天前` : `${diffDay}d ago`;
-  return formatTime(lastSeenTs, lang);
+  if (diffSec < 60) return t("profile.justNow");
+  if (diffMin < 60) return t("profile.minutesAgo", { n: String(diffMin) });
+  if (diffHour < 24) return t("profile.hoursAgo", { n: String(diffHour) });
+  if (diffDay < 30) return t("profile.daysAgo", { n: String(diffDay) });
+  return formatTime(lastSeenTs, t);
 }

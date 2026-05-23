@@ -278,6 +278,8 @@ export interface TranslationDict {
     minutesAgo: string;
     hoursAgo: string;
     daysAgo: string;
+    today: string;
+    yesterday: string;
   };
   search: {
     placeholder: string;
@@ -730,6 +732,8 @@ const zhCN: TranslationDict = {
     minutesAgo: "{{n}}分钟前",
     hoursAgo: "{{n}}小时前",
     daysAgo: "{{n}}天前",
+    today: "今天",
+    yesterday: "昨天",
   },
   search: {
     placeholder: "搜索消息...",
@@ -1185,6 +1189,8 @@ const enUS: TranslationDict = {
     minutesAgo: "{{n}}m ago",
     hoursAgo: "{{n}}h ago",
     daysAgo: "{{n}}d ago",
+    today: "Today",
+    yesterday: "Yesterday",
   },
   search: {
     placeholder: "Search messages...",

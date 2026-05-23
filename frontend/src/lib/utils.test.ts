@@ -8,7 +8,46 @@ import {
   formatTime,
   hashString,
   usernameHue,
+  type TFunction,
 } from "@/lib/utils";
+
+// --- Mock t functions that mirror the profile.* keys in translations.ts ---
+
+const t_zh: TFunction = (key: string, params?: Record<string, string | number>): string => {
+  const dict: Record<string, string> = {
+    "profile.justNow": "刚刚",
+    "profile.minutesAgo": "{{n}}分钟前",
+    "profile.hoursAgo": "{{n}}小时前",
+    "profile.daysAgo": "{{n}}天前",
+    "profile.today": "今天",
+    "profile.yesterday": "昨天",
+  };
+  let val = dict[key] ?? key;
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      val = val.replace(`{{${k}}}`, String(v));
+    }
+  }
+  return val;
+};
+
+const t_en: TFunction = (key: string, params?: Record<string, string | number>): string => {
+  const dict: Record<string, string> = {
+    "profile.justNow": "just now",
+    "profile.minutesAgo": "{{n}}m ago",
+    "profile.hoursAgo": "{{n}}h ago",
+    "profile.daysAgo": "{{n}}d ago",
+    "profile.today": "Today",
+    "profile.yesterday": "Yesterday",
+  };
+  let val = dict[key] ?? key;
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      val = val.replace(`{{${k}}}`, String(v));
+    }
+  }
+  return val;
+};
 
 describe("formatTime", () => {
   beforeEach(() => {
@@ -21,43 +60,41 @@ describe("formatTime", () => {
     vi.useRealTimers();
   });
 
-  it("少于60秒显示刚刚（英文显示just now）", () => {
+  it("returns i18n justNow when less than 60 seconds", () => {
     const ts = Date.now() - 30 * 1000; // 30 seconds ago
-    expect(formatTime(ts)).toBe("刚刚");
-    expect(formatTime(ts, "zh-CN")).toBe("刚刚");
-    expect(formatTime(ts, "en-US")).toBe("just now");
+    expect(formatTime(ts, t_zh)).toBe("刚刚");
+    expect(formatTime(ts, t_en)).toBe("just now");
   });
 
-  it("1到59分钟显示X分钟前", () => {
+  it("returns i18n minutesAgo when 1 to 59 minutes", () => {
     const ts = Date.now() - 5 * 60 * 1000; // 5 minutes ago
-    expect(formatTime(ts)).toBe("5分钟前");
-    expect(formatTime(ts, "zh-CN")).toBe("5分钟前");
-    expect(formatTime(ts, "en-US")).toBe("5m ago");
+    expect(formatTime(ts, t_zh)).toBe("5分钟前");
+    expect(formatTime(ts, t_en)).toBe("5m ago");
   });
 
-  it("同一天内小于4小时显示HH:mm", () => {
-    // 2 hours ago — still within the 4-hour window, so shows HH:mm
+  it("shows HH:mm when within same day and less than 4 hours", () => {
+    // 2 hours ago — still within the 4-hour window
     const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
     const expected = new Date(twoHoursAgo);
     const pad = (n: number) => String(n).padStart(2, "0");
-    expect(formatTime(twoHoursAgo)).toBe(`${pad(expected.getHours())}:${pad(expected.getMinutes())}`);
+    expect(formatTime(twoHoursAgo, t_zh)).toBe(`${pad(expected.getHours())}:${pad(expected.getMinutes())}`);
   });
 
-  it("超过4小时显示MM-DD", () => {
-    // 5 days ago — well past the 4-hour window, shows date only
+  it("shows MM-DD when over 4 hours", () => {
+    // 5 days ago — well past the 4-hour window
     const fiveDaysAgo = Date.now() - 5 * 24 * 60 * 60 * 1000;
     const d = new Date(fiveDaysAgo);
     const pad = (n: number) => String(n).padStart(2, "0");
-    expect(formatTime(fiveDaysAgo)).toBe(`${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    expect(formatTime(fiveDaysAgo, t_zh)).toBe(`${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
   });
 
-  it("不同年份显示YY-MM-DD", () => {
+  it("shows YY-MM-DD when different year", () => {
     // Create a timestamp in the previous year
     const now = new Date();
     const lastYear = new Date(now.getFullYear() - 1, 5, 15, 12, 0, 0);
     const pad = (n: number) => String(n).padStart(2, "0");
     const yy = String(lastYear.getFullYear()).slice(-2);
-    expect(formatTime(lastYear.getTime())).toBe(
+    expect(formatTime(lastYear.getTime(), t_zh)).toBe(
       `${yy}-${pad(lastYear.getMonth() + 1)}-${pad(lastYear.getDate())}`,
     );
   });
@@ -188,24 +225,26 @@ describe("formatDate", () => {
     vi.useRealTimers();
   });
 
-  it('returns 今天 for today', () => {
+  it('returns i18n today for today', () => {
     const ts = new Date("2025-06-15T08:00:00").getTime();
-    expect(formatDate(ts)).toBe("今天");
+    expect(formatDate(ts, t_zh)).toBe("今天");
+    expect(formatDate(ts, t_en)).toBe("Today");
   });
 
-  it('returns 昨天 for yesterday', () => {
+  it('returns i18n yesterday for yesterday', () => {
     const ts = new Date("2025-06-14T22:00:00").getTime();
-    expect(formatDate(ts)).toBe("昨天");
+    expect(formatDate(ts, t_zh)).toBe("昨天");
+    expect(formatDate(ts, t_en)).toBe("Yesterday");
   });
 
   it("returns YYYY-MM-DD for any other date", () => {
     const ts = new Date("2025-06-10T10:00:00").getTime();
-    expect(formatDate(ts)).toBe("2025-06-10");
+    expect(formatDate(ts, t_zh)).toBe("2025-06-10");
   });
 
   it("returns YYYY-MM-DD for a date in a different year", () => {
     const ts = new Date("2023-01-01T00:00:00").getTime();
-    expect(formatDate(ts)).toBe("2023-01-01");
+    expect(formatDate(ts, t_zh)).toBe("2023-01-01");
   });
 });
 
@@ -220,50 +259,46 @@ describe("formatLastSeen", () => {
     vi.useRealTimers();
   });
 
-  it('returns "刚刚" / "just now" when less than 60 seconds', () => {
+  it("returns i18n justNow when less than 60 seconds", () => {
     const ts = Date.now() - 30_000;
-    expect(formatLastSeen(ts)).toBe("刚刚");
-    expect(formatLastSeen(ts, "zh-CN")).toBe("刚刚");
-    expect(formatLastSeen(ts, "en-US")).toBe("just now");
+    expect(formatLastSeen(ts, t_zh)).toBe("刚刚");
+    expect(formatLastSeen(ts, t_en)).toBe("just now");
   });
 
-  it('returns "X分钟前" / "Xm ago" when 1–59 minutes', () => {
+  it("returns i18n minutesAgo when 1-59 minutes", () => {
     const ts = Date.now() - 5 * 60_000;
-    expect(formatLastSeen(ts)).toBe("5分钟前");
-    expect(formatLastSeen(ts, "zh-CN")).toBe("5分钟前");
-    expect(formatLastSeen(ts, "en-US")).toBe("5m ago");
+    expect(formatLastSeen(ts, t_zh)).toBe("5分钟前");
+    expect(formatLastSeen(ts, t_en)).toBe("5m ago");
   });
 
-  it('returns "X小时前" / "Xh ago" when 1–23 hours', () => {
+  it("returns i18n hoursAgo when 1-23 hours", () => {
     const ts = Date.now() - 5 * 3_600_000;
-    expect(formatLastSeen(ts)).toBe("5小时前");
-    expect(formatLastSeen(ts, "zh-CN")).toBe("5小时前");
-    expect(formatLastSeen(ts, "en-US")).toBe("5h ago");
+    expect(formatLastSeen(ts, t_zh)).toBe("5小时前");
+    expect(formatLastSeen(ts, t_en)).toBe("5h ago");
   });
 
-  it('returns "X天前" / "Xd ago" when 1–29 days', () => {
+  it("returns i18n daysAgo when 1-29 days", () => {
     const ts = Date.now() - 10 * 86_400_000;
-    expect(formatLastSeen(ts)).toBe("10天前");
-    expect(formatLastSeen(ts, "zh-CN")).toBe("10天前");
-    expect(formatLastSeen(ts, "en-US")).toBe("10d ago");
+    expect(formatLastSeen(ts, t_zh)).toBe("10天前");
+    expect(formatLastSeen(ts, t_en)).toBe("10d ago");
   });
 
   it("falls back to formatTime for 30+ days", () => {
     const ts = new Date("2025-04-10T10:00:00").getTime();
-    const result = formatLastSeen(ts);
+    const result = formatLastSeen(ts, t_zh);
     // formatTime now returns MM-DD for old dates
     expect(result).toBe("04-10");
   });
 
   it("handles boundary at exactly 60 seconds", () => {
     const ts = Date.now() - 60_000;
-    expect(formatLastSeen(ts)).toBe("1分钟前");
-    expect(formatLastSeen(ts, "en-US")).toBe("1m ago");
+    expect(formatLastSeen(ts, t_zh)).toBe("1分钟前");
+    expect(formatLastSeen(ts, t_en)).toBe("1m ago");
   });
 
   it("handles boundary at exactly 60 minutes", () => {
     const ts = Date.now() - 3_600_000;
-    expect(formatLastSeen(ts)).toBe("1小时前");
-    expect(formatLastSeen(ts, "en-US")).toBe("1h ago");
+    expect(formatLastSeen(ts, t_zh)).toBe("1小时前");
+    expect(formatLastSeen(ts, t_en)).toBe("1h ago");
   });
 });
