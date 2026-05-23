@@ -3,10 +3,16 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
+
+	"tokendancechat/backend/llm"
 	"tokendancechat/backend/store"
 )
 
@@ -2751,5 +2757,442 @@ func TestAllUserStatusEmpty(t *testing.T) {
 	users := h.AllUserStatus()
 	if len(users) != 0 {
 		t.Fatalf("expected 0 users, got %d", len(users))
+	}
+}
+
+// --- Broadcast methods ---
+
+func TestBroadcastJSON(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	client := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
+	h.register <- client
+	time.Sleep(10 * time.Millisecond)
+
+	testMsg := Message{Type: "test_broadcast", Content: "hello broadcast"}
+	h.BroadcastJSON(testMsg)
+
+	var got Message
+	select {
+	case payload := <-client.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode broadcast: %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected message on client channel after BroadcastJSON")
+	}
+	if got.Type != "test_broadcast" {
+		t.Fatalf("expected type=test_broadcast, got %q", got.Type)
+	}
+	if got.Content != "hello broadcast" {
+		t.Fatalf("expected content=hello broadcast, got %q", got.Content)
+	}
+
+	h.unregister <- client
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestBroadcastToRoom(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-2"}
+	h.register <- alice
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	data, _ := json.Marshal(Message{Type: "room_broadcast", Content: "secret"})
+	h.BroadcastToRoom(data, "room-1")
+
+	// alice should receive (in room-1).
+	select {
+	case <-alice.send:
+		// ok
+	default:
+		t.Fatal("expected alice (room-1) to receive room broadcast")
+	}
+
+	// bob should NOT receive (in room-2).
+	select {
+	case msg := <-bob.send:
+		t.Fatalf("expected bob (room-2) NOT to receive room broadcast, got %s", string(msg))
+	default:
+		// ok
+	}
+
+	// BroadcastToRoom with empty roomID broadcasts to all.
+	dataAll, _ := json.Marshal(Message{Type: "all_rooms", Content: "everyone"})
+	h.BroadcastToRoom(dataAll, "")
+
+	select {
+	case <-alice.send:
+	default:
+		t.Fatal("expected alice to receive broadcast when roomID is empty")
+	}
+	select {
+	case <-bob.send:
+	default:
+		t.Fatal("expected bob to receive broadcast when roomID is empty")
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestBroadcastTyping(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	sender := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
+	other := &Client{hub: h, username: "bob", send: make(chan []byte, 10)}
+	h.register <- sender
+	h.register <- other
+	time.Sleep(10 * time.Millisecond)
+
+	h.BroadcastTyping("alice", "typing", "dm", "bob")
+
+	// sender should NOT receive the typing message (excluded).
+	select {
+	case msg := <-sender.send:
+		t.Fatalf("expected sender to be excluded from typing broadcast, got %s", string(msg))
+	default:
+		// ok
+	}
+
+	// other should receive.
+	var got Message
+	select {
+	case payload := <-other.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode typing error: %v", err)
+		}
+	default:
+		t.Fatal("expected other client to receive typing message")
+	}
+	if got.Type != "typing" {
+		t.Fatalf("expected type=typing, got %q", got.Type)
+	}
+	if got.Username != "alice" {
+		t.Fatalf("expected username=alice, got %q", got.Username)
+	}
+	if got.Context != "dm" || got.To != "bob" {
+		t.Fatalf("expected context=dm, to=bob, got context=%q to=%q", got.Context, got.To)
+	}
+
+	// typing_stop should also exclude sender.
+	h.BroadcastTyping("alice", "typing_stop", "dm", "bob")
+	select {
+	case msg := <-sender.send:
+		t.Fatalf("expected sender excluded from typing_stop, got %s", string(msg))
+	default:
+	}
+	select {
+	case <-other.send:
+		// ok
+	default:
+		t.Fatal("expected other to receive typing_stop")
+	}
+
+	h.unregister <- sender
+	h.unregister <- other
+	time.Sleep(10 * time.Millisecond)
+}
+
+// --- Shutdown with clients ---
+
+func TestShutdownWithClients(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	// Create an httptest server for WebSocket connections.
+	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		client := NewClient(h, conn)
+		go client.WritePump()
+		go client.ReadPump()
+	}))
+	defer srv.Close()
+
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	conn1, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Fatalf("dial conn1: %v", err)
+	}
+
+	conn2, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Fatalf("dial conn2: %v", err)
+	}
+
+	// Send join messages to register clients.
+	conn1.WriteJSON(Message{Type: "join", Username: "alice"})
+	conn2.WriteJSON(Message{Type: "join", Username: "bob"})
+	time.Sleep(50 * time.Millisecond)
+
+	if h.ConnectionCount() != 2 {
+		t.Fatalf("expected 2 connections before shutdown, got %d", h.ConnectionCount())
+	}
+
+	// Verify both clients are initially online.
+	if !h.IsUsernameTaken("alice") || !h.IsUsernameTaken("bob") {
+		t.Fatal("expected both clients to be registered before shutdown")
+	}
+
+	h.Shutdown()
+
+	if h.ConnectionCount() != 0 {
+		t.Errorf("expected 0 connections after shutdown, got %d", h.ConnectionCount())
+	}
+
+	// Verify clients no longer tracked after shutdown.
+	if h.IsUsernameTaken("alice") {
+		t.Error("expected alice to no longer be registered after shutdown")
+	}
+	if h.IsUsernameTaken("bob") {
+		t.Error("expected bob to no longer be registered after shutdown")
+	}
+
+	// Verify write to connection fails (server-side conn was closed by Shutdown).
+	conn1.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
+	if err := conn1.WriteMessage(websocket.TextMessage, []byte("test")); err == nil {
+		// Write may still succeed on httptest in-memory pipes, but the hub
+		// should no longer process it — verify no re-registration.
+		time.Sleep(50 * time.Millisecond)
+		if h.ConnectionCount() != 0 {
+			t.Error("expected 0 connections after shutdown even after attempted write")
+		}
+	}
+	conn2.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
+	if err := conn2.WriteMessage(websocket.TextMessage, []byte("test")); err == nil {
+		time.Sleep(50 * time.Millisecond)
+		if h.ConnectionCount() != 0 {
+			t.Error("expected 0 connections after shutdown even after attempted write")
+		}
+	}
+
+	conn1.Close()
+	conn2.Close()
+}
+
+// --- SendBotMessage / SendAssistantMessage ---
+
+func TestSendBotMessage(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "TestBot")
+	go h.Run()
+
+	client := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
+	h.register <- client
+	time.Sleep(10 * time.Millisecond)
+
+	h.SendBotMessage("hello from bot", "room-1")
+
+	// Give Run loop time to consume from broadcast channel and deliver to client.
+	time.Sleep(20 * time.Millisecond)
+
+	// Verify persistence.
+	found := false
+	for _, msg := range ms.messages {
+		if msg.Username == "TestBot" && msg.Content == "hello from bot" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected bot message 'hello from bot' to be persisted in store")
+	}
+
+	// Verify broadcast.
+	var got Message
+	select {
+	case payload := <-client.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode bot message error: %v", err)
+		}
+	default:
+		t.Fatal("expected bot message to be broadcast to client")
+	}
+	if got.Type != "message" {
+		t.Fatalf("expected type=message, got %q", got.Type)
+	}
+	if got.Username != "TestBot" {
+		t.Fatalf("expected username=TestBot, got %q", got.Username)
+	}
+	if got.Content != "hello from bot" {
+		t.Fatalf("expected content='hello from bot', got %q", got.Content)
+	}
+	if got.RoomID != "room-1" {
+		t.Fatalf("expected roomID=room-1, got %q", got.RoomID)
+	}
+
+	h.unregister <- client
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestSendAssistantMessageEmptyUsername(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "FallbackBot")
+
+	// Empty username should fall back to botName.
+	h.SendAssistantMessage("", "assistant content", "room-1")
+
+	if len(ms.messages) == 0 {
+		t.Fatal("expected message to be persisted")
+	}
+	if ms.messages[0].Username != "FallbackBot" {
+		t.Fatalf("expected username to fallback to botName 'FallbackBot', got %q", ms.messages[0].Username)
+	}
+	if ms.messages[0].Content != "assistant content" {
+		t.Fatalf("expected content='assistant content', got %q", ms.messages[0].Content)
+	}
+
+	// Non-empty username should be used directly.
+	ms2 := &mockStore{}
+	h2 := New(ms2, nil, nil, "FallbackBot")
+	h2.SendAssistantMessage("CustomAgent", "custom message", "room-2")
+
+	if len(ms2.messages) == 0 {
+		t.Fatal("expected message to be persisted")
+	}
+	if ms2.messages[0].Username != "CustomAgent" {
+		t.Fatalf("expected username=CustomAgent, got %q", ms2.messages[0].Username)
+	}
+}
+
+// --- SetMemoryPath / GetMemoryContent ---
+
+func TestSetMemoryPath(t *testing.T) {
+	ms := &mockStore{}
+	llmCfg := &llm.Config{MemorySize: 10}
+	h := New(ms, llmCfg, nil, "TestBot")
+
+	tmpDir := t.TempDir()
+	memPath := tmpDir + "/MEMORY.md"
+
+	// Before setting path, content should be empty.
+	content := h.GetMemoryContent()
+	if content != "" {
+		t.Errorf("expected empty content before SetMemoryPath, got %q", content)
+	}
+
+	h.SetMemoryPath(memPath)
+
+	// After setting path, content still empty (file doesn't exist).
+	content = h.GetMemoryContent()
+	if content != "" {
+		t.Errorf("expected empty content for non-existent memory file, got %q", content)
+	}
+}
+
+func TestGetMemoryContentNoMemory(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// No LLM config, so memory is nil.
+	content := h.GetMemoryContent()
+	if content != "" {
+		t.Errorf("expected empty string when no memory configured, got %q", content)
+	}
+
+	// SetMemoryPath on nil memory should not panic.
+	h.SetMemoryPath("/tmp/nonexistent/MEMORY.md")
+}
+
+// --- BuildSystemPrompt ---
+
+func TestBuildSystemPrompt(t *testing.T) {
+	ms := &mockStore{}
+
+	t.Run("with botName configured", func(t *testing.T) {
+		h := New(ms, nil, nil, "MyBot")
+		prompt := h.BuildSystemPrompt()
+
+		if !strings.Contains(prompt, "MyBot") {
+			t.Errorf("expected prompt to contain bot name 'MyBot', got:\n%s", prompt)
+		}
+		if !strings.Contains(prompt, "Rules:") {
+			t.Error("expected prompt to contain Rules section")
+		}
+		// No LLM config, so no memory section.
+		if strings.Contains(prompt, "Conversation Context") {
+			t.Error("expected no memory section when no LLM config")
+		}
+		// Should contain the @username mention rule and bot identity.
+		if !strings.Contains(prompt, "@username") {
+			t.Error("expected prompt to contain @username mention rule")
+		}
+	})
+
+	t.Run("without memory content", func(t *testing.T) {
+		llmCfg := &llm.Config{MemorySize: 10}
+		h := New(ms, llmCfg, nil, "BotWithMem")
+		prompt := h.BuildSystemPrompt()
+
+		if !strings.Contains(prompt, "BotWithMem") {
+			t.Errorf("expected prompt to contain bot name, got:\n%s", prompt)
+		}
+		// Memory exists but GetMemoryContent returns "" (no path set).
+		if strings.Contains(prompt, "Conversation Context") {
+			t.Error("expected no Conversation Context section when memory content is empty")
+		}
+	})
+
+	t.Run("with memory content", func(t *testing.T) {
+		llmCfg := &llm.Config{MemorySize: 10}
+		h := New(ms, llmCfg, nil, "BotWithMem")
+
+		tmpDir := t.TempDir()
+		memPath := tmpDir + "/MEMORY.md"
+		os.WriteFile(memPath, []byte("User likes coffee.\nUser prefers Python."), 0644)
+		h.SetMemoryPath(memPath)
+
+		prompt := h.BuildSystemPrompt()
+		if !strings.Contains(prompt, "Conversation Context") {
+			t.Error("expected Conversation Context section when memory has content")
+		}
+		if !strings.Contains(prompt, "User likes coffee.") {
+			t.Errorf("expected memory content in prompt, got:\n%s", prompt)
+		}
+		if !strings.Contains(prompt, "User prefers Python.") {
+			t.Errorf("expected second memory line in prompt, got:\n%s", prompt)
+		}
+	})
+}
+
+// --- BroadcastJSON channel-full dropped counter ---
+
+func TestBroadcastJSONIncrementsDroppedWhenChannelFull(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Fill the broadcast channel without running the hub.
+	for i := 0; i < 256; i++ {
+		h.broadcast <- []byte("x")
+	}
+
+	// This BroadcastJSON should fail to send and increment dropped.
+	before := h.DroppedMessages()
+	h.BroadcastJSON(Message{Type: "test", Content: "dropped"})
+	after := h.DroppedMessages()
+
+	if after <= before {
+		t.Errorf("expected dropped counter to increment when broadcast channel is full (before=%d, after=%d)", before, after)
+	}
+
+	// Drain the channel to avoid affecting other tests.
+	for i := 0; i < 256; i++ {
+		<-h.broadcast
 	}
 }

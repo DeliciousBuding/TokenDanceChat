@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.8](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.8) | Docker: `tokendancechat:v0.2.8` | 测试: 672 前端 / 43 文件 / 全绿
+发布: [v0.2.8](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.8) | Docker: `tokendancechat:v0.2.8` | 测试: 679 前端 / 43 文件 / 全绿
 
 ## 当前目标
 
@@ -48,10 +48,10 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 性能优化 + UI 打磨 + 工程基建
 
-状态：持续推进。672 tests / 43 files / tsc 0 / ESLint 0 / CI 就绪。
+状态：持续推进。679 tests / 43 files / tsc 0 / ESLint 0 / CI 就绪。
 
-- [x] 前端测试从 237 → 672 (+435 tests / +25 文件 / 40%+ 行覆盖率)。
-- [x] E2E 测试从 18 → 64 (44 auth-flow + 8 group-call + 2 webhook + 10 dm-flow)。
+- [x] 前端测试从 237 → 679 (+442 tests / +25 文件 / 40%+ 行覆盖率)。
+- [x] E2E 测试从 18 → 64+，5 套 suites：auth、dm、group、poll、reconnect、sidebar、webhook。
 - [x] 后端测试扩展：store +7、hub +8、handler +34、llm +8、ratelimit 更新、ws +2。
 - [x] PM 产品审计 P0 修复：侧栏对话预览、未读「新消息」分隔线、移动端语音按钮可见。
 - [x] PM 产品审计 P1 修复：侧栏 IA 重排（DM/群组优先，AI 助手折叠）、对话搜索/过滤。
@@ -81,7 +81,9 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] 在线用户加载骨架屏。
 - [x] FAB 未读计数徽章。
 - [x] SettingsModal + SettingsPanel 测试。
-- [x] 项目 Skills 扩展至 4 个：verify、pm-audit、deploy、cross-review（`.agents/skills/`）。
+- [x] 项目 Skills 扩展至 5 个：verify、pm-audit、deploy、cross-review、i18n-scan（`.agents/skills/`）。
+- [x] a11y i18n 补全：28 keys，~20 文件，无障碍翻译全覆盖。
+- [x] 性能优化：lastPreviews O(1) 查找、replyCounts 缓存。
 
 ## 当前增量：Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收
 
@@ -137,7 +139,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] AdminPanel 完整 i18n：所有管理界面文案国际化，中英文覆盖。
 - [x] 后端测试扩展：main 模块集成测试 + media 模块 focused 测试。
 - [x] i18n-scan skill：沉淀 i18n 扫描、键值校验、未翻译检测为可复用 SOP（`.agents/skills/i18n-scan.md`）。
-- [x] 前端测试从 644 扩展至 672（43 文件），后端测试保持全量 PASS。
+- [x] 前端测试从 644 扩展至 679（43 文件），后端测试保持全量 PASS。
 
 ## 后续产品任务
 
@@ -169,7 +171,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-23 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | PASS, 18/18 |
 | 2026-05-23 | `git diff --check` | PASS |
 | 2026-05-23 | 搜索已删除交接文件的所有过期引用，排除 `node_modules`、`.git` 和 `.worktrees` | PASS，无匹配 |
-| 2026-05-24 | `cd frontend; npm test` | PASS, 43 files / 672 tests |
+| 2026-05-24 | `cd frontend; npm test` | PASS, 43 files / 679 tests |
 | 2026-05-24 | `cd backend; go test ./...` | PASS |
 ## Review Gates
 
