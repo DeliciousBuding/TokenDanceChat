@@ -1176,7 +1176,7 @@ export const MessageBubble = memo(function MessageBubble({
 
         {isOwn && (
           <div className="mt-1 flex justify-end items-center gap-1">
-            {/* Delivery status icons with clickable read receipt */}
+            {/* Delivery status icons — Telegram-style checkmarks */}
             {message.read_by && message.read_by.length > 0 ? (
               <ReadReceipt
                 readers={message.read_by}
@@ -1185,21 +1185,13 @@ export const MessageBubble = memo(function MessageBubble({
                 userProfiles={userProfiles}
                 onlineUsers={onlineUsers}
               />
+            ) : (message as ChatMessage).id ? (
+              <span className="inline-flex text-muted-foreground/40" aria-label={t("message.sent")}>
+                <Check className="h-3 w-3" />
+                <Check className="h-3 w-3 -ml-1.5" />
+              </span>
             ) : (
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-muted-foreground/40"
-                aria-label={t("message.sent")}
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+              <Check className="h-3 w-3 text-muted-foreground/40" aria-label={t("message.sent")} />
             )}
             <span
               className={cn(
@@ -1313,10 +1305,8 @@ function ReadReceipt({ readers, readByLabel, readLabel, userProfiles, onlineUser
         className="inline-flex cursor-pointer hover:opacity-80 transition-opacity"
         aria-label={readLabel}
       >
-        <svg width="16" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400/70">
-          <polyline points="20 6 9 17 4 12" />
-          <polyline points="22 6 13 17 8 12" />
-        </svg>
+        <Check className="h-3 w-3 text-blue-500" />
+        <Check className="h-3 w-3 text-blue-500 -ml-1.5" />
       </button>
       {showTooltip && (
         <div className="absolute bottom-full right-0 mb-1.5 z-50 rounded-lg border border-border bg-card shadow-xl p-2 min-w-[140px] animate-scale-in">
