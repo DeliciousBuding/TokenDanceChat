@@ -5,7 +5,17 @@ import { mockI18n } from "@/test-utils";
 // ── Mocks ──────────────────────────────────────────
 
 vi.mock("@/i18n/context", () => ({
-  useTranslation: () => mockI18n(),
+  useTranslation: () =>
+    mockI18n({
+      "transcript.emptyTitle": "暂无消息，发送第一条消息开始聊天吧",
+      "transcript.emptyDescription": "成为第一个发言的人吧",
+      "transcript.emptyDmTitle": "暂无私信",
+      "transcript.emptyDmDescription": "向 {{username}} 发送一条私信开始对话",
+      "transcript.emptyGroupTitle": "暂无群聊消息",
+      "transcript.emptyGroupDescription": "{{name}} 中还没有消息",
+      "transcript.emptyGroupMembers": "{{count}} 位成员",
+      "transcript.loading": "加载中...",
+    }),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -121,8 +131,8 @@ describe("MessageTranscript", () => {
   describe("empty state", () => {
     it("renders empty state when no messages are present", () => {
       renderTranscript();
-      expect(screen.getByText("transcript.emptyTitle")).toBeTruthy();
-      expect(screen.getByText("transcript.emptyDescription")).toBeTruthy();
+      expect(screen.getByText("暂无消息，发送第一条消息开始聊天吧")).toBeTruthy();
+      expect(screen.getByText("成为第一个发言的人吧")).toBeTruthy();
     });
 
     it("renders DM-specific empty state for direct messages", () => {
@@ -130,7 +140,7 @@ describe("MessageTranscript", () => {
         currentChat: { type: "dm", username: "alice" },
       });
       renderTranscript();
-      expect(screen.getByText("transcript.emptyDmTitle")).toBeTruthy();
+      expect(screen.getByText("暂无私信")).toBeTruthy();
     });
 
     it("renders group-specific empty state for group chats", () => {
@@ -139,7 +149,7 @@ describe("MessageTranscript", () => {
         groups: { general: { name: "general", members: ["testuser", "alice"], roles: {}, owner: "testuser", created_at: 1000 } },
       });
       renderTranscript();
-      expect(screen.getByText("transcript.emptyGroupTitle")).toBeTruthy();
+      expect(screen.getByText("暂无群聊消息")).toBeTruthy();
     });
   });
 
@@ -147,7 +157,7 @@ describe("MessageTranscript", () => {
     it("renders loading skeleton when history is not yet loaded", () => {
       useChatStore.setState({ historyLoaded: false, messages: [] });
       renderTranscript();
-      expect(screen.getByText("transcript.loading")).toBeTruthy();
+      expect(screen.getByText("加载中...")).toBeTruthy();
     });
   });
 

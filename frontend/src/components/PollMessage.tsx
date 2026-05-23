@@ -14,6 +14,7 @@ export const PollMessage = memo(function PollMessage({ poll, messageId }: PollMe
   const username = useChatStore((s) => s.username);
   const [selectedOptions, setSelectedOptions] = useState<Set<number>>(new Set());
   const [hasVoted, setHasVoted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Compute which options the current user has voted for from the poll data.
   const userVotedIndices = useMemo(() => {
@@ -55,14 +56,28 @@ export const PollMessage = memo(function PollMessage({ poll, messageId }: PollMe
     [poll.is_closed, poll.multiple_choice, userVotedIndices],
   );
 
-  const handleVote = useCallback(() => {
+  const handleVote = useCallback(async () => {
     if (selectedOptions.size === 0) return;
-    for (const idx of selectedOptions) {
-      chatAPI.sendPollVote(messageId, idx);
+    setError(null);
+    try {
+      for (const idx of selectedOptions) {
+        await chatAPI.sendPollVote(messageId, idx);
+      }
+      setHasVoted(true);
+      setSelectedOptions(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
-    setHasVoted(true);
-    setSelectedOptions(new Set());
   }, [selectedOptions, messageId]);
+
+  const handleClosePoll = useCallback(async () => {
+    setError(null);
+    try {
+      await chatAPI.sendPollClose(messageId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [messageId]);
 
   const isOwnPoll = poll.creator === username;
   const isClosed = poll.is_closed;
@@ -196,13 +211,20 @@ export const PollMessage = memo(function PollMessage({ poll, messageId }: PollMe
         {/* Close button (only poll creator can see) */}
         {!isClosed && isOwnPoll && (
           <button
-            onClick={() => chatAPI.sendPollClose(messageId)}
+            onClick={handleClosePoll}
             className="ml-auto rounded-lg border border-border px-2.5 py-1 text-xxs text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
           >
             {t("poll.closed")}
           </button>
         )}
       </div>
+
+      {/* Error feedback */}
+      {error && (
+        <p className="text-xs text-destructive mt-1 animate-fade-in" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 });

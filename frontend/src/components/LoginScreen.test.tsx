@@ -137,4 +137,30 @@ describe("LoginScreen", () => {
     expect(screen.getByLabelText("用户名").getAttribute("autocomplete")).toBe("username");
     expect(screen.getByLabelText("密码").getAttribute("autocomplete")).toBe("current-password");
   });
+
+  it("disables the submit button during API call (loading state)", async () => {
+    // Return a promise that never resolves so loading state persists
+    mockLoginUser.mockReturnValue(new Promise(() => {}));
+    renderLogin();
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "testuser" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "登录..." })).toBeDisabled();
+    });
+  });
+
+  it("shows error when API returns {success: false}", async () => {
+    mockLoginUser.mockResolvedValue({ success: false, username: "testuser" });
+    renderLogin();
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "testuser" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeTruthy();
+    });
+    expect(screen.getByText("未知错误")).toBeTruthy();
+  });
 });

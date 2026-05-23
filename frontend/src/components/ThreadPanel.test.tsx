@@ -195,4 +195,25 @@ describe("ThreadPanel", () => {
     );
     expect(screen.getByText("3 replies")).toBeInTheDocument();
   });
+
+  it("calls onSendReply with the reply text when typing and clicking send", () => {
+    const onSendReply = vi.fn();
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={onSendReply}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Write a reply...");
+    fireEvent.change(textarea, { target: { value: "Nice thread!" } });
+
+    const sendButton = screen.getByRole("button", { name: "Write a reply..." });
+    fireEvent.click(sendButton);
+
+    expect(onSendReply).toHaveBeenCalledWith("Nice thread!");
+  });
 });
