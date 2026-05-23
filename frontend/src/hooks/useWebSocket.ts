@@ -421,7 +421,8 @@ export function useWebSocket() {
           content || i18nSys("system.kicked"),
           Date.now(),
         );
-        // Store kicked flag so JoinScreen can show the message.
+        // Reset store state before redirecting to join screen.
+        useChatStore.getState().reset();
         useChatStore.getState().setView("join");
         disconnect();
       }),

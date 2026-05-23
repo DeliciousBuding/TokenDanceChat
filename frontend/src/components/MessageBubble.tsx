@@ -1185,14 +1185,12 @@ export const MessageBubble = memo(function MessageBubble({
                 userProfiles={userProfiles}
                 onlineUsers={onlineUsers}
               />
-            ) : (message as ChatMessage).id ? (
+            ) : message.id ? (
               <span className="inline-flex text-muted-foreground/40" aria-label={t("message.sent")}>
                 <Check className="h-3 w-3" />
                 <Check className="h-3 w-3 -ml-1.5" />
               </span>
-            ) : (
-              <Check className="h-3 w-3 text-muted-foreground/40" aria-label={t("message.sent")} />
-            )}
+            ) : null}
             <span
               className={cn(
                 "text-[10px] text-muted-foreground/50 transition-opacity",
