@@ -1655,7 +1655,7 @@ export function ChatInput({
 
             <div className="flex items-center justify-end gap-2">
               {/* Schedule button */}
-              <div className="hidden sm:block">
+              <div className="block">
                 <ScheduleButton
                   onSchedule={handleSchedule}
                   disabled={disabled || !hasContent}
