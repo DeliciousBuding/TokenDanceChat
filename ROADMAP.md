@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 896 前端 / 50 文件 / 51.86%+ 行覆盖率 / E2E 105/108 / Backend 6/6 PASS
+发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 937 前端 / 50 文件 / E2E 109/113 / Backend 6/6 PASS
 
 ## 当前目标
 
