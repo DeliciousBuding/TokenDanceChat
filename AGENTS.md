@@ -233,8 +233,10 @@ git log --oneline --all --grep='hk1|hk2|3221'
 - `git diff --check`
 - `cd backend && go test ./...`
 - `cd frontend && npx tsc --noEmit && npm test -- --run`
+- `npx eslint .`（0 errors 必须）
 - 安全泄露检查（3 条 grep）
 - 涉及文件的 focused 测试
+- CI workflow 自动在 push/PR 到 dev 和 master 时运行上述检查（`.github/workflows/ci.yml`）
 
 ### 项目级 Skill
 
