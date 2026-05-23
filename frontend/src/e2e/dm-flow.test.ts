@@ -370,7 +370,7 @@ test.describe("DM & Real User Flows", () => {
       });
 
       // The ScrollToBottom FAB has aria-label="Scroll to bottom".
-      const fab = page.getByRole("button", { name: /scroll to bottom/i });
+      const fab = page.getByRole("button", { name: /回到底部|scroll to bottom/i });
       await expect(fab).toBeVisible({ timeout: 10000 });
     });
   });

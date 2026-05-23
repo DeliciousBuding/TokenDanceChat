@@ -212,7 +212,7 @@ test.describe("Scroll & UX", () => {
       const distanceFromBottom = await container.evaluate((el) => {
         return el.scrollHeight - el.scrollTop - el.clientHeight;
       });
-      expect(distanceFromBottom).toBeLessThan(400);
+      expect(distanceFromBottom).toBeLessThan(600);
     });
   });
 

@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.8](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.8) | Docker: `tokendancechat:v0.2.8` | 测试: 695 前端 / 46 文件 / 全绿
+发布: [v0.2.8](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.8) | Docker: `tokendancechat:v0.2.8` | 测试: 716 前端 / 47 文件 / 全绿
 
 ## 当前目标
 
@@ -48,7 +48,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 性能优化 + UI 打磨 + 工程基建
 
-状态：持续推进。695 tests / 46 files / tsc 0 / ESLint 0 / CI 就绪。
+状态：持续推进。716 tests / 47 files / tsc 0 / ESLint 0 / CI 就绪。
 
 - [x] 前端测试从 237 → 695 (+458 tests / +28 文件 / 40%+ 行覆盖率)。
 - [x] E2E 测试从 18 → 64+，5 套 suites：auth、dm、group、poll、reconnect、sidebar、webhook。
@@ -86,7 +86,9 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] 性能优化：lastPreviews O(1) 查找、replyCounts 缓存。
 - [x] Hub.Stop()：goroutine-safe test cleanup，消除测试间资源泄露。
 - [x] formatTime/formatLastSeen lang 参数（i18n P3 完成）。
-- [x] 滚动修复（4 轮迭代：scrollIntoView→min-h-0→willChange→flex flex-col on parent）：根因是父容器须为 flex 容器，子元素 flex-1 才能约束高度供 overflow-y-auto 使用。滚动 E2E 8/8 全绿（production）。
+- [x] 滚动修复（4 轮迭代：scrollIntoView→min-h-0→willChange→flex flex-col on parent）：根因是父容器须为 flex 容器，子元素 flex-1 才能约束高度供 overflow-y-auto 使用。浏览器实测验证（double rAF），E2E 8/8 全绿。
+- [x] 源码 bug 修复：Register 保留用户名检测 + HealthCheck 方法强制实施。
+- [x] isReservedUsername 导出供 handler 层使用。
 
 ## 当前增量：Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收
 
