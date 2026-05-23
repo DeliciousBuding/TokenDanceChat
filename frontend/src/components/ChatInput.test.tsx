@@ -83,6 +83,7 @@ Object.defineProperty(window.navigator, "mediaDevices", {
 
 // Import ChatInput AFTER all mocks
 import { ChatInput } from "@/components/ChatInput";
+import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 
 function renderChatInput(props?: {
@@ -396,6 +397,131 @@ describe("ChatInput", () => {
       fireEvent.dragOver(container);
       // Component should still be rendered
       expect(container).toBeTruthy();
+    });
+  });
+
+  describe("上箭头编辑消息 (up-arrow edit last message)", () => {
+    it("空输入按 ArrowUp 加载最后一条本人消息到输入框", () => {
+      const messages = [
+        { id: "m1", username: "alice", content: "Hi", timestamp: 1000 },
+        { id: "m2", username: "testuser", content: "My last message", timestamp: 2000 },
+      ];
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages,
+      });
+
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+
+      fireEvent.keyDown(textarea, { key: "ArrowUp" });
+
+      expect(textarea.value).toBe("My last message");
+    });
+
+    it("ArrowUp 仅加载本人消息，不加载他人消息", () => {
+      const messages = [
+        { id: "m1", username: "alice", content: "Alice message", timestamp: 1000 },
+        { id: "m2", username: "bob", content: "Bob message", timestamp: 2000 },
+      ];
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages,
+      });
+
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+
+      fireEvent.keyDown(textarea, { key: "ArrowUp" });
+
+      expect(textarea.value).toBe("");
+    });
+
+    it("ArrowUp 跳过已删除消息", () => {
+      const messages = [
+        { id: "m1", username: "testuser", content: "deleted message", timestamp: 1000, deleted: true },
+        { id: "m2", username: "testuser", content: "my actual last", timestamp: 2000 },
+      ];
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages,
+      });
+
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+
+      fireEvent.keyDown(textarea, { key: "ArrowUp" });
+
+      expect(textarea.value).toBe("my actual last");
+    });
+
+    it("ArrowUp 在 DM 中只加载与该 DM 对端的对话消息", () => {
+      const messages = [
+        { id: "m1", username: "testuser", from: "testuser", to: "alice", content: "DM to alice", timestamp: 1000 },
+        { id: "m2", username: "testuser", from: "testuser", to: "bob", content: "DM to bob", timestamp: 2000 },
+        { id: "m3", username: "alice", from: "alice", to: "testuser", content: "from alice", timestamp: 3000 },
+      ];
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "dm", username: "alice" },
+        messages,
+      });
+
+      renderChatInput();
+      const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+
+      fireEvent.keyDown(textarea, { key: "ArrowUp" });
+
+      expect(textarea.value).toBe("DM to alice");
+    });
+
+    it("有内容时 ArrowUp 不触发编辑（优先导航/不吞键）", () => {
+      const messages = [
+        { id: "m1", username: "testuser", content: "old message", timestamp: 1000 },
+      ];
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages,
+      });
+
+      renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      typeInTextarea(textarea, "current content");
+      (textarea as any).selectionStart = "current content".length;
+      (textarea as any).selectionEnd = "current content".length;
+
+      fireEvent.keyDown(textarea, { key: "ArrowUp" });
+
+      expect(textarea.value).toBe("current content");
+    });
+
+    it("编辑态发送调用 sendMessageEdit 而非 onSend", () => {
+      const messages = [
+        { id: "m-edit", username: "testuser", content: "original text", timestamp: 1000 },
+      ];
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages,
+      });
+
+      const { onSend } = renderChatInput();
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+
+      fireEvent.keyDown(textarea, { key: "ArrowUp" });
+      expect(textarea.value).toBe("original text");
+
+      // Modify the loaded message
+      typeInTextarea(textarea, "original text (edited)");
+      fireEvent.keyDown(textarea, { key: "Enter" });
+
+      // Should call sendMessageEdit, not onSend
+      expect(chatAPI.sendMessageEdit).toHaveBeenCalledWith("m-edit", "original text (edited)");
+      expect(onSend).not.toHaveBeenCalled();
     });
   });
 });
