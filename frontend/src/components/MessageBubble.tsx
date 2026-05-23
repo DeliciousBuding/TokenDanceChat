@@ -12,6 +12,8 @@ import { useSwipeableMessage } from "@/hooks/useTouchGestures";
 import { Avatar } from "@/components/Avatar";
 import type { ChatMessage } from "@/lib/api";
 import { MessageLinkPreviews, extractURLs } from "@/components/LinkPreview";
+import { PollMessage } from "@/components/PollMessage";
+import type { PollData } from "@/lib/api";
 
 const EmojiPicker = lazy(() => import("@/components/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
 
@@ -472,6 +474,7 @@ export const MessageBubble = memo(function MessageBubble({
   const { t } = useTranslation();
   const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
   const translations = useChatStore((s) => s.translations);
+  const polls = useChatStore((s) => s.polls);
   const translatedText = translations[message.id];
   // Read reactions and read_by from O(1) lookup maps, falling back to message object for backward compat
   const reactionsByMessageId = useChatStore((s) => s.reactionsByMessageId);
@@ -1078,6 +1081,8 @@ export const MessageBubble = memo(function MessageBubble({
                 </button>
               </div>
             </div>
+          ) : (polls[message.id] || message.poll) ? (
+            <PollMessage poll={(polls[message.id] || message.poll)!} messageId={message.id} />
           ) : (
             <div className="markdown-body text-foreground/90 select-text">
               {mentionContent}

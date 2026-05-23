@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, RoomInfo, UserStatus, ScheduledMessage, CustomEmoji, ChatFolder } from "@/lib/api";
+import type { ChatMessage, RoomInfo, UserStatus, ScheduledMessage, CustomEmoji, ChatFolder, PollData } from "@/lib/api";
 
 const MESSAGE_CAP = 500;
 
@@ -215,6 +215,9 @@ interface ChatState {
   incomingCall: IncomingCall | null;
   activeCall: ActiveCall | null;
 
+  // Polls
+  polls: Record<string, PollData>;
+
   // Actions
   setView: (view: ViewState) => void;
   setUsername: (username: string) => void;
@@ -293,6 +296,8 @@ interface ChatState {
   setTranslation: (messageId: string, text: string) => void;
   setIncomingCall: (call: IncomingCall | null) => void;
   setActiveCall: (call: ActiveCall | null) => void;
+  updatePoll: (pollId: string, poll: PollData) => void;
+  removePoll: (pollId: string) => void;
   reset: () => void;
 }
 
@@ -342,6 +347,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   translations: {},
   incomingCall: null,
   activeCall: null,
+  polls: {},
 
   setView: (view) => set({ view }),
   setUsername: (username) => set({ username, lastReadTimestamps: loadLastReadTimestamps(username) }),
@@ -801,6 +807,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearLatestCreatedWebhook: () => set({ latestCreatedWebhook: null }),
   setIncomingCall: (incomingCall) => set({ incomingCall }),
   setActiveCall: (activeCall) => set({ activeCall }),
+  updatePoll: (pollId, poll) =>
+    set((state) => ({
+      polls: { ...state.polls, [pollId]: poll },
+    })),
+  removePoll: (pollId) =>
+    set((state) => {
+      const next = { ...state.polls };
+      delete next[pollId];
+      return { polls: next };
+    }),
   setTranslation: (messageId, text) =>
     set((state) => ({ translations: { ...state.translations, [messageId]: text } })),
   reset: () => {
@@ -856,6 +872,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       translations: {},
       incomingCall: null,
       activeCall: null,
+      polls: {},
     });
   },
 }));

@@ -474,7 +474,7 @@ export function Sidebar({
         {onClose && (
           <button
             onClick={onClose}
-            aria-label="Close sidebar"
+            aria-label={t("sidebar.closeSidebar")}
             className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
           >
             <X className="h-4 w-4" />
@@ -498,7 +498,7 @@ export function Sidebar({
             <button
               onClick={() => setSearchQuery("")}
               className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-              aria-label="Clear search"
+              aria-label={t("sidebar.clearSearch")}
             >
               <X className="h-3 w-3" />
             </button>

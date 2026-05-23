@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -186,5 +187,182 @@ func TestGracefulShutdown(t *testing.T) {
 	_, err = http.Get("http://" + ts.addr + "/api/health")
 	if err == nil {
 		t.Error("expected connection refused after shutdown, but request succeeded")
+	}
+}
+
+// TestParseEnvBool verifies all variants of the boolean environment parser.
+func TestParseEnvBool(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		// True values.
+		{"1", true},
+		{"true", true},
+		{"True", true},
+		{"TRUE", true},
+		{"yes", true},
+		{"YES", true},
+		{"y", true},
+		{"Y", true},
+		{"on", true},
+		{"ON", true},
+		// False values.
+		{"0", false},
+		{"false", false},
+		{"False", false},
+		{"no", false},
+		{"NO", false},
+		{"off", false},
+		{"OFF", false},
+		// Edge cases.
+		{"", false},
+		{"garbage", false},
+		{"  true  ", true},
+		{"  1  ", true},
+		{"  0  ", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := parseEnvBool(tt.input)
+			if got != tt.want {
+				t.Errorf("parseEnvBool(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWriteAgentsMD verifies AGENTS.md is written with correct bot and agent names.
+func TestWriteAgentsMD(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tokendancechat-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	err = writeAgentsMD(tmpDir, "MyBot", "MyAgent")
+	if err != nil {
+		t.Fatalf("writeAgentsMD() error: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(tmpDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("failed to read AGENTS.md: %v", err)
+	}
+
+	s := string(content)
+	if !strings.Contains(s, "MyBot") {
+		t.Errorf("AGENTS.md should contain 'MyBot', got: %s", s)
+	}
+	if !strings.Contains(s, "MyAgent") {
+		t.Errorf("AGENTS.md should contain 'MyAgent', got: %s", s)
+	}
+	if !strings.Contains(s, "TokenDanceChat") {
+		t.Errorf("AGENTS.md should contain 'TokenDanceChat', got: %s", s)
+	}
+}
+
+// TestServerEnvBotName verifies Server picks up CHAT_BOT_NAME and CHAT_AGENT_NAME
+// from the environment and writes them to AGENTS.md.
+func TestServerEnvBotName(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tokendancechat-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	frontendDir := filepath.Join(tmpDir, "frontend")
+	if err := os.MkdirAll(frontendDir, 0755); err != nil {
+		t.Fatalf("failed to create frontend dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(frontendDir, "index.html"), []byte("ok"), 0644); err != nil {
+		t.Fatalf("failed to write index.html: %v", err)
+	}
+
+	t.Setenv("CHAT_BOT_NAME", "CustomBot")
+	t.Setenv("CHAT_AGENT_NAME", "CustomAgent")
+
+	ts := startTestServer(t, filepath.Join(tmpDir, "chat.db"), frontendDir)
+	defer ts.Close()
+
+	content, err := os.ReadFile(filepath.Join(tmpDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("failed to read AGENTS.md: %v", err)
+	}
+	s := string(content)
+	if !strings.Contains(s, "CustomBot") {
+		t.Errorf("AGENTS.md should contain 'CustomBot', got: %s", s)
+	}
+	if !strings.Contains(s, "CustomAgent") {
+		t.Errorf("AGENTS.md should contain 'CustomAgent', got: %s", s)
+	}
+}
+
+// TestServerDefaultBotName verifies Server uses default bot/agent names when
+// environment variables are not set.
+func TestServerDefaultBotName(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tokendancechat-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	frontendDir := filepath.Join(tmpDir, "frontend")
+	if err := os.MkdirAll(frontendDir, 0755); err != nil {
+		t.Fatalf("failed to create frontend dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(frontendDir, "index.html"), []byte("ok"), 0644); err != nil {
+		t.Fatalf("failed to write index.html: %v", err)
+	}
+
+	ts := startTestServer(t, filepath.Join(tmpDir, "chat.db"), frontendDir)
+	defer ts.Close()
+
+	content, err := os.ReadFile(filepath.Join(tmpDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("failed to read AGENTS.md: %v", err)
+	}
+	s := string(content)
+	if !strings.Contains(s, "TokenBot") {
+		t.Errorf("AGENTS.md should contain default 'TokenBot', got: %s", s)
+	}
+	if !strings.Contains(s, "PicoClaw") {
+		t.Errorf("AGENTS.md should contain default 'PicoClaw', got: %s", s)
+	}
+}
+
+// TestServerLLMMemoryPath verifies CHAT_LLM_MEMORY_PATH is used when LLM provider is set.
+func TestServerLLMMemoryPath(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tokendancechat-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	frontendDir := filepath.Join(tmpDir, "frontend")
+	if err := os.MkdirAll(frontendDir, 0755); err != nil {
+		t.Fatalf("failed to create frontend dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(frontendDir, "index.html"), []byte("ok"), 0644); err != nil {
+		t.Fatalf("failed to write index.html: %v", err)
+	}
+
+	memPath := filepath.Join(tmpDir, "memory.json")
+	t.Setenv("CHAT_LLM_PROVIDER", "openai")
+	t.Setenv("CHAT_LLM_API_KEY", "sk-test")
+	t.Setenv("CHAT_LLM_MODEL", "gpt-4")
+	t.Setenv("CHAT_LLM_MEMORY_PATH", memPath)
+
+	ts := startTestServer(t, filepath.Join(tmpDir, "chat.db"), frontendDir)
+	defer ts.Close()
+
+	// Server should start successfully with LLM config.
+	resp, err := http.Get("http://" + ts.addr + "/api/health")
+	if err != nil {
+		t.Fatalf("health check failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 }
