@@ -1259,7 +1259,7 @@ export function ChatInput({
             disabled={disabled}
             aria-label={t("editor.strikethrough")}
             title={t("editor.strikethrough")}
-            className="hidden h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex"
+            className="h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex flex"
           >
             <Strikethrough className="h-4 w-4" />
           </button>
@@ -1310,7 +1310,7 @@ export function ChatInput({
               aria-label={t("editor.link")}
               title={t("editor.link") + " (Ctrl+K)"}
               className={cn(
-                "hidden h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex",
+                "h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex flex",
                 linkInputVisible
                   ? "bg-accent text-primary"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -1497,7 +1497,7 @@ export function ChatInput({
                 disabled={disabled}
                 aria-label={t("a11y.uploadImage")}
                 className={cn(
-                  "hidden h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:flex sm:h-12 sm:w-12",
+                  "h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:flex sm:h-12 sm:w-12 flex",
                   "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
                 )}
               >
