@@ -49,7 +49,7 @@ export const SystemMessage = memo(function SystemMessage({
             {displayText}
           </span>
           <span className="mt-0.5 text-[10px] text-muted-foreground/40">
-            {formatTime(timestamp, lang)}
+            {formatTime(timestamp, t)}
           </span>
         </div>
 

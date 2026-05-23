@@ -172,7 +172,7 @@ export function ConversationSearch({ open, onClose, onHighlightChange }: Convers
             >
               <div className="flex items-center gap-2 mb-0.5">
                 <span className="text-xs font-medium text-muted-foreground/70">{r.username}</span>
-                <span className="text-[10px] text-muted-foreground/40">{formatTime(r.timestamp, lang)}</span>
+                <span className="text-[10px] text-muted-foreground/40">{formatTime(r.timestamp, t)}</span>
               </div>
               <p className="text-xs text-muted-foreground/80 line-clamp-2">
                 {renderSnippet(r.content, trimmedQuery)}

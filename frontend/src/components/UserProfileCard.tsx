@@ -93,7 +93,7 @@ export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
     if (diffMin < 60) return t("profile.minutesAgo", { n: diffMin });
     if (diffHour < 24) return t("profile.hoursAgo", { n: diffHour });
     if (diffDay < 30) return t("profile.daysAgo", { n: diffDay });
-    return formatLastSeen(ls, lang);
+    return formatLastSeen(ls, t);
   }, [userStatus, t]);
 
   const handleSendMessage = useCallback(() => {
