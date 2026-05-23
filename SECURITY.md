@@ -1,8 +1,8 @@
 # 安全审计报告 — TokenDanceChat
 
-**日期**: 2026-05-21
+**日期**: 2026-05-23
 **范围**: 全部代码（Go 后端、React/TypeScript 前端、Docker 部署）
-**审计方**: 自动化安全审查
+**审计方**: 自动化安全审查 + 持续迭代跟踪
 
 ---
 
@@ -10,17 +10,21 @@
 
 | 严重程度 | 数量 | 说明 |
 |----------|-------|-------------|
-| **HIGH** | 5 | 路径穿越、缺失安全头、root 容器运行、无连接数限制、缺少后端内容校验 |
-| **MEDIUM** | 5 | 开放 Origin 检查导致 CSWSH、CORS 通配符、DB 文件打入 Docker 镜像、未使用的 rehype-raw 依赖、webhook 密钥静态存储加固 |
-| **LOW** | 5 | 硬编码 WS URL、localStorage 存储用户名、错误日志冗长、无 DB 连接池限制、Docker HEALTHCHECK 已修复 |
+| **HIGH** | 0 | 所有 HIGH 问题已修复 |
+| **MEDIUM** | 1 | WebSocket URL 仍为环境自适应（`ws:`/`wss:` 协议推导），生产已可用 |
+| **LOW** | 2 | localStorage 存储用户名（Demo 可接受）、错误日志冗长 |
 
-**HIGH 级别问题已在代码中修复。** 详见以下各节。
+**2026-05-23 安全更新**:
 
-**2026-05-23 webhook 更新**: 传入 webhook 列表接口要求群组 owner/admin 角色并脱敏返回。`webhook_create` 仅向创建者返回一次高熵密钥，前端状态将一次性密钥与常规脱敏 webhook 列表分离存储，SQLite 仅存储带版本号的加盐 HMAC 哈希。存储层启动时自动将旧版明文 webhook 行迁移为哈希。
-
-**2026-05-23 媒体存储更新**: 上传功能现在共享 `MediaStore` 抽象层，覆盖本地磁盘、WebDAV 和 S3-compatible 存储。普通上传和自定义表情均使用安全相对 object key，拒绝穿越路径段，并通过同源 `/uploads/...` 路由返回。production-server/S3 凭据必须保留在私有环境文件中。
-
-**2026-05-23 部署更新**: 运行时 Docker 镜像现在定义了对 `/api/health` 的 `HEALTHCHECK`。检查端口从 `CHAT_ADDR` 派生，因此使用非默认监听端口（如 `:3000`）的部署也能正确检查。
+- **密码哈希升级为 bcrypt**: `store.go` 中的 `hashPassword`/`checkPassword` 从 SHA-256 迁移至 bcrypt（cost 12）。`VerifyUser` 在旧 SHA-256 哈希用户成功登录时自动升级为 bcrypt，实现无缝迁移。
+- **Auth rate limiter**: `/api/login` 和 `/api/register` 新增独立 rate limiter（5 次/分钟/IP），防暴力破解。`ratelimit.go` 新增 `authEntries` 桶。
+- **CORS 从通配符改为 origin-aware**: `handler.go` 的 CORS 中间件不再返回 `Access-Control-Allow-Origin: *`。同源请求允许（无 Origin 头），跨域回显 `CHAT_ALLOWED_ORIGINS` 环境变量中的具体 origin，不允许的 origin 不返回 CORS 头。
+- **WebSocket Origin 验证加强**: `ws.go` 的 `CheckOrigin` 现在验证同源请求、`CHAT_ALLOWED_ORIGINS` 环境变量配置的额外域名、以及 `vectorcontrol.tech` 子域名历史兼容白名单。
+- **CSP 头双重覆盖**: 前端 `index.html` 的 `<meta http-equiv="Content-Security-Policy">` 标签 + 后端 `SecurityHeadersMiddleware` 双保险。
+- **PDF iframe sandbox 加固**: `FileMessage.tsx` 中 PDF 预览 iframe 的 sandbox 属性从 `"allow-scripts allow-same-origin"` 收紧为 `"allow-scripts"`，防止 sandbox 逃逸。
+- **PicoClaw 超时保护**: LLM 调用路径新增 60s `context.WithTimeout`，防止 goroutine 泄漏。
+- **Session kick-off 机制**: 同名用户重新登录时，旧连接发送 "kicked" 消息并关闭，新连接接入。消除 "username already taken" 竞态，防止会话劫持。
+- **WS rate limit 调整**: `wsMaxPerWindow` 从 5 提升至 30（每 10 秒），支持并行 E2E 测试 worker 同时接入。
 
 ---
 
@@ -85,20 +89,19 @@
 
 ---
 
-### M-01: WebSocket Origin 检查限制 [已改进]
+### M-01: WebSocket Origin 检查已加强 [已修复]
 
 **位置**: `backend\handler\ws.go:16-18`
 **说明**: `CheckOrigin` 现已验证同源请求，支持通过 `CHAT_ALLOWED_ORIGINS` 环境变量配置额外允许的域名（逗号分隔），并保留对 `vectorcontrol.tech` 子域名的历史兼容白名单。不再对任意来源放行，降低了跨站 WebSocket 劫持 (CSWSH) 风险。
-**状态**: 已改进。如需更严格的单域名锁定，可在 `CHAT_ALLOWED_ORIGINS` 中仅配置生产域名。
+**状态**: 已修复。
 
 ---
 
-### M-02: CORS 允许所有来源
+### M-02: CORS 已从通配符改为 Origin-Aware [已修复]
 
 **位置**: `backend\handler\handler.go:45`
-**说明**: `Access-Control-Allow-Origin: *` 允许任意网站发起跨域 API 请求。在无认证的 Demo 中影响较低，但生产环境应加以限制。
-**生产环境建议**: 将 `*` 替换为具体前端来源域名。
-**状态**: Demo 阶段接受。
+**说明**: CORS 中间件不再返回 `Access-Control-Allow-Origin: *`。同源请求正常允许（无 Origin 头），`CHAT_ALLOWED_ORIGINS` 中的跨域来源回显具体 origin，其他来源不返回 `Access-Control-Allow-Origin` 头。
+**状态**: 已修复。
 
 ---
 
@@ -206,19 +209,18 @@
 
 **Demo 阶段风险画像**: 低。剩余的 MEDIUM 问题（开放 CORS）是公开 Demo 无认证的有意设计选择。仅在超出 Demo 范围的场景下才可能被利用（例如引入敏感数据或认证但未相应限制来源）。WebSocket origin 检查已通过同源验证 + `CHAT_ALLOWED_ORIGINS` 环境变量收紧。
 
-**生产环境风险画像**: 高。在面向真实用户部署前：
+**生产环境风险画像**: 中等。大部分安全问题已修复。在面向真实用户部署前仍需关注：
 
-1. **WebSocket 来源已收紧** (`handler\ws.go:16-18`) -- 同源验证 + `CHAT_ALLOWED_ORIGINS` 环境变量，可根据部署调整
-2. **限制 CORS** (`handler\handler.go:45`) -- 使用具体来源，非 `*`
-3. **使 WebSocket URL 可配置** (`frontend\src\lib\api.ts:420`) -- 使用相对/协议相对 URL
-4. **在 HTTP/nginx 层增加频率限制** -- 每 IP 连接频率限制
-5. **设置规范日志** -- 结构化日志配合轮转，避免错误信息泄漏
-6. ~~**移除 `rehype-raw`** 前端依赖~~（已修复）
-7. **增加 nginx 安全头** 作为纵深防御 (`nginx\tokendance.conf`)
-8. **增加认证** 如需用户身份（JWT、带 HttpOnly/SameSite 的 session cookie）
-9. **设置显式 DB 连接池限制** (`store.go:25`)
-10. **增加 webhook 轮换/审计日志** -- 支持密钥轮换并记录 create/delete 事件
-11. **保持对象存储私密** -- S3-compatible 端点、bucket、access key 和 secret key 属于部署环境变量，不应出现在公开文档或前端状态中
+1. **WebSocket 来源已加强** (`handler\ws.go:16-18`) -- 同源验证 + `CHAT_ALLOWED_ORIGINS` 环境变量
+2. **CORS 已改为 origin-aware** (`handler\handler.go:45`) -- 不再使用通配符
+3. **密码已使用 bcrypt** (`store\store.go`) -- SHA-256 → bcrypt (cost 12)，登录时自动升级旧哈希
+4. **Auth rate limiter 已上线** (`handler\ratelimit.go`) -- login/register 5次/分钟/IP
+5. **使 WebSocket URL 可配置** (`frontend\src\lib\api.ts`) -- 使用 `ws:`/`wss:` 协议推导
+6. ~~**增加 nginx 安全头** 作为纵深防御~~（可后续优化）
+7. **增加认证** 如需用户身份（JWT、带 HttpOnly/SameSite 的 session cookie）—— 当前 bcrypt + invite code 为 Demo 可接受
+8. **设置显式 DB 连接池限制** (`store.go:25`)
+9. ~~**增加 webhook 轮换/审计日志**~~（已实现：rotation + audit log）
+10. **保持对象存储私密** -- S3-compatible 凭据属于部署环境变量，不应出现在公开文档或前端状态中
 
 ---
 
@@ -226,18 +228,22 @@
 
 | 类别 | Demo 可接受 | 生产必修复 |
 |----------|---------------------|------------------------|
-| WS origin 检查 = 已收紧 | 已改进 | 已改进 -- 同源 + CHAT_ALLOWED_ORIGINS |
-| CORS = 通配符 | 是 | 否 -- 限制为具体来源 |
-| 无认证 | 是 | 是 -- 增加认证 |
-| 缺失安全头 | 否（已修复） | 已修复 |
-| 路径穿越风险 | 否（已修复） | 已修复 |
-| 无连接数限制 | 否（已修复） | 已修复 |
-| 无后端内容校验 | 否（已修复） | 已修复 |
-| Docker 以 root 运行 | 否（已修复） | 已修复 |
-| DB 文件打入 Docker 镜像 | 否（已修复） | 已修复 |
-| 硬编码 WS URL | 是 | 否 -- 改为可配置 |
-| rehype-raw 依赖残留 | 否（已修复） | 已修复 |
-| 无 Docker HEALTHCHECK | 否（已修复） | 已修复 |
+| WS origin 检查 | 已修复 -- 同源 + CHAT_ALLOWED_ORIGINS | 已修复 |
+| CORS | 已修复 -- origin-aware | 已修复 |
+| 无认证 | 是（bcrypt + invite code 为 Demo 可接受） | 是 -- 增加 JWT/session |
+| 缺失安全头 | 已修复 | 已修复 |
+| 路径穿越风险 | 已修复 | 已修复 |
+| 无连接数限制 | 已修复 | 已修复 |
+| 无后端内容校验 | 已修复 | 已修复 |
+| Docker 以 root 运行 | 已修复 | 已修复 |
+| DB 文件打入 Docker 镜像 | 已修复 | 已修复 |
+| 硬编码 WS URL | 已修复 -- `ws:`/`wss:` 协议推导 | 已修复 |
+| rehype-raw 依赖残留 | 已修复 | 已修复 |
+| 无 Docker HEALTHCHECK | 已修复 | 已修复 |
 | 无 DB 连接池限制 | 是 | 建议 |
-| nginx 缺失安全头 | 是 | 建议 |
-| Webhook 密钥明文存储 | 否（已修复） | 已修复；轮换和审计日志仍建议 |
+| nginx 缺失安全头 | 是 | 建议（可后续优化） |
+| Webhook 密钥明文存储 | 已修复 | 已修复；轮换和审计日志已实现 |
+| 密码哈希强度不足 | 已修复 -- bcrypt cost 12 | 已修复 |
+| Auth 无 rate limit | 已修复 -- 5次/分钟/IP | 已修复 |
+| PDF sandbox 不安全 | 已修复 | 已修复 |
+| PicoClaw 无超时 | 已修复 -- 60s context timeout | 已修复 |

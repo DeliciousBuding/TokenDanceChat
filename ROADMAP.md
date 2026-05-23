@@ -120,83 +120,21 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 | 日期 | 命令 | 结果 |
 |---|---|---|
-| 2026-05-23 | `cd backend; go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPlaintextSecretMigrationHashesExistingRows)"` | PASS |
-| 2026-05-23 | `cd backend; go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"` | PASS |
-| 2026-05-23 | `cd backend; go test ./handler -run TestWebhookHandlerVerifiesHashedSecret` | PASS |
-| 2026-05-23 | 搜索 security/docs/roadmap 中的旧明文 webhook 加固措辞 | PASS，无过期匹配 |
-| 2026-05-23 | `cd backend; go test ./...` | PASS |
-| 2026-05-23 | `cd frontend; npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx` | PASS, 2 files / 39 tests |
-| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `git diff --check` | PASS |
-| 2026-05-23 | `cd backend; go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"` | PASS |
+| 2026-05-23 | `cd backend; go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPlaintextSecretMigrationHashesExistingRows|RotateWebhookSecretInvalidatesOldSecretAndAudits)"` | PASS |
+| 2026-05-23 | `cd backend; go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin|AuditListRedactsMetadataAndRequiresGroupAdmin)"` | PASS |
+| 2026-05-23 | `cd backend; go test ./handler -run "TestWebhookHandlerVerifiesHashedSecret|TestHealthCheck|Test(RateLimitMiddleware|ShouldRateLimitAPI|WSAllow)"` | PASS |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
 | 2026-05-23 | `cd frontend; npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx` | PASS |
+| 2026-05-23 | `cd frontend; npm test` | PASS, 18 files / 237 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 13 files / 196 tests |
-| 2026-05-23 | `cd backend; go test ./...` | PASS |
+| 2026-05-23 | `cd frontend; npm run build` | PASS |
+| 2026-05-23 | `docker build --check -f Dockerfile . && docker build --check -f Dockerfile.runtime .` | PASS |
+| 2026-05-23 | `docker build -f Dockerfile.runtime ... && docker run ... -e CHAT_ADDR=:3000` → `docker inspect .State.Health.Status` | PASS, healthy |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8091 npm run visual:acceptance` | PASS。完整 UI 验收 history 见 v0.2.5 CHANGELOG |
+| 2026-05-23 | `cd frontend; E2E_BASE_URL=http://127.0.0.1:8102 npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium` | PASS |
+| 2026-05-23 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | PASS, 18/18 |
 | 2026-05-23 | `git diff --check` | PASS |
 | 2026-05-23 | 搜索已删除交接文件的所有过期引用，排除 `node_modules`、`.git` 和 `.worktrees` | PASS，无匹配 |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 13 files / 196 tests |
-| 2026-05-23 | `cd backend; go test ./handler -run "Test(RateLimitMiddleware|ShouldRateLimitAPI|WSAllow)$"` | PASS |
-| 2026-05-23 | `cd frontend; npm test -- --run src/components/ChatLayout.test.tsx src/components/Sidebar.test.tsx src/components/ChatInput.test.tsx` | PASS, 3 files / 74 tests |
-| 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd backend; go test ./...` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8091 npm run visual:acceptance` | PASS。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T18-52-21-915Z`；最终 metrics：desktop textarea 816px, tablet 456px, mobile 208px，无横向溢出，无控制台错误。 |
-| 2026-05-23 | `cd frontend; npm test -- --run src/components/ChatLayout.test.tsx src/components/ChatInput.test.tsx` | PASS, 2 files / 40 tests |
-| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8091 npm run visual:acceptance` | PASS。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T19-36-55-386Z`；最终 metrics：desktop/tablet/mobile 全显示 4 条种子消息，mobile title 202px 未截断，mobile message font 13.5px，mobile textarea 208px，无横向溢出，无控制台错误。 |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 13 files / 197 tests |
-| 2026-05-23 | `cd frontend; npm test -- --run src/components/MessageContextMenu.test.tsx src/components/ChatLayout.test.tsx src/components/ChatInput.test.tsx src/components/Sidebar.test.tsx` | PASS, 4 files / 76 tests |
-| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `git diff --check` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8092 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T20-57-00-675Z`；全部六个场景显示 4 条种子消息且 `smallControls=0`，mobile title 202px，mobile message font 13.5px，mobile textarea 208px，无横向溢出，无控制台错误。 |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 198 tests |
-| 2026-05-23 | `cd frontend; npm test -- --run src/components/Sidebar.test.tsx` | PASS, 1 file / 36 tests |
-| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8093 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T21-19-49-947Z`；desktop sidebar model preview 4 cards, online-user section top 561px，全部六个场景 `smallControls=0`，无横向溢出，无控制台错误。 |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 199 tests |
-| 2026-05-23 | `docker build --check -f Dockerfile .` | PASS，无警告 |
-| 2026-05-23 | `docker build --check -f Dockerfile.runtime .` | PASS，无警告 |
-| 2026-05-23 | `cd backend; go test ./handler -run TestHealthCheck` | PASS |
-| 2026-05-23 | `cd backend; go test . -run TestServerStartsAndServesHealth` | PASS |
-| 2026-05-23 | `docker build -f Dockerfile.runtime -t tokendancechat:healthcheck-test <部署风格临时上下文>` | PASS，验证 runtime Dockerfile（`tokendancechat` 二进制 + `frontend/dist` 置于部署上下文根目录） |
-| 2026-05-23 | `docker run -d --name tdchat-healthcheck-* -e CHAT_ADDR=:3000 tokendancechat:healthcheck-test`；轮询 `docker inspect .State.Health.Status` | PASS，状态达到 `healthy`；测试容器已移除 |
-| 2026-05-23 | `cd backend; go test ./...` | PASS |
-| 2026-05-23 | `cd frontend; npm test -- --run src/components/ChatInput.test.tsx src/components/MessageContextMenu.test.tsx src/components/AssistantIcon.test.tsx` | PASS, 3 files / 38 tests |
-| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8095 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T22-17-22-184Z`；全部六个场景 `smallControls=0`，无横向溢出，无控制台错误。移动端 collapsed composer 87px，移动端 format composer 144px，desktop sidebar model preview 保持 4 cards，online-user section top 保持 561px。 |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 199 tests |
-| 2026-05-23 | `git diff --check` | PASS |
-| 2026-05-23 | `cd frontend; npm test -- --run src/lib/groupInfo.test.ts src/components/GroupInfoPanel.test.tsx src/components/Sidebar.test.tsx src/components/ChatLayout.test.tsx` | PASS, 4 files / 56 tests |
-| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8099 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-00-11-123Z`；全部七个场景 `smallControls=0`，无横向溢出，无控制台错误。新增 `desktop-light-group-info` 场景展示 384px 右侧面板、可见的仅 owner Webhook 区、`groupSmallControls=0`，已验证 `group_info.group_members` role 处理。 |
-| 2026-05-23 | `desktop-light-group-info.png`、`desktop-light.png`、`mobile-light.png` screenshot 复核 | PASS。群组管理面板控件可读且不再过小；移动端和桌面核心聊天保持视觉稳定。跟进项：新建群空状态较稀疏，应谨慎丰富。 |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 15 files / 202 tests |
-| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd backend; go test ./...` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8101 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-29-14-410Z`；全部七个场景 `smallControls=0`，无横向溢出，无控制台错误。`desktop-light-group-info` 展示 384px 右侧面板、`groupSmallControls=0`、desktop title 174x24 单行、可见的群组首屏空状态、仅 owner Webhook 控件。 |
-| 2026-05-23 | 来自 `tdchat-visual-2026-05-22T23-29-14-410Z` 的 `desktop-light-group-info.png`、`desktop-light.png`、`mobile-light.png` screenshot 复核 | PASS。群组管理控件可读，桌面标题在右侧面板打开时不再换行，群组首屏状态存在且无装饰填充，移动端/桌面核心聊天保持稳定。 |
-| 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; E2E_BASE_URL=http://127.0.0.1:8102 npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium --reporter=line` | PASS，覆盖群组管理员 UI 创建 webhook → HTTP POST → 群聊消息可见。首次 red check 因过时标题断言失败（`群组:` vs 实际 `群聊:`），修正选择器后通过。 |
-| 2026-05-23 | `cd backend; go test ./...` | PASS |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 15 files / 202 tests |
-| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8104 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-53-00-860Z`；全部七个场景 `smallControls=0`，无横向溢出，无控制台错误。 |
-| 2026-05-23 | 来自 `tdchat-visual-2026-05-22T23-53-00-860Z` 的 `desktop-light-group-info.png`、`desktop-light.png`、`mobile-light.png` screenshot 复核 | PASS。桌面核心聊天、群组管理面板和移动端 composer 保持可读稳定；无过小控件、标题截断或布局溢出。 |
-| 2026-05-23 | `cd backend; go test ./store -run "TestRotateWebhookSecretInvalidatesOldSecretAndAudits"` | PASS |
-| 2026-05-23 | `cd backend; go test ./hub -run "TestWebhookAuditListRedactsMetadataAndRequiresGroupAdmin"` | PASS |
-| 2026-05-23 | `cd backend; go test ./...` | PASS |
-| 2026-05-23 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | PASS, 18/18 |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 18 files / 237 tests |
-| 2026-05-23 | `cd backend; go test ./...` | PASS |
-| 2026-05-23 | `git diff --check` | PASS |
 ## Review Gates
 
 提交或交接有意义的变更前：
