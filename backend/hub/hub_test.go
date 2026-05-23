@@ -17,7 +17,8 @@ type mockStore struct {
 	groupRoles  map[string]string
 	webhooks    []store.Webhook
 	webhookByID map[string]store.Webhook
-	auditLogs   []store.WebhookAuditLog
+	auditLogs    []store.WebhookAuditLog
+	customEmojis []store.CustomEmoji
 }
 
 func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error) {
@@ -175,8 +176,16 @@ func (m *mockStore) GetGroupMemberRole(groupName, username string) (string, erro
 	return "member", nil
 }
 func (m *mockStore) GetGroupOwner(groupName string) (string, error)                     { return "", nil }
-func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error            { return nil }
-func (m *mockStore) ListCustomEmojis(roomID string) ([]store.CustomEmoji, error)        { return nil, nil }
+func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error {
+	m.customEmojis = append(m.customEmojis, store.CustomEmoji{
+		ID: "emoji-" + name, Name: name, URL: url, Uploader: uploader, RoomID: roomID,
+		CreatedAt: time.Now().UnixMilli(),
+	})
+	return nil
+}
+func (m *mockStore) ListCustomEmojis(roomID string) ([]store.CustomEmoji, error) {
+	return m.customEmojis, nil
+}
 func (m *mockStore) DeleteCustomEmoji(name, username string) error                      { return nil }
 func (m *mockStore) SearchCustomEmojis(query string) ([]store.CustomEmoji, error)       { return nil, nil }
 func (m *mockStore) LogCall(call store.CallRecord) error                                { return nil }
@@ -1256,5 +1265,316 @@ func TestHandleRoomCreateAndList(t *testing.T) {
 		}
 	default:
 		t.Fatal("expected room_list response")
+	}
+}
+
+func TestHandlePinMessage(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+	h.register <- c
+	time.Sleep(10 * time.Millisecond)
+
+	c.handlePinMessage(Message{ID: "msg-1"})
+
+	var got Message
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode pinned broadcast: %v", err)
+		}
+	default:
+		t.Fatal("expected pinned broadcast")
+	}
+	if got.Type != "pinned" {
+		t.Fatalf("expected type=pinned, got %q", got.Type)
+	}
+	if got.ID != "msg-1" {
+		t.Fatalf("expected id=msg-1, got %q", got.ID)
+	}
+	if !got.Pinned {
+		t.Error("expected pinned=true")
+	}
+	if got.PinnedBy != "alice" {
+		t.Fatalf("expected pinned_by=alice, got %q", got.PinnedBy)
+	}
+	if got.PinnedAt == 0 {
+		t.Error("expected non-zero pinned_at")
+	}
+
+	// Guard: empty username returns early, no broadcast.
+	anon := &Client{hub: h, send: make(chan []byte, 1)}
+	h.register <- anon
+	time.Sleep(10 * time.Millisecond)
+	anon.handlePinMessage(Message{ID: "msg-2"})
+	select {
+	case msg := <-anon.send:
+		t.Fatalf("expected no broadcast for empty username, got %s", string(msg))
+	default:
+	}
+
+	// Guard: empty message ID returns early.
+	c2 := &Client{hub: h, username: "bob", send: make(chan []byte, 1)}
+	h.register <- c2
+	time.Sleep(10 * time.Millisecond)
+	c2.handlePinMessage(Message{ID: ""})
+	select {
+	case msg := <-c2.send:
+		t.Fatalf("expected no broadcast for empty ID, got %s", string(msg))
+	default:
+	}
+
+	// Cleanup.
+	h.unregister <- c
+	h.unregister <- anon
+	h.unregister <- c2
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestHandleUnpinMessage(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+	h.register <- c
+	time.Sleep(10 * time.Millisecond)
+
+	c.handleUnpinMessage(Message{ID: "msg-1"})
+
+	var got Message
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode unpinned broadcast: %v", err)
+		}
+	default:
+		t.Fatal("expected unpinned broadcast")
+	}
+	if got.Type != "unpinned" {
+		t.Fatalf("expected type=unpinned, got %q", got.Type)
+	}
+	if got.ID != "msg-1" {
+		t.Fatalf("expected id=msg-1, got %q", got.ID)
+	}
+	if got.Pinned {
+		t.Error("expected pinned=false")
+	}
+
+	// Guard: empty username returns early.
+	anon := &Client{hub: h, send: make(chan []byte, 1)}
+	h.register <- anon
+	time.Sleep(10 * time.Millisecond)
+	anon.handleUnpinMessage(Message{ID: "msg-2"})
+	select {
+	case msg := <-anon.send:
+		t.Fatalf("expected no broadcast for empty username, got %s", string(msg))
+	default:
+	}
+
+	// Cleanup.
+	h.unregister <- c
+	h.unregister <- anon
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestHandleMuteAndUnmuteConversation(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+	h.register <- c
+	time.Sleep(10 * time.Millisecond)
+
+	// Mute a conversation.
+	c.handleMuteConversation(Message{Key: "dm:bob"})
+
+	var got Message
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode muted_conversations: %v", err)
+		}
+	default:
+		t.Fatal("expected muted_conversations response after mute")
+	}
+	if got.Type != "muted_conversations" {
+		t.Fatalf("expected muted_conversations, got %q", got.Type)
+	}
+
+	// Unmute — reuse the same client to avoid duplicate-username kick.
+	c.handleUnmuteConversation(Message{Key: "dm:bob"})
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode muted_conversations after unmute: %v", err)
+		}
+	default:
+		t.Fatal("expected muted_conversations response after unmute")
+	}
+	if got.Type != "muted_conversations" {
+		t.Fatalf("expected muted_conversations, got %q", got.Type)
+	}
+
+	// Guard: empty username returns early.
+	anon := &Client{hub: h, send: make(chan []byte, 1)}
+	anon.handleMuteConversation(Message{Key: "dm:bob"})
+	select {
+	case msg := <-anon.send:
+		t.Fatalf("expected no response for empty username, got %s", string(msg))
+	default:
+	}
+
+	// Guard: empty key returns early.
+	c.handleMuteConversation(Message{Key: ""})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no response for empty key, got %s", string(msg))
+	default:
+	}
+
+	// Cleanup.
+	h.unregister <- c
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestHandleArchiveAndUnarchiveConversation(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+
+	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+	h.register <- c
+	time.Sleep(10 * time.Millisecond)
+
+	// Archive a conversation.
+	c.handleArchiveConversation(Message{Key: "dm:bob"})
+
+	var got Message
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode archived_conversations: %v", err)
+		}
+	default:
+		t.Fatal("expected archived_conversations response after archive")
+	}
+	if got.Type != "archived_conversations" {
+		t.Fatalf("expected archived_conversations, got %q", got.Type)
+	}
+
+	// Unarchive — reuse the same client.
+	c.handleUnarchiveConversation(Message{Key: "dm:bob"})
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode archived_conversations after unarchive: %v", err)
+		}
+	default:
+		t.Fatal("expected archived_conversations response after unarchive")
+	}
+	if got.Type != "archived_conversations" {
+		t.Fatalf("expected archived_conversations, got %q", got.Type)
+	}
+
+	// Guard: empty username returns early.
+	anon := &Client{hub: h, send: make(chan []byte, 1)}
+	anon.handleArchiveConversation(Message{Key: "dm:bob"})
+	select {
+	case msg := <-anon.send:
+		t.Fatalf("expected no response for empty username, got %s", string(msg))
+	default:
+	}
+
+	// Guard: empty key returns early.
+	c.handleArchiveConversation(Message{Key: ""})
+	select {
+	case msg := <-c.send:
+		t.Fatalf("expected no response for empty key, got %s", string(msg))
+	default:
+	}
+
+	// Cleanup.
+	h.unregister <- c
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestHandleCustomEmojiAddAndList(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// Add an emoji — handler sends custom_emoji_list back to the client.
+	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+	c.handleCustomEmojiAdd(Message{EmojiName: "test_emoji", EmojiURL: "http://example.com/emoji.png"})
+
+	var got Message
+	select {
+	case payload := <-c.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode custom_emoji_list after add: %v", err)
+		}
+	default:
+		t.Fatal("expected custom_emoji_list response after add")
+	}
+	if got.Type != "custom_emoji_list" {
+		t.Fatalf("expected custom_emoji_list, got %q", got.Type)
+	}
+	if len(got.Emojis) != 1 {
+		t.Fatalf("expected 1 emoji in list, got %d", len(got.Emojis))
+	}
+	if got.Emojis[0].Name != "test_emoji" {
+		t.Fatalf("expected emoji name test_emoji, got %q", got.Emojis[0].Name)
+	}
+	if got.Emojis[0].URL != "http://example.com/emoji.png" {
+		t.Fatalf("expected emoji URL, got %q", got.Emojis[0].URL)
+	}
+	if got.Emojis[0].Uploader != "alice" {
+		t.Fatalf("expected uploader=alice, got %q", got.Emojis[0].Uploader)
+	}
+
+	// List emojis — should return the stored emoji.
+	c2 := &Client{hub: h, username: "bob", send: make(chan []byte, 1)}
+	c2.handleCustomEmojiList()
+
+	select {
+	case payload := <-c2.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode custom_emoji_list: %v", err)
+		}
+	default:
+		t.Fatal("expected custom_emoji_list response")
+	}
+	if got.Type != "custom_emoji_list" {
+		t.Fatalf("expected custom_emoji_list, got %q", got.Type)
+	}
+	if len(got.Emojis) != 1 {
+		t.Fatalf("expected 1 emoji in list, got %d", len(got.Emojis))
+	}
+
+	// Guard: empty username returns early.
+	anon := &Client{hub: h, send: make(chan []byte, 1)}
+	anon.handleCustomEmojiAdd(Message{EmojiName: "x", EmojiURL: "http://x.com/x.png"})
+	select {
+	case msg := <-anon.send:
+		t.Fatalf("expected no response for empty username, got %s", string(msg))
+	default:
+	}
+
+	// Guard: add with empty name returns INVALID_EMOJI error.
+	c3 := &Client{hub: h, username: "charlie", send: make(chan []byte, 1)}
+	c3.handleCustomEmojiAdd(Message{EmojiName: "", EmojiURL: "http://x.com/x.png"})
+	select {
+	case payload := <-c3.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode error: %v", err)
+		}
+	default:
+		t.Fatal("expected INVALID_EMOJI error for empty name")
+	}
+	if got.Type != "error" || got.ErrorCode != "INVALID_EMOJI" {
+		t.Fatalf("expected INVALID_EMOJI error, got type=%q code=%q", got.Type, got.ErrorCode)
 	}
 }
