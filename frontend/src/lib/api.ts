@@ -474,6 +474,12 @@ class ChatAPI {
             return;
           }
 
+          // Handle kick while already connected — prevent reconnect loop.
+          if (data.type === "kicked") {
+            this.reconnectUsername = null;
+            this.wasReconnecting = false;
+          }
+
           // Confirm join when we receive history.
           if (data.type === "history" && this.pendingJoin) {
             clearTimeout(timeout);
