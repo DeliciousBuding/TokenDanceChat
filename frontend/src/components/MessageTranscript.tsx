@@ -91,6 +91,7 @@ export function MessageTranscript({
     currentChat,
     onlineUsers,
     groups: chatGroups,
+    lastReadTimestamps,
   } = useChatStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -211,6 +212,21 @@ export function MessageTranscript({
   const hiddenCount = effectiveMessages.length - visibleMessages.length;
 
   const groups = useMemo(() => buildMessageGroups(visibleMessages, username), [visibleMessages, username]);
+
+  // Compute where to show the "New messages" unread divider.
+  const lastReadTimestamp = lastReadTimestamps[conversationKey];
+  const newMessagesDividerIndex = useMemo(() => {
+    if (!lastReadTimestamp) return -1;
+    for (let i = 0; i < groups.length; i++) {
+      const group = groups[i];
+      const groupTs =
+        group.type === "system"
+          ? group.message.timestamp
+          : group.messages[0].timestamp;
+      if (groupTs > lastReadTimestamp) return i;
+    }
+    return -1;
+  }, [groups, lastReadTimestamp]);
   const currentGroupMemberCount = currentChat.type === "group"
     ? chatGroups[currentChat.name]?.members.length ?? 1
     : 0;
@@ -622,6 +638,15 @@ export function MessageTranscript({
             if (group.type === "system") {
               return (
                 <div key={group.message.id}>
+                  {gi === newMessagesDividerIndex && (
+                    <div className="flex items-center gap-3 py-2">
+                      <div className="h-px flex-1 bg-primary/30" />
+                      <span className="text-xs font-medium text-primary shrink-0">
+                        {t("transcript.newMessagesDivider")}
+                      </span>
+                      <div className="h-px flex-1 bg-primary/30" />
+                    </div>
+                  )}
                   {dateSep}
                   <SystemMessage
                     content={group.message.content}
@@ -634,6 +659,15 @@ export function MessageTranscript({
             const { messages: groupMessages, isOwn } = group;
             return (
               <div key={groupMessages[0].id}>
+                {gi === newMessagesDividerIndex && (
+                  <div className="flex items-center gap-3 py-2">
+                    <div className="h-px flex-1 bg-primary/30" />
+                    <span className="text-xs font-medium text-primary shrink-0">
+                      {t("transcript.newMessagesDivider")}
+                    </span>
+                    <div className="h-px flex-1 bg-primary/30" />
+                  </div>
+                )}
                 {dateSep}
                 <div className="message-group">
                   {groupMessages.map((msg, idx) => {

@@ -457,4 +457,34 @@ describe("chatStore", () => {
       expect(s.replyTo).toBeNull();
     });
   });
+
+  describe("lastReadTimestamps", () => {
+    it("markConversationRead sets timestamp for a conversation key", () => {
+      const before = Date.now();
+      useChatStore.getState().markConversationRead("dm:Alice");
+      const ts = useChatStore.getState().lastReadTimestamps["dm:Alice"];
+      expect(ts).toBeGreaterThanOrEqual(before);
+      expect(ts).toBeLessThanOrEqual(Date.now());
+    });
+
+    it("clearConversationUnread also sets lastReadTimestamp when unreads exist", () => {
+      useChatStore.getState().incrementConversationUnread("public");
+      useChatStore.getState().clearConversationUnread("public");
+      expect(useChatStore.getState().lastReadTimestamps["public"]).toBeGreaterThan(0);
+      expect(useChatStore.getState().unreadByConversation["public"]).toBeUndefined();
+    });
+
+    it("reset clears lastReadTimestamps", () => {
+      useChatStore.getState().markConversationRead("public");
+      expect(useChatStore.getState().lastReadTimestamps["public"]).toBeGreaterThan(0);
+      useChatStore.getState().reset();
+      expect(Object.keys(useChatStore.getState().lastReadTimestamps)).toHaveLength(0);
+    });
+
+    it("persists lastReadTimestamps across state changes", () => {
+      useChatStore.getState().markConversationRead("dm:Bob");
+      const stored = JSON.parse(localStorage.getItem("tokendance:lastReadTimestamps") || "{}");
+      expect(stored["dm:Bob"]).toBeGreaterThan(0);
+    });
+  });
 });

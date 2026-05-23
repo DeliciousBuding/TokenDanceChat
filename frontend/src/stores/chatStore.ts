@@ -2,6 +2,16 @@ import { create } from "zustand";
 import type { ChatMessage, RoomInfo, UserStatus, ScheduledMessage, CustomEmoji, ChatFolder } from "@/lib/api";
 
 const MESSAGE_CAP = 500;
+const LS_LAST_READ_KEY = "tokendance:lastReadTimestamps";
+
+function loadLastReadTimestamps(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(LS_LAST_READ_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
 
 export type ViewState = "join" | "chat";
 
@@ -154,6 +164,9 @@ interface ChatState {
   unreadCount: number;
   unreadByConversation: Record<string, number>;
 
+  // Last read timestamps (per conversation) for "New messages" unread divider
+  lastReadTimestamps: Record<string, number>;
+
   // Mention notifications
   latestMention: MentionNotification | null;
 
@@ -228,6 +241,7 @@ interface ChatState {
   incrementConversationUnread: (key: string) => void;
   clearConversationUnread: (key: string) => void;
   clearAllConversationUnreads: () => void;
+  markConversationRead: (key: string) => void;
   updateMessageReactions: (messageId: string, reactions: Record<string, string[]>) => void;
   editMessageInPlace: (messageId: string, content: string) => void;
   markMessagesReadBy: (reader: string) => void;
@@ -268,13 +282,14 @@ interface ChatState {
   rotateGroupWebhookSecret: (group: string, webhook: CreatedWebhookInfo) => void;
   removeGroupWebhook: (group: string, id: string) => void;
   clearLatestCreatedWebhook: () => void;
+  getLastMessagePreview: (key: string) => { content: string; timestamp: number; sender: string } | null;
   setTranslation: (messageId: string, text: string) => void;
   setIncomingCall: (call: IncomingCall | null) => void;
   setActiveCall: (call: ActiveCall | null) => void;
   reset: () => void;
 }
 
-export const useChatStore = create<ChatState>((set) => ({
+export const useChatStore = create<ChatState>((set, get) => ({
   view: "join",
   username: "",
   connected: false,
@@ -298,6 +313,7 @@ export const useChatStore = create<ChatState>((set) => ({
   pendingImage: null,
   unreadCount: 0,
   unreadByConversation: {},
+  lastReadTimestamps: loadLastReadTimestamps(),
   latestMention: null,
   blockedUsers: [],
   pinnedMessages: [],
@@ -384,7 +400,21 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
   setRooms: (rooms) => set({ rooms }),
   setCurrentRoomID: (currentRoomID) => set({ currentRoomID }),
-  setCurrentChat: (currentChat) => set({ currentChat, pendingImage: null }),
+  setCurrentChat: (currentChat) =>
+    set((state) => {
+      // Mark the conversation being left as read up to this point.
+      const oldKey =
+        state.currentChat.type === "dm"
+          ? `dm:${state.currentChat.username}`
+          : state.currentChat.type === "group"
+            ? `group:${state.currentChat.name}`
+            : "public";
+      const nextTimestamps = { ...state.lastReadTimestamps, [oldKey]: Date.now() };
+      try {
+        localStorage.setItem(LS_LAST_READ_KEY, JSON.stringify(nextTimestamps));
+      } catch { /* quota exceeded */ }
+      return { currentChat, pendingImage: null, lastReadTimestamps: nextTimestamps };
+    }),
   setReplyTo: (replyTo) => set({ replyTo }),
   setFriends: (friends) => set({ friends }),
   addFriendRequest: (from) =>
@@ -479,9 +509,21 @@ export const useChatStore = create<ChatState>((set) => ({
       if (!state.unreadByConversation[key]) return state;
       const next = { ...state.unreadByConversation };
       delete next[key];
-      return { unreadByConversation: next };
+      const nextTimestamps = { ...state.lastReadTimestamps, [key]: Date.now() };
+      try {
+        localStorage.setItem(LS_LAST_READ_KEY, JSON.stringify(nextTimestamps));
+      } catch { /* quota exceeded */ }
+      return { unreadByConversation: next, lastReadTimestamps: nextTimestamps };
     }),
   clearAllConversationUnreads: () => set({ unreadByConversation: {} }),
+  markConversationRead: (key) =>
+    set((state) => {
+      const next = { ...state.lastReadTimestamps, [key]: Date.now() };
+      try {
+        localStorage.setItem(LS_LAST_READ_KEY, JSON.stringify(next));
+      } catch { /* quota exceeded */ }
+      return { lastReadTimestamps: next };
+    }),
   updateMessageReactions: (messageId, reactions) =>
     set((state) => ({
       messages: state.messages.map((m) =>
@@ -686,6 +728,40 @@ export const useChatStore = create<ChatState>((set) => ({
       return { groupWebhooks: nextWebhooks, latestCreatedWebhook: latest };
     }),
   clearLatestCreatedWebhook: () => set({ latestCreatedWebhook: null }),
+  getLastMessagePreview: (key: string) => {
+    const { messages, username } = get();
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.deleted || m.username === "system" || !m.content) continue;
+
+      let match = false;
+      if (key === "public") {
+        match = !m.to && !m.from && !m.group;
+      } else if (key.startsWith("dm:")) {
+        const partner = key.slice(3);
+        const msgSender = m.from || m.username;
+        const msgRecipient = m.to;
+        match =
+          (msgSender === partner && msgRecipient === username) ||
+          (msgSender === username && msgRecipient === partner);
+      } else if (key.startsWith("group:")) {
+        const groupName = key.slice(6);
+        match = m.to === groupName || m.group === groupName;
+      }
+
+      if (match) {
+        let content = m.content;
+        if (content.length > 50) {
+          content = content.slice(0, 47) + "...";
+        }
+        if (m.username === username) {
+          content = "You: " + content;
+        }
+        return { content, timestamp: m.timestamp, sender: m.username };
+      }
+    }
+    return null;
+  },
   setIncomingCall: (incomingCall) => set({ incomingCall }),
   setActiveCall: (activeCall) => set({ activeCall }),
   setTranslation: (messageId, text) =>
@@ -715,6 +791,7 @@ export const useChatStore = create<ChatState>((set) => ({
       pendingImage: null,
       unreadCount: 0,
       unreadByConversation: {},
+      lastReadTimestamps: {},
       latestMention: null,
       blockedUsers: [],
       pinnedMessages: [],

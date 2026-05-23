@@ -15,6 +15,7 @@ vi.mock("@/i18n/context", () => ({
       "transcript.emptyGroupDescription": "{{name}} 中还没有消息",
       "transcript.emptyGroupMembers": "{{count}} 位成员",
       "transcript.loading": "加载中...",
+      "transcript.newMessagesDivider": "新消息",
     }),
 }));
 
@@ -284,6 +285,51 @@ describe("MessageTranscript", () => {
       expect(bubbles).toHaveLength(2);
       expect(bubbles[0].dataset.msgId).toBe("dm1");
       expect(bubbles[1].dataset.msgId).toBe("dm2");
+    });
+  });
+
+  describe("unread divider", () => {
+    it("shows '新消息' divider when lastReadTimestamp is between messages", () => {
+      const baseTime = 1700000000000;
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages: [
+          makeMsg({ id: "m1", username: "alice", content: "Old", timestamp: baseTime }),
+          makeMsg({ id: "m2", username: "bob", content: "New", timestamp: baseTime + 10000 }),
+        ],
+        lastReadTimestamps: { public: baseTime + 5000 },
+      });
+      renderTranscript();
+      expect(screen.getByText("新消息")).toBeTruthy();
+    });
+
+    it("does not show divider when all messages are older than lastReadTimestamp", () => {
+      const baseTime = 1700000000000;
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages: [
+          makeMsg({ id: "m1", username: "alice", content: "Old", timestamp: baseTime }),
+          makeMsg({ id: "m2", username: "bob", content: "Also old", timestamp: baseTime + 1000 }),
+        ],
+        lastReadTimestamps: { public: baseTime + 50000 },
+      });
+      renderTranscript();
+      expect(screen.queryByText("新消息")).toBeNull();
+    });
+
+    it("does not show divider when lastReadTimestamp is not set", () => {
+      useChatStore.setState({
+        username: "testuser",
+        currentChat: { type: "public" },
+        messages: [
+          makeMsg({ id: "m1", username: "alice", content: "Msg", timestamp: 1000 }),
+        ],
+        lastReadTimestamps: {},
+      });
+      renderTranscript();
+      expect(screen.queryByText("新消息")).toBeNull();
     });
   });
 });

@@ -1509,8 +1509,9 @@ export function ChatInput({
                 disabled={disabled}
                 aria-label="Record voice message"
                 className={cn(
-                  "hidden h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:flex sm:h-12 sm:w-12",
+                  "h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:h-12 sm:w-12",
                   "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
+                  hasContent ? "hidden" : "flex",
                 )}
               >
                 <Mic className="h-[18px] w-[18px]" />

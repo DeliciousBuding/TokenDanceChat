@@ -19,24 +19,13 @@ export function formatTime(timestamp: number): string {
   // Less than 1 hour: "Nm ago"
   if (diffMin < 60) return `${diffMin}m ago`;
 
-  // Less than 24h and same day: "HH:mm"
-  const today = new Date();
-  if (
-    diffHour < 24 &&
-    date.getDate() === today.getDate() &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear()
-  ) {
+  // Less than 4 hours: "HH:mm"
+  if (diffHour < 4) {
     return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
-  // This year: "MM-DD HH:mm"
-  if (date.getFullYear() === today.getFullYear()) {
-    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  }
-
-  // Other years: "YYYY-MM-DD HH:mm"
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  // Older: "MM-DD"
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 export function formatFullTime(timestamp: number): string {

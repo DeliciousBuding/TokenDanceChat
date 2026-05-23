@@ -47,14 +47,14 @@ let audioCtorCallCount = 0;
 // ── Helpers ────────────────────────────────────────────────────────
 function installAudioContext() {
   audioCtorCallCount = 0;
-  (window as Record<string, unknown>).AudioContext = function (this: void) {
+  (window as unknown as Record<string, unknown>).AudioContext = function (this: void) {
     audioCtorCallCount++;
     return ctxMock;
   };
 }
 
 function removeAudioContext() {
-  delete (window as Record<string, unknown>).AudioContext;
+  delete (window as unknown as Record<string, unknown>).AudioContext;
 }
 
 // ── Tests ──────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ describe("sound utilities", () => {
 
     it("does not throw when AudioContext constructor throws", () => {
       isSoundEnabledMock.mockReturnValue(true);
-      (window as Record<string, unknown>).AudioContext = function () {
+      (window as unknown as Record<string, unknown>).AudioContext = function () {
         throw new Error("Not supported");
       };
 
