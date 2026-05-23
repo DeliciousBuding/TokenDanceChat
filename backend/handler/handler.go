@@ -965,6 +965,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "password must be at least 6 characters", "WEAK_PASSWORD", requestID)
 		return
 	}
+	if len(password) > 72 {
+		writeJSONError(w, http.StatusBadRequest, "password must be at most 72 characters", "PASSWORD_TOO_LONG", requestID)
+		return
+	}
 
 	if inviteCode == "" {
 		writeJSONError(w, http.StatusBadRequest, "invite code is required", "MISSING_INVITE_CODE", requestID)
@@ -973,12 +977,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.RegisterUser(username, password, inviteCode); err != nil {
 		log.Printf("register error: %v", err)
-		if strings.Contains(err.Error(), "invalid invite code") {
+		if strings.Contains(err.Error(), "invalid invite code") ||
+			strings.Contains(err.Error(), "no remaining uses") ||
+			strings.Contains(err.Error(), "expired") {
 			writeJSONError(w, http.StatusBadRequest, "invalid or expired invite code", "INVALID_INVITE_CODE", requestID)
-			return
-		}
-		if strings.Contains(err.Error(), "no remaining uses") {
-			writeJSONError(w, http.StatusBadRequest, "invite code has reached maximum uses", "INVITE_CODE_EXHAUSTED", requestID)
 			return
 		}
 		if strings.Contains(err.Error(), "already registered") {
