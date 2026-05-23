@@ -22,6 +22,7 @@ import {
   FolderPlus,
   Settings,
   Activity,
+  Search,
 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -174,7 +175,7 @@ export function Sidebar({
   onMentionAssistant,
   pendingFriendUsers = [],
 }: SidebarProps) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const {
     onlineUsers,
     username,
@@ -191,7 +192,7 @@ export function Sidebar({
     userProfiles,
     setGroupInfoPanel,
     folders,
-    getLastMessagePreview,
+    blockedUsers,
   } = useChatStore();
 
   // Sound toggle state
@@ -227,18 +228,58 @@ export function Sidebar({
     const partners = new Set<string>();
     const recent = messages.slice(-200);
     for (const m of recent) {
-      if (m.from && m.from !== username && !partners.has(m.from)) {
+      if (m.from && m.from !== username && !partners.has(m.from) && !blockedUsers.includes(m.from)) {
         partners.add(m.from);
       }
-      if (m.to && m.to !== username && m.username === username && !partners.has(m.to)) {
+      if (m.to && m.to !== username && m.username === username && !partners.has(m.to) && !blockedUsers.includes(m.to)) {
         partners.add(m.to);
       }
     }
     return [...partners];
-  }, [messages, username]);
+  }, [messages, username, blockedUsers]);
 
   // Convert groups record to array
   const groupList = useMemo(() => Object.values(groups), [groups]);
+
+  // Precompute last message previews for all conversations (single pass over messages)
+  const groupNames = useMemo(() => new Set(Object.keys(groups)), [groups]);
+  const previewMap = useMemo(() => {
+    const map = new Map<string, { content: string; timestamp: number; sender: string }>();
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.deleted || m.username === "system" || !m.content) continue;
+
+      let key: string | null = null;
+      if (!m.to && !m.from && !m.group) {
+        key = "public";
+      } else if (m.group && groupNames.has(m.group)) {
+        key = `group:${m.group}`;
+      } else if (m.to && groupNames.has(m.to)) {
+        key = `group:${m.to}`;
+      } else if (m.to && (m.from || m.username)) {
+        // DM: determine partner (who isn't the current user)
+        const msgSender = m.from || m.username;
+        const msgRecipient = m.to;
+        if (msgSender === username && msgRecipient) {
+          key = `dm:${msgRecipient}`;
+        } else if (msgRecipient === username && msgSender) {
+          key = `dm:${msgSender}`;
+        }
+      }
+
+      if (key && !map.has(key)) {
+        let content = m.content;
+        if (content.length > 50) {
+          content = content.slice(0, 47) + "...";
+        }
+        if (m.username === username) {
+          content = "You: " + content;
+        }
+        map.set(key, { content, timestamp: m.timestamp, sender: m.username });
+      }
+    }
+    return map;
+  }, [messages, username, groupNames]);
 
   // Friend users who are online
   const onlineFriends = friends.filter((f) => onlineUsers.includes(f));
@@ -364,6 +405,53 @@ export function Sidebar({
     return () => document.removeEventListener("click", handler);
   }, [contextMenu]);
 
+  // ---- P1 improvements ----
+
+  // Fix 1: AI Assistants collapsible section
+  const [aiAssistantsExpanded, setAiAssistantsExpanded] = useState(false);
+
+  // Fix 2: Conversation search/filter
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  // Debounce search input (150ms)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 150);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const isFiltering = debouncedQuery.trim().length > 0;
+
+  // Filtered conversation results for search
+  const filteredItems = useMemo(() => {
+    if (!isFiltering) return null;
+    const q = debouncedQuery.toLowerCase();
+    const results: { type: "dm" | "group" | "friend"; name: string; key: string }[] = [];
+
+    for (const partner of dmPartners) {
+      if (partner.toLowerCase().includes(q)) {
+        results.push({ type: "dm", name: partner, key: `dm:${partner}` });
+      }
+    }
+    for (const g of groupList) {
+      if (g.name.toLowerCase().includes(q)) {
+        results.push({ type: "group", name: g.name, key: `group:${g.name}` });
+      }
+    }
+    for (const friend of friends) {
+      if (friend.toLowerCase().includes(q)) {
+        results.push({ type: "friend", name: friend, key: `dm:${friend}` });
+      }
+    }
+    return results;
+  }, [isFiltering, debouncedQuery, dmPartners, groupList, friends]);
+
+  // Inline bilingual labels for new UI (no translation file changes needed)
+  const searchPlaceholder = lang === "zh-CN" ? "搜索对话..." : "Search conversations...";
+  const searchResultsLabel = lang === "zh-CN" ? "搜索结果" : "Search Results";
+  const searchEmptyLabel = lang === "zh-CN" ? "未找到匹配的对话" : "No matching conversations";
+  const aiAssistantsLabel = lang === "zh-CN" ? "AI 助手" : "AI Assistants";
+
   return (
     <aside
       aria-label={t("chat.roomName")}
@@ -399,6 +487,29 @@ export function Sidebar({
             <X className="h-4 w-4" />
           </button>
         )}
+      </div>
+
+      {/* Search filter (P1 #5) */}
+      <div className="px-3 pt-2 pb-0.5">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="w-full rounded-lg border border-border bg-background/50 pl-9 pr-8 py-2 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/50 transition-colors"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              aria-label="Clear search"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Navigation: public chat */}
@@ -465,254 +576,362 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Assistants */}
-      <div className="px-3 pt-1.5 pb-0.5">
-        <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-          {t("sidebar.assistants")}
-        </span>
-        {assistants.map((assistant) => (
-          <button
-            key={assistant.id}
-            onClick={() => {
-              setCurrentChat({ type: "public" });
-              onMentionAssistant?.(assistant.name);
-              onClose?.();
-            }}
-            className="mt-1 flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-foreground/80 transition-all border-l-2 border-l-transparent hover:border-l-primary hover:bg-accent hover:text-foreground"
-          >
-            <AssistantIcon assistant={assistant} size="sm" />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate">{assistant.name}</span>
-              <span className="block truncate text-xs text-muted-foreground/55">
-                {assistant.label} · {assistant.model.name}
-              </span>
-            </span>
-            <span className="h-2 w-2 rounded-full bg-online animate-pulse-dot" aria-label={assistant.status} />
-          </button>
-        ))}
-      </div>
-
-      {/* Model catalog */}
-      <div className="px-3 pt-1.5 pb-0.5">
-        <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-          {t("sidebar.models")}
-        </span>
-        <div className="mt-1 grid grid-cols-2 gap-1">
-          {modelCatalog.slice(0, 4).map((model) => (
-            <div
-              key={model.id}
-              data-testid="sidebar-model-card"
-              data-visual="sidebar-model-card"
-              className="flex min-h-9 min-w-0 items-center gap-1.5 rounded-lg border border-border bg-background/45 px-2 py-1.5"
-              title={`${model.name} · ${model.protocol}`}
-            >
-              <AssistantIcon model={model} size="sm" />
-              <span className="min-w-0">
-                <span className="block truncate text-xs text-foreground/80">{model.providerName}</span>
-                <span className="block truncate text-[10px] text-muted-foreground/50">{model.context}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Direct Messages */}
-      {dmPartners.length > 0 && (
+      {/* Search results (when filtering) — replaces DMs / Groups / Friends */}
+      {isFiltering ? (
         <div className="px-3 pt-1.5 pb-0.5">
           <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-            {t("sidebar.directMessages")}
+            {searchResultsLabel}
           </span>
-          {dmPartners.map((partner) => {
-            const preview = getLastMessagePreview(`dm:${partner}`);
-            return (
-            <button
-              key={partner}
-              onClick={() =>
-                setCurrentChat({ type: "dm", username: partner })
-              }
-              onContextMenu={(e) => handleContextMenu(e, `dm:${partner}`)}
-              className={cn(
-                "flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
-                currentChat.type === "dm" &&
-                  currentChat.username === partner
-                  ? "bg-accent text-foreground border-l-primary"
-                  : "text-foreground/70 hover:bg-accent hover:text-foreground",
+          {filteredItems && filteredItems.length > 0 ? (
+            filteredItems.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => {
+                  if (item.type === "dm" || item.type === "friend") {
+                    setCurrentChat({ type: "dm", username: item.name });
+                  } else if (item.type === "group") {
+                    setCurrentChat({ type: "group", name: item.name });
+                  }
+                }}
+                onContextMenu={(e) => handleContextMenu(e, item.key)}
+                className={cn(
+                  "flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
+                  (currentChat.type === "dm" && currentChat.username === item.name) ||
+                  (currentChat.type === "group" && currentChat.name === item.name)
+                    ? "bg-accent text-foreground border-l-primary"
+                    : "text-foreground/70 hover:bg-accent hover:text-foreground",
+                )}
+              >
+                {item.type === "group" ? (
+                  <Hash className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                ) : (
+                  <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0 text-left">
+                  <span className="block truncate">{item.name}</span>
+                  {/* Show preview for DMs and groups */}
+                  {item.type !== "friend" && (() => {
+                    const preview = previewMap.get(item.key);
+                    if (!preview) return null;
+                    return (
+                      <div className="flex items-center w-full">
+                        <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                          {preview.content}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
+                          {formatTime(preview.timestamp)}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </div>
+                {(() => {
+                  const count = unreadByConversation[item.key];
+                  if (count) {
+                    return (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge shrink-0">
+                        {count > 99 ? "99+" : count}
+                      </span>
+                    );
+                  }
+                  if (item.type === "friend") {
+                    return <span className="h-2 w-2 rounded-full bg-online shrink-0" />;
+                  }
+                  if (item.type === "dm" && onlineUsers.includes(item.name)) {
+                    return <span className="h-2 w-2 rounded-full bg-online shrink-0" />;
+                  }
+                  if (item.type === "group") {
+                    const g = groups[item.name];
+                    if (g) {
+                      return (
+                        <span className="text-[10px] text-muted-foreground/50 shrink-0">
+                          {g.members.length}
+                        </span>
+                      );
+                    }
+                  }
+                  return null;
+                })()}
+              </button>
+            ))
+          ) : (
+            <div className="px-5 py-3">
+              <span className="text-[11px] text-muted-foreground/35 italic">
+                {searchEmptyLabel}
+              </span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Direct Messages — moved above Assistants (P1 #4) */}
+          {dmPartners.length > 0 && (
+            <div className="px-3 pt-1.5 pb-0.5">
+              <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+                {t("sidebar.directMessages")}
+              </span>
+              {dmPartners.map((partner) => {
+                const preview = previewMap.get(`dm:${partner}`);
+                return (
+                <button
+                  key={partner}
+                  onClick={() =>
+                    setCurrentChat({ type: "dm", username: partner })
+                  }
+                  onContextMenu={(e) => handleContextMenu(e, `dm:${partner}`)}
+                  className={cn(
+                    "flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
+                    currentChat.type === "dm" &&
+                      currentChat.username === partner
+                      ? "bg-accent text-foreground border-l-primary"
+                      : "text-foreground/70 hover:bg-accent hover:text-foreground",
+                  )}
+                >
+                  <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="block truncate">{partner}</span>
+                    {preview && (
+                      <div className="flex items-center w-full">
+                        <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                          {preview.content}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
+                          {formatTime(preview.timestamp)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {(() => {
+                    const count = unreadByConversation[`dm:${partner}`];
+                    if (count) {
+                      return (
+                        <span key={`dm-${partner}-${count}`} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge shrink-0">
+                          {count > 99 ? "99+" : count}
+                        </span>
+                      );
+                    }
+                    return onlineUsers.includes(partner) && (
+                      <span className="h-2 w-2 rounded-full bg-online shrink-0" />
+                    );
+                  })()}
+                </button>
+              )})}
+            </div>
+          )}
+
+          {/* Direct Messages: empty state */}
+          {dmPartners.length === 0 && (
+            <div className="px-5 py-0.5">
+              <span className="text-[11px] text-muted-foreground/35 italic">
+                {t("sidebar.noDMs")}
+              </span>
+            </div>
+          )}
+
+          {/* Groups section — moved above Assistants (P1 #4) */}
+          <div className="mt-1 px-3 pt-1">
+            <div className="flex items-center justify-between px-2">
+              <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+                {t("sidebar.groups")}
+              </span>
+              {onCreateGroup && (
+                <button
+                  onClick={onCreateGroup}
+                  aria-label={t("sidebar.createGroup")}
+                  className="flex h-[44px] w-[44px] items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
               )}
-            >
-              <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <span className="block truncate">{partner}</span>
-                {preview && (
-                  <div className="flex items-center w-full">
-                    <span className="text-xs text-muted-foreground truncate max-w-[180px]">
-                      {preview.content}
+            </div>
+            {groupList.map((g) => {
+                const preview = previewMap.get(`group:${g.name}`);
+                return (
+              <button
+                key={g.name}
+                onClick={() => setCurrentChat({ type: "group", name: g.name })}
+                onContextMenu={(e) => handleContextMenu(e, `group:${g.name}`)}
+                className={cn(
+                  "flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
+                  currentChat.type === "group" && currentChat.name === g.name
+                    ? "bg-accent text-foreground border-l-primary"
+                    : "text-foreground/70 hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <Hash className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="block truncate">{g.name}</span>
+                  {preview && (
+                    <div className="flex items-center w-full">
+                      <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                        {preview.content}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
+                        {formatTime(preview.timestamp)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {(() => {
+                  const count = unreadByConversation[`group:${g.name}`];
+                  if (count) {
+                    return (
+                      <span key={`group-${g.name}-${count}`} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge shrink-0">
+                        {count > 99 ? "99+" : count}
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="text-[10px] text-muted-foreground/50 shrink-0">
+                      {g.members.length}
                     </span>
-                    <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
-                      {formatTime(preview.timestamp)}
+                  );
+                })()}
+              </button>
+            )})}
+            {/* Groups: empty state */}
+            {groupList.length === 0 && (
+              <div className="px-2 py-0.5">
+                <span className="text-[10px] text-muted-foreground/35 italic">
+                  {t("sidebar.noGroups")}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Friends section — moved above Assistants (P1 #4) */}
+          <div className="mt-1 px-3 pt-1">
+            <div className="flex items-center justify-between px-2">
+              <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+                {t("sidebar.friends")}
+              </span>
+              <span className="text-xs text-muted-foreground/40">
+                {friends.length}
+              </span>
+            </div>
+            {onlineFriends.length > 0
+              ? onlineFriends.map((friend) => (
+                  <button
+                    key={friend}
+                    onClick={() =>
+                      setCurrentChat({ type: "dm", username: friend })
+                    }
+                    className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground/80 transition-all border-l-2 border-l-transparent hover:border-l-primary hover:bg-accent"
+                  >
+                    <div
+                      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                      style={{ background: avatarGradient(friend) }}
+                    >
+                      {friend.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="truncate">{friend}</span>
+                    <span className="ml-auto h-2 w-2 rounded-full bg-online" />
+                  </button>
+                ))
+              : friends.length > 0
+                ? friends.map((friend) => {
+                    const friendStatus = userStatusList.find((u) => u.username === friend);
+                    const lsText = friendStatus && !friendStatus.online ? formatLastSeen(friendStatus.last_seen) : "";
+                    return (
+                    <div
+                      key={friend}
+                      className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-foreground/50"
+                    >
+                      <div
+                        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white opacity-50"
+                        style={{ background: avatarGradient(friend) }}
+                      >
+                        {friend.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="truncate block">{friend}</span>
+                        {lsText && (
+                          <span className="text-[10px] text-muted-foreground/40 block truncate">
+                            {lsText}
+                          </span>
+                        )}
+                      </div>
+                      <span className="ml-auto h-2 w-2 flex-shrink-0 rounded-full bg-muted-foreground/30" />
+                    </div>
+                  )})
+                : (
+                  <div className="px-2 py-0.5">
+                    <span className="text-[10px] text-muted-foreground/35 italic">
+                      {t("sidebar.noFriends")}
                     </span>
                   </div>
                 )}
-              </div>
-              {(() => {
-                const count = unreadByConversation[`dm:${partner}`];
-                if (count) {
-                  return (
-                    <span key={`dm-${partner}-${count}`} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge shrink-0">
-                      {count > 99 ? "99+" : count}
-                    </span>
-                  );
-                }
-                return onlineUsers.includes(partner) && (
-                  <span className="h-2 w-2 rounded-full bg-online shrink-0" />
-                );
-              })()}
-            </button>
-          )})}
-        </div>
-      )}
-
-      {/* Direct Messages: empty state */}
-      {dmPartners.length === 0 && (
-        <div className="px-5 py-0.5">
-          <span className="text-[11px] text-muted-foreground/35 italic">
-            {t("sidebar.noDMs")}
-          </span>
-        </div>
-      )}
-
-      {/* Groups section */}
-      <div className="mt-1 px-3 pt-1">
-        <div className="flex items-center justify-between px-2">
-          <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-            {t("sidebar.groups")}
-          </span>
-          {onCreateGroup && (
-            <button
-              onClick={onCreateGroup}
-              aria-label={t("sidebar.createGroup")}
-              className="flex h-[44px] w-[44px] items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-        {groupList.map((g) => {
-            const preview = getLastMessagePreview(`group:${g.name}`);
-            return (
-          <button
-            key={g.name}
-            onClick={() => setCurrentChat({ type: "group", name: g.name })}
-            onContextMenu={(e) => handleContextMenu(e, `group:${g.name}`)}
-            className={cn(
-              "flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all border-l-2 border-l-transparent hover:border-l-primary",
-              currentChat.type === "group" && currentChat.name === g.name
-                ? "bg-accent text-foreground border-l-primary"
-                : "text-foreground/70 hover:bg-accent hover:text-foreground",
-            )}
-          >
-            <Hash className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="block truncate">{g.name}</span>
-              {preview && (
-                <div className="flex items-center w-full">
-                  <span className="text-xs text-muted-foreground truncate max-w-[180px]">
-                    {preview.content}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground/60 ml-auto shrink-0">
-                    {formatTime(preview.timestamp)}
-                  </span>
-                </div>
-              )}
-            </div>
-            {(() => {
-              const count = unreadByConversation[`group:${g.name}`];
-              if (count) {
-                return (
-                  <span key={`group-${g.name}-${count}`} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge shrink-0">
-                    {count > 99 ? "99+" : count}
-                  </span>
-                );
-              }
-              return (
-                <span className="text-[10px] text-muted-foreground/50 shrink-0">
-                  {g.members.length}
-                </span>
-              );
-            })()}
-          </button>
-        )})}
-        {/* Groups: empty state */}
-        {groupList.length === 0 && (
-          <div className="px-2 py-0.5">
-            <span className="text-[10px] text-muted-foreground/35 italic">
-              {t("sidebar.noGroups")}
-            </span>
           </div>
-        )}
-      </div>
+        </>
+      )}
 
-      {/* Friends section */}
-      <div className="mt-1 px-3 pt-1">
-        <div className="flex items-center justify-between px-2">
-          <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-            {t("sidebar.friends")}
-          </span>
-          <span className="text-xs text-muted-foreground/40">
-            {friends.length}
-          </span>
-        </div>
-        {onlineFriends.length > 0
-          ? onlineFriends.map((friend) => (
-              <button
-                key={friend}
-                onClick={() =>
-                  setCurrentChat({ type: "dm", username: friend })
-                }
-                className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground/80 transition-all border-l-2 border-l-transparent hover:border-l-primary hover:bg-accent"
-              >
-                <div
-                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-                  style={{ background: avatarGradient(friend) }}
+      {/* AI Assistants — collapsible section wrapping Assistants + Model Catalog (P1 #4) */}
+      <div className="px-3 pt-1.5 pb-0.5">
+        <button
+          onClick={() => setAiAssistantsExpanded(!aiAssistantsExpanded)}
+          className="flex min-h-9 w-full items-center gap-1 px-2 py-1.5 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider hover:text-muted-foreground transition-colors"
+        >
+          {aiAssistantsExpanded ? (
+            <ChevronDown className="h-3 w-3" />
+          ) : (
+            <ChevronRight className="h-3 w-3" />
+          )}
+          {aiAssistantsLabel}
+        </button>
+        {aiAssistantsExpanded && (
+          <>
+            {/* Assistants */}
+            <div className="pt-0.5 pb-0.5">
+              <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+                {t("sidebar.assistants")}
+              </span>
+              {assistants.map((assistant) => (
+                <button
+                  key={assistant.id}
+                  onClick={() => {
+                    setCurrentChat({ type: "public" });
+                    onMentionAssistant?.(assistant.name);
+                    onClose?.();
+                  }}
+                  className="mt-1 flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-foreground/80 transition-all border-l-2 border-l-transparent hover:border-l-primary hover:bg-accent hover:text-foreground"
                 >
-                  {friend.charAt(0).toUpperCase()}
-                </div>
-                <span className="truncate">{friend}</span>
-                <span className="ml-auto h-2 w-2 rounded-full bg-online" />
-              </button>
-            ))
-          : friends.length > 0
-            ? friends.map((friend) => {
-                const friendStatus = userStatusList.find((u) => u.username === friend);
-                const lsText = friendStatus && !friendStatus.online ? formatLastSeen(friendStatus.last_seen) : "";
-                return (
-                <div
-                  key={friend}
-                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-foreground/50"
-                >
+                  <AssistantIcon assistant={assistant} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{assistant.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground/55">
+                      {assistant.label} · {assistant.model.name}
+                    </span>
+                  </span>
+                  <span className="h-2 w-2 rounded-full bg-online animate-pulse-dot" aria-label={assistant.status} />
+                </button>
+              ))}
+            </div>
+
+            {/* Model catalog */}
+            <div className="pt-0.5 pb-0.5">
+              <span className="px-2 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+                {t("sidebar.models")}
+              </span>
+              <div className="mt-1 grid grid-cols-2 gap-1">
+                {modelCatalog.slice(0, 4).map((model) => (
                   <div
-                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white opacity-50"
-                    style={{ background: avatarGradient(friend) }}
+                    key={model.id}
+                    data-testid="sidebar-model-card"
+                    data-visual="sidebar-model-card"
+                    className="flex min-h-9 min-w-0 items-center gap-1.5 rounded-lg border border-border bg-background/45 px-2 py-1.5"
+                    title={`${model.name} · ${model.protocol}`}
                   >
-                    {friend.charAt(0).toUpperCase()}
+                    <AssistantIcon model={model} size="sm" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs text-foreground/80">{model.providerName}</span>
+                      <span className="block truncate text-[10px] text-muted-foreground/50">{model.context}</span>
+                    </span>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="truncate block">{friend}</span>
-                    {lsText && (
-                      <span className="text-[10px] text-muted-foreground/40 block truncate">
-                        {lsText}
-                      </span>
-                    )}
-                  </div>
-                  <span className="ml-auto h-2 w-2 flex-shrink-0 rounded-full bg-muted-foreground/30" />
-                </div>
-              )})
-            : (
-              <div className="px-2 py-0.5">
-                <span className="text-[10px] text-muted-foreground/35 italic">
-                  {t("sidebar.noFriends")}
-                </span>
+                ))}
               </div>
-            )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Online users section */}

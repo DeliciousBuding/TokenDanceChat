@@ -162,18 +162,22 @@ describe("ChatLayout", () => {
       expect(container.querySelector(".flex")).toBeTruthy();
     });
 
-    it("桌面语言切换按钮可见", () => {
+    it("桌面更多菜单包含语言切换", () => {
       renderChatLayout();
+      // The desktop language toggle is now inside the More dropdown
+      const moreBtn = screen.getByLabelText("更多");
+      expect(moreBtn).toBeTruthy();
+      fireEvent.click(moreBtn);
       expect(screen.getByText("English")).toBeTruthy();
     });
 
     it("移动端次要操作收纳在更多菜单", () => {
       renderChatLayout();
       fireEvent.click(screen.getByLabelText("More chat actions"));
-      expect(screen.getAllByText("English").length).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByText("English").length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText("导出为 JSON")).toBeTruthy();
       expect(screen.getByText("导出为文本")).toBeTruthy();
-      expect(screen.getAllByText("打开设置").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("通知偏好").length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText("断开连接")).toBeTruthy();
     });
 

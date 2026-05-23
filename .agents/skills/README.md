@@ -5,6 +5,7 @@ Reusable SOPs for TokenDanceChat development. Each skill is a self-contained mar
 | Skill | Description |
 |-------|-------------|
 | [verify](verify.md) | Commit-gate checklist: quick verify, full verify, security leak scan, E2E |
+| [pm-audit](pm-audit.md) | PM UX audit SOP: file checklist, UX dimensions, competitor comparison, priority framework, report format |
 
 ## Usage
 
