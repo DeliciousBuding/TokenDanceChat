@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { mockI18n } from "@/test-utils";
+
+vi.mock("@/i18n/context", () => ({
+  useTranslation: () => mockI18n(),
+}));
 
 // Mock fetch for /api/admin/stats
 const mockStats = {

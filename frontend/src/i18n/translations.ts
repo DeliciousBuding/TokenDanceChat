@@ -71,6 +71,7 @@ export interface TranslationDict {
     connectedAs: string;
     you: string;
     friends: string;
+    friendsOnline: string;
     groups: string;
     directMessages: string;
     assistants: string;
@@ -99,6 +100,7 @@ export interface TranslationDict {
     searchResults: string;
     searchEmpty: string;
     aiAssistants: string;
+    adminDashboard: string;
     connecting: string;
   };
   transcript: {
@@ -509,6 +511,7 @@ const zhCN: TranslationDict = {
     connectedAs: "已连接为",
     you: "你",
     friends: "好友",
+    friendsOnline: "好友在线",
     groups: "群组",
     directMessages: "私信",
     assistants: "助手",
@@ -537,6 +540,7 @@ const zhCN: TranslationDict = {
     searchResults: "搜索结果",
     searchEmpty: "未找到匹配的对话",
     aiAssistants: "AI 助手",
+    adminDashboard: "管理面板",
     connecting: "连接中...",
   },
   transcript: {
@@ -949,6 +953,7 @@ const enUS: TranslationDict = {
     connectedAs: "Connected as",
     you: "You",
     friends: "Friends",
+    friendsOnline: "Friends Online",
     groups: "Groups",
     directMessages: "Direct Messages",
     assistants: "Assistants",
@@ -977,6 +982,7 @@ const enUS: TranslationDict = {
     searchResults: "Search results",
     searchEmpty: "No matching conversations",
     aiAssistants: "AI Assistants",
+    adminDashboard: "Admin Dashboard",
     connecting: "Connecting...",
   },
   transcript: {

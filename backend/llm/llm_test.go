@@ -332,6 +332,89 @@ func TestExtractTopic(t *testing.T) {
 	}
 }
 
+// TestNewZeroConfig verifies New handles a zero-value Config without panicking
+// and applies sensible defaults.
+func TestNewZeroConfig(t *testing.T) {
+	c := New(Config{})
+	if c == nil {
+		t.Fatal("New(Config{}) returned nil")
+	}
+	if c.getMaxTokens() != 8192 {
+		t.Errorf("default maxTokens = %d, want 8192", c.getMaxTokens())
+	}
+	if c.systemPrompt != "You are a helpful chatbot in a public chat room. Keep responses concise." {
+		t.Errorf("default systemPrompt = %q", c.systemPrompt)
+	}
+	if c.cfg.Provider != "" {
+		t.Errorf("provider = %q, want empty", c.cfg.Provider)
+	}
+	if c.client == nil {
+		t.Error("http.Client should be initialized")
+	}
+}
+
+// TestMemoryAddExactCapacity verifies old messages are evicted exactly when
+// crossing the capacity boundary (at-capacity + 1).
+func TestMemoryAddExactCapacity(t *testing.T) {
+	m := NewMemory(3)
+
+	// Fill to exact capacity.
+	m.Add(Message{Role: "user", Content: "msg-0"})
+	m.Add(Message{Role: "user", Content: "msg-1"})
+	m.Add(Message{Role: "user", Content: "msg-2"})
+
+	msgs := m.GetMessages()
+	if len(msgs) != 3 {
+		t.Fatalf("at capacity: got %d msgs, want 3", len(msgs))
+	}
+
+	// Add one more — oldest (msg-0) should be evicted.
+	m.Add(Message{Role: "user", Content: "msg-3"})
+	msgs = m.GetMessages()
+	if len(msgs) != 3 {
+		t.Fatalf("after overflow: got %d msgs, want 3", len(msgs))
+	}
+	if msgs[0].Content != "msg-1" {
+		t.Errorf("oldest kept = %q, want msg-1", msgs[0].Content)
+	}
+	if msgs[2].Content != "msg-3" {
+		t.Errorf("newest = %q, want msg-3", msgs[2].Content)
+	}
+}
+
+// TestMemoryNegativeMaxSize verifies NewMemory handles a negative maxSize
+// by falling back to the default of 20.
+func TestMemoryNegativeMaxSize(t *testing.T) {
+	m := NewMemory(-5)
+	for i := 0; i < 25; i++ {
+		m.Add(Message{Role: "user", Content: fmt.Sprintf("msg-%d", i)})
+	}
+	msgs := m.GetMessages()
+	if len(msgs) != 20 {
+		t.Errorf("expected 20 (default max from negative input), got %d", len(msgs))
+	}
+}
+
+// TestBuildMemoryMarkdownEmpty verifies buildMemoryMarkdown output when the
+// memory contains zero messages (the "empty memory" case).
+func TestBuildMemoryMarkdownEmpty(t *testing.T) {
+	m := NewMemory(20)
+	markdown := m.buildMemoryMarkdown()
+
+	if !strings.Contains(markdown, "# Bot Memory") {
+		t.Error("markdown should contain title")
+	}
+	if !strings.Contains(markdown, "(no topics yet)") {
+		t.Error("markdown should indicate no topics")
+	}
+	if !strings.Contains(markdown, "(no users yet)") {
+		t.Error("markdown should indicate no users")
+	}
+	if !strings.Contains(markdown, "(no facts recorded yet)") {
+		t.Error("markdown should indicate no facts")
+	}
+}
+
 func TestExtractFact(t *testing.T) {
 	tests := []struct {
 		input string

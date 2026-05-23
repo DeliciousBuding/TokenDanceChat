@@ -175,7 +175,7 @@ export function Sidebar({
   onMentionAssistant,
   pendingFriendUsers = [],
 }: SidebarProps) {
-  const { t, lang } = useTranslation();
+  const { t } = useTranslation();
   const {
     onlineUsers,
     username,
@@ -960,7 +960,7 @@ export function Sidebar({
                   </div>
                 ))}
                 <p className="text-[11px] text-muted-foreground/40 mt-1">
-                  {lang === "zh-CN" ? "连接中..." : "Connecting..."}
+                  {t("sidebar.connecting")}
                 </p>
               </div>
             ) : (
@@ -998,7 +998,7 @@ export function Sidebar({
               {sortedOnlineGroups.friends.length > 0 && (sortedOnlineGroups.dmPartners.length > 0 || sortedOnlineGroups.others.length > 0) && (
                 <div className="flex items-center gap-2 px-3 py-1.5">
                   <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider">
-                    {lang === "zh-CN" ? "好友在线" : "Friends Online"}
+                    {t("sidebar.friendsOnline")}
                   </span>
                   <div className="h-px flex-1 bg-accent" />
                 </div>
@@ -1173,8 +1173,8 @@ export function Sidebar({
             <button
               onClick={() => setAdminOpen(true)}
               className="flex h-[44px] w-[44px] items-center justify-center rounded-lg text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
-              aria-label="Admin Dashboard"
-              title="Admin Dashboard"
+              aria-label={t("sidebar.adminDashboard")}
+              title={t("sidebar.adminDashboard")}
             >
               <Activity className="h-4 w-4" />
             </button>
