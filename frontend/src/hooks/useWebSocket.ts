@@ -540,6 +540,7 @@ export function useWebSocket() {
 
     unsubs.push(
       chatAPI.on("reconnected", () => {
+        useChatStore.getState().setConnected(true);
         addSystemMessage(i18nSys("system.reconnected"), Date.now());
       }),
     );

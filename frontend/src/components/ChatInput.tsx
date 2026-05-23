@@ -57,6 +57,9 @@ export function ChatInput({
     draftLoadedRef.current = true;
   }, [draftStorageKey]);
 
+  // Cleanup mountedRef on unmount to prevent state updates after unmount.
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
   // Save draft on content change (debounced via ref).
   const saveDraftRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
@@ -84,6 +87,7 @@ export function ChatInput({
   const sendBtnRef = useRef<HTMLButtonElement>(null);
   const sendingRef = useRef(false);
   const typingSentRef = useRef(false);
+  const mountedRef = useRef(true);
   const [hasScheduled, setHasScheduled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -738,8 +742,8 @@ export function ChatInput({
       // Keep content in input so user can retry when reconnected.
       setDisconnectFeedback(true);
       setDisconnectFlash(true);
-      setTimeout(() => setDisconnectFlash(false), 300);
-      setTimeout(() => setDisconnectFeedback(false), 3000);
+      setTimeout(() => { if (mountedRef.current) setDisconnectFlash(false); }, 300);
+      setTimeout(() => { if (mountedRef.current) setDisconnectFeedback(false); }, 3000);
       return;
     }
     sendingRef.current = true;
