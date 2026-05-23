@@ -39,17 +39,17 @@ export function formatFullTime(timestamp: number): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function formatDate(timestamp: number): string {
+export function formatDate(timestamp: number, lang: string = "zh-CN"): string {
   const date = new Date(timestamp);
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
   if (date.toDateString() === today.toDateString()) {
-    return "今天";
+    return lang === "en-US" ? "Today" : "今天";
   }
   if (date.toDateString() === yesterday.toDateString()) {
-    return "昨天";
+    return lang === "en-US" ? "Yesterday" : "昨天";
   }
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
