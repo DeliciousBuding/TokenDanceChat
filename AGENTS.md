@@ -91,7 +91,12 @@ frontend/src/components/GroupInfoPanel.tsx
 
 先跑 focused checks，再跑 broad checks，最后才声称完成。
 
+全量一键验证：`.\scripts\verify.ps1`（可选 `-SkipVisual`、`-SkipDocker`）。
+
 ```powershell
+# 全量一键
+cd D:\Code\Projects\TokenDanceChat
+.\scripts\verify.ps1
 # Backend focused webhook 回归
 cd D:\Code\Projects\TokenDanceChat\backend
 go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin|AuditListRedactsMetadataAndRequiresGroupAdmin)"
