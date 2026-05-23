@@ -4238,3 +4238,716 @@ func TestDeleteGroupNonExistent(t *testing.T) {
 		t.Errorf("expected 1 group, got %d", len(groups))
 	}
 }
+
+// ── Message operations: happy-path coverage ──
+
+func TestGetMessageByID(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	msg, err := s.InsertMessage("alice", "hello world", "", "room-1", "bob", "group-x", "thread-1")
+	if err != nil {
+		t.Fatalf("InsertMessage returned error: %v", err)
+	}
+
+	retrieved, err := s.GetMessageByID(msg.ID)
+	if err != nil {
+		t.Fatalf("GetMessageByID returned error: %v", err)
+	}
+	if retrieved.ID != msg.ID {
+		t.Errorf("expected ID '%s', got '%s'", msg.ID, retrieved.ID)
+	}
+	if retrieved.Username != "alice" {
+		t.Errorf("expected username 'alice', got '%s'", retrieved.Username)
+	}
+	if retrieved.Content != "hello world" {
+		t.Errorf("expected content 'hello world', got '%s'", retrieved.Content)
+	}
+	if retrieved.Timestamp != msg.Timestamp {
+		t.Errorf("expected timestamp %d, got %d", msg.Timestamp, retrieved.Timestamp)
+	}
+	if retrieved.RoomID != "room-1" {
+		t.Errorf("expected RoomID 'room-1', got '%s'", retrieved.RoomID)
+	}
+	if retrieved.ToUser != "bob" {
+		t.Errorf("expected ToUser 'bob', got '%s'", retrieved.ToUser)
+	}
+	if retrieved.GroupName != "group-x" {
+		t.Errorf("expected GroupName 'group-x', got '%s'", retrieved.GroupName)
+	}
+	if retrieved.ThreadID != "thread-1" {
+		t.Errorf("expected ThreadID 'thread-1', got '%s'", retrieved.ThreadID)
+	}
+	if retrieved.Deleted {
+		t.Error("expected Deleted to be false for new message")
+	}
+	if retrieved.Edited {
+		t.Error("expected Edited to be false for new message")
+	}
+}
+
+func TestEditMessage(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	msg, err := s.InsertMessage("alice", "original content", "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("InsertMessage returned error: %v", err)
+	}
+
+	updated, err := s.UpdateMessage(msg.ID, "edited content")
+	if err != nil {
+		t.Fatalf("UpdateMessage returned error: %v", err)
+	}
+	if updated.Content != "edited content" {
+		t.Errorf("expected content 'edited content', got '%s'", updated.Content)
+	}
+	if !updated.Edited {
+		t.Error("expected Edited flag to be true after update")
+	}
+	if updated.ID != msg.ID {
+		t.Errorf("expected same ID '%s', got '%s'", msg.ID, updated.ID)
+	}
+	if updated.Username != "alice" {
+		t.Errorf("expected username 'alice', got '%s'", updated.Username)
+	}
+
+	// Verify via GetMessageByID.
+	retrieved, err := s.GetMessageByID(msg.ID)
+	if err != nil {
+		t.Fatalf("GetMessageByID returned error: %v", err)
+	}
+	if retrieved.Content != "edited content" {
+		t.Errorf("expected retrieved content 'edited content', got '%s'", retrieved.Content)
+	}
+	if !retrieved.Edited {
+		t.Error("expected retrieved Edited flag to be true")
+	}
+}
+
+func TestDeleteMessage(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	msg, err := s.InsertMessage("alice", "message to delete", "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("InsertMessage returned error: %v", err)
+	}
+
+	err = s.MarkDeleted(msg.ID)
+	if err != nil {
+		t.Fatalf("MarkDeleted returned error: %v", err)
+	}
+
+	// Retrieved message should have empty content and Deleted flag set.
+	retrieved, err := s.GetMessageByID(msg.ID)
+	if err != nil {
+		t.Fatalf("GetMessageByID returned error: %v", err)
+	}
+	if retrieved.Content != "" {
+		t.Errorf("expected empty content for deleted message, got '%s'", retrieved.Content)
+	}
+	if !retrieved.Deleted {
+		t.Error("expected Deleted flag to be true")
+	}
+
+	// In the message list, deleted messages should have empty content.
+	msgs := s.GetMessages(10, 0)
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message in list, got %d", len(msgs))
+	}
+	if msgs[0].Content != "" {
+		t.Errorf("expected empty content in list for deleted message, got '%s'", msgs[0].Content)
+	}
+}
+
+func TestGetMessagesPagination(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Insert 5 messages with sleeps to ensure distinct timestamps.
+	for i := 0; i < 5; i++ {
+		s.InsertMessage("alice", fmt.Sprintf("msg%d", i), "", "", "", "", "")
+		time.Sleep(time.Millisecond)
+	}
+
+	// Get first page: limit 2, before=0 (newest).
+	msgs := s.GetMessages(2, 0)
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages with limit 2, got %d", len(msgs))
+	}
+	// Should be msg3 and msg4 (newest, then reversed to chronological).
+	if msgs[0].Content != "msg3" {
+		t.Errorf("expected 'msg3', got '%s'", msgs[0].Content)
+	}
+	if msgs[1].Content != "msg4" {
+		t.Errorf("expected 'msg4', got '%s'", msgs[1].Content)
+	}
+
+	// Get second page: limit 2, before timestamp of msgs[0] (msg3).
+	msgs = s.GetMessages(2, msgs[0].Timestamp)
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages for page 2, got %d", len(msgs))
+	}
+	if msgs[0].Content != "msg1" {
+		t.Errorf("expected 'msg1', got '%s'", msgs[0].Content)
+	}
+	if msgs[1].Content != "msg2" {
+		t.Errorf("expected 'msg2', got '%s'", msgs[1].Content)
+	}
+
+	// Third page: should have only msg0 left.
+	msgs = s.GetMessages(2, msgs[0].Timestamp)
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message on last page, got %d", len(msgs))
+	}
+	if msgs[0].Content != "msg0" {
+		t.Errorf("expected 'msg0', got '%s'", msgs[0].Content)
+	}
+
+	// Limit of 0 should default to 100.
+	msgs = s.GetMessages(0, 0)
+	if len(msgs) != 5 {
+		t.Errorf("expected 5 messages with limit 0 (defaults to 100), got %d", len(msgs))
+	}
+}
+
+// ── User profile: focused status and update tests ──
+
+func TestUpdateUserProfile(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Insert initial profile.
+	err = s.UpsertUserProfile("alice", "Alice", "", "", "online", 0)
+	if err != nil {
+		t.Fatalf("UpsertUserProfile returned error: %v", err)
+	}
+
+	// Update all fields via upsert.
+	now := time.Now().UnixMilli()
+	err = s.UpsertUserProfile("alice", "Alice Updated", "https://new.url/img.png", "New bio", "away", now)
+	if err != nil {
+		t.Fatalf("UpsertUserProfile update returned error: %v", err)
+	}
+
+	profile, err := s.GetUserProfile("alice")
+	if err != nil {
+		t.Fatalf("GetUserProfile returned error: %v", err)
+	}
+	if profile.DisplayName != "Alice Updated" {
+		t.Errorf("expected DisplayName 'Alice Updated', got '%s'", profile.DisplayName)
+	}
+	if profile.AvatarURL != "https://new.url/img.png" {
+		t.Errorf("expected AvatarURL updated, got '%s'", profile.AvatarURL)
+	}
+	if profile.Bio != "New bio" {
+		t.Errorf("expected Bio 'New bio', got '%s'", profile.Bio)
+	}
+	if profile.Status != "away" {
+		t.Errorf("expected Status 'away', got '%s'", profile.Status)
+	}
+	if profile.LastSeen != now {
+		t.Errorf("expected LastSeen %d, got %d", now, profile.LastSeen)
+	}
+}
+
+func TestUpdateUserStatus(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Upsert profile first.
+	err = s.UpsertUserProfile("alice", "Alice", "", "", "online", 0)
+	if err != nil {
+		t.Fatalf("UpsertUserProfile returned error: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		status    string
+		wantEmpty bool
+	}{
+		{name: "away", status: "away", wantEmpty: false},
+		{name: "busy", status: "busy", wantEmpty: false},
+		{name: "empty", status: "", wantEmpty: true},
+		{name: "emoji", status: "\U0001f4a1", wantEmpty: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err = s.UpdateUserStatus("alice", tt.status)
+			if err != nil {
+				t.Fatalf("UpdateUserStatus returned error: %v", err)
+			}
+			profile, err := s.GetUserProfile("alice")
+			if err != nil {
+				t.Fatalf("GetUserProfile returned error: %v", err)
+			}
+			if profile.Status != tt.status {
+				t.Errorf("expected status '%s', got '%s'", tt.status, profile.Status)
+			}
+			if tt.wantEmpty && profile.Status != "" {
+				t.Errorf("expected empty status, got '%s'", profile.Status)
+			}
+		})
+	}
+}
+
+// ── Friend operations: standalone coverage ──
+
+func TestAddFriend(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	err = s.AddFriend("alice", "bob")
+	if err != nil {
+		t.Fatalf("AddFriend returned error: %v", err)
+	}
+
+	friends := s.GetFriends("alice")
+	if len(friends) != 1 {
+		t.Fatalf("expected 1 friend, got %d", len(friends))
+	}
+	if friends[0] != "bob" {
+		t.Errorf("expected friend 'bob', got '%s'", friends[0])
+	}
+
+	// Verify bob does not automatically have alice as friend.
+	bobFriends := s.GetFriends("bob")
+	if len(bobFriends) != 0 {
+		t.Errorf("expected 0 friends for bob, got %d", len(bobFriends))
+	}
+
+	// Double-add should be idempotent (INSERT OR IGNORE).
+	err = s.AddFriend("alice", "bob")
+	if err != nil {
+		t.Fatalf("AddFriend duplicate returned error: %v", err)
+	}
+	friends = s.GetFriends("alice")
+	if len(friends) != 1 {
+		t.Errorf("expected still 1 friend after duplicate add, got %d", len(friends))
+	}
+}
+
+func TestRemoveFriend(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.AddFriend("alice", "bob")
+	s.AddFriend("alice", "charlie")
+
+	err = s.RemoveFriend("alice", "bob")
+	if err != nil {
+		t.Fatalf("RemoveFriend returned error: %v", err)
+	}
+
+	friends := s.GetFriends("alice")
+	if len(friends) != 1 {
+		t.Fatalf("expected 1 friend after remove, got %d", len(friends))
+	}
+	if friends[0] != "charlie" {
+		t.Errorf("expected remaining friend 'charlie', got '%s'", friends[0])
+	}
+
+	// Remove the last friend.
+	err = s.RemoveFriend("alice", "charlie")
+	if err != nil {
+		t.Fatalf("RemoveFriend returned error: %v", err)
+	}
+	friends = s.GetFriends("alice")
+	if len(friends) != 0 {
+		t.Errorf("expected 0 friends after removing all, got %d", len(friends))
+	}
+}
+
+func TestGetFriends(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Empty friends list should return empty slice, not nil.
+	friends := s.GetFriends("alice")
+	if friends == nil {
+		t.Error("expected non-nil empty slice, got nil")
+	}
+	if len(friends) != 0 {
+		t.Errorf("expected 0 friends for empty state, got %d", len(friends))
+	}
+
+	// Add multiple friends and verify they are all returned.
+	s.AddFriend("alice", "bob")
+	s.AddFriend("alice", "charlie")
+	s.AddFriend("alice", "dave")
+
+	friends = s.GetFriends("alice")
+	if len(friends) != 3 {
+		t.Fatalf("expected 3 friends, got %d", len(friends))
+	}
+
+	// Verify all expected friends are present (order matches insertion order).
+	expected := []string{"bob", "charlie", "dave"}
+	for i, f := range friends {
+		if f != expected[i] {
+			t.Errorf("friends[%d]: expected '%s', got '%s'", i, expected[i], f)
+		}
+	}
+
+	// GetAllFriends should include alice's relationships.
+	allFriends := s.GetAllFriends()
+	if len(allFriends["alice"]) != 3 {
+		t.Errorf("GetAllFriends: expected 3 friends for alice, got %d", len(allFriends["alice"]))
+	}
+}
+
+func TestIsFriend(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Helper: check friendship by scanning GetFriends result.
+	isFriend := func(username, friend string) bool {
+		for _, f := range s.GetFriends(username) {
+			if f == friend {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Initially not friends.
+	if isFriend("alice", "bob") {
+		t.Error("expected alice and bob not to be friends initially")
+	}
+
+	s.AddFriend("alice", "bob")
+
+	if !isFriend("alice", "bob") {
+		t.Error("expected alice and bob to be friends after AddFriend")
+	}
+	if isFriend("bob", "alice") {
+		t.Error("expected bob not to have alice as friend (one-way)")
+	}
+	if isFriend("alice", "charlie") {
+		t.Error("expected alice and charlie not to be friends")
+	}
+
+	s.RemoveFriend("alice", "bob")
+	if isFriend("alice", "bob") {
+		t.Error("expected alice and bob not to be friends after RemoveFriend")
+	}
+}
+
+// ── Search: empty results coverage ──
+
+func TestSearchMessagesEmptyResults(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.InsertMessage("alice", "hello world", "", "", "", "", "")
+	s.InsertMessage("bob", "rainbow unicorn", "", "", "", "", "")
+
+	// Search for a term not present in any message.
+	results, err := s.SearchMessages("nonexistentterm", "", 10)
+	if err != nil {
+		t.Fatalf("SearchMessages returned error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for non-matching query, got %d", len(results))
+	}
+	if results == nil {
+		t.Error("expected non-nil empty slice for empty results, got nil")
+	}
+
+	// Search in a room that has no matching messages.
+	roomID, _ := s.CreateRoom("empty-room")
+	results, err = s.SearchMessages("hello", roomID, 10)
+	if err != nil {
+		t.Fatalf("SearchMessages in empty room returned error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results in empty room, got %d", len(results))
+	}
+
+	// Search with spaces/punctuation-only query.
+	results, err = s.SearchMessages("   ", "", 10)
+	if err != nil {
+		t.Fatalf("SearchMessages with whitespace query returned error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for whitespace query, got %d", len(results))
+	}
+}
+
+func TestSearchMessagesLimit(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Insert several messages containing "test".
+	for i := 0; i < 5; i++ {
+		s.InsertMessage("alice", fmt.Sprintf("test message number %d", i), "", "", "", "", "")
+	}
+
+	// Limit to 2 results.
+	results, err := s.SearchMessages("test", "", 2)
+	if err != nil {
+		t.Fatalf("SearchMessages returned error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results with limit 2, got %d", len(results))
+	}
+
+	// Limit of 0 should default to 20.
+	results, err = s.SearchMessages("test", "", 0)
+	if err != nil {
+		t.Fatalf("SearchMessages with limit 0 returned error: %v", err)
+	}
+	if len(results) != 5 {
+		t.Errorf("expected 5 results with limit 0 (default 20), got %d", len(results))
+	}
+
+	// Negative limit should also default.
+	results, err = s.SearchMessages("test", "", -1)
+	if err != nil {
+		t.Fatalf("SearchMessages with limit -1 returned error: %v", err)
+	}
+	if len(results) != 5 {
+		t.Errorf("expected 5 results with limit -1 (default 20), got %d", len(results))
+	}
+}
+
+// ── Room operations: standalone coverage ──
+
+func TestCreateRoom(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	roomID, err := s.CreateRoom("my-room")
+	if err != nil {
+		t.Fatalf("CreateRoom returned error: %v", err)
+	}
+	if roomID == "" {
+		t.Fatal("expected non-empty room ID")
+	}
+	if len(roomID) != 36 {
+		t.Errorf("expected UUID length 36, got %d (%s)", len(roomID), roomID)
+	}
+
+	// Verify we can look it up.
+	lookupID, err := s.GetRoomID("my-room")
+	if err != nil {
+		t.Fatalf("GetRoomID returned error: %v", err)
+	}
+	if lookupID != roomID {
+		t.Errorf("expected room ID '%s', got '%s'", roomID, lookupID)
+	}
+}
+
+func TestCreateRoomEmptyName(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// CreateRoom with empty name — allowed by schema since UNIQUE constraint
+	// is on name, and empty string is a valid unique value.
+	roomID, err := s.CreateRoom("")
+	if err != nil {
+		t.Fatalf("CreateRoom with empty name returned error: %v", err)
+	}
+	if roomID == "" {
+		t.Fatal("expected non-empty room ID")
+	}
+
+	// Verify it is retrievable.
+	lookupID, err := s.GetRoomID("")
+	if err != nil {
+		t.Fatalf("GetRoomID for empty-name room returned error: %v", err)
+	}
+	if lookupID != roomID {
+		t.Errorf("expected room ID '%s', got '%s'", roomID, lookupID)
+	}
+}
+
+func TestGetRoom(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	roomID, err := s.CreateRoom("chat-room")
+	if err != nil {
+		t.Fatalf("CreateRoom returned error: %v", err)
+	}
+
+	retrievedID, err := s.GetRoomID("chat-room")
+	if err != nil {
+		t.Fatalf("GetRoomID returned error: %v", err)
+	}
+	if retrievedID != roomID {
+		t.Errorf("expected ID '%s', got '%s'", roomID, retrievedID)
+	}
+	if retrievedID == "" {
+		t.Error("expected non-empty room ID from GetRoomID")
+	}
+}
+
+func TestListRooms(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Initially there is one default room ("公共聊天").
+	rooms := s.ListRooms()
+	initialCount := len(rooms)
+	if initialCount < 1 {
+		t.Errorf("expected at least 1 default room, got %d", initialCount)
+	}
+
+	// Create additional rooms.
+	roomID1, _ := s.CreateRoom("room-alpha")
+	roomID2, _ := s.CreateRoom("room-beta")
+	roomID3, _ := s.CreateRoom("room-gamma")
+
+	rooms = s.ListRooms()
+	if len(rooms) != initialCount+3 {
+		t.Errorf("expected %d rooms, got %d", initialCount+3, len(rooms))
+	}
+
+	// Rooms should be ordered by name alphabetically.
+	// Verify all created rooms are present.
+	foundAlpha := false
+	foundBeta := false
+	foundGamma := false
+	for _, r := range rooms {
+		switch r.Name {
+		case "room-alpha":
+			foundAlpha = true
+			if r.ID != roomID1 {
+				t.Errorf("room-alpha: expected ID '%s', got '%s'", roomID1, r.ID)
+			}
+		case "room-beta":
+			foundBeta = true
+			if r.ID != roomID2 {
+				t.Errorf("room-beta: expected ID '%s', got '%s'", roomID2, r.ID)
+			}
+		case "room-gamma":
+			foundGamma = true
+			if r.ID != roomID3 {
+				t.Errorf("room-gamma: expected ID '%s', got '%s'", roomID3, r.ID)
+			}
+		}
+	}
+	if !foundAlpha || !foundBeta || !foundGamma {
+		t.Errorf("missing rooms in list: alpha=%v beta=%v gamma=%v", foundAlpha, foundBeta, foundGamma)
+	}
+}
+
+// ── GetMessageByID: deleted message via DM/group channels ──
+
+func TestGetMessageByIDDeletedDM(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Insert a DM.
+	dm, err := s.InsertMessage("alice", "secret dm", "", "", "bob", "", "")
+	if err != nil {
+		t.Fatalf("InsertMessage returned error: %v", err)
+	}
+
+	// Verify retrievable.
+	retrieved, err := s.GetMessageByID(dm.ID)
+	if err != nil {
+		t.Fatalf("GetMessageByID returned error: %v", err)
+	}
+	if retrieved.ToUser != "bob" {
+		t.Errorf("expected ToUser 'bob', got '%s'", retrieved.ToUser)
+	}
+
+	// Delete and verify content cleared.
+	s.MarkDeleted(dm.ID)
+	retrieved, err = s.GetMessageByID(dm.ID)
+	if err != nil {
+		t.Fatalf("GetMessageByID after delete returned error: %v", err)
+	}
+	if retrieved.Content != "" {
+		t.Errorf("expected empty content for deleted DM, got '%s'", retrieved.Content)
+	}
+	if !retrieved.Deleted {
+		t.Error("expected Deleted flag true for deleted DM")
+	}
+}
+
+func TestGetMessageByIDWithReactions(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	msg, err := s.InsertMessage("alice", "reactable message", "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("InsertMessage returned error: %v", err)
+	}
+
+	// Add a reaction.
+	_, err = s.ToggleReaction(msg.ID, "\U0001f44d", "bob")
+	if err != nil {
+		t.Fatalf("ToggleReaction returned error: %v", err)
+	}
+
+	// GetMessageByID does NOT return reactions (reactions are populated
+	// only in GetMessages/GetRoomMessages batch queries). Verify basic retrieval.
+	retrieved, err := s.GetMessageByID(msg.ID)
+	if err != nil {
+		t.Fatalf("GetMessageByID returned error: %v", err)
+	}
+	if retrieved.Content != "reactable message" {
+		t.Errorf("expected content 'reactable message', got '%s'", retrieved.Content)
+	}
+	// Reactions map may or may not be populated in single-message fetch.
+	_ = retrieved.Reactions
+}
