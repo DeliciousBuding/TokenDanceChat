@@ -436,7 +436,7 @@ test.describe("Poll Creation & Voting Flow", () => {
       await closeBtn.click();
 
       // After closing, the "最终结果" badge should appear.
-      await expect(page.getByText("最终结果")).toBeVisible({ timeout: 5000 });
+      await expect(page.getByText("最终结果").first()).toBeVisible({ timeout: 5000 });
 
       // The close button should disappear.
       await expect(closeBtn).not.toBeVisible({ timeout: 3000 });
