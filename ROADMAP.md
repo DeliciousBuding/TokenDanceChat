@@ -2,7 +2,7 @@
 
 最后更新：2026-05-23
 
-发布: [v0.2.1](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.1) | Docker: `tokendancechat:v0.2.1`
+发布: [v0.2.7](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.7) | Docker: `tokendancechat:v0.2.7`
 
 ## 当前目标
 
@@ -45,6 +45,16 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | P1 | Agent-as-contact | 让 TokenBot/PicoClaw 感觉像 IM 联系人：DM、群组 mention、流式回复、模型/provider 可供性、工作流转移。 |
 | P2 | 运维/性能 | Health check、部署 checklist、bundle/runtime profiling、虚拟列表调优、WebSocket fanout/load check。 |
 | P2 | UI/美术方向 | 克制企业 UI + 流畅聊天交互；避免装饰性营销布局。 |
+
+## 当前增量：挤下线 + Webhook 安全完善
+
+状态：已实现、已部署、已通过 18 项 E2E 测试。
+
+- [x] 实现 session kick-off 机制：同名用户在新标签页登录时，旧连接自动断开并收到 "kicked" 消息，新会话正常接入。
+- [x] 移除 `handleJoin` 中的 `IsUsernameTaken` 预检查——重复用户名由 hub 注册通道统一处理，确保原子性。
+- [x] 前端新增 "kicked" WebSocket 事件监听器——断开连接、显示系统消息、自动跳转回加入界面。
+- [x] 更新重复用户名 E2E 测试：验证旧连接被踢出、新连接成功加入（而非错误提示）。
+- [x] 修正 rate-limit 测试以匹配当前 `wsMaxPerWindow = 30` 限制。
 
 ## 当前增量：Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收
 
@@ -180,11 +190,10 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-23 | `cd backend; go test ./store -run "TestRotateWebhookSecretInvalidatesOldSecretAndAudits"` | PASS |
 | 2026-05-23 | `cd backend; go test ./hub -run "TestWebhookAuditListRedactsMetadataAndRequiresGroupAdmin"` | PASS |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 15 files / 209 tests |
-| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8105 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-23T04-02-23-020Z`；全部七个场景 `smallControls=0` 且 `groupSmallControls=0`，无横向溢出，无控制台错误。Group-info 场景现包含已创建的 webhook、rotate 按钮和 audit log 条目。 |
-
+| 2026-05-23 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | PASS, 18/18 |
+| 2026-05-23 | `cd frontend; npm test` | PASS, 18 files / 237 tests |
+| 2026-05-23 | `cd backend; go test ./...` | PASS |
+| 2026-05-23 | `git diff --check` | PASS |
 ## Review Gates
 
 提交或交接有意义的变更前：
