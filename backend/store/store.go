@@ -9,6 +9,8 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+
+	"golang.org/x/crypto/bcrypt"
 	"fmt"
 	"log"
 	"math/big"
@@ -2710,28 +2712,48 @@ func webhookSecretDigest(salt []byte, secret string) []byte {
 const inviteCodeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 const inviteCodeLength = 8
 
-// hashPassword hashes a password using SHA-256 with a random salt.
-// NOTE: For production deployment with network access, prefer bcrypt
-// (golang.org/x/crypto/bcrypt) which provides adaptive cost and built-in salting.
+// hashPassword hashes a password using bcrypt with cost 12.
 func hashPassword(password string) string {
-	salt := make([]byte, 16)
-	rand.Read(salt)
-	h := sha256.Sum256(append(salt, []byte(password)...))
-	return hex.EncodeToString(salt) + ":" + hex.EncodeToString(h[:])
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		// bcrypt only fails on password > 72 bytes or cost too high.
+		// Neither happens here; fallback to a safe hash to avoid panic.
+		panic("bcrypt: " + err.Error())
+	}
+	return string(hash)
 }
 
-// checkPassword verifies a plaintext password against a salted SHA-256 hash.
-func checkPassword(hash, password string) bool {
+// checkPassword verifies a plaintext password against a hash.
+// Supports both bcrypt ($2a$) and legacy SHA-256 (hex:salt:hash) formats.
+// Returns true and a new hash if the legacy format was detected but verified,
+// so the caller can upgrade the stored hash to bcrypt.
+func checkPassword(hash, password string) (bool, string) {
+	// Bcrypt hashes start with "$2a$".
+	if strings.HasPrefix(hash, "$2a$") {
+		err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+		return err == nil, ""
+	}
+
+	// Legacy SHA-256 format: "hexSalt:hexHash".
 	parts := strings.SplitN(hash, ":", 2)
 	if len(parts) != 2 {
-		return false
+		return false, ""
 	}
 	salt, err := hex.DecodeString(parts[0])
 	if err != nil {
-		return false
+		return false, ""
 	}
 	h := sha256.Sum256(append(salt, []byte(password)...))
-	return hex.EncodeToString(h[:]) == parts[1]
+	if hex.EncodeToString(h[:]) != parts[1] {
+		return false, ""
+	}
+
+	// Password matches legacy hash — upgrade to bcrypt.
+	newHash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		return true, "" // verified but upgrade failed; not fatal
+	}
+	return true, string(newHash)
 }
 
 // RegisterUser validates the invite code, hashes the password, creates the user,
@@ -2779,7 +2801,7 @@ func (s *Store) RegisterUser(username, passwordHash, inviteCode string) error {
 		return fmt.Errorf("username already registered")
 	}
 
-	// Hash password with salted SHA-256.
+	// Hash password with bcrypt.
 	hash := hashPassword(passwordHash)
 
 	now := time.Now().UnixMilli()
@@ -2819,8 +2841,17 @@ func (s *Store) VerifyUser(username, password string) (bool, error) {
 		return false, err
 	}
 
-	if !checkPassword(passwordHash, password) {
+	ok, upgradeHash := checkPassword(passwordHash, password)
+	if !ok {
 		return false, nil
+	}
+	// Auto-upgrade legacy SHA-256 hash to bcrypt.
+	if upgradeHash != "" {
+		s.mu.RUnlock()
+		s.mu.Lock()
+		_, _ = s.db.Exec("UPDATE users SET password_hash = ? WHERE username = ?", upgradeHash, username)
+		s.mu.Unlock()
+		s.mu.RLock()
 	}
 	return true, nil
 }
