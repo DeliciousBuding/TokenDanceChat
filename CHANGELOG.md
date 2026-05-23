@@ -6,7 +6,9 @@
 
 - 测试扩展至 747 tests / 49 files, coverage 51.86% lines。
 - handler +10、CustomEmojiPicker +13、ProfileEditModal +18。
-- E2E 44/52 pass against production（3 fixes 进行中，target 47/52）。
+- Store tests +7（BlockUser, SearchCustomEmojis, UpdateUserStatus, ThreadReplyCount）。
+- E2E production fixes x3（target 47/52）。
+- nginx production fix：agenthub-chat.conf 冲突修复。
 
 ## v0.2.10 (2026-05-24)
 

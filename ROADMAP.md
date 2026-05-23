@@ -50,6 +50,9 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 状态：持续推进。747 tests / 49 files / tsc 0 / ESLint 0 / CI 就绪 / coverage 51.86%。
 
+- [x] Store tests +7（BlockUser, SearchCustomEmojis, UpdateUserStatus, ThreadReplyCount）。
+- [x] E2E production fixes x3（target 47/52）。
+- [x] nginx production fix：agenthub-chat.conf 冲突修复。
 - [x] 前端测试从 237 → 747 (+510 tests / +30 文件 / 51.86% 行覆盖率)。
 - [x] handler +10、CustomEmojiPicker +13、ProfileEditModal +18 focused tests。
 - [x] E2E 44/52 pass against production（3 fixes 进行中，target 47/52）。
