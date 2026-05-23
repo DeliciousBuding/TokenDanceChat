@@ -326,12 +326,14 @@ export function MessageTranscript({
 
   useEffect(() => {
     if (shouldAutoScroll && containerRef.current) {
-      // Use scrollTo on the container element to avoid scrollIntoView
-      // cascading to ancestor scrollable elements.
+      // Double rAF: first schedules after React commit, second after browser layout.
+      // Single rAF fires before the browser has recalculated scrollHeight for new content.
       requestAnimationFrame(() => {
-        if (containerRef.current) {
-          containerRef.current.scrollTo({ top: containerRef.current.scrollHeight });
-        }
+        requestAnimationFrame(() => {
+          if (containerRef.current) {
+            containerRef.current.scrollTo({ top: containerRef.current.scrollHeight });
+          }
+        });
       });
     }
   }, [groups, shouldAutoScroll]);
