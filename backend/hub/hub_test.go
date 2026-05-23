@@ -17,6 +17,7 @@ type mockStore struct {
 	groupRoles  map[string]string
 	webhooks    []store.Webhook
 	webhookByID map[string]store.Webhook
+	auditLogs   []store.WebhookAuditLog
 }
 
 func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error) {
@@ -218,7 +219,46 @@ func (m *mockStore) CreateWebhook(id, groupName, url, secret, createdBy string) 
 	m.webhookByID[id] = w
 	return nil
 }
-func (m *mockStore) DeleteWebhook(id, groupName string) error { return nil }
+func (m *mockStore) DeleteWebhook(id, groupName, deletedBy string) error {
+	next := m.webhooks[:0]
+	for _, w := range m.webhooks {
+		if w.ID == id && w.GroupName == groupName {
+			m.auditLogs = append(m.auditLogs, store.WebhookAuditLog{
+				ID: "audit-delete-" + id, WebhookID: id, GroupName: groupName,
+				Action: "deleted", Actor: deletedBy, CreatedAt: time.Now().UnixMilli(),
+				Metadata: `{"url":"` + w.URL + `"}`,
+			})
+			if m.webhookByID != nil {
+				delete(m.webhookByID, id)
+			}
+			continue
+		}
+		next = append(next, w)
+	}
+	m.webhooks = next
+	return nil
+}
+func (m *mockStore) RotateWebhookSecret(id, groupName, secret, rotatedBy string) (*store.Webhook, error) {
+	for i, w := range m.webhooks {
+		if w.ID == id && w.GroupName == groupName {
+			w.Secret = secret
+			w.RotatedAt = time.Now().UnixMilli()
+			w.RotatedBy = rotatedBy
+			m.webhooks[i] = w
+			if m.webhookByID == nil {
+				m.webhookByID = make(map[string]store.Webhook)
+			}
+			m.webhookByID[id] = w
+			m.auditLogs = append(m.auditLogs, store.WebhookAuditLog{
+				ID: "audit-rotate-" + id, WebhookID: id, GroupName: groupName,
+				Action: "rotated", Actor: rotatedBy, CreatedAt: w.RotatedAt,
+				Metadata: `{"url":"` + w.URL + `"}`,
+			})
+			return &w, nil
+		}
+	}
+	return nil, nil
+}
 func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error) {
 	if len(m.webhooks) == 0 {
 		return nil, nil
@@ -227,6 +267,15 @@ func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error) {
 	for _, w := range m.webhooks {
 		if w.GroupName == groupName {
 			result = append(result, w)
+		}
+	}
+	return result, nil
+}
+func (m *mockStore) ListWebhookAuditLogs(groupName string, limit int) ([]store.WebhookAuditLog, error) {
+	result := make([]store.WebhookAuditLog, 0, len(m.auditLogs))
+	for _, item := range m.auditLogs {
+		if item.GroupName == groupName {
+			result = append(result, item)
 		}
 	}
 	return result, nil
@@ -381,6 +430,138 @@ func TestWebhookListRequiresGroupAdmin(t *testing.T) {
 	select {
 	case payload := <-client.send:
 		t.Fatalf("expected no webhook_list response for non-admin, got %s", string(payload))
+	default:
+	}
+}
+
+func TestWebhookRotateReturnsSecretAndMetadataToAdmin(t *testing.T) {
+	ms := &mockStore{
+		groupRoles: map[string]string{"alice": "admin"},
+		webhooks: []store.Webhook{
+			{
+				ID:        "wh-1",
+				GroupName: "team",
+				URL:       "wh-1-url",
+				Secret:    "old-secret",
+				CreatedBy: "owner",
+				CreatedAt: 12345,
+			},
+		},
+	}
+	h := New(ms, nil, nil, "")
+	client := &Client{
+		hub:      h,
+		send:     make(chan []byte, 1),
+		username: "alice",
+	}
+
+	client.handleWebhookRotate(Message{Group: "team", ID: "wh-1"})
+
+	var got Message
+	select {
+	case payload := <-client.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("failed to decode webhook_rotate response: %v", err)
+		}
+	default:
+		t.Fatal("expected webhook_rotated response")
+	}
+	if got.Type != "webhook_rotated" {
+		t.Fatalf("response type = %q, want webhook_rotated", got.Type)
+	}
+	if got.ID != "wh-1" || got.Group != "team" || got.Content != "wh-1-url" {
+		t.Fatalf("unexpected rotate response: %+v", got)
+	}
+	if got.Secret == "" || len(got.Secret) < 32 {
+		t.Fatalf("expected one-time rotated secret, got %q", got.Secret)
+	}
+	if got.RotatedBy != "alice" || got.RotatedAt == 0 {
+		t.Fatalf("missing rotation metadata: %+v", got)
+	}
+	if ms.webhooks[0].Secret == "old-secret" {
+		t.Fatal("mock webhook secret was not rotated")
+	}
+}
+
+func TestWebhookRotateRequiresGroupAdmin(t *testing.T) {
+	ms := &mockStore{
+		groupRoles: map[string]string{"alice": "member"},
+		webhooks: []store.Webhook{
+			{ID: "wh-1", GroupName: "team", URL: "wh-1-url", Secret: "old-secret"},
+		},
+	}
+	h := New(ms, nil, nil, "")
+	client := &Client{
+		hub:      h,
+		send:     make(chan []byte, 1),
+		username: "alice",
+	}
+
+	client.handleWebhookRotate(Message{Group: "team", ID: "wh-1"})
+
+	select {
+	case payload := <-client.send:
+		t.Fatalf("expected no webhook_rotated response for non-admin, got %s", string(payload))
+	default:
+	}
+	if ms.webhooks[0].Secret != "old-secret" {
+		t.Fatal("non-admin rotated webhook secret")
+	}
+}
+
+func TestWebhookAuditListRedactsMetadataAndRequiresGroupAdmin(t *testing.T) {
+	ms := &mockStore{
+		groupRoles: map[string]string{"alice": "admin", "mallory": "member"},
+		auditLogs: []store.WebhookAuditLog{
+			{
+				ID: "audit-1", WebhookID: "wh-1", GroupName: "team",
+				Action: "rotated", Actor: "alice", CreatedAt: 12345,
+				Metadata: `{"secret":"secret-value","hash":"whsec_sha256:abc"}`,
+			},
+		},
+	}
+	h := New(ms, nil, nil, "")
+	admin := &Client{
+		hub:      h,
+		send:     make(chan []byte, 1),
+		username: "alice",
+	}
+
+	admin.handleWebhookAuditList(Message{Group: "team"})
+
+	var raw map[string]interface{}
+	select {
+	case payload := <-admin.send:
+		if err := json.Unmarshal(payload, &raw); err != nil {
+			t.Fatalf("failed to decode webhook_audit_list response: %v", err)
+		}
+	default:
+		t.Fatal("expected webhook_audit_list response")
+	}
+	if raw["type"] != "webhook_audit_list" {
+		t.Fatalf("response type = %v, want webhook_audit_list", raw["type"])
+	}
+	encoded, err := json.Marshal(raw["audit_logs"])
+	if err != nil {
+		t.Fatalf("failed to encode audit payload: %v", err)
+	}
+	payload := string(encoded)
+	if strings.Contains(payload, "secret-value") || strings.Contains(payload, "whsec_sha256:") || strings.Contains(payload, "metadata") {
+		t.Fatalf("webhook_audit_list leaked sensitive metadata: %s", payload)
+	}
+	if !strings.Contains(payload, "rotated") || !strings.Contains(payload, "alice") {
+		t.Fatalf("webhook_audit_list omitted safe audit fields: %s", payload)
+	}
+
+	member := &Client{
+		hub:      h,
+		send:     make(chan []byte, 1),
+		username: "mallory",
+	}
+	member.handleWebhookAuditList(Message{Group: "team"})
+	select {
+	case payload := <-member.send:
+		t.Fatalf("expected no webhook_audit_list response for non-admin, got %s", string(payload))
 	default:
 	}
 }

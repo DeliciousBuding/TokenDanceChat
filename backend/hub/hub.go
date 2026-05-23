@@ -189,8 +189,10 @@ type Store interface {
 
 	// Webhooks
 	CreateWebhook(id, groupName, url, secret, createdBy string) error
-	DeleteWebhook(id, groupName string) error
+	DeleteWebhook(id, groupName, deletedBy string) error
+	RotateWebhookSecret(id, groupName, secret, rotatedBy string) (*store.Webhook, error)
 	ListWebhooks(groupName string) ([]store.Webhook, error)
+	ListWebhookAuditLogs(groupName string, limit int) ([]store.WebhookAuditLog, error)
 	GetWebhookByURL(url string) (*store.Webhook, error)
 	VerifyWebhookSecret(url, secret string) (*store.Webhook, bool, error)
 }
@@ -324,9 +326,12 @@ type Message struct {
 	MentionAll bool `json:"mention_all,omitempty"`
 
 	// Chat folders
-	Folders  interface{} `json:"folders,omitempty"`
-	Webhooks interface{} `json:"webhooks,omitempty"`
-	Secret   string      `json:"secret,omitempty"`
+	Folders   interface{} `json:"folders,omitempty"`
+	Webhooks  interface{} `json:"webhooks,omitempty"`
+	AuditLogs interface{} `json:"audit_logs,omitempty"`
+	Secret    string      `json:"secret,omitempty"`
+	RotatedAt int64       `json:"rotated_at,omitempty"`
+	RotatedBy string      `json:"rotated_by,omitempty"`
 
 	// Custom emoji fields
 	EmojiName string        `json:"emoji_name,omitempty"`

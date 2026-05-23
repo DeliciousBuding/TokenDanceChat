@@ -103,7 +103,9 @@ export function useWebSocket() {
     addConversationToFolder,
     removeConversationFromFolder,
     setGroupWebhooks,
+    setGroupWebhookAuditLogs,
     addGroupWebhook,
+    rotateGroupWebhookSecret,
     removeGroupWebhook,
     setIncomingCall,
     setActiveCall,
@@ -1083,6 +1085,7 @@ export function useWebSocket() {
           });
           setGroupInfoPanel(grp);
           chatAPI.sendWebhookList(grp);
+          chatAPI.sendWebhookAuditList(grp);
         }
       }),
     );
@@ -1094,6 +1097,36 @@ export function useWebSocket() {
           removeGroupWebhook(grp, id);
           setGroupInfoPanel(grp);
           chatAPI.sendWebhookList(grp);
+          chatAPI.sendWebhookAuditList(grp);
+        }
+      }),
+    );
+
+    unsubs.push(
+      chatAPI.on("webhook_rotated", (msg: WSMessage) => {
+        const { group: grp, id, content, secret, rotated_at, rotated_by } = msg as {
+          type: string;
+          group: string;
+          id: string;
+          content: string;
+          secret?: string;
+          rotated_at?: number;
+          rotated_by?: string;
+        };
+        if (grp && id && content && secret) {
+          rotateGroupWebhookSecret(grp, {
+            id,
+            group_name: grp,
+            url: content,
+            secret,
+            created_by: "",
+            created_at: 0,
+            rotated_at,
+            rotated_by,
+          });
+          setGroupInfoPanel(grp);
+          chatAPI.sendWebhookList(grp);
+          chatAPI.sendWebhookAuditList(grp);
         }
       }),
     );
@@ -1109,10 +1142,32 @@ export function useWebSocket() {
             url: string;
             created_by: string;
             created_at: number;
+            rotated_at?: number;
+            rotated_by?: string;
           }[];
         };
         if (grp && Array.isArray(webhooks)) {
           setGroupWebhooks(grp, webhooks);
+        }
+      }),
+    );
+
+    unsubs.push(
+      chatAPI.on("webhook_audit_list", (msg: WSMessage) => {
+        const { group: grp, audit_logs } = msg as {
+          type: string;
+          group: string;
+          audit_logs?: {
+            id: string;
+            webhook_id: string;
+            group_name: string;
+            action: string;
+            actor: string;
+            created_at: number;
+          }[];
+        };
+        if (grp && Array.isArray(audit_logs)) {
+          setGroupWebhookAuditLogs(grp, audit_logs);
         }
       }),
     );
@@ -1295,7 +1350,7 @@ export function useWebSocket() {
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setGroupWebhooks, addGroupWebhook, removeGroupWebhook, setIncomingCall, setActiveCall, setNotificationPrefs, setTranslation, setGroupInfoPanel]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setGroupWebhooks, setGroupWebhookAuditLogs, addGroupWebhook, rotateGroupWebhookSecret, removeGroupWebhook, setIncomingCall, setActiveCall, setNotificationPrefs, setTranslation, setGroupInfoPanel]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
 }

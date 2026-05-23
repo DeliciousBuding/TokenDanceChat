@@ -204,8 +204,14 @@ func (m *mockStore) ListFolders(username string) ([]store.ChatFolder, error) { r
 func (m *mockStore) GetFolderItems(folderID string) ([]string, error)        { return nil, nil }
 
 func (m *mockStore) CreateWebhook(id, groupName, url, secret, createdBy string) error { return nil }
-func (m *mockStore) DeleteWebhook(id, groupName string) error                         { return nil }
+func (m *mockStore) DeleteWebhook(id, groupName, deletedBy string) error              { return nil }
+func (m *mockStore) RotateWebhookSecret(id, groupName, secret, rotatedBy string) (*store.Webhook, error) {
+	return nil, nil
+}
 func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error)           { return nil, nil }
+func (m *mockStore) ListWebhookAuditLogs(groupName string, limit int) ([]store.WebhookAuditLog, error) {
+	return nil, nil
+}
 func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error)               { return nil, nil }
 func (m *mockStore) VerifyWebhookSecret(url, secret string) (*store.Webhook, bool, error) {
 	return nil, false, nil

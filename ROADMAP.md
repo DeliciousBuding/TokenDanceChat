@@ -83,16 +83,21 @@ Status: implemented, documented, tested, and accepted with browser screenshots.
 - [x] Added group-info visual gates for desktop title single-line stability and a visible first-run group empty state after screenshot review caught header squeeze and sparse group content.
 - [x] Added browser E2E coverage for the complete Webhook ingress loop: group admin creates a one-time webhook through the UI, POSTs to the generated HTTP URL, and sees the external message in the group transcript.
 - [x] Reaffirmed multimodal UI acceptance: meaningful frontend polish requires real browser screenshots and metrics; `gpt-image-2` mockups are allowed as aesthetic references only.
+- [x] Added webhook secret rotation: store-level `RotateWebhookSecret` with SQLite transactional audit logging (created/rotated/deleted), old secret immediate invalidation, new one-time secret returned to creator only.
+- [x] Added `webhook_rotate` and `webhook_audit_list` typed WebSocket events with owner/admin permission checks and redacted audit DTOs.
+- [x] Added frontend rotation UI: rotate button per webhook row (44px), audit log panel with refresh, one-time secret display on rotation, rotated-at/rotated-by metadata.
+- [x] Extended visual acceptance: group-info scenario now creates a webhook and gates on webhook row, rotate button, audit log entries, and created-secret display.
+- [x] Added focused store and hub tests for rotation secret invalidation, audit log redaction, and permission checks.
+- [x] Added frontend store tests for rotation state (one-time secret isolation, rotated metadata, audit log storage) and GroupInfoPanel tests for rotate button and audit rendering.
 
 ## Next Product Tasks
 
 1. Group video call browser smoke/e2e with two sessions or a mocked WebRTC/media boundary.
-2. Add webhook secret rotation and audit logging design before production use.
-3. Message input parity: up-arrow edit last message, slash commands, emoji shortcode expansion.
-4. Message list polish: date separators, timestamp hover, smoother new-message and conversation-switching transitions.
-5. Admin/security surface: 2FA plan, admin dashboard, audit log design, invite-code management hardening.
-6. Performance pass: message list profiling, bundle/chunk review, WebSocket fanout/load check.
-7. AgentHub feedback note: summarize which webhook/group/call/media primitives should migrate to AgentHub Hub APIs.
+2. Message input parity: up-arrow edit last message, slash commands, emoji shortcode expansion.
+3. Message list polish: date separators, timestamp hover, smoother new-message and conversation-switching transitions.
+4. Admin/security surface: 2FA plan, admin dashboard, audit log design, invite-code management hardening.
+5. Performance pass: message list profiling, bundle/chunk review, WebSocket fanout/load check.
+6. AgentHub feedback note: summarize which webhook/group/call/media primitives should migrate to AgentHub Hub APIs.
 
 ## Verification Ledger
 
@@ -170,6 +175,13 @@ Record commands here when they are run for the current increment.
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8104 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-53-00-860Z`; all seven scenarios `smallControls=0`, no horizontal overflow, no console errors. |
 | 2026-05-23 | Screenshot review of `desktop-light-group-info.png`, `desktop-light.png`, and `mobile-light.png` from `tdchat-visual-2026-05-22T23-53-00-860Z` | PASS. Desktop core chat, group admin panel, and mobile composer remain readable and stable; no tiny controls, title clipping, or layout overflow observed. |
+| 2026-05-23 | `cd backend; go test ./store -run "TestRotateWebhookSecretInvalidatesOldSecretAndAudits"` | PASS |
+| 2026-05-23 | `cd backend; go test ./hub -run "TestWebhookAuditListRedactsMetadataAndRequiresGroupAdmin"` | PASS |
+| 2026-05-23 | `cd backend; go test ./...` | PASS |
+| 2026-05-23 | `cd frontend; npm test` | PASS, 15 files / 209 tests |
+| 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-23 | `cd frontend; npm run build` | PASS |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8105 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-23T04-02-23-020Z`; all seven scenarios `smallControls=0` and `groupSmallControls=0`, no horizontal overflow, no console errors. Group-info scenario now includes a created webhook, rotate button, and audit log entry. |
 
 ## Review Gates
 

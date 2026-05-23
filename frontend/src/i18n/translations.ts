@@ -212,8 +212,16 @@ export interface TranslationDict {
     webhookCopied: string;
     noWebhooks: string;
     copyWebhook: string;
+    rotateWebhook: string;
     deleteWebhook: string;
     webhookCreatedBy: string;
+    webhookRotatedBy: string;
+    webhookAudit: string;
+    refreshWebhookAudit: string;
+    webhookAuditEmpty: string;
+    webhookAuditCreated: string;
+    webhookAuditRotated: string;
+    webhookAuditDeleted: string;
   };
   forward: {
     title: string;
@@ -619,8 +627,16 @@ const zhCN: TranslationDict = {
     webhookCopied: "已复制",
     noWebhooks: "暂无 webhook",
     copyWebhook: "复制 webhook 地址",
+    rotateWebhook: "轮换 webhook 密钥",
     deleteWebhook: "删除 webhook",
     webhookCreatedBy: "创建者：{{name}}",
+    webhookRotatedBy: "轮换：{{name}} · {{time}}",
+    webhookAudit: "Webhook 审计",
+    refreshWebhookAudit: "刷新",
+    webhookAuditEmpty: "暂无审计记录",
+    webhookAuditCreated: "创建 webhook",
+    webhookAuditRotated: "轮换密钥",
+    webhookAuditDeleted: "删除 webhook",
   },
   forward: {
     title: "转发消息",
@@ -1029,8 +1045,16 @@ const enUS: TranslationDict = {
     webhookCopied: "Copied",
     noWebhooks: "No webhooks yet",
     copyWebhook: "Copy webhook URL",
+    rotateWebhook: "Rotate webhook secret",
     deleteWebhook: "Delete webhook",
     webhookCreatedBy: "Created by {{name}}",
+    webhookRotatedBy: "Rotated by {{name}} · {{time}}",
+    webhookAudit: "Webhook Audit",
+    refreshWebhookAudit: "Refresh",
+    webhookAuditEmpty: "No audit events yet",
+    webhookAuditCreated: "Created webhook",
+    webhookAuditRotated: "Rotated secret",
+    webhookAuditDeleted: "Deleted webhook",
   },
   forward: {
     title: "Forward Message",

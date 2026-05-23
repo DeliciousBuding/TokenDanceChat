@@ -256,6 +256,72 @@ describe("chatStore", () => {
       expect(useChatStore.getState().groupWebhooks.Team).toHaveLength(0);
       expect(useChatStore.getState().latestCreatedWebhook).toBeNull();
     });
+
+    it("rotates a webhook secret: new secret goes to one-time field, list never contains secrets", () => {
+      useChatStore.getState().setGroupWebhooks("Team", [
+        {
+          id: "wh-1",
+          group_name: "Team",
+          url: "wh-path",
+          created_by: "Alice",
+          created_at: 1000,
+        },
+      ]);
+
+      useChatStore.getState().rotateGroupWebhookSecret("Team", {
+        id: "wh-1",
+        group_name: "Team",
+        url: "wh-path",
+        secret: "rotated-secret-once",
+        created_by: "Alice",
+        created_at: 1000,
+        rotated_at: 3000,
+        rotated_by: "Bob",
+      });
+
+      expect(useChatStore.getState().latestCreatedWebhook?.secret).toBe("rotated-secret-once");
+      const rotated = useChatStore.getState().groupWebhooks.Team[0];
+      expect(rotated).not.toHaveProperty("secret");
+      expect(rotated.rotated_at).toBe(3000);
+      expect(rotated.rotated_by).toBe("Bob");
+    });
+
+    it("stores audit logs per group and resets them", () => {
+      useChatStore.getState().setGroupWebhookAuditLogs("Team", [
+        {
+          id: "audit-1",
+          webhook_id: "wh-1",
+          group_name: "Team",
+          action: "created",
+          actor: "Alice",
+          created_at: 1000,
+        },
+      ]);
+
+      expect(useChatStore.getState().groupWebhookAuditLogs.Team).toHaveLength(1);
+      expect(useChatStore.getState().groupWebhookAuditLogs.Team[0].action).toBe("created");
+
+      useChatStore.getState().reset();
+      expect(useChatStore.getState().groupWebhookAuditLogs).toEqual({});
+    });
+
+    it("audit log entries never contain secret fields", () => {
+      useChatStore.getState().setGroupWebhookAuditLogs("Team", [
+        {
+          id: "audit-1",
+          webhook_id: "wh-1",
+          group_name: "Team",
+          action: "rotated",
+          actor: "Alice",
+          created_at: 1000,
+        } as any,
+      ]);
+
+      const logs = useChatStore.getState().groupWebhookAuditLogs.Team;
+      expect(logs[0]).not.toHaveProperty("secret");
+      expect(logs[0]).not.toHaveProperty("hash");
+      expect(logs[0]).not.toHaveProperty("metadata");
+    });
   });
 
   describe("reactions", () => {

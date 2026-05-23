@@ -11,6 +11,8 @@ vi.mock("@/lib/api", () => ({
     sendWebhookList: vi.fn(),
     sendWebhookCreate: vi.fn(),
     sendWebhookDelete: vi.fn(),
+    sendWebhookRotate: vi.fn(),
+    sendWebhookAuditList: vi.fn(),
     sendGroupKick: vi.fn(),
     sendGroupSetRole: vi.fn(),
     sendGroupTransfer: vi.fn(),
@@ -66,6 +68,18 @@ describe("GroupInfoPanel webhooks", () => {
           },
         ],
       },
+      groupWebhookAuditLogs: {
+        Team: [
+          {
+            id: "audit-1",
+            webhook_id: "wh-1",
+            group_name: "Team",
+            action: "created",
+            actor: "Alice",
+            created_at: 1000,
+          },
+        ],
+      },
       latestCreatedWebhook: {
         id: "wh-2",
         group_name: "Team",
@@ -82,6 +96,7 @@ describe("GroupInfoPanel webhooks", () => {
 
     expect(chatAPI.sendGroupInfo).toHaveBeenCalledWith("Team");
     expect(chatAPI.sendWebhookList).toHaveBeenCalledWith("Team");
+    expect(chatAPI.sendWebhookAuditList).toHaveBeenCalledWith("Team");
     expect(screen.getByText("传入 Webhook")).toBeTruthy();
     expect(screen.getByText("请立即复制，密钥只显示一次")).toBeTruthy();
     expect(screen.getByText(/secret-once/)).toBeTruthy();
@@ -99,5 +114,56 @@ describe("GroupInfoPanel webhooks", () => {
 
     fireEvent.click(screen.getByLabelText("删除 webhook"));
     expect(chatAPI.sendWebhookDelete).toHaveBeenCalledWith("Team", "wh-1");
+  });
+
+  it("rotates a webhook through chatAPI", () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByLabelText("轮换 webhook 密钥"));
+    expect(chatAPI.sendWebhookRotate).toHaveBeenCalledWith("Team", "wh-1");
+  });
+
+  it("renders webhook audit logs and can refresh", () => {
+    renderPanel();
+
+    expect(screen.getByText("Webhook 审计")).toBeTruthy();
+    expect(screen.getByText("创建 webhook")).toBeTruthy();
+    const auditLogEl = document.querySelector('[data-visual="group-info-webhook-audit-log"]');
+    expect(auditLogEl?.textContent).toContain("Alice");
+
+    fireEvent.click(screen.getByText("刷新"));
+    expect(chatAPI.sendWebhookAuditList).toHaveBeenCalledWith("Team");
+  });
+
+  it("renders rotated metadata row when a webhook has been rotated", () => {
+    useChatStore.setState({
+      groupWebhooks: {
+        Team: [
+          {
+            id: "wh-1",
+            group_name: "Team",
+            url: "webhook-path",
+            created_by: "Alice",
+            created_at: 1000,
+            rotated_at: 3000,
+            rotated_by: "Bob",
+          },
+        ],
+      },
+    });
+
+    renderPanel();
+
+    expect(screen.getByText(/轮换：Bob/)).toBeTruthy();
+  });
+
+  it("shows empty audit state when no logs exist", () => {
+    useChatStore.setState({
+      groupWebhookAuditLogs: { Team: [] },
+    });
+
+    renderPanel();
+
+    expect(screen.getByText("暂无审计记录")).toBeTruthy();
   });
 });
