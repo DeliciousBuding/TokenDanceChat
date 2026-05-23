@@ -94,14 +94,14 @@ describe("I18nContext", () => {
           <LangSwitcher />
         </I18nProvider>,
       );
-      // 中文：加入公共聊天室
-      expect(screen.getByTestId("translated").textContent).toBe("加入公共聊天室");
+      // 中文：AgentHub 实时聊天验证 Demo · AI 助手 @TokenBot @PicoClaw 随时待命
+      expect(screen.getByTestId("translated").textContent).toBe("AgentHub 实时聊天验证 Demo · AI 助手 @TokenBot @PicoClaw 随时待命");
 
       fireEvent.click(screen.getByTestId("switch-lang"));
 
-      // 英文：Enter a username to join the public chat room
+      // 英文：AgentHub realtime chat demo · AI assistants @TokenBot @PicoClaw at your service
       expect(screen.getByTestId("translated").textContent).toBe(
-        "Enter a username to join the public chat room",
+        "AgentHub realtime chat demo · AI assistants @TokenBot @PicoClaw at your service",
       );
       expect(screen.getByTestId("lang").textContent).toBe("en-US");
     });

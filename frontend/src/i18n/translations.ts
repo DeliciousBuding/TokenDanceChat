@@ -8,6 +8,7 @@ export interface TranslationDict {
     buttonJoin: string;
     buttonConnecting: string;
     footer: string;
+    welcomeHint: string;
     errorEmpty: string;
     errorTooShort: string;
     errorTooLong: string;
@@ -424,11 +425,12 @@ export interface TranslationDict {
 const zhCN: TranslationDict = {
   join: {
     title: "TokenDance Chat",
-    subtitle: "加入公共聊天室",
+    subtitle: "AgentHub 实时聊天验证 Demo · AI 助手 @TokenBot @PicoClaw 随时待命",
     placeholder: "你的用户名...",
     buttonJoin: "加入聊天",
     buttonConnecting: "连接中...",
     footer: "公共聊天室 · 文明交流",
+    welcomeHint: "支持 Markdown · 图片拖拽 · 表情反应 · 私信群组 · 文件分享",
     errorEmpty: "请输入用户名",
     errorTooShort: "用户名至少需要2个字符",
     errorTooLong: "用户名不能超过20个字符",
@@ -846,11 +848,12 @@ const zhCN: TranslationDict = {
 const enUS: TranslationDict = {
   join: {
     title: "TokenDance Chat",
-    subtitle: "Enter a username to join the public chat room",
+    subtitle: "AgentHub realtime chat demo · AI assistants @TokenBot @PicoClaw at your service",
     placeholder: "Your username...",
     buttonJoin: "Join Chat",
     buttonConnecting: "Connecting...",
     footer: "Public Chat Room · Be respectful",
+    welcomeHint: "Markdown · Image drag-drop · Emoji reactions · DMs & Groups · File sharing",
     errorEmpty: "Please enter a username",
     errorTooShort: "Username must be at least 2 characters",
     errorTooLong: "Username cannot exceed 20 characters",
