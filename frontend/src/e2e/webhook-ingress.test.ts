@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const joinChat = async (page: import("@playwright/test").Page, username: string) => {
   await page.goto("/");
   await page.getByPlaceholder("你的用户名...").fill(username);
-  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "游客加入" }).click();
   await page.locator("textarea").first().waitFor({ state: "visible", timeout: 15000 });
 };
 

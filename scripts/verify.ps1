@@ -1,9 +1,10 @@
 # TokenDanceChat 全量验证脚本
-# 用法: .\scripts\verify.ps1 [-SkipVisual] [-SkipDocker]
+# 用法: .\scripts\verify.ps1 [-SkipVisual] [-SkipDocker] [-WithE2E]
 # 环境变量: VISUAL_BASE_URL (默认 http://127.0.0.1:8080)
 param(
   [switch] $SkipVisual,
-  [switch] $SkipDocker
+  [switch] $SkipDocker,
+  [switch] $WithE2E
 )
 
 $ErrorActionPreference = "Stop"
@@ -100,6 +101,40 @@ if (-not $SkipVisual) {
       $env:VISUAL_BASE_URL = $visualBase
       npm run visual:acceptance 2>&1 | Select-Object -Last 8
     }
+  }
+}
+
+# ── E2E (Playwright) ──
+
+if ($WithE2E) {
+  $e2ePort = 8199
+  $e2eDB = Join-Path ([System.IO.Path]::GetTempPath()) "tdchat-e2e-verify"
+  Remove-Item -Recurse -Force $e2eDB -ErrorAction SilentlyContinue
+  New-Item -ItemType Directory -Force -Path $e2eDB | Out-Null
+
+  Write-Host "`n  Starting backend for E2E on port $e2ePort..." -ForegroundColor Cyan
+  $env:CHAT_DATA_DIR = $e2eDB
+  $env:CHAT_ADDR = ":$e2ePort"
+
+  $e2eBackend = Start-Process -FilePath "$ProjectRoot\backend\backend.exe" -PassThru -NoNewWindow
+  Start-Sleep -Seconds 3
+
+  try {
+    $null = Invoke-WebRequest -Uri "http://127.0.0.1:$e2ePort/api/health" -UseBasicParsing -TimeoutSec 10
+    Write-Host "  Backend ready" -ForegroundColor Green
+
+    Step "Playwright E2E" {
+      Set-Location "$ProjectRoot\frontend"
+      $env:E2E_BASE_URL = "http://127.0.0.1:$e2ePort"
+      npx playwright test --project=chromium --reporter=line 2>&1 | Select-Object -Last 15
+    }
+  } catch {
+    Write-Host "  Backend failed to start for E2E" -ForegroundColor Red
+    $script:Failures += "E2E backend startup"
+  } finally {
+    Stop-Process -Id $e2eBackend.Id -Force -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force $e2eDB -ErrorAction SilentlyContinue
+    Write-Host "  E2E backend stopped" -ForegroundColor Cyan
   }
 }
 
