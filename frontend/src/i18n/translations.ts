@@ -143,6 +143,9 @@ export interface TranslationDict {
     cancel: string;
     save: string;
     fileTooLarge: string;
+    micPermissionDenied: string;
+    slideToCancel: string;
+    releaseToCancel: string;
     uploadFailed: string;
     editingMessage: string;
   };
@@ -589,6 +592,9 @@ const zhCN: TranslationDict = {
     cancel: "取消",
     save: "保存",
     fileTooLarge: "文件过大（最大 50MB）",
+    micPermissionDenied: "无法访问麦克风，请在浏览器设置中允许麦克风权限",
+    slideToCancel: "← 滑动取消",
+    releaseToCancel: "松开取消",
     uploadFailed: "上传失败",
     editingMessage: "编辑消息",
   },
@@ -1037,6 +1043,9 @@ const enUS: TranslationDict = {
     cancel: "Cancel",
     save: "Save",
     fileTooLarge: "File too large (max 50MB)",
+    micPermissionDenied: "Cannot access microphone. Allow microphone access in browser settings.",
+    slideToCancel: "← slide to cancel",
+    releaseToCancel: "Release to cancel",
     uploadFailed: "Upload failed",
     editingMessage: "Edit message",
   },

@@ -410,7 +410,10 @@ export function ChatInput({
           e.preventDefault();
           const file = item.getAsFile();
           if (file) {
-            if (file.size > 50 * 1024 * 1024) return;
+            if (file.size > 50 * 1024 * 1024) {
+              setDragError(t("input.fileTooLarge"));
+              return;
+            }
             const reader = new FileReader();
             reader.onload = () => {
               setPendingImage(reader.result as string);
@@ -696,7 +699,7 @@ export function ChatInput({
         return t + 1;
       }), 1000);
     } catch {
-      console.warn('MediaRecorder not available or microphone permission denied');
+      setDragError(t("input.micPermissionDenied"));
     }
   }, [onUpload]);
 
@@ -1452,7 +1455,7 @@ export function ChatInput({
                 <X className="h-4 w-4" />
               </button>
               <span className="slide-cancel-hint">
-                {slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD ? "Release to cancel" : "← slide to cancel"}
+                {slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD ? t("input.releaseToCancel") : t("input.slideToCancel")}
               </span>
             </div>
 
