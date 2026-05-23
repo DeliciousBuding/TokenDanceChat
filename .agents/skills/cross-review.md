@@ -423,3 +423,49 @@ After all HIGH and MEDIUM items are resolved:
 | Find missing aria-labels | `rg "<button(?![^>]*aria-label)[^>]*>" frontend/src/` (approximate, manual review) |
 | Git diff for pending changes | `git diff --check` |
 | Find duplicate components | Manual review of JSX tree in ChatLayout.tsx |
+
+---
+
+## 10. Multi-agent parallel review workflow (2026-05-24 refinement)
+
+Based on successful cross-review sessions. Dispatch 4-5 agents simultaneously, each reviewing a different dimension. Agents run in background (`run_in_background: true`) and deliver results independently.
+
+### Agent assignment matrix
+
+| Agent # | Dimension | Model | Review target |
+|---------|-----------|-------|---------------|
+| 1 | Security + Correctness | opus | api.ts, sw.js, auth flow, WebSocket handlers |
+| 2 | i18n + UX Consistency | explore | translations.ts, components, E2E tests |
+| 3 | E2E Test Quality | explore | e2e/ directory, test helpers, selectors |
+| 4 | Architecture + Contracts | opus | Cross-file dependencies, store contracts, typed events |
+| 5 | Coverage + Dead Code | sonnet | Uncovered branches, unused imports, dead handlers |
+
+### Review prompt template
+
+```
+Cross-review [DIMENSION] for recent commits. Read `.agents/skills/cross-review.md` for SOP.
+Review these files: [FILE LIST]
+Focus on: [SPECIFIC CHECKS]
+Report issues with severity (HIGH/MEDIUM/LOW) and file:line. Under 300 words.
+```
+
+### Fix prioritization
+
+1. **HIGH first**: runtime crashes, XSS, data loss, infinite loops — fix immediately
+2. **MEDIUM**: type errors, dead code, missing i18n, fragile selectors — fix in batch
+3. **LOW**: comment inaccuracies, style inconsistency — defer or skip
+
+### Verification after fixes
+
+```bash
+cd frontend && npm test -- --run   # All unit tests must pass
+cd frontend && npx tsc --noEmit    # Zero TypeScript errors
+cd backend && go test ./...         # All backend tests pass
+```
+
+### Lessons learned
+
+- **Cross-review finds bugs that unit tests miss**: generation guards missing from 4/5 handlers, ReadReceipt `t` scope bug, VideoCall formatTime arity bug — all found by cross-review, zero by tests.
+- **Subagents self-correct**: subagent A found `t` scope bug, subagent B independently fixed it while adding tests for the same file.
+- **Skip failing subagent output rather than reverting entire batch**: 25 Sidebar tests passed, 17 context-menu tests failed → skip 17, keep 25. Net positive.
+- **VideoCall/WebRTC is inherently hard to unit test**: jsdom lacks `getUserMedia`, `RTCPeerConnection`, `AudioContext`. Browser E2E or component-harness testing would be more effective.
