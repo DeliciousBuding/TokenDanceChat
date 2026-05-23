@@ -28,7 +28,7 @@ export const SystemMessage = memo(function SystemMessage({
   content,
   timestamp,
 }: SystemMessageProps) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const i18n = parseI18nContent(content);
   const displayText = i18n ? t(i18n.key, i18n.params) : content;
 
@@ -49,7 +49,7 @@ export const SystemMessage = memo(function SystemMessage({
             {displayText}
           </span>
           <span className="mt-0.5 text-[10px] text-muted-foreground/40">
-            {formatTime(timestamp)}
+            {formatTime(timestamp, lang)}
           </span>
         </div>
 

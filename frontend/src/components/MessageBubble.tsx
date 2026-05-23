@@ -471,7 +471,7 @@ export const MessageBubble = memo(function MessageBubble({
   onlineUsers = [],
   emojiPreprocess,
 }: MessageBubbleProps) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const setSelectedProfileUser = useChatStore((s) => s.setSelectedProfileUser);
   const translations = useChatStore((s) => s.translations);
   const polls = useChatStore((s) => s.polls);
@@ -959,7 +959,7 @@ export const MessageBubble = memo(function MessageBubble({
             )}
             {isOwn && !isGrouped && (
               <span className="text-xs text-muted-foreground/60" title={formatFullTime(message.timestamp)}>
-                {formatTime(message.timestamp)}
+                {formatTime(message.timestamp, lang)}
                 {message.edited && (
                   <span className="text-[10px] text-muted-foreground/40 ml-1">
                     {t("message.edited")}
@@ -974,7 +974,7 @@ export const MessageBubble = memo(function MessageBubble({
             )}
             {!isOwn && !isGrouped && (
               <span className="text-[10px] text-muted-foreground/50" title={formatFullTime(message.timestamp)}>
-                {formatTime(message.timestamp)}
+                {formatTime(message.timestamp, lang)}
                 {(message as ChatMessage).mention_all && (
                   <span className="text-[10px] text-amber-500/70 ml-1 font-medium">
                     @all
@@ -1227,7 +1227,7 @@ export const MessageBubble = memo(function MessageBubble({
               )}
               title={formatFullTime(message.timestamp)}
             >
-              {formatTime(message.timestamp)}
+              {formatTime(message.timestamp, lang)}
               {message.edited && (
                 <span className="text-[10px] text-muted-foreground/40 ml-1">
                   (edited)

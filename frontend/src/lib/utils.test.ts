@@ -23,12 +23,16 @@ describe("formatTime", () => {
 
   it("少于60秒显示刚刚（英文显示just now）", () => {
     const ts = Date.now() - 30 * 1000; // 30 seconds ago
-    expect(formatTime(ts)).toBe("just now");
+    expect(formatTime(ts)).toBe("刚刚");
+    expect(formatTime(ts, "zh-CN")).toBe("刚刚");
+    expect(formatTime(ts, "en-US")).toBe("just now");
   });
 
   it("1到59分钟显示X分钟前", () => {
     const ts = Date.now() - 5 * 60 * 1000; // 5 minutes ago
-    expect(formatTime(ts)).toBe("5m ago");
+    expect(formatTime(ts)).toBe("5分钟前");
+    expect(formatTime(ts, "zh-CN")).toBe("5分钟前");
+    expect(formatTime(ts, "en-US")).toBe("5m ago");
   });
 
   it("同一天内小于4小时显示HH:mm", () => {
@@ -216,24 +220,32 @@ describe("formatLastSeen", () => {
     vi.useRealTimers();
   });
 
-  it('returns "just now" when less than 60 seconds', () => {
+  it('returns "刚刚" / "just now" when less than 60 seconds', () => {
     const ts = Date.now() - 30_000;
-    expect(formatLastSeen(ts)).toBe("just now");
+    expect(formatLastSeen(ts)).toBe("刚刚");
+    expect(formatLastSeen(ts, "zh-CN")).toBe("刚刚");
+    expect(formatLastSeen(ts, "en-US")).toBe("just now");
   });
 
-  it('returns "Xm ago" when 1–59 minutes', () => {
+  it('returns "X分钟前" / "Xm ago" when 1–59 minutes', () => {
     const ts = Date.now() - 5 * 60_000;
-    expect(formatLastSeen(ts)).toBe("5m ago");
+    expect(formatLastSeen(ts)).toBe("5分钟前");
+    expect(formatLastSeen(ts, "zh-CN")).toBe("5分钟前");
+    expect(formatLastSeen(ts, "en-US")).toBe("5m ago");
   });
 
-  it('returns "Xh ago" when 1–23 hours', () => {
+  it('returns "X小时前" / "Xh ago" when 1–23 hours', () => {
     const ts = Date.now() - 5 * 3_600_000;
-    expect(formatLastSeen(ts)).toBe("5h ago");
+    expect(formatLastSeen(ts)).toBe("5小时前");
+    expect(formatLastSeen(ts, "zh-CN")).toBe("5小时前");
+    expect(formatLastSeen(ts, "en-US")).toBe("5h ago");
   });
 
-  it('returns "Xd ago" when 1–29 days', () => {
+  it('returns "X天前" / "Xd ago" when 1–29 days', () => {
     const ts = Date.now() - 10 * 86_400_000;
-    expect(formatLastSeen(ts)).toBe("10d ago");
+    expect(formatLastSeen(ts)).toBe("10天前");
+    expect(formatLastSeen(ts, "zh-CN")).toBe("10天前");
+    expect(formatLastSeen(ts, "en-US")).toBe("10d ago");
   });
 
   it("falls back to formatTime for 30+ days", () => {
@@ -245,11 +257,13 @@ describe("formatLastSeen", () => {
 
   it("handles boundary at exactly 60 seconds", () => {
     const ts = Date.now() - 60_000;
-    expect(formatLastSeen(ts)).toBe("1m ago");
+    expect(formatLastSeen(ts)).toBe("1分钟前");
+    expect(formatLastSeen(ts, "en-US")).toBe("1m ago");
   });
 
   it("handles boundary at exactly 60 minutes", () => {
     const ts = Date.now() - 3_600_000;
-    expect(formatLastSeen(ts)).toBe("1h ago");
+    expect(formatLastSeen(ts)).toBe("1小时前");
+    expect(formatLastSeen(ts, "en-US")).toBe("1h ago");
   });
 });

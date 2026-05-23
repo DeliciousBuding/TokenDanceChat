@@ -5,7 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatTime(timestamp: number): string {
+export function formatTime(timestamp: number, lang: string = "zh-CN"): string {
   const date = new Date(timestamp);
   const now = Date.now();
   const diffMs = now - date.getTime();
@@ -13,11 +13,11 @@ export function formatTime(timestamp: number): string {
   const diffMin = Math.floor(diffSec / 60);
   const diffHour = Math.floor(diffMin / 60);
 
-  // Less than 1 minute: "just now"
-  if (diffSec < 60) return "just now";
+  // Less than 1 minute
+  if (diffSec < 60) return lang === "zh-CN" ? "刚刚" : "just now";
 
-  // Less than 1 hour: "Nm ago"
-  if (diffMin < 60) return `${diffMin}m ago`;
+  // Less than 1 hour
+  if (diffMin < 60) return lang === "zh-CN" ? `${diffMin}分钟前` : `${diffMin}m ago`;
 
   // Less than 4 hours: "HH:mm"
   if (diffHour < 4) {
@@ -89,7 +89,7 @@ export function usernameHue(username: string): number {
 /**
  * Formats a "last seen" timestamp into a human-readable relative time string.
  */
-export function formatLastSeen(lastSeenTs: number): string {
+export function formatLastSeen(lastSeenTs: number, lang: string = "zh-CN"): string {
   const now = Date.now();
   const diffMs = now - lastSeenTs;
   const diffSec = Math.floor(diffMs / 1000);
@@ -97,9 +97,9 @@ export function formatLastSeen(lastSeenTs: number): string {
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSec < 60) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 30) return `${diffDay}d ago`;
-  return formatTime(lastSeenTs);
+  if (diffSec < 60) return lang === "zh-CN" ? "刚刚" : "just now";
+  if (diffMin < 60) return lang === "zh-CN" ? `${diffMin}分钟前` : `${diffMin}m ago`;
+  if (diffHour < 24) return lang === "zh-CN" ? `${diffHour}小时前` : `${diffHour}h ago`;
+  if (diffDay < 30) return lang === "zh-CN" ? `${diffDay}天前` : `${diffDay}d ago`;
+  return formatTime(lastSeenTs, lang);
 }
