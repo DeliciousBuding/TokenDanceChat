@@ -12,10 +12,13 @@
 
 ## v0.2.12 (2026-05-24)
 
-- 测试扩展至 779 tests / 50 files, coverage 51.86% lines。
+- 测试扩展至 794 tests / 50 files, coverage 51.86% lines。
 - E2E 47/52 against production。
 - Backend 全量 PASS。
 - 生产环境 healthy（nginx 修复确认）。
+
+### Fixed
+- WebSocket connect 竞态修复：连接建立与 kicked 事件处理间的 race condition，确保旧连接正确关闭后再建立新连接。
 
 ## v0.2.10 (2026-05-24)
 

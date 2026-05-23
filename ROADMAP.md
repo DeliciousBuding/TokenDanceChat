@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 779 前端 / 50 文件 / 51.86% 行覆盖率 / E2E 47/52
+发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 794 前端 / 50 文件 / 51.86% 行覆盖率 / E2E 47/52
 
 ## 当前目标
 
@@ -48,7 +48,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 性能优化 + UI 打磨 + 工程基建
 
-状态：持续推进。779 tests / 50 files / tsc 0 / ESLint 0 / CI 就绪 / coverage 51.86%。
+状态：持续推进。794 tests / 50 files / tsc 0 / ESLint 0 / CI 就绪 / coverage 51.86%。
 
 - [x] Store tests +7（BlockUser, SearchCustomEmojis, UpdateUserStatus, ThreadReplyCount）。
 - [x] E2E production fixes x3（target 47/52）。
@@ -94,6 +94,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] 滚动修复（4 轮迭代：scrollIntoView→min-h-0→willChange→flex flex-col on parent）：根因是父容器须为 flex 容器，子元素 flex-1 才能约束高度供 overflow-y-auto 使用。浏览器实测验证（double rAF），E2E 8/8 全绿。
 - [x] 源码 bug 修复：Register 保留用户名检测 + HealthCheck 方法强制实施。
 - [x] isReservedUsername 导出供 handler 层使用。
+- [x] WebSocket connect 竞态修复：连接建立与 kicked 事件处理间的 race condition。
 
 ## 当前增量：Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收
 
@@ -188,6 +189,8 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 779 tests, 51.86% lines |
 | 2026-05-24 | `cd backend; go test ./...` | PASS |
 | 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 47/52 pass（3 fixes pending） |
+| 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 794 tests, 51.86% lines |
+| 2026-05-24 | `cd backend; go test ./...` | PASS |
 
 ## Review Gates
 
