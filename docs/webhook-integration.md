@@ -1,28 +1,28 @@
-# Webhook Integration
+# Webhook 集成
 
-Last updated: 2026-05-23
+最后更新：2026-05-23
 
-Incoming webhooks let a group owner or admin create a group-scoped HTTP endpoint that can post messages into that group.
+入站 webhook 允许群主或管理员创建一个群组范围的 HTTP 端点，用于向该群组发送消息。
 
-This is both a demo feature and an AgentHub validation slice: it exercises group permissions, typed WebSocket control events, SQLite persistence, secret handling, and external-to-Hub message ingress.
+这既是 Demo 功能，也是 AgentHub 验证切片：它覆盖群组权限、类型化 WebSocket 控制事件、SQLite 持久化、密钥处理以及外部到 Hub 的消息入口。
 
-## Security Contract
+## 安全契约
 
-- Only group owners and admins can create, list, or delete webhooks.
-- `webhook_create` returns the generated secret once, only to the creator's WebSocket connection.
-- `webhook_list` never returns secrets.
-- `store.Webhook.Secret` is tagged `json:"-"` to prevent accidental JSON leakage.
-- Frontend state stores the one-time secret separately from the normal redacted webhook list.
-- Frontend group admin controls depend on the `group_info.group_members` role payload; clients should normalize it before deciding whether to show Webhook management.
-- Webhook secrets are persisted as versioned salted HMAC hashes in SQLite and verified with constant-time comparison.
-- Existing plaintext webhook rows are migrated to hashes when the store starts.
-- Production follow-ups: secret rotation and audit logging for create/delete events.
+- 仅群主与管理员可创建、列举或删除 webhook。
+- `webhook_create` 仅向创建者的 WebSocket 连接返回一次生成的密钥。
+- `webhook_list` 永不返回密钥。
+- `store.Webhook.Secret` 标记为 `json:"-"` 以防止意外 JSON 泄露。
+- 前端状态将一次性密钥与常规脱敏 webhook 列表分开存储。
+- 前端群组管理员控件依赖 `group_info.group_members` 角色数据；客户端在决定是否展示 Webhook 管理前应对其标准化。
+- Webhook 密钥在 SQLite 中以带版本号的加盐 HMAC 哈希形式持久化，并使用 constant-time 比较进行验证。
+- 现有明文 webhook 行在 store 启动时迁移为哈希。
+- 生产环境后续工作：密钥轮换以及创建/删除事件的审计日志。
 
-## WebSocket Control Events
+## WebSocket 控制事件
 
-### Create
+### 创建
 
-Client request:
+客户端请求：
 
 ```json
 {
@@ -31,7 +31,7 @@ Client request:
 }
 ```
 
-Server response to creator:
+服务器响应至创建者：
 
 ```json
 {
@@ -43,15 +43,15 @@ Server response to creator:
 }
 ```
 
-The frontend composes the usable HTTP URL as:
+前端组装可用 HTTP URL 为：
 
 ```text
 /api/webhook/{content}?secret={secret}
 ```
 
-### List
+### 列举
 
-Client request:
+客户端请求：
 
 ```json
 {
@@ -60,7 +60,7 @@ Client request:
 }
 ```
 
-Server response:
+服务器响应：
 
 ```json
 {
@@ -78,11 +78,11 @@ Server response:
 }
 ```
 
-No `secret` field is present in list responses.
+列举响应中不包含 `secret` 字段。
 
-### Delete
+### 删除
 
-Client request:
+客户端请求：
 
 ```json
 {
@@ -92,7 +92,7 @@ Client request:
 }
 ```
 
-Server response:
+服务器响应：
 
 ```json
 {
@@ -102,9 +102,9 @@ Server response:
 }
 ```
 
-## HTTP Message Ingress
+## HTTP 消息入口
 
-Request:
+请求：
 
 ```bash
 curl -X POST "https://chat.example.com/api/webhook/webhook-path?secret=secret-shown-once" \
@@ -112,7 +112,7 @@ curl -X POST "https://chat.example.com/api/webhook/webhook-path?secret=secret-sh
   -d '{"content":"Deploy finished","username":"ci-bot"}'
 ```
 
-Body:
+请求体：
 
 ```json
 {
@@ -121,9 +121,9 @@ Body:
 }
 ```
 
-`username` is optional and defaults to `webhook`.
+`username` 为可选字段，默认为 `webhook`。
 
-Success response:
+成功响应：
 
 ```json
 {
@@ -131,9 +131,9 @@ Success response:
 }
 ```
 
-## Verification
+## 验证
 
-Focused backend tests:
+聚焦后端测试：
 
 ```powershell
 cd backend
@@ -142,7 +142,7 @@ go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPla
 go test ./handler -run TestWebhookHandlerVerifiesHashedSecret
 ```
 
-Focused frontend tests:
+聚焦前端测试：
 
 ```powershell
 cd frontend
@@ -150,9 +150,9 @@ npm test -- --run src/lib/groupInfo.test.ts src/stores/chatStore.test.ts src/com
 npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium
 ```
 
-The Playwright ingress test must run against a local Go backend serving the built frontend. It covers the full browser path: join as a group owner, create a group through the UI, open the group admin panel, create a one-time webhook, POST to the generated HTTP URL, and verify that the group transcript shows the webhook message.
+Playwright 入口测试须针对托管构建前端的本地 Go 后端运行。它覆盖完整浏览器路径：以群主身份加入，通过 UI 创建群组，打开群组管理面板，创建一次性 webhook，向生成的 HTTP URL 发送 POST 请求，并验证群组消息列表中显示 webhook 消息。
 
-Broader gates:
+更广泛的门禁：
 
 ```powershell
 cd backend

@@ -1,114 +1,114 @@
 # TokenDanceChat ROADMAP
 
-Last updated: 2026-05-23
+最后更新：2026-05-23
 
-## Current Goal
+## 当前目标
 
-TokenDanceChat is the AgentHub Hub/IM validation project and a playable demo.
+TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
-The long-running product goal is to validate AgentHub's realtime Hub, SQLite persistence, React client state, Agent-as-contact UX, and deployment shape while evolving the demo toward:
+长期产品目标是验证 AgentHub 的 realtime Hub、SQLite 持久化、React 客户端状态、Agent-as-contact UX 和部署形态，同时将 Demo 向以下方向演进：
 
-- Feishu/Lark-style 1:1 chat feature parity for enterprise collaboration;
-- Telegram-grade message flow, conversation ergonomics, and mobile interaction quality;
-- a secure, testable, deployable engineering baseline that can feed lessons back into `D:\Code\AgentHub`.
+- 飞书/Lark 风格的 1:1 聊天功能对等度，面向企业协作；
+- Telegram 级别的消息流动、对话人体工学、移动端交互质量；
+- 安全、可测试、可部署的工程基线，能将经验回流到 `D:\Code\AgentHub`。
 
-`ROADMAP.md` is the durable goal ledger for future agents. Update it after every meaningful implementation, verification, security review, or scope decision.
+`ROADMAP.md` 是面向未来 agent 的持久化目标账本。每次有意义的实现、验证、安全复核或范围决策后更新。
 
-## Product Principles
+## 产品原则
 
 1. **AgentHub first**
-   TokenDanceChat validates AgentHub's IM collaboration and Hub network layers. It must not become a separate long-term product architecture.
+   TokenDanceChat 验证 AgentHub 的 IM 协作和 Hub 网络层。不得演化为独立的长期产品架构。
 
-2. **Playable demo**
-   The app should remain useful and enjoyable: DMs, groups, calls, emoji, GIFs, files, folders, translation, webhooks, and Agent chat are valuable because they put realistic pressure on the platform.
+2. **可玩 Demo**
+   应用应保持可用和有趣：DM、群组、通话、emoji、GIF、文件、文件夹、翻译、webhook 和 Agent 聊天都很重要，因为它们对平台施加真实压力。
 
 3. **Typed realtime protocol**
-   New capabilities should use explicit WebSocket message types, typed frontend helpers, store contracts, and focused tests.
+   新能力应使用显式 WebSocket message type、typed 前端 helper、store contract 和 focused tests。
 
 4. **Security by default**
-   Secrets should be one-time or redacted where practical; production-only details stay out of public docs; security findings are tracked in `SECURITY.md` and this roadmap.
+   Secret 应为一次性或在可行时脱敏；仅生产环境细节不进入公开文档；安全发现追踪于 `SECURITY.md` 和本 roadmap。
 
 5. **Verified increments**
-   Every code change needs a focused check and then broader verification before it is called complete.
+   每次代码变更需先过 focused check，再 broader verification，方可声称完成。
 
-## Active Workstreams
+## 活跃工作流
 
-| Priority | Workstream | Target |
+| 优先级 | 工作流 | 目标 |
 |---|---|---|
-| P0 | AgentHub validation alignment | Keep README, docs, roadmap, protocol, and store contracts mapped to AgentHub primitives. |
-| P0 | Protocol/store hardening | Treat WebSocket events and SQLite tables as reusable Hub evidence; add regression tests for security-sensitive contracts. |
-| P0 | Verification baseline | Keep `go test ./...`, frontend focused tests, `npx tsc --noEmit`, and `git diff --check` green. |
-| P1 | Feishu parity | Group admin, webhooks, files, threads, reactions, notifications, search, calls, admin surfaces, and enterprise collaboration flows. |
-| P1 | Telegram UX | Fast message list, clean input, mobile gestures, copy/reply/edit ergonomics, polished transitions, media viewer quality. |
-| P1 | Agent-as-contact | Make TokenBot/PicoClaw feel like IM contacts: DM, group mention, streaming replies, model/provider affordances, and workflow transfer. |
-| P2 | Operations/performance | Health checks, deployment checklist, bundle/runtime profiling, virtualized list tuning, WebSocket fanout/load checks. |
-| P2 | UI/art direction | Restrained enterprise UI with smooth chat interactions; avoid decorative marketing layouts. |
+| P0 | AgentHub 验证对齐 | 保持 README、docs、roadmap、protocol 和 store contract 映射到 AgentHub 原语。 |
+| P0 | 协议/存储加固 | 将 WebSocket event 和 SQLite 表视为可复用 Hub 证据；为安全敏感合约添加回归测试。 |
+| P0 | 验证基线 | 保持 `go test ./...`、前端 focused tests、`npx tsc --noEmit`、`git diff --check` 全绿。 |
+| P1 | 飞书对等 | 群组管理、webhook、文件、threads、reactions、通知、搜索、通话、管理界面、企业协作流。 |
+| P1 | Telegram UX | 快速消息列表、干净输入、移动端手势、copy/reply/edit 人体工学、打磨过渡、媒体查看器质量。 |
+| P1 | Agent-as-contact | 让 TokenBot/PicoClaw 感觉像 IM 联系人：DM、群组 mention、流式回复、模型/provider 可供性、工作流转移。 |
+| P2 | 运维/性能 | Health check、部署 checklist、bundle/runtime profiling、虚拟列表调优、WebSocket fanout/load check。 |
+| P2 | UI/美术方向 | 克制企业 UI + 流畅聊天交互；避免装饰性营销布局。 |
 
-## Current Increment: Webhook Security + Media Storage + Screenshot-Driven UI Acceptance
+## 当前增量：Webhook 安全 + 媒体存储 + Screenshot 驱动 UI 验收
 
-Status: implemented, documented, tested, and accepted with browser screenshots.
+状态：已实现、已文档化、已测试、已通过浏览器 screenshot 验收。
 
-- [x] Replaced plaintext webhook secret persistence with versioned salted HMAC hashes in SQLite.
-- [x] Added store startup migration for legacy plaintext webhook secret rows.
-- [x] Added `store.VerifyWebhookSecret` and routed HTTP webhook ingress through constant-time hash verification.
-- [x] Strengthened generated one-time webhook secrets beyond short UUID fragments.
-- [x] Added focused store, hub, and handler tests for hashed webhook persistence, migration, redaction, permission checks, and HTTP ingress.
-- [x] Added S3-compatible `MediaStore` support with AWS SigV4 signing and env-driven configuration.
-- [x] Kept S3 behind same-origin `/uploads/...` routes so frontend state never sees bucket URLs or credentials.
-- [x] Moved custom emoji upload/serve paths onto the shared `MediaStore` abstraction.
-- [x] Hardened media keys to reject empty segments, `.`, `..`, and traversal before local/WebDAV/S3 access.
-- [x] Added focused backend tests for S3 PUT/GET, emoji media storage, emoji serving, and traversal rejection.
-- [x] Documented production-server/S3-compatible deployment shape without private hostnames, buckets, keys, ports, or logs.
-- [x] Added Docker runtime HEALTHCHECK probes for `/api/health` that follow `CHAT_ADDR`, including non-default deployment listeners.
-- [x] Made light mode the default first-run posture for Feishu/Lark-style acceptance.
-- [x] Reworked mobile composer so Markdown tools collapse behind an icon and the textarea stays usable.
-- [x] Added `docs/visual-acceptance.md` with screenshot metrics and a `gpt-image-2` reference prompt.
-- [x] Added `npm run visual:acceptance` for desktop/tablet/mobile light/dark screenshots and JSON metrics.
-- [x] Fixed production static assets being counted against REST API rate limits; `/api/...` remains limited, static SPA assets do not.
-- [x] Completed Playwright screenshot review for desktop, tablet, and mobile light/dark mode.
-- [x] Moved the desktop layout breakpoint from `md` to `lg` after screenshots showed a 768px tablet textarea squeezed to 144px; final tablet textarea is 456px.
-- [x] Moved mobile secondary actions into a more menu so `公共聊天` stays readable instead of clipping to `公...`.
-- [x] Tightened mobile message density: smaller mobile bubble text, narrower bubble padding, reduced transcript/date-separator padding, and no duplicated non-own bottom timestamp.
-- [x] Hardened `npm run visual:acceptance` so seeded messages wait past the input send guard and fail fast if fewer than 4 acceptance messages are present.
-- [x] Added visual hard gates for mobile title clipping, mobile message font size, and minimum visible message density.
-- [x] Consolidated per-message hover actions into a single 44px action menu while preserving copy, forward, translate, react, pin, edit, delete, and select flows.
-- [x] Raised header actions, Markdown toolbar controls, scheduled-message entry, sidebar utility buttons, clickable avatars, and message action buttons to the 44px visual acceptance target.
-- [x] Tightened visual acceptance metrics so hidden/offscreen controls and ancestor opacity are handled correctly.
-- [x] Re-ran visual acceptance on a clean temporary SQLite DB so final screenshots contain only the seeded demo transcript.
-- [x] Tightened desktop sidebar above-the-fold density with four model preview cards, compact empty states, and a visual gate for online-user section position.
-- [x] Lightened the core chat surface after screenshot review: message bubbles use quieter borders, composer utility buttons no longer render as heavy bordered blocks, and clickable avatars have a 46px safety floor for stable 44px acceptance.
-- [x] Added a real group-info visual acceptance scenario that creates a group, opens the right-side admin panel, verifies the owner-only Webhook section, and gates panel controls at the 44px target.
-- [x] Raised group-info admin controls, Webhook actions, member rows, context menus, confirm actions, and visible group sidebar rows to stable 44px targets.
-- [x] Fixed frontend `group_info` handling to read the backend `group_members` role payload, so owner/admin state drives group info and Webhook management after a real WebSocket round trip.
-- [x] Added group-info visual gates for desktop title single-line stability and a visible first-run group empty state after screenshot review caught header squeeze and sparse group content.
-- [x] Added browser E2E coverage for the complete Webhook ingress loop: group admin creates a one-time webhook through the UI, POSTs to the generated HTTP URL, and sees the external message in the group transcript.
-- [x] Reaffirmed multimodal UI acceptance: meaningful frontend polish requires real browser screenshots and metrics; `gpt-image-2` mockups are allowed as aesthetic references only.
-- [x] Added webhook secret rotation: store-level `RotateWebhookSecret` with SQLite transactional audit logging (created/rotated/deleted), old secret immediate invalidation, new one-time secret returned to creator only.
-- [x] Added `webhook_rotate` and `webhook_audit_list` typed WebSocket events with owner/admin permission checks and redacted audit DTOs.
-- [x] Added frontend rotation UI: rotate button per webhook row (44px), audit log panel with refresh, one-time secret display on rotation, rotated-at/rotated-by metadata.
-- [x] Extended visual acceptance: group-info scenario now creates a webhook and gates on webhook row, rotate button, audit log entries, and created-secret display.
-- [x] Added focused store and hub tests for rotation secret invalidation, audit log redaction, and permission checks.
-- [x] Added frontend store tests for rotation state (one-time secret isolation, rotated metadata, audit log storage) and GroupInfoPanel tests for rotate button and audit rendering.
+- [x] 将明文 webhook secret 持久化替换为 SQLite 中 versioned salted HMAC hash。
+- [x] 添加 store 启动迁移以处理旧版明文 webhook secret 行。
+- [x] 添加 `store.VerifyWebhookSecret`，将 HTTP webhook ingress 路由通过 constant-time hash 验证。
+- [x] 将生成的一次性 webhook secret 强化到超出短 UUID 片段的熵值。
+- [x] 为 hashed webhook 持久化、迁移、脱敏、权限检查和 HTTP ingress 添加 focused store、hub、handler 测试。
+- [x] 添加 S3-compatible `MediaStore` 支持，含 AWS SigV4 签名和 env 驱动配置。
+- [x] 将 S3 置于同源 `/uploads/...` 路由之后，前端状态永不见 bucket URL 或凭证。
+- [x] 将自定义 emoji 上传/服务路径迁移到共享 `MediaStore` 抽象。
+- [x] 加固 media key 以拒绝空段、`.`、`..` 和路径穿越，覆盖 local/WebDAV/S3 访问。
+- [x] 为 S3 PUT/GET、emoji 媒体存储、emoji 服务和穿越拒绝添加 focused 后端测试。
+- [x] 记录 production-server/S3-compatible 部署形态，不含私有 hostname、bucket、key、端口或日志。
+- [x] 添加 Docker runtime HEALTHCHECK 探针 `/api/health`，跟随 `CHAT_ADDR`（包括非默认部署监听地址）。
+- [x] 将 light mode 设为首次运行的默认姿态，面向飞书/Lark 风格验收。
+- [x] 重做移动端 composer，Markdown 工具收起为图标，textarea 保持可用。
+- [x] 添加 `docs/visual-acceptance.md`，含 screenshot metrics 和 `gpt-image-2` 参考 prompt。
+- [x] 添加 `npm run visual:acceptance`，覆盖 desktop/tablet/mobile light/dark screenshot 和 JSON metrics。
+- [x] 修复生产构建静态资源被计入 REST API rate limit 的问题；`/api/...` 保持限流，静态 SPA 资源不限。
+- [x] 完成 desktop、tablet、mobile light/dark 模式的 Playwright screenshot 复核。
+- [x] 在 screenshot 显示 768px 平板 textarea 被挤压至 144px 后，将桌面布局断点从 `md` 移至 `lg`；最终平板 textarea 为 456px。
+- [x] 将移动端辅助操作收入更多菜单，确保「公共聊天」可读而非截断为「公...」。
+- [x] 收紧移动端消息密度：更小的移动端气泡字号、更窄的气泡内边距、减少记录/日期分隔线内边距，移除非本人底部重复时间戳。
+- [x] 加固 `npm run visual:acceptance`：种子消息等待输入发送守卫后上屏，若验收消息少于 4 条则快速失败。
+- [x] 为移动端标题截断、移动端消息字号、最低可见消息密度添加视觉硬门槛。
+- [x] 将每条消息的 hover 操作合并为单个 44px 操作菜单，保留 copy、forward、translate、react、pin、edit、delete、select 流程。
+- [x] 将 header 操作、Markdown 工具栏控件、定时消息入口、侧栏工具按钮、可点击头像和消息操作按钮提升至 44px 视觉验收目标。
+- [x] 收紧视觉验收 metrics，正确处理隐藏/屏外控件和祖先透明度。
+- [x] 在干净的临时 SQLite DB 上重新运行视觉验收，确保最终 screenshot 仅包含种子 Demo 记录。
+- [x] 收紧桌面侧栏首屏密度：4 张 model preview card、紧凑空状态、online-user 区位置的视觉门槛。
+- [x] 经 screenshot 复核后减轻核心聊天界面视觉重量：message bubble 使用更轻的边框，composer 工具按钮不再渲染为粗边框块，可点击头像使用 46px 安全底板以确保稳定 44px 验收。
+- [x] 添加真实 group-info 视觉验收场景：创建群组、打开右侧管理面板、验证仅 owner 可见的 Webhook 区、以 44px 目标对面板控件做硬门槛。
+- [x] 将 group-info 管理控件、Webhook 操作、成员行、右键菜单、确认操作和可见群组侧栏行提升到稳定的 44px 目标。
+- [x] 修复前端 `group_info` 处理以读取后端 `group_members` role payload，owner/admin 状态在真实 WebSocket round trip 后正确驱动群组信息和 Webhook 管理。
+- [x] 在 screenshot 复核发现 header 挤压和空群内容稀疏后，为 group-info 截图门槛添加桌面标题单行稳定性和群组首屏空状态可见检查。
+- [x] 添加浏览器 E2E 覆盖完整 Webhook ingress 闭环：群组管理员通过 UI 创建一次性 webhook，对生成的 HTTP URL 发 POST，在群组记录中可见外部消息。
+- [x] 重申多模态 UI 验收：有意义的 UI 打磨需要真实浏览器 screenshot 和 metrics；`gpt-image-2` mockup 仅允许作为美学参考。
+- [x] 添加 webhook secret rotation：store 级 `RotateWebhookSecret`，含 SQLite 事务化 audit logging（created/rotated/deleted），旧 secret 即时失效，新一次性 secret 仅返回创建者。
+- [x] 添加 `webhook_rotate` 和 `webhook_audit_list` typed WebSocket event，含 owner/admin 权限检查和脱敏 audit DTO。
+- [x] 添加前端 rotation UI：每 webhook 行的 rotate 按钮（44px）、带刷新的 audit log 面板、轮换时一次性 secret 显示、rotated-at/rotated-by 元数据。
+- [x] 扩展视觉验收：group-info 场景现在创建 webhook 并对 webhook 行、rotate 按钮、audit log 条目和 created-secret 显示做硬门槛。
+- [x] 为 rotation secret 失效、audit log 脱敏和权限检查添加 focused store 和 hub 测试。
+- [x] 为 rotation state（一次性 secret 隔离、rotated 元数据、audit log 存储）添加前端 store 测试，及 rotate 按钮和 audit 渲染的 GroupInfoPanel 测试。
 
-## Next Product Tasks
+## 后续产品任务
 
-1. Group video call browser smoke/e2e with two sessions or a mocked WebRTC/media boundary.
-2. Message input parity: up-arrow edit last message, slash commands, emoji shortcode expansion.
-3. Message list polish: date separators, timestamp hover, smoother new-message and conversation-switching transitions.
-4. Admin/security surface: 2FA plan, admin dashboard, audit log design, invite-code management hardening.
-5. Performance pass: message list profiling, bundle/chunk review, WebSocket fanout/load check.
-6. AgentHub feedback note: summarize which webhook/group/call/media primitives should migrate to AgentHub Hub APIs.
+1. 群组视频通话浏览器 smoke/E2E（双会话或 mock WebRTC/media 边界）。
+2. 消息输入对等增强：上箭头编辑上一条消息、slash commands、emoji 快捷码展开。
+3. 消息列表打磨：日期分隔线、timestamp hover、更流畅的新消息和会话切换过渡。
+4. 管理/安全界面：2FA 方案、管理仪表盘、audit log 设计、邀请码管理加固。
+5. 性能 pass：消息列表 profiling、bundle/chunk review、WebSocket fanout/load check。
+6. AgentHub 反馈笔记：总结哪些 webhook/group/call/media 原语应迁移到 AgentHub Hub API。
 
-## Verification Ledger
+## 验证台账
 
-Record commands here when they are run for the current increment.
+记录当前增量的实际运行命令。
 
-| Date | Command | Result |
+| 日期 | 命令 | 结果 |
 |---|---|---|
 | 2026-05-23 | `cd backend; go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPlaintextSecretMigrationHashesExistingRows)"` | PASS |
 | 2026-05-23 | `cd backend; go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"` | PASS |
 | 2026-05-23 | `cd backend; go test ./handler -run TestWebhookHandlerVerifiesHashedSecret` | PASS |
-| 2026-05-23 | Searched security/docs/roadmap for stale plaintext webhook hardening wording | PASS, no stale matches |
+| 2026-05-23 | 搜索 security/docs/roadmap 中的旧明文 webhook 加固措辞 | PASS，无过期匹配 |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
 | 2026-05-23 | `cd frontend; npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx` | PASS, 2 files / 39 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
@@ -120,85 +120,85 @@ Record commands here when they are run for the current increment.
 | 2026-05-23 | `cd frontend; npm test` | PASS, 13 files / 196 tests |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
 | 2026-05-23 | `git diff --check` | PASS |
-| 2026-05-23 | Searched for stale references to the removed transfer document, excluding `node_modules`, `.git`, and `.worktrees` | PASS, no matches |
+| 2026-05-23 | 搜索已删除交接文件的所有过期引用，排除 `node_modules`、`.git` 和 `.worktrees` | PASS，无匹配 |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 13 files / 196 tests |
 | 2026-05-23 | `cd backend; go test ./handler -run "Test(RateLimitMiddleware|ShouldRateLimitAPI|WSAllow)$"` | PASS |
 | 2026-05-23 | `cd frontend; npm test -- --run src/components/ChatLayout.test.tsx src/components/Sidebar.test.tsx src/components/ChatInput.test.tsx` | PASS, 3 files / 74 tests |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8091 npm run visual:acceptance` | PASS. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T18-52-21-915Z`; final metrics: desktop textarea 816px, tablet 456px, mobile 208px, no horizontal overflow, no console errors. |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8091 npm run visual:acceptance` | PASS。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T18-52-21-915Z`；最终 metrics：desktop textarea 816px, tablet 456px, mobile 208px，无横向溢出，无控制台错误。 |
 | 2026-05-23 | `cd frontend; npm test -- --run src/components/ChatLayout.test.tsx src/components/ChatInput.test.tsx` | PASS, 2 files / 40 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8091 npm run visual:acceptance` | PASS. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T19-36-55-386Z`; final metrics: desktop/tablet/mobile all show 4 seeded messages, mobile title 202px unclipped, mobile message font 13.5px, mobile textarea 208px, no horizontal overflow, no console errors. |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8091 npm run visual:acceptance` | PASS。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T19-36-55-386Z`；最终 metrics：desktop/tablet/mobile 全显示 4 条种子消息，mobile title 202px 未截断，mobile message font 13.5px，mobile textarea 208px，无横向溢出，无控制台错误。 |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 13 files / 197 tests |
 | 2026-05-23 | `cd frontend; npm test -- --run src/components/MessageContextMenu.test.tsx src/components/ChatLayout.test.tsx src/components/ChatInput.test.tsx src/components/Sidebar.test.tsx` | PASS, 4 files / 76 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
 | 2026-05-23 | `git diff --check` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8092 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T20-57-00-675Z`; all six scenarios show 4 seeded messages and `smallControls=0`, mobile title 202px, mobile message font 13.5px, mobile textarea 208px, no horizontal overflow, no console errors. |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8092 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T20-57-00-675Z`；全部六个场景显示 4 条种子消息且 `smallControls=0`，mobile title 202px，mobile message font 13.5px，mobile textarea 208px，无横向溢出，无控制台错误。 |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 198 tests |
 | 2026-05-23 | `cd frontend; npm test -- --run src/components/Sidebar.test.tsx` | PASS, 1 file / 36 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8093 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T21-19-49-947Z`; desktop sidebar model preview 4 cards, online-user section top 561px, all six scenarios `smallControls=0`, no horizontal overflow, no console errors. |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8093 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T21-19-49-947Z`；desktop sidebar model preview 4 cards, online-user section top 561px，全部六个场景 `smallControls=0`，无横向溢出，无控制台错误。 |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 199 tests |
-| 2026-05-23 | `docker build --check -f Dockerfile .` | PASS, no warnings |
-| 2026-05-23 | `docker build --check -f Dockerfile.runtime .` | PASS, no warnings |
+| 2026-05-23 | `docker build --check -f Dockerfile .` | PASS，无警告 |
+| 2026-05-23 | `docker build --check -f Dockerfile.runtime .` | PASS，无警告 |
 | 2026-05-23 | `cd backend; go test ./handler -run TestHealthCheck` | PASS |
 | 2026-05-23 | `cd backend; go test . -run TestServerStartsAndServesHealth` | PASS |
-| 2026-05-23 | `docker build -f Dockerfile.runtime -t tokendancechat:healthcheck-test <deploy-style-temp-context>` | PASS, validates runtime Dockerfile with `tokendancechat` binary and `frontend/dist` at deployment context root |
-| 2026-05-23 | `docker run -d --name tdchat-healthcheck-* -e CHAT_ADDR=:3000 tokendancechat:healthcheck-test`; poll `docker inspect .State.Health.Status` | PASS, status reached `healthy`; test container removed |
+| 2026-05-23 | `docker build -f Dockerfile.runtime -t tokendancechat:healthcheck-test <部署风格临时上下文>` | PASS，验证 runtime Dockerfile（`tokendancechat` 二进制 + `frontend/dist` 置于部署上下文根目录） |
+| 2026-05-23 | `docker run -d --name tdchat-healthcheck-* -e CHAT_ADDR=:3000 tokendancechat:healthcheck-test`；轮询 `docker inspect .State.Health.Status` | PASS，状态达到 `healthy`；测试容器已移除 |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
 | 2026-05-23 | `cd frontend; npm test -- --run src/components/ChatInput.test.tsx src/components/MessageContextMenu.test.tsx src/components/AssistantIcon.test.tsx` | PASS, 3 files / 38 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8095 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T22-17-22-184Z`; all six scenarios `smallControls=0`, no horizontal overflow, no console errors. Mobile collapsed composer is 87px, mobile format composer is 144px, desktop sidebar model preview remains 4 cards, online-user section top remains 561px. |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8095 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T22-17-22-184Z`；全部六个场景 `smallControls=0`，无横向溢出，无控制台错误。移动端 collapsed composer 87px，移动端 format composer 144px，desktop sidebar model preview 保持 4 cards，online-user section top 保持 561px。 |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 14 files / 199 tests |
 | 2026-05-23 | `git diff --check` | PASS |
 | 2026-05-23 | `cd frontend; npm test -- --run src/lib/groupInfo.test.ts src/components/GroupInfoPanel.test.tsx src/components/Sidebar.test.tsx src/components/ChatLayout.test.tsx` | PASS, 4 files / 56 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8099 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-00-11-123Z`; all seven scenarios `smallControls=0`, no horizontal overflow, no console errors. New `desktop-light-group-info` scenario shows a 384px right panel, visible owner-only Webhook section, `groupSmallControls=0`, and verified `group_info.group_members` role handling. |
-| 2026-05-23 | Screenshot review of `desktop-light-group-info.png`, `desktop-light.png`, and `mobile-light.png` | PASS. Group admin panel controls are readable and no longer tiny; mobile and desktop core chat remain visually stable. Follow-up: newly created group empty state is sparse and should be enriched carefully. |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8099 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-00-11-123Z`；全部七个场景 `smallControls=0`，无横向溢出，无控制台错误。新增 `desktop-light-group-info` 场景展示 384px 右侧面板、可见的仅 owner Webhook 区、`groupSmallControls=0`，已验证 `group_info.group_members` role 处理。 |
+| 2026-05-23 | `desktop-light-group-info.png`、`desktop-light.png`、`mobile-light.png` screenshot 复核 | PASS。群组管理面板控件可读且不再过小；移动端和桌面核心聊天保持视觉稳定。跟进项：新建群空状态较稀疏，应谨慎丰富。 |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 15 files / 202 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8101 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-29-14-410Z`; all seven scenarios `smallControls=0`, no horizontal overflow, no console errors. `desktop-light-group-info` shows a 384px right panel, `groupSmallControls=0`, desktop title 174x24 and single-line, visible first-run group empty state, and owner-only Webhook controls. |
-| 2026-05-23 | Screenshot review of `desktop-light-group-info.png`, `desktop-light.png`, and `mobile-light.png` from `tdchat-visual-2026-05-22T23-29-14-410Z` | PASS. Group admin controls are readable, desktop title no longer wraps when the right panel is open, the group first-run state is present without decorative filler, and mobile/desktop core chat remain stable. |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8101 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-29-14-410Z`；全部七个场景 `smallControls=0`，无横向溢出，无控制台错误。`desktop-light-group-info` 展示 384px 右侧面板、`groupSmallControls=0`、desktop title 174x24 单行、可见的群组首屏空状态、仅 owner Webhook 控件。 |
+| 2026-05-23 | 来自 `tdchat-visual-2026-05-22T23-29-14-410Z` 的 `desktop-light-group-info.png`、`desktop-light.png`、`mobile-light.png` screenshot 复核 | PASS。群组管理控件可读，桌面标题在右侧面板打开时不再换行，群组首屏状态存在且无装饰填充，移动端/桌面核心聊天保持稳定。 |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; E2E_BASE_URL=http://127.0.0.1:8102 npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium --reporter=line` | PASS, covers group admin UI webhook creation -> HTTP POST -> visible group message. Initial red check failed on a stale heading assertion (`群组:` vs actual `群聊:`), then passed after fixing the selector. |
+| 2026-05-23 | `cd frontend; E2E_BASE_URL=http://127.0.0.1:8102 npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium --reporter=line` | PASS，覆盖群组管理员 UI 创建 webhook → HTTP POST → 群聊消息可见。首次 red check 因过时标题断言失败（`群组:` vs 实际 `群聊:`），修正选择器后通过。 |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 15 files / 202 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8104 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-53-00-860Z`; all seven scenarios `smallControls=0`, no horizontal overflow, no console errors. |
-| 2026-05-23 | Screenshot review of `desktop-light-group-info.png`, `desktop-light.png`, and `mobile-light.png` from `tdchat-visual-2026-05-22T23-53-00-860Z` | PASS. Desktop core chat, group admin panel, and mobile composer remain readable and stable; no tiny controls, title clipping, or layout overflow observed. |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8104 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-53-00-860Z`；全部七个场景 `smallControls=0`，无横向溢出，无控制台错误。 |
+| 2026-05-23 | 来自 `tdchat-visual-2026-05-22T23-53-00-860Z` 的 `desktop-light-group-info.png`、`desktop-light.png`、`mobile-light.png` screenshot 复核 | PASS。桌面核心聊天、群组管理面板和移动端 composer 保持可读稳定；无过小控件、标题截断或布局溢出。 |
 | 2026-05-23 | `cd backend; go test ./store -run "TestRotateWebhookSecretInvalidatesOldSecretAndAudits"` | PASS |
 | 2026-05-23 | `cd backend; go test ./hub -run "TestWebhookAuditListRedactsMetadataAndRequiresGroupAdmin"` | PASS |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
 | 2026-05-23 | `cd frontend; npm test` | PASS, 15 files / 209 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
-| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8105 npm run visual:acceptance` | PASS on clean temporary DB. Screenshots and metrics in `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-23T04-02-23-020Z`; all seven scenarios `smallControls=0` and `groupSmallControls=0`, no horizontal overflow, no console errors. Group-info scenario now includes a created webhook, rotate button, and audit log entry. |
+| 2026-05-23 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:8105 npm run visual:acceptance` | PASS（干净临时 DB）。Screenshot 与 metrics 在 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-23T04-02-23-020Z`；全部七个场景 `smallControls=0` 且 `groupSmallControls=0`，无横向溢出，无控制台错误。Group-info 场景现包含已创建的 webhook、rotate 按钮和 audit log 条目。 |
 
 ## Review Gates
 
-Before committing or handing off meaningful changes:
+提交或交接有意义的变更前：
 
 - [x] `git diff --check`
 - [x] `cd backend && go test ./...`
 - [x] `cd frontend && npx tsc --noEmit`
-- [x] Focused frontend/backend tests relevant to touched files
-- [x] Docs updated for protocol, security, user-facing behavior, and AgentHub validation notes
-- [x] `tmp_*` or unrelated local files are not staged
+- [x] 涉及文件的 Focused 前后端测试
+- [x] 文档更新（protocol、security、用户可见行为和 AgentHub validation 笔记）
+- [x] `tmp_*` 或无关本地文件不暂存
 
-## Completed Baseline
+## 已完成基线
 
-- Core chat: public room, DMs, groups, friends, reactions, online status, typing.
-- Data integrity: SQLite persistence, offline DMs, reactions in history, message caps, scoped typing.
-- IM polish: unread badges, drafts, scroll memory, search jump, forwarding, streaming throttle, Chinese mentions, CSP/XSS hardening.
-- Power features: read receipts, last seen, @mention notifications, notification sounds, blocking, file sharing.
-- Advanced IM: pins/bookmarks, group invite flow, threaded replies, scoped search, infinite history, typing preview, custom emoji.
-- Platform: PWA shell, frontend unit tests, backend WebSocket/store tests, accessibility baseline, Bot/Agent mention routing.
+- 核心聊天：公共房间、DM、群组、好友、reactions、在线状态、typing。
+- 数据完整性：SQLite 持久化、离线 DM、历史 reactions、消息上限、作用域 typing。
+- IM 打磨：未读角标、草稿、滚动记忆、搜索跳转、转发、流式节流、中文 mentions、CSP/XSS 加固。
+- 高级功能：已读回执、最后在线、@mention 通知、通知声音、屏蔽、文件分享。
+- 进阶 IM：置顶/书签、群组邀请流程、threaded replies、范围搜索、无限历史、typing 预览、自定义 emoji。
+- 平台：PWA shell、前端单元测试、后端 WebSocket/store 测试、无障碍基线、Bot/Agent mention 路由。

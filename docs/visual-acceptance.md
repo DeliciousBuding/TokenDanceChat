@@ -1,107 +1,107 @@
-# Visual Acceptance Notes
+# 视觉验收笔记
 
-TokenDanceChat is the AgentHub technical validation project and a playable demo. Visual work should prove that the AgentHub IM surface can feel credible as a real chat product, not only that the protocol works.
+TokenDanceChat 是 AgentHub 的技术验证项目与可玩 Demo。视觉工作应证明 AgentHub IM 界面能够像一个真正的聊天产品般可信，而不仅仅是协议能跑通。
 
-## Product Direction
+## 产品方向
 
-- Primary posture: light, restrained enterprise chat UI inspired by Feishu/Lark.
-- Interaction feel: Telegram-grade composer ergonomics, readable message flow, strong mobile tap targets.
-- Avoid marketing-style hero layouts, decorative cards, and empty ornamental space.
-- Prefer lucide icons for controls; text labels are reserved for commands that need clarity.
+- 主基调：明亮、克制的企业聊天 UI，风格参考 Feishu/Lark。
+- 交互手感：Telegram 级的输入框人机工程、可读的消息流、充足的移动端点击目标。
+- 避免营销式 Hero 布局、装饰性卡片以及空洞的装饰空间。
+- 控件优先使用 lucide 图标；文字标签仅保留给需要明确语义的命令。
 
-## Multimodal Screenshot Acceptance
+## 多模态截图验收
 
-Every meaningful UI polish increment must capture real browser screenshots before claiming completion. Generated mockups can help set direction, but they are not acceptance evidence.
+每一次有意义的前端打磨增量，必须在声明完成前采集真实浏览器截图。生成的 mockup 可帮助设定方向，但不可作为验收证据。
 
-Required workflow:
+必要工作流：
 
-1. Capture real browser screenshots with `npm run visual:acceptance` or an equivalent Playwright pass.
-2. Review screenshots directly for layout, typography, button size, icon balance, density, empty space, and visual hierarchy.
-3. Compare against a deliberate aesthetic reference when useful. A `gpt-image-2` mockup is acceptable as a reference target, but the implementation passes only when the real browser screenshots and metrics pass.
-4. Record the screenshot output directory in `ROADMAP.md` or the relevant PR/commit notes for meaningful frontend polish.
+1. 通过 `npm run visual:acceptance` 或等效的 Playwright 流程采集真实浏览器截图。
+2. 直接审阅截图中的布局、排版、按钮尺寸、图标平衡、密度、留白及视觉层级。
+3. 有用时与明确的审美参考对比。`gpt-image-2` mockup 可作为参考目标，但仅当真实浏览器截图与指标通过时实现才算验收通过。
+4. 对于有意义的前端打磨，将截图输出目录记录在 `ROADMAP.md` 或相关 PR/commit 说明中。
 
-| Viewport | Theme | Required checks |
+| 视口 | 主题 | 必要检查项 |
 |---|---|---|
-| 1440x900 | light | Header density, sidebar width, visible message count, no horizontal toolbar overflow. |
-| 1440x900 | light + group info | Right-side group admin panel width, full-height alignment, unclipped group heading, owner-only Webhook section visibility, readable admin controls. |
-| 1440x900 | dark | Contrast and spacing remain usable without becoming a black slab. |
-| 768x1024 | light | Tablet should keep chat full-width until `lg`; textarea should be wider than 360px. |
-| 390x844 | light | Composer stays usable; title is readable, textarea should be wider than 180px with controls visible. |
-| 390x844 | dark | Tap targets remain at least 44px where practical; no text overlap. |
+| 1440x900 | light | 头部密度、侧边栏宽度、可见消息数、工具栏无水平溢出。 |
+| 1440x900 | light + 群组信息 | 右侧群组管理面板宽度、全高对齐、群组标题未被截断、仅群主可见的 Webhook 区域可见性、管理员控件可读。 |
+| 1440x900 | dark | 对比度与间距保持可用，避免成为黑色整块。 |
+| 768x1024 | light | 平板在 `lg` 之前应保持聊天全宽；textarea 宽度应大于 360px。 |
+| 390x844 | light | 输入框保持可用；标题可读，textarea 宽度应大于 180px 且控件可见。 |
+| 390x844 | dark | 点击目标在可行范围内保持至少 44px；无文字重叠。 |
 
-Collect these metrics with screenshots:
+截图时采集以下指标：
 
-- total buttons and count below 44x44;
-- minimum textarea width;
-- composer height as a percentage of viewport height;
-- mobile header title width and whether `公共聊天` is clipped;
-- visible message font size on mobile;
-- first meaningful chat content y-position;
-- horizontal scroll presence;
-- number of visible messages above composer;
-- desktop sidebar model preview count and online-user section y-position;
-- group info panel width, height, right alignment, heading clipping, Webhook section visibility, member-row count, panel-local controls below 44x44, desktop title line stability, and first-run group empty-state visibility;
-- console errors.
+- 按钮总数及低于 44x44 的数量；
+- 最小 textarea 宽度；
+- 输入框高度占视口高度百分比；
+- 移动端标题宽度及 `公共聊天` 是否被截断；
+- 移动端可见消息字号；
+- 首个有意义聊天内容的 y 坐标；
+- 水平滚动条是否存在；
+- 输入框上方可见消息数；
+- 桌面端侧边栏模型预览卡片数及在线用户区域 y 坐标；
+- 群组信息面板宽度、高度、右对齐、标题截断情况、Webhook 区域可见性、成员行数、面板内低于 44x44 的控件数、桌面标题行稳定性以及首次进入群组空状态可见性；
+- 控制台错误。
 
-Current hard gates in `npm run visual:acceptance` include:
+`npm run visual:acceptance` 当前硬性门槛包括：
 
-- no horizontal overflow and no console/page errors;
-- mobile textarea at least 180px wide, tablet textarea at least 360px wide;
-- collapsed mobile composer at most 24% of viewport height;
-- mobile title at least 120px wide and the public-chat title must not be clipped;
-- mobile visible message text must stay at or below 15px;
-- at least 4 visible messages in collapsed mobile and tablet seeded chat views.
-- desktop sidebar model preview at most 4 cards and online-user section no lower than 680px from the top.
-- group info scenario must show a 320-390px right-aligned full-height panel, an unclipped heading, owner/admin Webhook controls, at least one member row, no visible panel controls below 44x44, a single-line desktop title, and a visible first-run group empty state.
+- 无水平溢出且无控制台/页面错误；
+- 移动端 textarea 至少 180px 宽，平板 textarea 至少 360px 宽；
+- 折叠态移动端输入框至多占视口高度的 24%；
+- 移动端标题至少 120px 宽且公开聊天标题不得被截断；
+- 移动端可见消息文字必须保持在 15px 或以下；
+- 折叠态移动端与平板种子聊天视图中至少 4 条可见消息；
+- 桌面端侧边栏模型预览至多 4 张卡片，在线用户区域距顶部不低过 680px；
+- 群组信息场景必须展示 320-390px 宽、全高右对齐面板，标题未被截断，owner/admin Webhook 控件可见，至少一行成员，无可视面板控件低于 44x44，桌面标题为单行，以及可见的首次群组空状态。
 
-Run the reusable Playwright acceptance script against a local production build:
+针对本地生产构建运行可复用的 Playwright 验收脚本：
 
 ```powershell
 cd D:\Code\Projects\TokenDanceChat\frontend
 npm run build
 
-# In another shell, serve the built app through the Go backend.
+# 在另一 shell 中通过 Go 后端托管构建产物。
 cd D:\Code\Projects\TokenDanceChat\backend
 $env:CHAT_DB_PATH = Join-Path $env:TEMP 'tdchat-visual-chat.db'
 $env:CHAT_FRONTEND_DIR = 'D:\Code\Projects\TokenDanceChat\frontend\dist'
 $env:CHAT_ADDR = ':8091'
 go run .
 
-# Then collect screenshots and metrics.
+# 随后采集截图与指标。
 cd D:\Code\Projects\TokenDanceChat\frontend
 $env:VISUAL_BASE_URL = 'http://127.0.0.1:8091'
 npm run visual:acceptance
 ```
 
-The script writes screenshots and `metrics.json` to a temp directory such as `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-*`. It refuses non-local targets unless `VISUAL_ALLOW_NONLOCAL=1` is set, because it seeds demo messages. Do not claim UI polish from a generated reference alone; use generated images only as aesthetic guidance for the real implementation.
+脚本将截图与 `metrics.json` 写入临时目录，如 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-*`。除非设置 `VISUAL_ALLOW_NONLOCAL=1`，否则拒绝非本地目标——因其会写入 Demo 种子消息。不要仅凭生成参考图声称 UI 打磨通过；生成图像仅用作真实实现的审美参考。
 
-## 2026-05-23 Acceptance
+## 2026-05-23 验收
 
-Latest accepted screenshot pass:
+最新通过的截图验收：
 
-- Output: `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-53-00-860Z`
-- Baseline: production build served by the Go backend on a clean temporary SQLite DB, so screenshots contain only the current seeded demo transcript and no repeated history from earlier runs.
-- Scenarios: seven screenshots, including `desktop-light-group-info`.
-- Desktop light/dark 1440x900: textarea 816x48px, composer 130px, 4 visible seeded messages, `smallControls=0`, sidebar width 312px, sidebar model preview 4 cards, sidebar online-user section top 561px, no horizontal overflow, no console errors.
-- Desktop light group info 1440x900: right-side panel 384px wide and full height, Webhook section visible for the owner, 1 member row, `groupSmallControls=0`, desktop title 169x24 and single-line, visible group empty state, no horizontal overflow, no console errors.
-- Tablet light 768x1024: textarea 456x48px, mobile title width 580px, composer 130px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
-- Mobile light/dark 390x844: title width 202px with `公共聊天` unclipped, message font 13.5px, collapsed composer textarea 208x66px, composer 87px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
-- Mobile light with formatting toolbar: textarea 208x66px, composer 144px, 4 visible seeded messages, `smallControls=0`, no horizontal overflow, no console errors.
-- Screenshot review confirms desktop core chat, the group admin panel, and the mobile composer remain readable and stable; no tiny controls, title clipping, overlapping UI, or layout overflow were observed.
+- 输出目录：`C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-22T23-53-00-860Z`
+- 基线：由 Go 后端托管的生产构建，使用干净的临时 SQLite 数据库，因此截图仅包含当前种子 Demo 对话，无此前运行的重复历史。
+- 场景：七张截图，含 `desktop-light-group-info`。
+- 桌面 light/dark 1440x900：textarea 816x48px，输入框 130px，4 条可见种子消息，`smallControls=0`，侧边栏宽度 312px，侧边栏模型预览 4 张卡片，侧边栏在线用户区域顶部 561px，无水平溢出，无控制台错误。
+- 桌面 light 群组信息 1440x900：右侧面板 384px 宽且全高，群主可见 Webhook 区域，1 行成员，`groupSmallControls=0`，桌面标题 169x24 单行，可见群组空状态，无水平溢出，无控制台错误。
+- 平板 light 768x1024：textarea 456x48px，移动端标题宽度 580px，输入框 130px，4 条可见种子消息，`smallControls=0`，无水平溢出，无控制台错误。
+- 移动端 light/dark 390x844：标题宽度 202px 且 `公共聊天` 未被截断，消息字号 13.5px，折叠态输入框 textarea 208x66px，输入框 87px，4 条可见种子消息，`smallControls=0`，无水平溢出，无控制台错误。
+- 移动端 light 含格式工具栏：textarea 208x66px，输入框 144px，4 条可见种子消息，`smallControls=0`，无水平溢出，无控制台错误。
+- 截图审阅确认桌面核心聊天、群组管理面板及移动端输入框保持可读且稳定；未发现过小控件、标题截断、UI 重叠或布局溢出。
 
-Screenshot passes caught real implementation issues:
+截图验收捕获了实际实现问题：
 
-- 768px tablet was forced into desktop layout and squeezed the textarea to 144px; the accepted layout now keeps tablet/mobile top bar until `lg`.
-- Mobile header showed `公共聊天` as `公...`; secondary mobile actions now live behind the more menu.
-- Desktop sidebar previously showed six model cards plus tall empty-state rows before online users; the accepted sidebar now keeps four model preview cards and brings online users to 561px from the top.
-- A follow-up pass caught a 43px tablet avatar button caused by pixel rounding; clickable avatars now use a 46px minimum target.
-- The group info screenshot initially hid owner-only Webhook controls because the frontend read legacy `members` instead of the backend `group_info.group_members` payload; the accepted pass verifies the typed role payload after a real WebSocket round trip.
-- Opening the group info panel squeezed desktop header icon buttons until fixed-width controls shrank to roughly 30px; header buttons now keep their 44px floor with `flex-shrink-0`.
-- Manual screenshot review then caught the desktop group title wrapping and a sparse first-run group state; the final script gates desktop title single-line stability and visible group empty-state content.
+- 768px 平板被强制使用桌面布局，textarea 被压缩至 144px；通过验收的布局在 `lg` 之前保持平板/移动端顶栏。
+- 移动端标题将 `公共聊天` 显示为 `公...`；移动端次要操作现已收入更多菜单。
+- 桌面侧边栏此前显示六张模型卡片加在线用户前的高空状态行；通过验收的侧边栏现已保持四张模型预览卡片，并将在线用户提升至距顶部 561px。
+- 一次跟进验收发现像素舍入导致 43px 平板头像按钮；可点击头像现使用 46px 最小目标。
+- 群组信息截图最初隐藏了群主专属 Webhook 控件，因前端读取旧版 `members` 而非后端 `group_info.group_members` 数据；通过验收的流程验证了真实 WebSocket 往返后的类型化角色数据。
+- 打开群组信息面板挤压了桌面标题图标按钮，导致定宽控件缩至约 30px；标题按钮现已通过 `flex-shrink-0` 保持 44px 下限。
+- 手动截图审阅随后发现桌面群组标题换行及首次群组空状态过于稀疏；最终脚本门控桌面标题单行稳定性及可见群组空状态内容。
 
-## Current Reference Prompt
+## 当前参考 Prompt
 
-Use this with `gpt-image-2` when an image-generation tool and API key are available. Treat the output as visual direction, not as a source asset to copy blindly, and never as a replacement for real browser screenshot acceptance.
+在图像生成工具与 API Key 可用时，与 `gpt-image-2` 配合使用。将输出视为视觉方向参考，而非直接照搬的源素材，且绝不替代真实浏览器截图验收。
 
 ```text
 Use case: ui-mockup
@@ -115,12 +115,12 @@ Controls: lucide-style icon buttons, 44px mobile tap targets, compact but not cr
 Constraints: no marketing hero, no decorative blob backgrounds, no glassmorphism, no fake brand logos, no unreadable microtext, no overlapping UI, no emoji as primary icons.
 ```
 
-## Review Notes
+## 审查说明
 
-If screenshots still feel weak, adjust in this order:
+若截图仍感觉薄弱，按以下顺序调整：
 
-1. Mobile composer row and formatting toolbar collapse.
-2. Header action overflow and secondary actions.
-3. Sidebar information density above the fold.
-4. Message transcript padding and empty-state scale.
-5. Remaining `text-[10px]` pockets in banners, metadata, and badges.
+1. 移动端输入框行与格式工具栏折叠。
+2. 标题动作溢出与次要操作。
+3. 侧边栏首屏信息密度。
+4. 消息列表内边距与空状态缩放。
+5. banner、元数据与徽章中残留的 `text-[10px]` 局部。
