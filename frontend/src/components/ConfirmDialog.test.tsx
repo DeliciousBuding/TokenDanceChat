@@ -2,6 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
+vi.mock("@/i18n/context", () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const map: Record<string, string> = { "a11y.close": "关闭" };
+      return map[key] ?? key;
+    },
+    lang: "zh-CN" as const,
+    setLang: vi.fn(),
+  }),
+}));
+
 // Mock localStorage (used by unrelated modules, but set up to be safe)
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -91,7 +102,7 @@ describe("ConfirmDialog", () => {
         onCancel={onCancel}
       />,
     );
-    const closeButton = screen.getByLabelText("Close");
+    const closeButton = screen.getByLabelText("关闭");
     fireEvent.click(closeButton);
     expect(onCancel).toHaveBeenCalledTimes(1);
   });

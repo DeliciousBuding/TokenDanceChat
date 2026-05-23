@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/context";
 
 interface ScrollToBottomProps {
   /** Ref to the scrollable container to monitor and control. */
@@ -20,6 +21,7 @@ interface ScrollToBottomProps {
  * Classic Telegram / Feishu UX pattern.
  */
 export function ScrollToBottom({ containerRef, threshold = 200, newCount, onClearCount }: ScrollToBottomProps) {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,7 +64,7 @@ export function ScrollToBottom({ containerRef, threshold = 200, newCount, onClea
   return (
     <button
       onClick={scrollToBottom}
-      aria-label={newCount ? `Scroll to bottom (${newCount} new messages)` : "Scroll to bottom"}
+      aria-label={newCount ? `${t("a11y.scrollToBottom")} (${newCount})` : t("a11y.scrollToBottom")}
       className={cn(
         "fixed bottom-24 right-4 z-30 flex h-10 w-10 items-center justify-center",
         "rounded-full bg-card border border-border shadow-lg",

@@ -91,7 +91,7 @@ export function InviteCodeManager({ open, onClose }: InviteCodeManagerProps) {
           <button
             onClick={onClose}
             className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            aria-label="Close"
+            aria-label={t("a11y.close")}
           >
             <X className="h-4 w-4" />
           </button>

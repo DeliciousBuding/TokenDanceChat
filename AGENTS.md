@@ -36,10 +36,10 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 ## 当前增量
 
-性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.8+），644 前端测试 / 42 文件 / tsc 0 / ESLint 0 / CI 全绿。
+性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.8+），672 前端测试 / 43 文件 / tsc 0 / ESLint 0 / CI 全绿。
 
 此增量包含：
-- 前端测试扩展至 644 tests / 42 files（~40% 行覆盖率）。
+- 前端测试扩展至 672 tests / 43 files（~40% 行覆盖率）。
 - E2E 测试扩展（64 tests：44 auth-flow + 8 group-call + 2 webhook + 10 dm-flow）。
 - 性能优化：O(1) reaction/read_by 查找表、onlineUsers prop 下沉至 MessageBubble、emoji 预处理提升。
 - WebSocket 自动重连：指数退避 + jitter（1s/2s/4s/8s/16s 上限），重连期间 banner 提示。
@@ -47,6 +47,10 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 - URL 预览卡片：紧凑型，500ms 防抖，年龄分级过滤，加载/错误/溢出状态覆盖。
 - 在线用户加载骨架屏、FAB 未读计数徽章。
 - SettingsModal + SettingsPanel 测试。
+- Poll 前端集成：创建/投票/结果展示 UI，typed WebSocket event 前后端闭环。
+- AdminPanel 完整 i18n：管理面板全部文案国际化，中英文覆盖。
+- i18n-scan skill：i18n 扫描、键值校验、未翻译检测 SOP（`.agents/skills/i18n-scan.md`）。
+- 后端测试扩展：main 模块集成测试 + media 模块 focused 测试。
 - 交叉审查 5 轮全部修复（HIGH + MEDIUM），安全修复 3 项。
 
 ## 近期增量（v0.2.7）
@@ -255,11 +259,12 @@ git log --oneline --all --grep='hk1|hk2|3221'
 
 ### 项目级 Skill
 
-可复用 SOP 沉淀到 `.agents/skills/` 目录（不含本机路径、凭据、IP）。共 4 个活跃 skill + 使用指南：
+可复用 SOP 沉淀到 `.agents/skills/` 目录（不含本机路径、凭据、IP）。共 5 个活跃 skill + 使用指南：
 
 - `verify` -- 提交前验证门禁（quick/full/security/E2E）
 - `pm-audit` -- PM UX 审计 SOP（file checklist, UX dimensions, competitor comparison, priority framework）
 - `deploy` -- 部署 SOP（Docker cp/build, systemctl, health check, rollback）
 - `cross-review` -- 代码交叉审查 SOP（8 维检查清单, file groups, 常见 bug 模式, 严重度分类, 输出格式）
+- `i18n-scan` -- i18n 扫描 SOP（键值校验、未翻译检测、硬编码字符串发现）
 
 详见 `.agents/skills/README.md`。

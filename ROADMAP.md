@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.8](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.8) | Docker: `tokendancechat:v0.2.8` | 测试: 644 前端 / 42 文件 / 全绿
+发布: [v0.2.8](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.8) | Docker: `tokendancechat:v0.2.8` | 测试: 672 前端 / 43 文件 / 全绿
 
 ## 当前目标
 
@@ -48,9 +48,9 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 ## 当前增量（dev）：测试覆盖 + 性能优化 + UI 打磨 + 工程基建
 
-状态：持续推进。644 tests / 42 files / tsc 0 / ESLint 0 / CI 就绪。
+状态：持续推进。672 tests / 43 files / tsc 0 / ESLint 0 / CI 就绪。
 
-- [x] 前端测试从 237 → 644 (+407 tests / +24 文件 / 40%+ 行覆盖率)。
+- [x] 前端测试从 237 → 672 (+435 tests / +25 文件 / 40%+ 行覆盖率)。
 - [x] E2E 测试从 18 → 64 (44 auth-flow + 8 group-call + 2 webhook + 10 dm-flow)。
 - [x] 后端测试扩展：store +7、hub +8、handler +34、llm +8、ratelimit 更新、ws +2。
 - [x] PM 产品审计 P0 修复：侧栏对话预览、未读「新消息」分隔线、移动端语音按钮可见。
@@ -129,6 +129,16 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] 为 rotation secret 失效、audit log 脱敏和权限检查添加 focused store 和 hub 测试。
 - [x] 为 rotation state（一次性 secret 隔离、rotated 元数据、audit log 存储）添加前端 store 测试，及 rotate 按钮和 audit 渲染的 GroupInfoPanel 测试。
 
+## 当前增量：Poll 前端集成 + AdminPanel i18n + 后端测试扩展 + i18n-scan skill
+
+状态：已实现、已测试、已通过。
+
+- [x] Poll 前端集成：创建/投票/结果展示 UI，typed WebSocket event 前后端闭环。
+- [x] AdminPanel 完整 i18n：所有管理界面文案国际化，中英文覆盖。
+- [x] 后端测试扩展：main 模块集成测试 + media 模块 focused 测试。
+- [x] i18n-scan skill：沉淀 i18n 扫描、键值校验、未翻译检测为可复用 SOP（`.agents/skills/i18n-scan.md`）。
+- [x] 前端测试从 644 扩展至 672（43 文件），后端测试保持全量 PASS。
+
 ## 后续产品任务
 
 1. 群组视频通话浏览器 smoke/E2E（双会话或 mock WebRTC/media 边界）。~~（store 逻辑已覆盖：participants 计算、isGroupCall/groupName 设置与清除）~~
@@ -149,7 +159,7 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-23 | `cd backend; go test ./handler -run "TestWebhookHandlerVerifiesHashedSecret|TestHealthCheck|Test(RateLimitMiddleware|ShouldRateLimitAPI|WSAllow)"` | PASS |
 | 2026-05-23 | `cd backend; go test ./...` | PASS |
 | 2026-05-23 | `cd frontend; npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx` | PASS |
-| 2026-05-23 | `cd frontend; npm test` | PASS, 42 files / 644 tests |
+| 2026-05-23 | `cd frontend; npm test` | PASS, 43 files / 672 tests |
 | 2026-05-23 | `cd frontend; npx tsc --noEmit` | PASS |
 | 2026-05-23 | `cd frontend; npm run build` | PASS |
 | 2026-05-23 | `docker build --check -f Dockerfile . && docker build --check -f Dockerfile.runtime .` | PASS |
@@ -159,6 +169,8 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-23 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | PASS, 18/18 |
 | 2026-05-23 | `git diff --check` | PASS |
 | 2026-05-23 | 搜索已删除交接文件的所有过期引用，排除 `node_modules`、`.git` 和 `.worktrees` | PASS，无匹配 |
+| 2026-05-24 | `cd frontend; npm test` | PASS, 43 files / 672 tests |
+| 2026-05-24 | `cd backend; go test ./...` | PASS |
 ## Review Gates
 
 提交或交接有意义的变更前：

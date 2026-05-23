@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from "react";
 import { X, ZoomIn, ZoomOut } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "@/i18n/context";
 
 interface ImageLightboxProps {
   imageUrl: string;
@@ -8,6 +9,7 @@ interface ImageLightboxProps {
 }
 
 export function ImageLightbox({ imageUrl, onClose }: ImageLightboxProps) {
+  const { t } = useTranslation();
   const [scale, setScale] = useState(1);
   const imageWrapperRef = useRef<HTMLDivElement>(null);
 
@@ -52,21 +54,21 @@ export function ImageLightbox({ imageUrl, onClose }: ImageLightboxProps) {
         <button
           onClick={zoomOut}
           className="rounded-lg bg-white/10 p-2 text-white/80 hover:bg-white/20 hover:text-white transition-colors"
-          aria-label="Zoom out"
+          aria-label={t("a11y.zoomOut")}
         >
           <ZoomOut className="h-4 w-4" />
         </button>
         <button
           onClick={zoomIn}
           className="rounded-lg bg-white/10 p-2 text-white/80 hover:bg-white/20 hover:text-white transition-colors"
-          aria-label="Zoom in"
+          aria-label={t("a11y.zoomIn")}
         >
           <ZoomIn className="h-4 w-4" />
         </button>
         <button
           onClick={onClose}
           className="rounded-lg bg-white/10 p-2 text-white/80 hover:bg-white/20 hover:text-white transition-colors"
-          aria-label="Close"
+          aria-label={t("a11y.close")}
         >
           <X className="h-4 w-4" />
         </button>

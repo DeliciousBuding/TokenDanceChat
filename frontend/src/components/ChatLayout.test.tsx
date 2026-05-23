@@ -185,7 +185,7 @@ describe("ChatLayout", () => {
 
     it("移动端次要操作收纳在更多菜单", () => {
       renderChatLayout();
-      fireEvent.click(screen.getByLabelText("More chat actions"));
+      fireEvent.click(screen.getByLabelText("更多操作"));
       expect(screen.getAllByText("English").length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText("导出为 JSON")).toBeTruthy();
       expect(screen.getByText("导出为文本")).toBeTruthy();
@@ -195,7 +195,7 @@ describe("ChatLayout", () => {
 
     it("移动端折叠菜单按钮存在", () => {
       renderChatLayout();
-      expect(screen.getByLabelText("Open sidebar")).toBeTruthy();
+      expect(screen.getByLabelText("打开侧边栏")).toBeTruthy();
     });
   });
 

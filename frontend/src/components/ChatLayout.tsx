@@ -498,7 +498,7 @@ export function ChatLayout() {
         <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-2 lg:hidden pt-safe">
           <button
             onClick={() => setSidebarOpen(true)}
-            aria-label="Open sidebar"
+            aria-label={t("a11y.openSidebar")}
             className="touch-target rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <Menu className="h-5 w-5" />
@@ -556,7 +556,7 @@ export function ChatLayout() {
           <div className="relative flex-shrink-0">
             <button
               onClick={() => setMobileActionsOpen((open) => !open)}
-              aria-label="More chat actions"
+              aria-label={t("a11y.moreActions")}
               className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
             >
               <MoreHorizontal className="h-5 w-5" />

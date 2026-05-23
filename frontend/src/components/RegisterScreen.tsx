@@ -104,7 +104,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
         <button
           onClick={onBack}
           className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Back"
+          aria-label={t("a11y.back")}
         >
           <ArrowLeft className="h-4 w-4" />
           {t("auth.guestLogin")}

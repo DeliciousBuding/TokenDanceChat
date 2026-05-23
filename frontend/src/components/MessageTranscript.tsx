@@ -568,7 +568,7 @@ export function MessageTranscript({
           <button onClick={() => setShowBatchForwardPicker((prev) => !prev)} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors" aria-label={t("transcript.contextForward")}>
             <Forward className="h-4 w-4" />{t("transcript.contextForward")}
           </button>
-          <button onClick={exitSelectMode} className="flex items-center gap-1 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" aria-label="Exit select mode">
+          <button onClick={exitSelectMode} className="flex items-center gap-1 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" aria-label={t("a11y.exitSelect")}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>

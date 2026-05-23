@@ -227,17 +227,17 @@ describe("ChatInput", () => {
 
     it("图片上传按钮存在", () => {
       renderChatInput();
-      expect(screen.getByLabelText("Upload image")).toBeTruthy();
+      expect(screen.getByLabelText("上传图片")).toBeTruthy();
     });
 
     it("文件上传按钮存在", () => {
       renderChatInput();
-      expect(screen.getByLabelText("Upload file")).toBeTruthy();
+      expect(screen.getByLabelText("上传文件")).toBeTruthy();
     });
 
     it("麦克风按钮存在", () => {
       renderChatInput();
-      expect(screen.getByLabelText("Record voice message")).toBeTruthy();
+      expect(screen.getByLabelText("录制语音")).toBeTruthy();
     });
 
     it("Markdown 格式化工具栏存在", () => {
