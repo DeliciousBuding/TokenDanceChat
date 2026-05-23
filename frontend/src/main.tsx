@@ -64,7 +64,10 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { chatAPI } from "@/lib/api";
 
 // Expose chatAPI for E2E tests (sends via existing WS, avoids kick mechanism).
-(window as any).__chatAPI = chatAPI;
+// Only available in dev mode or when ?e2e query param is present.
+if (import.meta.env.DEV || new URLSearchParams(window.location.search).has('e2e')) {
+  (window as any).__chatAPI = chatAPI;
+}
 
 createRoot(document.getElementById("root")!).render(
   <I18nProvider>

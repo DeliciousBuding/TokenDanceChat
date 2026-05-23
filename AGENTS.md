@@ -36,10 +36,10 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 ## 当前增量
 
-性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.8+），672 前端测试 / 43 文件 / tsc 0 / ESLint 0 / CI 全绿。
+性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.8+），695 前端测试 / 46 文件 / tsc 0 / ESLint 0 / CI 全绿。
 
 此增量包含：
-- 前端测试扩展至 672 tests / 43 files（~40% 行覆盖率）。
+- 前端测试扩展至 695 tests / 46 files（~40% 行覆盖率）。
 - E2E 测试扩展（64 tests：44 auth-flow + 8 group-call + 2 webhook + 10 dm-flow）。
 - 性能优化：O(1) reaction/read_by 查找表、onlineUsers prop 下沉至 MessageBubble、emoji 预处理提升。
 - WebSocket 自动重连：指数退避 + jitter（1s/2s/4s/8s/16s 上限），重连期间 banner 提示。
@@ -52,6 +52,9 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 - i18n-scan skill：i18n 扫描、键值校验、未翻译检测 SOP（`.agents/skills/i18n-scan.md`）。
 - 后端测试扩展：main 模块集成测试 + media 模块 focused 测试。
 - 交叉审查 5 轮全部修复（HIGH + MEDIUM），安全修复 3 项。
+- Hub.Stop()：goroutine-safe test cleanup，消除测试间资源泄露。
+- formatTime/formatLastSeen lang 参数（i18n P3 完成）。
+- willChange:transform scroll fix：修复 Chrome/Edge 下消息列表滚动性能问题。
 
 ## 近期增量（v0.2.7）
 

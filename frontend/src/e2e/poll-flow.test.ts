@@ -39,10 +39,11 @@ const setupPage = async (page: import("@playwright/test").Page) => {
 async function joinChat(
   page: import("@playwright/test").Page,
   name?: string,
+  path = "/",
 ): Promise<string> {
   const guestName = name ?? `e2e_${Math.random().toString(36).slice(2, 8)}`;
 
-  await page.goto("/");
+  await page.goto(path);
   await page.getByPlaceholder("你的用户名...").fill(guestName);
   await page.getByRole("button", { name: "游客加入" }).click();
 
@@ -412,8 +413,8 @@ test.describe("Poll Creation & Voting Flow", () => {
     test("poll creator can close the poll", async ({ page }) => {
       const creatorName = `creator_${Math.random().toString(36).slice(2, 6)}`;
 
-      // Join as the poll creator.
-      await page.goto("/");
+      // Join as the poll creator (with ?e2e to expose __chatAPI).
+      await page.goto("/?e2e");
       await page.getByPlaceholder("你的用户名...").fill(creatorName);
       await page.getByRole("button", { name: "游客加入" }).click();
       await expect(page.locator("textarea").first()).toBeVisible({
@@ -442,7 +443,7 @@ test.describe("Poll Creation & Voting Flow", () => {
     });
 
     test("closed poll shows final results", async ({ page }) => {
-      await joinChat(page);
+      await joinChat(page, undefined, "/?e2e");
 
       const question = `FinalResult_${Math.random().toString(36).slice(2, 6)}`;
       const options = ["Up", "Down", "Strange", "Charm"];
