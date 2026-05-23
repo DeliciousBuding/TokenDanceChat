@@ -437,7 +437,7 @@ class ChatAPI {
         // Close the timed-out socket to prevent orphaned onopen from
         // writing to a newer connection.
         this.ws?.close();
-      }, 8000);
+      }, 15000);
 
       this.ws.onopen = () => {
         clearTimeout(timeout);
