@@ -76,8 +76,8 @@ function renderSidebar(props?: {
   };
 }
 
-/** Helper: expand the collapsible AI 助手 section so assistant/model tests work. */
-function expandAIAssistants() {
+/** Helper: click the collapsible AI 助手 header to toggle expansion. Default is expanded. */
+function toggleAIAssistants() {
   const header = screen.getByText("AI 助手");
   fireEvent.click(header);
 }
@@ -167,27 +167,24 @@ describe("Sidebar", () => {
   });
 
   describe("AI 助手区 (collapsible Assistants + Models)", () => {
-    it("默认折叠，AI 助手 header 可见", () => {
+    it("默认展开，AI 助手 header 可见", () => {
       renderSidebar();
       expect(screen.getByText("AI 助手")).toBeTruthy();
     });
 
-    it("默认折叠时助手列表不可见", () => {
+    it("默认展开时助手列表可见", () => {
       renderSidebar();
-      // TokenBot/PicoClaw are not rendered when section is collapsed
-      expect(screen.queryByText("TokenBot")).toBeNull();
-      expect(screen.queryByText("PicoClaw")).toBeNull();
+      expect(screen.getByText("TokenBot")).toBeTruthy();
+      expect(screen.getByText("PicoClaw")).toBeTruthy();
     });
 
     it("展开后显示助手 section 子标题", () => {
       renderSidebar();
-      expandAIAssistants();
       expect(screen.getByText("助手")).toBeTruthy();
     });
 
     it("展开后 TokenBot 和 PicoClaw 助手可见", () => {
       renderSidebar();
-      expandAIAssistants();
       const tokenBotMatches = screen.getAllByText("TokenBot");
       const picoClawMatches = screen.getAllByText("PicoClaw");
       expect(tokenBotMatches.length).toBeGreaterThanOrEqual(1);
@@ -196,7 +193,6 @@ describe("Sidebar", () => {
 
     it("展开后助手标签 Bot/Agent 存在", () => {
       renderSidebar();
-      expandAIAssistants();
       const botElements = screen.getAllByText((content) => content.includes("Bot"));
       const agentElements = screen.getAllByText((content) => content.includes("Agent"));
       expect(botElements.length).toBeGreaterThanOrEqual(1);
@@ -205,7 +201,6 @@ describe("Sidebar", () => {
 
     it("展开后点击助手触发 onMentionAssistant", () => {
       const { onMentionAssistant } = renderSidebar();
-      expandAIAssistants();
 
       const tokenBotButtons = screen.getAllByText("TokenBot");
       fireEvent.click(tokenBotButtons[0]);
@@ -215,20 +210,17 @@ describe("Sidebar", () => {
 
     it("展开后助手卡片显示在线状态点", () => {
       const { container } = renderSidebar();
-      expandAIAssistants();
       const onlineDots = container.querySelectorAll(".bg-online");
       expect(onlineDots.length).toBeGreaterThan(0);
     });
 
     it("展开后显示模型 section 子标题", () => {
       renderSidebar();
-      expandAIAssistants();
       expect(screen.getByText("模型")).toBeTruthy();
     });
 
     it("展开后模型卡片包含 providerName 文本", () => {
       renderSidebar();
-      expandAIAssistants();
       const deepseekMatches = screen.getAllByText("DeepSeek");
       expect(deepseekMatches.length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText("Qwen")).toBeTruthy();
@@ -237,20 +229,17 @@ describe("Sidebar", () => {
 
     it("展开后模型卡片有网格布局", () => {
       const { container } = renderSidebar();
-      expandAIAssistants();
       const grid = container.querySelector(".grid.grid-cols-2");
       expect(grid).toBeTruthy();
     });
 
     it("展开后模型预览只展示前四个模型", () => {
       renderSidebar();
-      expandAIAssistants();
       expect(screen.getAllByTestId("sidebar-model-card")).toHaveLength(4);
     });
 
     it("折叠回 AI 助手区会隐藏内容", () => {
       renderSidebar();
-      expandAIAssistants();
       expect(screen.getByText("助手")).toBeTruthy();
       // Click again to collapse
       fireEvent.click(screen.getByText("AI 助手"));
@@ -265,9 +254,9 @@ describe("Sidebar", () => {
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
 
-    it("显示副标题 'Public Chat Room'", () => {
+    it("显示副标题 '公共聊天室'", () => {
       renderSidebar();
-      expect(screen.getByText("Public Chat Room")).toBeTruthy();
+      expect(screen.getByText("公共聊天室")).toBeTruthy();
     });
 
     it("不传 onClose 时无关闭按钮", () => {

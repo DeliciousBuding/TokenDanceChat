@@ -1729,9 +1729,7 @@ export function ChatInput({
       {disconnectFeedback && (
         <div className="animate-fade-in px-4 pb-1.5">
           <p className="text-xs text-destructive/70">
-            {lang === "zh-CN"
-              ? "未连接 — 重新连接后重试"
-              : "Not connected — retrying..."}
+            {t("system.disconnected")}
           </p>
         </div>
       )}
