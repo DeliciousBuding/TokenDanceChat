@@ -42,8 +42,13 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
           setError(t("error.unknown"));
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : t("error.unknown");
-        setError(msg);
+        const msg = err instanceof Error ? err.message : "";
+        // Map known server errors to user-friendly i18n messages.
+        if (msg.includes("not found") || msg.includes("invalid") || msg.includes("credentials")) {
+          setError(t("auth.loginFailed"));
+        } else {
+          setError(msg || t("error.unknown"));
+        }
       } finally {
         setLoading(false);
       }

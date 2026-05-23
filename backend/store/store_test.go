@@ -621,3 +621,558 @@ func TestCheckPasswordLegacyWrongPassword(t *testing.T) {
 	}
 }
 
+// ── User registration ──
+
+func TestRegisterUser(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Create an invite code for testing.
+	code, err := s.GenerateInviteCode("admin", 2)
+	if err != nil {
+		t.Fatalf("GenerateInviteCode returned error: %v", err)
+	}
+	if code == "" {
+		t.Fatal("expected non-empty invite code")
+	}
+	if len(code) != 8 {
+		t.Errorf("expected 8-char invite code, got %d", len(code))
+	}
+
+	// Register a user with the valid invite code.
+	err = s.RegisterUser("newuser", "secure-password-123", code)
+	if err != nil {
+		t.Fatalf("RegisterUser with valid code returned error: %v", err)
+	}
+
+	// Verify the user was created in the DB.
+	var pwdHash string
+	err = s.db.QueryRow("SELECT password_hash FROM users WHERE username = ?", "newuser").Scan(&pwdHash)
+	if err != nil {
+		t.Fatalf("user not found after registration: %v", err)
+	}
+	if !strings.HasPrefix(pwdHash, "$2a$") {
+		t.Errorf("expected bcrypt hash, got: %s", pwdHash[:20]+"...")
+	}
+
+	// Duplicate username should fail.
+	err = s.RegisterUser("newuser", "another-password", code)
+	if err == nil {
+		t.Error("expected error for duplicate username registration")
+	}
+
+	// Register a second user to exhaust the code (maxUses=2).
+	err = s.RegisterUser("newuser2", "password456", code)
+	if err != nil {
+		t.Fatalf("RegisterUser second time returned error: %v", err)
+	}
+
+	// Third registration with exhausted code should fail.
+	err = s.RegisterUser("newuser3", "password789", code)
+	if err == nil {
+		t.Error("expected error for exhausted invite code")
+	}
+
+	// Empty invite code should fail.
+	err = s.RegisterUser("newuser4", "password", "")
+	if err == nil {
+		t.Error("expected error for empty invite code")
+	}
+
+	// Invalid invite code should fail.
+	err = s.RegisterUser("newuser5", "password", "ZZZZZZZZ")
+	if err == nil {
+		t.Error("expected error for invalid invite code")
+	}
+
+	// Check TotalUsers.
+	if s.TotalUsers() != 2 {
+		t.Errorf("expected TotalUsers=2, got %d", s.TotalUsers())
+	}
+}
+
+func TestVerifyUserBcryptUpgradeFlow(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Step 1: Manually insert a user with a legacy SHA-256 password hash.
+	salt := make([]byte, 16)
+	for i := range salt {
+		salt[i] = byte(i)
+	}
+	password := "upgrade-me-password"
+	h := sha256.Sum256(append(salt, []byte(password)...))
+	legacyHash := hex.EncodeToString(salt) + ":" + hex.EncodeToString(h[:])
+
+	now := time.Now().UnixMilli()
+	_, err = s.db.Exec(
+		"INSERT INTO users (username, password_hash, invited_by, created_at) VALUES (?, ?, ?, ?)",
+		"legacyuser", legacyHash, "admin", now,
+	)
+	if err != nil {
+		t.Fatalf("failed to insert legacy user: %v", err)
+	}
+
+	// Step 2: VerifyUser should succeed and auto-upgrade the hash.
+	ok, err := s.VerifyUser("legacyuser", password)
+	if err != nil {
+		t.Fatalf("VerifyUser returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("VerifyUser should return true for correct password")
+	}
+
+	// Step 3: Confirm the stored hash was upgraded to bcrypt.
+	var storedHash string
+	err = s.db.QueryRow("SELECT password_hash FROM users WHERE username = ?", "legacyuser").Scan(&storedHash)
+	if err != nil {
+		t.Fatalf("failed to read upgraded hash: %v", err)
+	}
+	if !strings.HasPrefix(storedHash, "$2a$") {
+		t.Errorf("expected bcrypt hash after upgrade, got: %s", storedHash[:20]+"...")
+	}
+
+	// Step 4: VerifyUser again — should use bcrypt path now.
+	ok, err = s.VerifyUser("legacyuser", password)
+	if err != nil {
+		t.Fatalf("VerifyUser after upgrade returned error: %v", err)
+	}
+	if !ok {
+		t.Error("VerifyUser should return true after upgrade")
+	}
+
+	// Step 5: Wrong password should still fail.
+	ok, err = s.VerifyUser("legacyuser", "wrong-password")
+	if err != nil {
+		t.Fatalf("VerifyUser with wrong password returned error: %v", err)
+	}
+	if ok {
+		t.Error("VerifyUser should return false for wrong password")
+	}
+
+	// Step 6: Non-existent user should return false without error.
+	ok, err = s.VerifyUser("nonexistent", "password")
+	if err != nil {
+		t.Fatalf("VerifyUser for nonexistent user returned error: %v", err)
+	}
+	if ok {
+		t.Error("VerifyUser should return false for non-existent user")
+	}
+}
+
+func TestGetUserProfile(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Upsert a profile.
+	err = s.UpsertUserProfile("alice", "Alice Wang", "https://example.com/avatar.png", "Hello world", "online", time.Now().UnixMilli())
+	if err != nil {
+		t.Fatalf("UpsertUserProfile returned error: %v", err)
+	}
+
+	// Retrieve the profile.
+	profile, err := s.GetUserProfile("alice")
+	if err != nil {
+		t.Fatalf("GetUserProfile returned error: %v", err)
+	}
+	if profile.Username != "alice" {
+		t.Errorf("expected username 'alice', got '%s'", profile.Username)
+	}
+	if profile.DisplayName != "Alice Wang" {
+		t.Errorf("expected display_name 'Alice Wang', got '%s'", profile.DisplayName)
+	}
+	if profile.AvatarURL != "https://example.com/avatar.png" {
+		t.Errorf("expected avatar_url, got '%s'", profile.AvatarURL)
+	}
+	if profile.Bio != "Hello world" {
+		t.Errorf("expected bio 'Hello world', got '%s'", profile.Bio)
+	}
+	if profile.Status != "online" {
+		t.Errorf("expected status 'online', got '%s'", profile.Status)
+	}
+
+	// Non-existent profile should return error.
+	_, err = s.GetUserProfile("nonexistent")
+	if err == nil {
+		t.Error("expected error for non-existent user profile")
+	}
+
+	// Update status.
+	err = s.UpdateUserStatus("alice", "away")
+	if err != nil {
+		t.Fatalf("UpdateUserStatus returned error: %v", err)
+	}
+	profile, err = s.GetUserProfile("alice")
+	if err != nil {
+		t.Fatalf("GetUserProfile after status update returned error: %v", err)
+	}
+	if profile.Status != "away" {
+		t.Errorf("expected status 'away' after update, got '%s'", profile.Status)
+	}
+
+	// Update last seen.
+	err = s.UpdateUserLastSeen("bob")
+	if err != nil {
+		t.Fatalf("UpdateUserLastSeen returned error: %v", err)
+	}
+	profile, err = s.GetUserProfile("bob")
+	if err != nil {
+		t.Fatalf("GetUserProfile for last-seen-only user returned error: %v", err)
+	}
+	if profile.LastSeen == 0 {
+		t.Error("expected non-zero last_seen after UpdateUserLastSeen")
+	}
+
+	// GetAllUserProfiles.
+	profiles, err := s.GetAllUserProfiles()
+	if err != nil {
+		t.Fatalf("GetAllUserProfiles returned error: %v", err)
+	}
+	if len(profiles) != 2 {
+		t.Errorf("expected 2 profiles, got %d", len(profiles))
+	}
+}
+
+// ── Room-scoped messages ──
+
+func TestGetRoomMessages(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Create a room.
+	roomID, err := s.CreateRoom("test-room")
+	if err != nil {
+		t.Fatalf("CreateRoom returned error: %v", err)
+	}
+	if roomID == "" {
+		t.Fatal("expected non-empty room ID")
+	}
+
+	// Insert messages into the room.
+	s.InsertMessage("alice", "room msg 1", "", roomID, "", "", "")
+	time.Sleep(time.Millisecond)
+	s.InsertMessage("bob", "room msg 2", "", roomID, "", "", "")
+	time.Sleep(time.Millisecond)
+	s.InsertMessage("alice", "room msg 3", "", roomID, "", "", "")
+
+	// Also insert a public message (no room) — should not appear in room queries.
+	s.InsertMessage("charlie", "public msg", "", "", "", "", "")
+
+	// Get room messages.
+	msgs := s.GetRoomMessages(roomID, 100, 0)
+	if len(msgs) != 3 {
+		t.Fatalf("expected 3 room messages, got %d", len(msgs))
+	}
+	if msgs[0].Content != "room msg 1" {
+		t.Errorf("expected first message 'room msg 1', got '%s'", msgs[0].Content)
+	}
+	if msgs[2].Content != "room msg 3" {
+		t.Errorf("expected third message 'room msg 3', got '%s'", msgs[2].Content)
+	}
+	// Verify room_id is set on returned messages.
+	for _, m := range msgs {
+		if m.RoomID != roomID {
+			t.Errorf("expected room_id '%s', got '%s'", roomID, m.RoomID)
+		}
+	}
+
+	// Pagination with before.
+	thirdMsg := msgs[2]
+	msgs = s.GetRoomMessages(roomID, 100, thirdMsg.Timestamp)
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages before third, got %d", len(msgs))
+	}
+	if msgs[0].Content != "room msg 1" || msgs[1].Content != "room msg 2" {
+		t.Error("unexpected pagination results for room messages")
+	}
+
+	// Limit.
+	msgs = s.GetRoomMessages(roomID, 2, 0)
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages with limit, got %d", len(msgs))
+	}
+
+	// Verify room exists in list.
+	rooms := s.ListRooms()
+	found := false
+	for _, r := range rooms {
+		if r.ID == roomID && r.Name == "test-room" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected 'test-room' in room list")
+	}
+}
+
+// ── Threaded replies ──
+
+func TestGetThreadMessages(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Insert a parent message.
+	parent, err := s.InsertMessage("alice", "parent message", "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("InsertMessage returned error: %v", err)
+	}
+
+	// Insert thread replies.
+	time.Sleep(time.Millisecond)
+	s.InsertMessage("bob", "reply 1", parent.ID, "", "", "", parent.ID)
+	time.Sleep(time.Millisecond)
+	s.InsertMessage("charlie", "reply 2", parent.ID, "", "", "", parent.ID)
+
+	// GetThreadMessages should return replies in chronological order.
+	replies := s.GetThreadMessages(parent.ID)
+	if len(replies) != 2 {
+		t.Fatalf("expected 2 thread replies, got %d", len(replies))
+	}
+	if replies[0].Content != "reply 1" {
+		t.Errorf("expected first reply 'reply 1', got '%s'", replies[0].Content)
+	}
+	if replies[1].Content != "reply 2" {
+		t.Errorf("expected second reply 'reply 2', got '%s'", replies[1].Content)
+	}
+	if replies[0].ThreadID != parent.ID {
+		t.Errorf("expected thread_id '%s', got '%s'", parent.ID, replies[0].ThreadID)
+	}
+	if replies[0].ReplyToID != parent.ID {
+		t.Errorf("expected reply_to_id '%s', got '%s'", parent.ID, replies[0].ReplyToID)
+	}
+
+	// GetThreadReplyCount.
+	count := s.GetThreadReplyCount(parent.ID)
+	if count != 2 {
+		t.Errorf("expected 2 thread replies, got %d", count)
+	}
+
+	// Empty thread should return 0 replies.
+	replies = s.GetThreadMessages("nonexistent-id")
+	if len(replies) != 0 {
+		t.Errorf("expected 0 replies for unknown thread, got %d", len(replies))
+	}
+	count = s.GetThreadReplyCount("nonexistent-id")
+	if count != 0 {
+		t.Errorf("expected 0 count for unknown thread, got %d", count)
+	}
+}
+
+// ── Group management ──
+
+func TestCreateGroupAndMembers(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Create a group.
+	err = s.CreateGroup("devs", "alice")
+	if err != nil {
+		t.Fatalf("CreateGroup returned error: %v", err)
+	}
+
+	// Get group info.
+	info, err := s.GetGroupInfo("devs")
+	if err != nil {
+		t.Fatalf("GetGroupInfo returned error: %v", err)
+	}
+	if info.Name != "devs" {
+		t.Errorf("expected group name 'devs', got '%s'", info.Name)
+	}
+	if info.Owner != "alice" {
+		t.Errorf("expected owner 'alice', got '%s'", info.Owner)
+	}
+	if info.MemberCount != 1 {
+		t.Errorf("expected 1 member after creation, got %d", info.MemberCount)
+	}
+
+	// Get group owner.
+	owner, err := s.GetGroupOwner("devs")
+	if err != nil {
+		t.Fatalf("GetGroupOwner returned error: %v", err)
+	}
+	if owner != "alice" {
+		t.Errorf("expected owner 'alice', got '%s'", owner)
+	}
+
+	// Get members with roles.
+	members := s.GetGroupMembersWithRoles("devs")
+	if len(members) != 1 {
+		t.Fatalf("expected 1 member, got %d", len(members))
+	}
+	if members[0].Username != "alice" || members[0].Role != "owner" {
+		t.Errorf("expected alice as owner, got %s/%s", members[0].Username, members[0].Role)
+	}
+
+	// Add members.
+	err = s.AddGroupMember("devs", "bob")
+	if err != nil {
+		t.Fatalf("AddGroupMember returned error: %v", err)
+	}
+	err = s.AddGroupMember("devs", "charlie")
+	if err != nil {
+		t.Fatalf("AddGroupMember returned error: %v", err)
+	}
+
+	// Get member role.
+	role, err := s.GetGroupMemberRole("devs", "bob")
+	if err != nil {
+		t.Fatalf("GetGroupMemberRole returned error: %v", err)
+	}
+	if role != "member" {
+		t.Errorf("expected role 'member', got '%s'", role)
+	}
+
+	// Set member role to admin.
+	err = s.SetGroupMemberRole("devs", "bob", "admin")
+	if err != nil {
+		t.Fatalf("SetGroupMemberRole returned error: %v", err)
+	}
+	role, err = s.GetGroupMemberRole("devs", "bob")
+	if err != nil {
+		t.Fatalf("GetGroupMemberRole after promotion returned error: %v", err)
+	}
+	if role != "admin" {
+		t.Errorf("expected role 'admin' after promotion, got '%s'", role)
+	}
+
+	// Get simple member list.
+	names := s.GetGroupMembers("devs")
+	if len(names) != 3 {
+		t.Errorf("expected 3 members, got %d", len(names))
+	}
+
+	// Verify member count updated.
+	info, err = s.GetGroupInfo("devs")
+	if err != nil {
+		t.Fatalf("GetGroupInfo after adding members returned error: %v", err)
+	}
+	if info.MemberCount != 3 {
+		t.Errorf("expected 3 members in info, got %d", info.MemberCount)
+	}
+
+	// Get all groups.
+	allGroups := s.GetAllGroups()
+	if len(allGroups) != 1 {
+		t.Errorf("expected 1 group in GetAllGroups, got %d", len(allGroups))
+	}
+	if len(allGroups["devs"]) != 3 {
+		t.Errorf("expected 3 members in devs group, got %d", len(allGroups["devs"]))
+	}
+
+	// Remove a member.
+	err = s.RemoveGroupMember("devs", "charlie")
+	if err != nil {
+		t.Fatalf("RemoveGroupMember returned error: %v", err)
+	}
+	names = s.GetGroupMembers("devs")
+	if len(names) != 2 {
+		t.Errorf("expected 2 members after removal, got %d", len(names))
+	}
+}
+
+// ── Invite codes ──
+
+func TestGenerateInviteCode(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Generate code with specific max uses.
+	code, err := s.GenerateInviteCode("admin", 3)
+	if err != nil {
+		t.Fatalf("GenerateInviteCode returned error: %v", err)
+	}
+	if len(code) != 8 {
+		t.Errorf("expected 8-character code, got %d", len(code))
+	}
+	for _, c := range code {
+		if !strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", c) {
+			t.Errorf("invite code contains invalid character: %c", c)
+		}
+	}
+
+	// Validate the code.
+	valid, err := s.ValidateInviteCode(code)
+	if err != nil {
+		t.Fatalf("ValidateInviteCode returned error: %v", err)
+	}
+	if !valid {
+		t.Error("expected code to be valid")
+	}
+
+	// Validate with lowercase should work (normalized to uppercase).
+	valid, err = s.ValidateInviteCode(strings.ToLower(code))
+	if err != nil {
+		t.Fatalf("ValidateInviteCode (lowercase) returned error: %v", err)
+	}
+	if !valid {
+		t.Error("expected lowercase code to be valid (normalized)")
+	}
+
+	// Validate empty code.
+	valid, err = s.ValidateInviteCode("")
+	if err != nil {
+		t.Fatalf("ValidateInviteCode (empty) returned error: %v", err)
+	}
+	if valid {
+		t.Error("expected empty code to be invalid")
+	}
+
+	// Validate non-existent code.
+	valid, err = s.ValidateInviteCode("ZZZZZZZZ")
+	if err != nil {
+		t.Fatalf("ValidateInviteCode (nonexistent) returned error: %v", err)
+	}
+	if valid {
+		t.Error("expected non-existent code to be invalid")
+	}
+
+	// Generate another code.
+	code2, err := s.GenerateInviteCode("admin", 1)
+	if err != nil {
+		t.Fatalf("GenerateInviteCode second returned error: %v", err)
+	}
+	if code == code2 {
+		t.Error("expected unique invite codes")
+	}
+
+	// List invite codes for the creator.
+	codes, err := s.ListInviteCodes("admin")
+	if err != nil {
+		t.Fatalf("ListInviteCodes returned error: %v", err)
+	}
+	if len(codes) != 2 {
+		t.Errorf("expected 2 invite codes, got %d", len(codes))
+	}
+
+	// List for a different creator should be empty.
+	codes, err = s.ListInviteCodes("other")
+	if err != nil {
+		t.Fatalf("ListInviteCodes for other creator returned error: %v", err)
+	}
+	if len(codes) != 0 {
+		t.Errorf("expected 0 codes for other creator, got %d", len(codes))
+	}
+}
+

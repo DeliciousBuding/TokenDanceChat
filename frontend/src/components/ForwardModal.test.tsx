@@ -46,16 +46,17 @@ describe("ForwardModal", () => {
   });
 
   it("filters out self from recipient list", () => {
-    const { container } = render(
+    render(
       <ForwardModal message={message} onClose={onClose} onForward={onForward} />,
     );
     // bob and charlie should appear in the user selector
     expect(screen.getByText("bob")).toBeTruthy();
     expect(screen.getByText("charlie")).toBeTruthy();
-    // alice (self) should NOT be a selectable recipient button
-    const userButtons = container.querySelectorAll(".space-y-1 button");
-    const buttonTexts = Array.from(userButtons).map((b) => b.textContent);
-    expect(buttonTexts.some((t) => t?.includes("alice"))).toBe(false);
+    // alice (self) should NOT appear as a selectable recipient in the user list.
+    // The user selector renders each user as a button; alice should be filtered out.
+    expect(
+      screen.queryByRole("button", { name: /alice/ }),
+    ).toBeNull();
   });
 
   it("shows empty state when no other users online", () => {
