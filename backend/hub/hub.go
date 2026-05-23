@@ -454,7 +454,7 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 	return &Hub{
 		clients:         make(map[*Client]bool),
 		broadcast:       make(chan []byte, 256),
-		register:        make(chan *Client),
+		register:        make(chan *Client, 256),
 		unregister:      make(chan *Client, 256),
 		store:           store,
 		StartTime:       time.Now(),
