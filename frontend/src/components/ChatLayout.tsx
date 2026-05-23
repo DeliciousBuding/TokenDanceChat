@@ -11,6 +11,7 @@ import { SearchBar } from "./SearchBar";
 import { ConversationSearch } from "./ConversationSearch";
 import { ScheduledMessagesPanel } from "./ScheduledMessagesPanel";
 import { SettingsPanel } from "./SettingsPanel";
+import { ScrollToBottom } from "./ScrollToBottom";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
@@ -67,6 +68,7 @@ export function ChatLayout() {
 
   // Mobile keyboard handling
   const mainRef = useRef<HTMLDivElement>(null);
+  const transcriptContainerRef = useRef<HTMLDivElement | null>(null);
   const [keyboardPadding, setKeyboardPadding] = useState(0);
 
   // Conversation crossfade on switch
@@ -866,7 +868,7 @@ export function ChatLayout() {
         <div className="relative flex-1 overflow-hidden flex flex-col">
           <div className={cn("flex-1 min-h-0 transition-opacity duration-150", convFade ? "opacity-40" : "opacity-100")}>
             <ErrorBoundary fallback={<div className="flex items-center justify-center h-full text-sm text-muted-foreground/50">Chat transcript unavailable</div>}>
-              <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} onOpenThread={handleOpenThread} highlight={searchHighlight} />
+              <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} onOpenThread={handleOpenThread} highlight={searchHighlight} scrollContainerRef={transcriptContainerRef} />
             </ErrorBoundary>
           </div>
 
@@ -876,6 +878,9 @@ export function ChatLayout() {
           </ErrorBoundary>
         </div>
       </div>
+
+      {/* Scroll-to-bottom FAB */}
+      <ScrollToBottom containerRef={transcriptContainerRef} />
 
       {/* Thread panel */}
       <Suspense fallback={null}>

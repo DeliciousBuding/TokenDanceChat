@@ -19,6 +19,8 @@ interface MessageTranscriptProps {
   onForward?: (message: ChatMessage) => void;
   onOpenThread?: (message: ChatMessage) => void;
   highlight?: string;
+  /** Ref that will be set to the scrollable container element. */
+  scrollContainerRef?: React.MutableRefObject<HTMLDivElement | null>;
 }
 
 interface UserMessageGroup {
@@ -78,6 +80,7 @@ export function MessageTranscript({
   onForward,
   onOpenThread,
   highlight,
+  scrollContainerRef,
 }: MessageTranscriptProps) {
   const { t } = useTranslation();
   const {
@@ -93,13 +96,10 @@ export function MessageTranscript({
   const containerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [showAllMessages, setShowAllMessages] = useState(false);
-  const [unreadLocalCount, setUnreadLocalCount] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [unreadBounce, setUnreadBounce] = useState(false);
   const hasMoreRef = useRef(true);
   const prevConversationRef = useRef("");
-  const prevMessageCountRef = useRef(0);
   const pendingScrollRestore = useRef(0);
   const scrollPositions = useRef<Map<string, number>>(new Map());
   const conversationKey = currentChat.type === "dm" ? `dm:${currentChat.username}` : currentChat.type === "group" ? `group:${currentChat.name}` : "public";
@@ -227,22 +227,6 @@ export function MessageTranscript({
   }, [effectiveMessages]);
 
   useEffect(() => {
-    const prev = prevMessageCountRef.current;
-    const curr = effectiveMessages.length;
-    if (curr > prev && !shouldAutoScroll) {
-      setUnreadLocalCount((c) => {
-        const next = c + (curr - prev);
-        if (next > 0 && c === 0) setUnreadBounce(true);
-        return next;
-      });
-    }
-    if (shouldAutoScroll) {
-      setUnreadLocalCount(0);
-    }
-    prevMessageCountRef.current = curr;
-  }, [effectiveMessages.length, shouldAutoScroll]);
-
-  useEffect(() => {
     if (shouldAutoScroll && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
@@ -262,13 +246,6 @@ export function MessageTranscript({
     };
     window.addEventListener("tdchat:scroll-to-message", handler);
     return () => window.removeEventListener("tdchat:scroll-to-message", handler);
-  }, []);
-
-  const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    setShouldAutoScroll(true);
-    setUnreadLocalCount(0);
-    setUnreadBounce(false);
   }, []);
 
   const handleLoadOlder = useCallback(() => {
@@ -424,7 +401,10 @@ export function MessageTranscript({
 
   return (
     <div
-      ref={containerRef}
+      ref={(node) => {
+        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        if (scrollContainerRef) scrollContainerRef.current = node;
+      }}
       onScroll={handleScroll}
       onClick={handleContainerClick}
       onPointerMove={handleContainerPointerMove}
@@ -711,28 +691,6 @@ export function MessageTranscript({
 
           <div ref={bottomRef} className="h-1" />
         </div>
-      )}
-
-      {/* Jump-to-bottom floating button */}
-      {!shouldAutoScroll && (
-        <button
-          onClick={scrollToBottom}
-          className={cn(
-            "absolute bottom-4 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-card border border-border shadow-lg hover:bg-accent hover:scale-105 hover:shadow-xl transition-all duration-200 text-muted-foreground hover:text-foreground",
-            unreadBounce && "animate-bounce-in",
-          )}
-          onAnimationEnd={() => setUnreadBounce(false)}
-          aria-label={t("transcript.scrollToBottom")}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-          {unreadLocalCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white px-1">
-              {unreadLocalCount > 99 ? "99+" : unreadLocalCount}
-            </span>
-          )}
-        </button>
       )}
 
       {/* Context menu */}
