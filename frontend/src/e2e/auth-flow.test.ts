@@ -58,7 +58,7 @@ test.describe("Auth flow", () => {
       });
 
       // Click back → should return to guest join view.
-      await page.getByLabel("Back").click();
+      await page.getByLabel("返回").click();
 
       await expect(page.getByPlaceholder("你的用户名...")).toBeVisible({
         timeout: 15000,
@@ -200,7 +200,7 @@ test.describe("Auth flow", () => {
         timeout: 15000,
       });
 
-      await page.getByLabel("Back").click();
+      await page.getByLabel("返回").click();
 
       await expect(page.getByPlaceholder("你的用户名...")).toBeVisible({
         timeout: 15000,
@@ -378,7 +378,7 @@ test.describe("Auth flow", () => {
       });
 
       // Back to guest screen, toggle back to Chinese.
-      await page.getByLabel("Back").click();
+      await page.getByLabel("返回").click();
       await page.getByLabel("Switch language").click();
 
       // Navigate back to register and verify Chinese labels.
@@ -416,7 +416,7 @@ test.describe("Auth flow", () => {
       });
 
       // Back to guest screen, toggle back to Chinese.
-      await page.getByLabel("Back").click();
+      await page.getByLabel("返回").click();
       await page.getByLabel("Switch language").click();
 
       // Navigate back to login and verify Chinese labels.

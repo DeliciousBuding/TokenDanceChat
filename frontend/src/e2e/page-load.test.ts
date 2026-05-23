@@ -139,7 +139,7 @@ test.describe('加入流程', () => {
     await expect(page.getByLabel('密码')).toBeVisible();
 
     // Back button returns to guest join
-    await page.getByLabel('Back').click();
+    await page.getByLabel('返回').click();
     await expect(page.getByPlaceholder('你的用户名...')).toBeVisible();
   });
 });
