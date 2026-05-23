@@ -1877,3 +1877,261 @@ func TestSanitizeExportName(t *testing.T) {
 		})
 	}
 }
+
+// --- UploadEmoji edge cases ---
+
+func TestUploadEmojiWrongMethod(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/emoji/upload", nil)
+	w := httptest.NewRecorder()
+	h.UploadEmoji(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET /api/emoji/upload, got %d", w.Code)
+	}
+}
+
+func TestUploadEmojiInvalidFileType(t *testing.T) {
+	h := newTestHandler()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "readme.txt")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	if _, err := part.Write([]byte("not an image")); err != nil {
+		t.Fatalf("failed to write test payload: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/emoji/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	h.UploadEmoji(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for .txt emoji upload, got %d", resp.StatusCode)
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if payload["code"] != "INVALID_FILE_TYPE" {
+		t.Errorf("expected code INVALID_FILE_TYPE, got %q", payload["code"])
+	}
+}
+
+// --- ServeEmoji edge cases ---
+
+func TestServeEmojiRootPath(t *testing.T) {
+	h := newTestHandler()
+	h.mediaStore = &failingMediaStore{}
+
+	req := httptest.NewRequest(http.MethodGet, "/uploads/emojis/", nil)
+	w := httptest.NewRecorder()
+	h.ServeEmoji(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for /uploads/emojis/, got %d", w.Code)
+	}
+}
+
+func TestServeEmojiNonexistentFile(t *testing.T) {
+	h := newTestHandler()
+	h.mediaStore = &failingMediaStore{}
+
+	req := httptest.NewRequest(http.MethodGet, "/uploads/emojis/nonexistent.gif", nil)
+	w := httptest.NewRecorder()
+	h.ServeEmoji(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for nonexistent emoji, got %d", w.Code)
+	}
+}
+
+// --- LoggingMiddleware tests ---
+
+func TestLoggingMiddlewareRequestID(t *testing.T) {
+	var capturedReqID string
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedReqID = requestIDFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+	wrapped := LoggingMiddleware(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+
+	if capturedReqID == "" {
+		t.Error("expected non-empty request_id in context")
+	}
+	if len(capturedReqID) != 8 {
+		t.Errorf("expected 8-character request_id (UUID[:8]), got %q (len=%d)", capturedReqID, len(capturedReqID))
+	}
+}
+
+func TestLoggingMiddlewareRequestIDInError(t *testing.T) {
+	h := newTestHandler()
+
+	// Wrap GetMessages with LoggingMiddleware so request_id is injected into context.
+	wrapped := LoggingMiddleware(http.HandlerFunc(h.GetMessages))
+
+	// POST to trigger method-not-allowed error response.
+	req := httptest.NewRequest(http.MethodPost, "/api/messages", nil)
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON error: %v", err)
+	}
+
+	reqID, _ := body["request_id"].(string)
+	if reqID == "" {
+		t.Error("expected non-empty request_id in error response JSON")
+	}
+	if len(reqID) != 8 {
+		t.Errorf("expected 8-character request_id, got %q (len=%d)", reqID, len(reqID))
+	}
+	if body["code"] != "METHOD_NOT_ALLOWED" {
+		t.Errorf("expected code METHOD_NOT_ALLOWED, got %q", body["code"])
+	}
+}
+
+// --- CORSMiddleware additional cases ---
+
+func TestCORSWildcardAll(t *testing.T) {
+	os.Setenv("CHAT_ALLOWED_ORIGINS", "*")
+	defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
+
+	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	t.Run("any origin allowed with wildcard", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Origin", "https://any-random-domain.io")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		if resp.Header.Get("Access-Control-Allow-Origin") != "https://any-random-domain.io" {
+			t.Errorf("expected wildcard to echo origin, got %q",
+				resp.Header.Get("Access-Control-Allow-Origin"))
+		}
+	})
+
+	t.Run("different origin also allowed with wildcard", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Origin", "https://completely-different.example")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		if resp.Header.Get("Access-Control-Allow-Origin") != "https://completely-different.example" {
+			t.Errorf("expected wildcard to echo any origin, got %q",
+				resp.Header.Get("Access-Control-Allow-Origin"))
+		}
+	})
+
+	t.Run("same-origin still works with wildcard", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		// No Origin header (same-origin).
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		// Same-origin requests with wildcard: the origin==“” branch sets allow=true,
+		// and then Access-Control-Allow-Origin is set to "" (empty).
+		if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+			t.Error("expected empty Access-Control-Allow-Origin for same-origin with wildcard")
+		}
+	})
+}
+
+// --- GetMessages additional cases ---
+
+func TestGetMessagesWithBeforeParam(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/messages?before=1700000000000", nil)
+	w := httptest.NewRecorder()
+	h.GetMessages(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 with valid before param, got %d", w.Code)
+	}
+
+	// Verify response is valid JSON with messages array.
+	var body map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if _, ok := body["messages"]; !ok {
+		t.Error("expected 'messages' key in response")
+	}
+}
+
+func TestGetMessagesWithInvalidBefore(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/messages?before=not-a-number", nil)
+	w := httptest.NewRecorder()
+	h.GetMessages(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 when invalid before is silently ignored, got %d", w.Code)
+	}
+
+	// Verify response is still valid JSON with messages array.
+	var body map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if _, ok := body["messages"]; !ok {
+		t.Error("expected 'messages' key in response with invalid before")
+	}
+}
+
+func TestGetMessagesWithLimitAndBefore(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/messages?limit=10&before=1700000000000", nil)
+	w := httptest.NewRecorder()
+	h.GetMessages(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 with limit and before params, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if _, ok := body["messages"]; !ok {
+		t.Error("expected 'messages' key in response")
+	}
+}
