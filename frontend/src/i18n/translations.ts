@@ -36,6 +36,8 @@ export interface TranslationDict {
     registerSuccess: string;
     passwordMinLength: string;
     confirmNotMatch: string;
+    loginFailed: string;
+    registerFailed: string;
   };
   invite: {
     inviteCodes: string;
@@ -454,6 +456,8 @@ const zhCN: TranslationDict = {
     registerSuccess: "注册成功",
     passwordMinLength: "密码至少需要6个字符",
     confirmNotMatch: "两次输入的密码不一致",
+    loginFailed: "用户名或密码错误",
+    registerFailed: "注册失败，请稍后重试",
   },
   invite: {
     inviteCodes: "邀请码管理",
@@ -874,6 +878,8 @@ const enUS: TranslationDict = {
     registerSuccess: "Registration successful",
     passwordMinLength: "Password must be at least 6 characters",
     confirmNotMatch: "Passwords do not match",
+    loginFailed: "Invalid username or password",
+    registerFailed: "Registration failed, please try again later",
   },
   invite: {
     inviteCodes: "Invite Codes",
