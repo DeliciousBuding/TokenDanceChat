@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -1173,6 +1174,1658 @@ func TestGenerateInviteCode(t *testing.T) {
 	}
 	if len(codes) != 0 {
 		t.Errorf("expected 0 codes for other creator, got %d", len(codes))
+	}
+}
+
+// ── Chat folders ──
+
+func TestChatFolderCreateAndList(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Create folders.
+	f1, err := s.CreateChatFolder("alice", "Work")
+	if err != nil {
+		t.Fatalf("CreateChatFolder returned error: %v", err)
+	}
+	if f1.ID == "" {
+		t.Error("expected non-empty folder ID")
+	}
+	if f1.Name != "Work" {
+		t.Errorf("expected folder name 'Work', got '%s'", f1.Name)
+	}
+	if f1.Username != "alice" {
+		t.Errorf("expected username 'alice', got '%s'", f1.Username)
+	}
+	if f1.CreatedAt == 0 {
+		t.Error("expected non-zero CreatedAt")
+	}
+
+	_, err = s.CreateChatFolder("alice", "Personal")
+	if err != nil {
+		t.Fatalf("CreateChatFolder second returned error: %v", err)
+	}
+
+	// Create folder for another user.
+	_, err = s.CreateChatFolder("bob", "Bob's Stuff")
+	if err != nil {
+		t.Fatalf("CreateChatFolder for bob returned error: %v", err)
+	}
+
+	// List folders for alice.
+	folders, err := s.ListFolders("alice")
+	if err != nil {
+		t.Fatalf("ListFolders returned error: %v", err)
+	}
+	if len(folders) != 2 {
+		t.Fatalf("expected 2 folders for alice, got %d", len(folders))
+	}
+	if folders[0].ItemCount != 0 || folders[1].ItemCount != 0 {
+		t.Error("expected 0 item counts for empty folders")
+	}
+
+	// List folders for bob.
+	folders, err = s.ListFolders("bob")
+	if err != nil {
+		t.Fatalf("ListFolders for bob returned error: %v", err)
+	}
+	if len(folders) != 1 {
+		t.Fatalf("expected 1 folder for bob, got %d", len(folders))
+	}
+
+	// List folders for user with no folders.
+	folders, err = s.ListFolders("nonexistent")
+	if err != nil {
+		t.Fatalf("ListFolders for nonexistent returned error: %v", err)
+	}
+	if len(folders) != 0 {
+		t.Errorf("expected 0 folders for nonexistent user, got %d", len(folders))
+	}
+
+	// Duplicate name for same user should fail (UNIQUE constraint).
+	_, err = s.CreateChatFolder("alice", "Work")
+	if err == nil {
+		t.Error("expected error for duplicate folder name")
+	}
+
+	// Same name for different user should succeed.
+	_, err = s.CreateChatFolder("charlie", "Work")
+	if err != nil {
+		t.Fatalf("CreateChatFolder same name different user returned error: %v", err)
+	}
+}
+
+func TestChatFolderRename(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	f, err := s.CreateChatFolder("alice", "Old Name")
+	if err != nil {
+		t.Fatalf("CreateChatFolder returned error: %v", err)
+	}
+
+	// Rename succeeds.
+	err = s.RenameChatFolder("alice", f.ID, "New Name")
+	if err != nil {
+		t.Fatalf("RenameChatFolder returned error: %v", err)
+	}
+
+	folders, err := s.ListFolders("alice")
+	if err != nil {
+		t.Fatalf("ListFolders returned error: %v", err)
+	}
+	if len(folders) != 1 {
+		t.Fatalf("expected 1 folder, got %d", len(folders))
+	}
+	if folders[0].Name != "New Name" {
+		t.Errorf("expected renamed folder 'New Name', got '%s'", folders[0].Name)
+	}
+
+	// Rename with wrong username should silently affect 0 rows (no error, just no-op).
+	err = s.RenameChatFolder("bob", f.ID, "Evil Name")
+	if err != nil {
+		t.Fatalf("RenameChatFolder with wrong user returned error: %v", err)
+	}
+	folders, err = s.ListFolders("alice")
+	if err != nil {
+		t.Fatalf("ListFolders returned error: %v", err)
+	}
+	if folders[0].Name != "New Name" {
+		t.Errorf("expected name unchanged after wrong-user rename, got '%s'", folders[0].Name)
+	}
+
+	// Rename non-existent folder.
+	err = s.RenameChatFolder("alice", "nonexistent-id", "Whatever")
+	if err != nil {
+		t.Fatalf("RenameChatFolder non-existent returned error: %v", err)
+	}
+}
+
+func TestChatFolderDelete(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	f, err := s.CreateChatFolder("alice", "Ephemeral")
+	if err != nil {
+		t.Fatalf("CreateChatFolder returned error: %v", err)
+	}
+
+	// Add items to the folder.
+	err = s.AddToFolder(f.ID, "dm:bob")
+	if err != nil {
+		t.Fatalf("AddToFolder returned error: %v", err)
+	}
+	err = s.AddToFolder(f.ID, "room:general")
+	if err != nil {
+		t.Fatalf("AddToFolder second returned error: %v", err)
+	}
+
+	// Verify items exist.
+	items, err := s.GetFolderItems(f.ID)
+	if err != nil {
+		t.Fatalf("GetFolderItems returned error: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+
+	// Delete the folder.
+	err = s.DeleteChatFolder("alice", f.ID)
+	if err != nil {
+		t.Fatalf("DeleteChatFolder returned error: %v", err)
+	}
+
+	// Folder should be gone.
+	folders, err := s.ListFolders("alice")
+	if err != nil {
+		t.Fatalf("ListFolders after delete returned error: %v", err)
+	}
+	if len(folders) != 0 {
+		t.Errorf("expected 0 folders after delete, got %d", len(folders))
+	}
+
+	// Items should be cascaded/deleted.
+	items, err = s.GetFolderItems(f.ID)
+	if err != nil {
+		t.Fatalf("GetFolderItems after delete returned error: %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("expected 0 items after folder delete, got %d", len(items))
+	}
+
+	// Delete with wrong username should not delete.
+	f2, _ := s.CreateChatFolder("alice", "Keep")
+	err = s.DeleteChatFolder("bob", f2.ID)
+	if err != nil {
+		t.Fatalf("DeleteChatFolder wrong user returned error: %v", err)
+	}
+	folders, err = s.ListFolders("alice")
+	if err != nil {
+		t.Fatalf("ListFolders returned error: %v", err)
+	}
+	if len(folders) != 1 {
+		t.Errorf("expected folder not deleted by wrong user, got %d folders", len(folders))
+	}
+}
+
+func TestChatFolderAddRemoveItems(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	f, err := s.CreateChatFolder("alice", "Test")
+	if err != nil {
+		t.Fatalf("CreateChatFolder returned error: %v", err)
+	}
+
+	// Add item.
+	err = s.AddToFolder(f.ID, "dm:charlie")
+	if err != nil {
+		t.Fatalf("AddToFolder returned error: %v", err)
+	}
+
+	// Adding same item again should be a no-op (INSERT OR IGNORE).
+	err = s.AddToFolder(f.ID, "dm:charlie")
+	if err != nil {
+		t.Fatalf("AddToFolder duplicate returned error: %v", err)
+	}
+
+	// Verify item count.
+	items, err := s.GetFolderItems(f.ID)
+	if err != nil {
+		t.Fatalf("GetFolderItems returned error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item after duplicate add, got %d", len(items))
+	}
+	if items[0] != "dm:charlie" {
+		t.Errorf("expected item 'dm:charlie', got '%s'", items[0])
+	}
+
+	// Remove item.
+	err = s.RemoveFromFolder(f.ID, "dm:charlie")
+	if err != nil {
+		t.Fatalf("RemoveFromFolder returned error: %v", err)
+	}
+	items, err = s.GetFolderItems(f.ID)
+	if err != nil {
+		t.Fatalf("GetFolderItems after remove returned error: %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("expected 0 items after remove, got %d", len(items))
+	}
+
+	// Removing non-existent item should not error.
+	err = s.RemoveFromFolder(f.ID, "nonexistent")
+	if err != nil {
+		t.Fatalf("RemoveFromFolder non-existent returned error: %v", err)
+	}
+
+	// GetFolderItems for non-existent folder returns empty.
+	items, err = s.GetFolderItems("nonexistent-id")
+	if err != nil {
+		t.Fatalf("GetFolderItems non-existent returned error: %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("expected 0 items for non-existent folder, got %d", len(items))
+	}
+}
+
+// ── Notification preferences ──
+
+func TestNotificationPrefsSetAndGet(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Set notification prefs.
+	err = s.SetNotificationPrefs("alice", "dm:bob", time.Now().UnixMilli()+3600000, false)
+	if err != nil {
+		t.Fatalf("SetNotificationPrefs returned error: %v", err)
+	}
+
+	mutedUntil, showPreview, err := s.GetNotificationPrefs("alice", "dm:bob")
+	if err != nil {
+		t.Fatalf("GetNotificationPrefs returned error: %v", err)
+	}
+	if mutedUntil == 0 {
+		t.Error("expected non-zero muted_until")
+	}
+	if showPreview {
+		t.Error("expected show_preview=false")
+	}
+
+	// GetNotificationPrefs for non-existent key should return defaults (0, true).
+	mutedUntil, showPreview, err = s.GetNotificationPrefs("alice", "room:nonexistent")
+	if err != nil {
+		t.Fatalf("GetNotificationPrefs for missing key returned error: %v", err)
+	}
+	if mutedUntil != 0 {
+		t.Errorf("expected muted_until=0 for missing key, got %d", mutedUntil)
+	}
+	if !showPreview {
+		t.Error("expected show_preview=true for missing key (default)")
+	}
+}
+
+func TestNotificationPrefsUpsert(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	key := "dm:eve"
+	err = s.SetNotificationPrefs("alice", key, 1000, true)
+	if err != nil {
+		t.Fatalf("SetNotificationPrefs returned error: %v", err)
+	}
+
+	// Upsert: change show_preview and muted_until.
+	err = s.SetNotificationPrefs("alice", key, 2000, false)
+	if err != nil {
+		t.Fatalf("SetNotificationPrefs upsert returned error: %v", err)
+	}
+
+	mutedUntil, showPreview, err := s.GetNotificationPrefs("alice", key)
+	if err != nil {
+		t.Fatalf("GetNotificationPrefs after upsert returned error: %v", err)
+	}
+	if mutedUntil != 2000 {
+		t.Errorf("expected muted_until=2000 after upsert, got %d", mutedUntil)
+	}
+	if showPreview {
+		t.Error("expected show_preview=false after upsert")
+	}
+}
+
+func TestListNotificationPrefs(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Set multiple prefs for alice.
+	s.SetNotificationPrefs("alice", "dm:bob", 5000, false)
+	s.SetNotificationPrefs("alice", "room:general", 0, true)
+	s.SetNotificationPrefs("bob", "dm:alice", 3000, true)
+
+	// List for alice.
+	prefs := s.ListNotificationPrefs("alice")
+	if len(prefs) != 2 {
+		t.Fatalf("expected 2 prefs for alice, got %d", len(prefs))
+	}
+
+	keys := map[string]bool{}
+	for _, p := range prefs {
+		keys[p.Key] = true
+	}
+	if !keys["dm:bob"] || !keys["room:general"] {
+		t.Errorf("unexpected keys in prefs: %+v", prefs)
+	}
+
+	// List for user with no prefs.
+	prefs = s.ListNotificationPrefs("nonexistent")
+	if len(prefs) != 0 {
+		t.Errorf("expected 0 prefs for empty user, got %d", len(prefs))
+	}
+}
+
+// ── Custom emoji ──
+
+func TestCustomEmojiAddAndList(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Add custom emojis.
+	err = s.AddCustomEmoji("party_parrot", "https://example.com/parrot.gif", "alice", "room1")
+	if err != nil {
+		t.Fatalf("AddCustomEmoji returned error: %v", err)
+	}
+	err = s.AddCustomEmoji("cat_jam", "https://example.com/cat.gif", "bob", "")
+	if err != nil {
+		t.Fatalf("AddCustomEmoji second returned error: %v", err)
+	}
+	err = s.AddCustomEmoji("dance", "https://example.com/dance.gif", "alice", "room2")
+	if err != nil {
+		t.Fatalf("AddCustomEmoji third returned error: %v", err)
+	}
+
+	// List all emojis (no room filter).
+	all, err := s.ListCustomEmojis("")
+	if err != nil {
+		t.Fatalf("ListCustomEmojis returned error: %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("expected 3 emojis, got %d", len(all))
+	}
+
+	// List with room filter: should return room1 + global emojis.
+	room1Emojis, err := s.ListCustomEmojis("room1")
+	if err != nil {
+		t.Fatalf("ListCustomEmojis for room1 returned error: %v", err)
+	}
+	// room1 gets: party_parrot (room1) + cat_jam (global) = 2
+	if len(room1Emojis) != 2 {
+		t.Fatalf("expected 2 emojis for room1, got %d", len(room1Emojis))
+	}
+	foundCatJam := false
+	for _, e := range room1Emojis {
+		if e.Name == "cat_jam" {
+			foundCatJam = true
+		}
+	}
+	if !foundCatJam {
+		t.Error("expected global emoji 'cat_jam' in room1 results")
+	}
+}
+
+func TestCustomEmojiDelete(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	err = s.AddCustomEmoji("cool_emoji", "https://example.com/cool.gif", "alice", "")
+	if err != nil {
+		t.Fatalf("AddCustomEmoji returned error: %v", err)
+	}
+
+	// Delete by uploader succeeds.
+	err = s.DeleteCustomEmoji("cool_emoji", "alice")
+	if err != nil {
+		t.Fatalf("DeleteCustomEmoji returned error: %v", err)
+	}
+
+	// Verify deleted.
+	all, err := s.ListCustomEmojis("")
+	if err != nil {
+		t.Fatalf("ListCustomEmojis after delete returned error: %v", err)
+	}
+	if len(all) != 0 {
+		t.Errorf("expected 0 emojis after delete, got %d", len(all))
+	}
+
+	// Delete by non-uploader should silently affect 0 rows.
+	err = s.AddCustomEmoji("bob_emoji", "https://example.com/bob.gif", "bob", "")
+	if err != nil {
+		t.Fatalf("AddCustomEmoji returned error: %v", err)
+	}
+	err = s.DeleteCustomEmoji("bob_emoji", "alice")
+	if err != nil {
+		t.Fatalf("DeleteCustomEmoji wrong user returned error: %v", err)
+	}
+	all, err = s.ListCustomEmojis("")
+	if err != nil {
+		t.Fatalf("ListCustomEmojis returned error: %v", err)
+	}
+	if len(all) != 1 {
+		t.Errorf("expected emoji still present after wrong-user delete, got %d", len(all))
+	}
+}
+
+func TestCustomEmojiSearch(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Add emojis with known prefixes.
+	s.AddCustomEmoji("party_parrot", "https://example.com/parrot.gif", "alice", "")
+	s.AddCustomEmoji("party_blob", "https://example.com/blob.gif", "alice", "")
+	s.AddCustomEmoji("cat_jam", "https://example.com/cat.gif", "bob", "")
+	s.AddCustomEmoji("cat_wave", "https://example.com/wave.gif", "bob", "")
+
+	// Search by prefix "party".
+	results, err := s.SearchCustomEmojis("party")
+	if err != nil {
+		t.Fatalf("SearchCustomEmojis returned error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results for 'party', got %d", len(results))
+	}
+
+	// Search by prefix "cat".
+	results, err = s.SearchCustomEmojis("cat")
+	if err != nil {
+		t.Fatalf("SearchCustomEmojis for 'cat' returned error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results for 'cat', got %d", len(results))
+	}
+
+	// Search with no matches.
+	results, err = s.SearchCustomEmojis("zzz_nonexistent")
+	if err != nil {
+		t.Fatalf("SearchCustomEmojis for non-existent returned error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for non-existent, got %d", len(results))
+	}
+}
+
+func TestCustomEmojiDuplicateName(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	err = s.AddCustomEmoji("unique_emoji", "https://example.com/1.gif", "alice", "")
+	if err != nil {
+		t.Fatalf("AddCustomEmoji returned error: %v", err)
+	}
+
+	// UNIQUE constraint on name should reject duplicate.
+	err = s.AddCustomEmoji("unique_emoji", "https://example.com/2.gif", "bob", "")
+	if err == nil {
+		t.Error("expected error for duplicate emoji name")
+	}
+}
+
+// ── Export messages ──
+
+func TestExportMessagesRoom(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	roomID, _ := s.CreateRoom("export-room")
+	s.InsertMessage("alice", "room msg 1", "", roomID, "", "", "")
+	time.Sleep(time.Millisecond)
+	s.InsertMessage("bob", "room msg 2", "", roomID, "", "", "")
+	time.Sleep(time.Millisecond)
+	s.InsertMessage("alice", "room msg 3", "", roomID, "", "", "")
+
+	// Also insert a deleted message (should be excluded).
+	deleted, _ := s.InsertMessage("bob", "deleted msg", "", roomID, "", "", "")
+	s.MarkDeleted(deleted.ID)
+
+	ctx := context.Background()
+	msgs, err := s.ExportMessages(ctx, roomID, "", "", "", 0)
+	if err != nil {
+		t.Fatalf("ExportMessages returned error: %v", err)
+	}
+	if len(msgs) != 3 {
+		t.Fatalf("expected 3 messages (deleted excluded), got %d", len(msgs))
+	}
+	if msgs[0].Content != "room msg 1" {
+		t.Errorf("expected first 'room msg 1', got '%s'", msgs[0].Content)
+	}
+	if msgs[2].Content != "room msg 3" {
+		t.Errorf("expected third 'room msg 3', got '%s'", msgs[2].Content)
+	}
+}
+
+func TestExportMessagesDM(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.InsertMessage("alice", "hi bob", "", "", "bob", "", "")
+	time.Sleep(time.Millisecond)
+	s.InsertMessage("bob", "hey alice", "", "", "alice", "", "")
+	time.Sleep(time.Millisecond)
+	s.InsertMessage("alice", "how are you", "", "", "bob", "", "")
+
+	ctx := context.Background()
+	msgs, err := s.ExportMessages(ctx, "", "bob", "", "alice", 0)
+	if err != nil {
+		t.Fatalf("ExportMessages DM returned error: %v", err)
+	}
+	if len(msgs) != 3 {
+		t.Fatalf("expected 3 DM messages, got %d", len(msgs))
+	}
+	// Messages should be in chronological order.
+	if msgs[0].Content != "hi bob" {
+		t.Errorf("expected first 'hi bob', got '%s'", msgs[0].Content)
+	}
+	if msgs[1].Content != "hey alice" {
+		t.Errorf("expected second 'hey alice', got '%s'", msgs[1].Content)
+	}
+}
+
+func TestExportMessagesGroup(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.InsertMessage("alice", "group msg 1", "", "", "", "devs", "")
+	time.Sleep(time.Millisecond)
+	s.InsertMessage("bob", "group msg 2", "", "", "", "devs", "")
+
+	ctx := context.Background()
+	msgs, err := s.ExportMessages(ctx, "", "", "devs", "", 0)
+	if err != nil {
+		t.Fatalf("ExportMessages group returned error: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 group messages, got %d", len(msgs))
+	}
+	if msgs[0].GroupName != "devs" {
+		t.Errorf("expected group_name 'devs', got '%s'", msgs[0].GroupName)
+	}
+}
+
+func TestExportMessagesPublic(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.InsertMessage("alice", "public msg 1", "", "", "", "", "")
+	time.Sleep(time.Millisecond)
+	s.InsertMessage("bob", "public msg 2", "", "", "", "", "")
+
+	// Also insert a DM and group message — should not appear in public export.
+	s.InsertMessage("alice", "dm msg", "", "", "bob", "", "")
+	s.InsertMessage("charlie", "group msg", "", "", "", "team", "")
+
+	ctx := context.Background()
+	msgs, err := s.ExportMessages(ctx, "", "", "", "", 0)
+	if err != nil {
+		t.Fatalf("ExportMessages public returned error: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 public messages, got %d", len(msgs))
+	}
+}
+
+func TestExportMessagesLimit(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	for i := 0; i < 5; i++ {
+		s.InsertMessage("alice", fmt.Sprintf("msg%d", i), "", "", "", "", "")
+		time.Sleep(time.Millisecond)
+	}
+
+	ctx := context.Background()
+	msgs, err := s.ExportMessages(ctx, "", "", "", "", 2)
+	if err != nil {
+		t.Fatalf("ExportMessages with limit returned error: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages with limit, got %d", len(msgs))
+	}
+}
+
+func TestExportMessagesEmpty(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	msgs, err := s.ExportMessages(ctx, "nonexistent-room", "", "", "", 0)
+	if err != nil {
+		t.Fatalf("ExportMessages on empty DB returned error: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Errorf("expected 0 messages on empty DB, got %d", len(msgs))
+	}
+}
+
+// ── Call history ──
+
+func TestCallHistoryLogAndGet(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	now := time.Now().UnixMilli()
+	call := CallRecord{
+		ID:        "call-1",
+		Caller:    "alice",
+		Callee:    "bob",
+		CallType:  "video",
+		Status:    "missed",
+		StartedAt: now,
+		EndedAt:   0,
+		CreatedAt: now,
+	}
+	err = s.LogCall(call)
+	if err != nil {
+		t.Fatalf("LogCall returned error: %v", err)
+	}
+
+	// GetCallHistory for caller.
+	history, err := s.GetCallHistory("alice", 50)
+	if err != nil {
+		t.Fatalf("GetCallHistory for caller returned error: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(history))
+	}
+	if history[0].Caller != "alice" {
+		t.Errorf("expected caller 'alice', got '%s'", history[0].Caller)
+	}
+	if history[0].Status != "missed" {
+		t.Errorf("expected status 'missed', got '%s'", history[0].Status)
+	}
+
+	// GetCallHistory for callee.
+	history, err = s.GetCallHistory("bob", 50)
+	if err != nil {
+		t.Fatalf("GetCallHistory for callee returned error: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("expected 1 call for callee, got %d", len(history))
+	}
+}
+
+func TestCallHistoryUpdate(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	now := time.Now().UnixMilli()
+	call := CallRecord{
+		ID:        "call-1",
+		Caller:    "alice",
+		Callee:    "bob",
+		CallType:  "audio",
+		Status:    "ringing",
+		StartedAt: now,
+		CreatedAt: now,
+	}
+	s.LogCall(call)
+
+	// Update the call record.
+	endedAt := now + 60000
+	err = s.UpdateCallRecord("call-1", "completed", now, endedAt)
+	if err != nil {
+		t.Fatalf("UpdateCallRecord returned error: %v", err)
+	}
+
+	history, err := s.GetCallHistory("alice", 50)
+	if err != nil {
+		t.Fatalf("GetCallHistory after update returned error: %v", err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("expected 1 call after update, got %d", len(history))
+	}
+	if history[0].Status != "completed" {
+		t.Errorf("expected status 'completed', got '%s'", history[0].Status)
+	}
+	if history[0].StartedAt != now {
+		t.Errorf("expected StartedAt=%d, got %d", now, history[0].StartedAt)
+	}
+	if history[0].EndedAt != endedAt {
+		t.Errorf("expected EndedAt=%d, got %d", endedAt, history[0].EndedAt)
+	}
+}
+
+func TestCallHistoryEmptyAndLimit(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Empty history.
+	history, err := s.GetCallHistory("alice", 50)
+	if err != nil {
+		t.Fatalf("GetCallHistory empty returned error: %v", err)
+	}
+	if len(history) != 0 {
+		t.Errorf("expected 0 calls for empty history, got %d", len(history))
+	}
+
+	// Log multiple calls.
+	now := time.Now().UnixMilli()
+	for i := 0; i < 5; i++ {
+		s.LogCall(CallRecord{
+			ID:        fmt.Sprintf("call-%d", i),
+			Caller:    "alice",
+			Callee:    fmt.Sprintf("user%d", i),
+			CallType:  "video",
+			Status:    "completed",
+			StartedAt: now - int64(i*1000),
+			EndedAt:   now - int64(i*500),
+			CreatedAt: now - int64(i*1000),
+		})
+	}
+
+	// Limit returns only the requested number.
+	history, err = s.GetCallHistory("alice", 2)
+	if err != nil {
+		t.Fatalf("GetCallHistory with limit returned error: %v", err)
+	}
+	if len(history) != 2 {
+		t.Fatalf("expected 2 calls with limit, got %d", len(history))
+	}
+}
+
+// ── Scheduled messages ──
+
+func TestScheduledMessageLifecycle(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	now := time.Now().UnixMilli()
+	// Schedule a message in the past (should be picked up as pending).
+	pastMsg := ScheduledMessage{
+		ID:        "sched-1",
+		Username:  "alice",
+		Content:   "past message",
+		RoomID:    "public",
+		SendAt:    now - 10000, // 10 seconds in the past
+		CreatedAt: now - 20000,
+	}
+	err = s.ScheduleMessage(pastMsg)
+	if err != nil {
+		t.Fatalf("ScheduleMessage returned error: %v", err)
+	}
+
+	// Schedule a message in the future (should NOT be picked up as pending).
+	futureMsg := ScheduledMessage{
+		ID:        "sched-2",
+		Username:  "alice",
+		Content:   "future message",
+		RoomID:    "public",
+		SendAt:    now + 3600000, // 1 hour in the future
+		CreatedAt: now,
+	}
+	err = s.ScheduleMessage(futureMsg)
+	if err != nil {
+		t.Fatalf("ScheduleMessage future returned error: %v", err)
+	}
+
+	// GetPendingScheduledMessages should only return the past message.
+	ctx := context.Background()
+	pending, err := s.GetPendingScheduledMessages(ctx)
+	if err != nil {
+		t.Fatalf("GetPendingScheduledMessages returned error: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("expected 1 pending message, got %d", len(pending))
+	}
+	if pending[0].ID != "sched-1" {
+		t.Errorf("expected pending msg 'sched-1', got '%s'", pending[0].ID)
+	}
+
+	// Mark as sent.
+	err = s.MarkScheduledSent("sched-1")
+	if err != nil {
+		t.Fatalf("MarkScheduledSent returned error: %v", err)
+	}
+
+	// Pending should now be empty.
+	pending, err = s.GetPendingScheduledMessages(ctx)
+	if err != nil {
+		t.Fatalf("GetPendingScheduledMessages after mark returned error: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("expected 0 pending after marking sent, got %d", len(pending))
+	}
+
+	// GetUserScheduledMessages for alice should return only the unsent future message.
+	userMsgs, err := s.GetUserScheduledMessages("alice")
+	if err != nil {
+		t.Fatalf("GetUserScheduledMessages returned error: %v", err)
+	}
+	if len(userMsgs) != 1 {
+		t.Fatalf("expected 1 user scheduled message, got %d", len(userMsgs))
+	}
+	if userMsgs[0].ID != "sched-2" {
+		t.Errorf("expected 'sched-2', got '%s'", userMsgs[0].ID)
+	}
+
+	// Cancel the future message.
+	err = s.CancelScheduledMessage("sched-2", "alice")
+	if err != nil {
+		t.Fatalf("CancelScheduledMessage returned error: %v", err)
+	}
+
+	userMsgs, err = s.GetUserScheduledMessages("alice")
+	if err != nil {
+		t.Fatalf("GetUserScheduledMessages after cancel returned error: %v", err)
+	}
+	if len(userMsgs) != 0 {
+		t.Errorf("expected 0 user messages after cancel, got %d", len(userMsgs))
+	}
+}
+
+func TestScheduledMessageCancelWrongUser(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	now := time.Now().UnixMilli()
+	msg := ScheduledMessage{
+		ID:        "sched-1",
+		Username:  "alice",
+		Content:   "alice's message",
+		RoomID:    "public",
+		SendAt:    now + 3600000,
+		CreatedAt: now,
+	}
+	s.ScheduleMessage(msg)
+
+	// Bob tries to cancel alice's message — should silently affect 0 rows.
+	err = s.CancelScheduledMessage("sched-1", "bob")
+	if err != nil {
+		t.Fatalf("CancelScheduledMessage wrong user returned error: %v", err)
+	}
+
+	// Verify the message is still there for alice.
+	userMsgs, err := s.GetUserScheduledMessages("alice")
+	if err != nil {
+		t.Fatalf("GetUserScheduledMessages returned error: %v", err)
+	}
+	if len(userMsgs) != 1 {
+		t.Errorf("expected message still present after wrong-user cancel, got %d", len(userMsgs))
+	}
+}
+
+func TestScheduledMessageEmptyUser(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// GetUserScheduledMessages for user with no scheduled messages.
+	msgs, err := s.GetUserScheduledMessages("nonexistent")
+	if err != nil {
+		t.Fatalf("GetUserScheduledMessages returned error: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Errorf("expected 0 messages for empty user, got %d", len(msgs))
+	}
+
+	// GetPendingScheduledMessages on empty DB.
+	ctx := context.Background()
+	pending, err := s.GetPendingScheduledMessages(ctx)
+	if err != nil {
+		t.Fatalf("GetPendingScheduledMessages returned error: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("expected 0 pending on empty DB, got %d", len(pending))
+	}
+}
+
+func TestScheduledMessageWithGroupAndDM(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	now := time.Now().UnixMilli()
+	// Schedule a group message.
+	groupMsg := ScheduledMessage{
+		ID:        "sched-group",
+		Username:  "alice",
+		Content:   "group scheduled",
+		GroupName: "devs",
+		SendAt:    now - 1000,
+		CreatedAt: now - 2000,
+	}
+	s.ScheduleMessage(groupMsg)
+
+	// Schedule a DM.
+	dmMsg := ScheduledMessage{
+		ID:        "sched-dm",
+		Username:  "bob",
+		Content:   "dm scheduled",
+		ToUser:    "alice",
+		SendAt:    now - 1000,
+		CreatedAt: now - 2000,
+	}
+	s.ScheduleMessage(dmMsg)
+
+	ctx := context.Background()
+	pending, err := s.GetPendingScheduledMessages(ctx)
+	if err != nil {
+		t.Fatalf("GetPendingScheduledMessages returned error: %v", err)
+	}
+	if len(pending) != 2 {
+		t.Fatalf("expected 2 pending messages, got %d", len(pending))
+	}
+
+	// Verify all fields are returned.
+	for _, m := range pending {
+		if m.Username == "alice" && m.GroupName != "devs" {
+			t.Errorf("expected group_name 'devs', got '%s'", m.GroupName)
+		}
+		if m.Username == "bob" && m.ToUser != "alice" {
+			t.Errorf("expected to_user 'alice', got '%s'", m.ToUser)
+		}
+	}
+}
+
+// ── MarkDeleted edge cases ──
+
+func TestMarkDeletedNonExistent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// MarkDeleted on non-existent message should not error.
+	err = s.MarkDeleted("nonexistent-id")
+	if err != nil {
+		t.Errorf("MarkDeleted on non-existent returned error: %v", err)
+	}
+}
+
+func TestUpdateMessageNonExistent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	_, err = s.UpdateMessage("nonexistent-id", "new content")
+	if err == nil {
+		t.Error("expected error for UpdateMessage on non-existent message")
+	}
+}
+
+// ── Reaction toggle edge cases ──
+
+func TestToggleReactionToggleTwice(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	msg, _ := s.InsertMessage("alice", "reaction test", "", "", "", "", "")
+
+	// Add reaction.
+	reactions, err := s.ToggleReaction(msg.ID, "👍", "bob")
+	if err != nil {
+		t.Fatalf("ToggleReaction (add) returned error: %v", err)
+	}
+	if reactions["👍"] == nil || len(reactions["👍"]) != 1 {
+		t.Error("expected 1 👍 reaction from bob")
+	}
+
+	// Toggle same reaction (remove).
+	reactions, err = s.ToggleReaction(msg.ID, "👍", "bob")
+	if err != nil {
+		t.Fatalf("ToggleReaction (remove) returned error: %v", err)
+	}
+	if len(reactions["👍"]) != 0 {
+		t.Error("expected empty 👍 reactions after toggle-remove")
+	}
+}
+
+func TestGetReactionsForMessagesEmpty(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Empty input should return empty map.
+	reactions := s.GetReactionsForMessages([]string{})
+	if len(reactions) != 0 {
+		t.Errorf("expected empty map for empty input, got %d entries", len(reactions))
+	}
+}
+
+// ── Pinned conversations edge cases ──
+
+func TestPinConversationDuplicate(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	err = s.PinConversation("alice", "dm:bob")
+	if err != nil {
+		t.Fatalf("PinConversation returned error: %v", err)
+	}
+
+	// Pinning again should be no-op (INSERT OR IGNORE).
+	err = s.PinConversation("alice", "dm:bob")
+	if err != nil {
+		t.Fatalf("PinConversation duplicate returned error: %v", err)
+	}
+
+	keys := s.ListPinnedConversations("alice")
+	if len(keys) != 1 {
+		t.Errorf("expected 1 pinned conversation after duplicate pin, got %d", len(keys))
+	}
+}
+
+// ── Mute/Archive edge cases ──
+
+func TestMuteUnmuteCycle(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	key := "room:general"
+
+	// Initially not muted.
+	if s.IsConversationMuted("alice", key) {
+		t.Error("expected not muted initially")
+	}
+
+	// Mute.
+	s.MuteConversation("alice", key)
+	if !s.IsConversationMuted("alice", key) {
+		t.Error("expected muted after MuteConversation")
+	}
+
+	// Unmute.
+	s.UnmuteConversation("alice", key)
+	if s.IsConversationMuted("alice", key) {
+		t.Error("expected not muted after UnmuteConversation")
+	}
+}
+
+func TestArchiveUnarchiveCycle(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	key := "dm:eve"
+
+	// Initially not archived.
+	if s.IsConversationArchived("alice", key) {
+		t.Error("expected not archived initially")
+	}
+
+	// Archive.
+	s.ArchiveConversation("alice", key)
+	if !s.IsConversationArchived("alice", key) {
+		t.Error("expected archived after ArchiveConversation")
+	}
+
+	// Unarchive.
+	s.UnarchiveConversation("alice", key)
+	if s.IsConversationArchived("alice", key) {
+		t.Error("expected not archived after UnarchiveConversation")
+	}
+}
+
+// ── Friends edge cases ──
+
+func TestFriendsRoundTrip(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Empty friends list.
+	friends := s.GetFriends("alice")
+	if len(friends) != 0 {
+		t.Errorf("expected 0 friends for new user, got %d", len(friends))
+	}
+
+	// Add friends.
+	s.AddFriend("alice", "bob")
+	s.AddFriend("alice", "charlie")
+	s.AddFriend("bob", "alice")
+
+	friends = s.GetFriends("alice")
+	if len(friends) != 2 {
+		t.Errorf("expected 2 friends, got %d", len(friends))
+	}
+
+	// Remove friend.
+	s.RemoveFriend("alice", "bob")
+	friends = s.GetFriends("alice")
+	if len(friends) != 1 {
+		t.Errorf("expected 1 friend after remove, got %d", len(friends))
+	}
+}
+
+// ── Room management edge cases ──
+
+func TestDeleteRoom(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	roomID, _ := s.CreateRoom("temp-room")
+	rooms := s.ListRooms()
+	originalCount := len(rooms)
+
+	err = s.DeleteRoom(roomID)
+	if err != nil {
+		t.Fatalf("DeleteRoom returned error: %v", err)
+	}
+
+	rooms = s.ListRooms()
+	if len(rooms) != originalCount-1 {
+		t.Errorf("expected %d rooms after delete, got %d", originalCount-1, len(rooms))
+	}
+
+	// Verify room is gone.
+	_, err = s.GetRoomID("temp-room")
+	if err == nil {
+		t.Error("expected error when getting deleted room")
+	}
+}
+
+func TestDuplicateRoom(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	_, err = s.CreateRoom("unique-room")
+	if err != nil {
+		t.Fatalf("CreateRoom returned error: %v", err)
+	}
+
+	// Duplicate room name should fail.
+	_, err = s.CreateRoom("unique-room")
+	if err == nil {
+		t.Error("expected error for duplicate room name")
+	}
+}
+
+// ── GetAllFriends and GetAllGroups coverage ──
+
+func TestGetAllFriendsEmpty(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	result := s.GetAllFriends()
+	if len(result) != 0 {
+		t.Errorf("expected empty map, got %d entries", len(result))
+	}
+}
+
+func TestGetAllGroupsEmpty(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	result := s.GetAllGroups()
+	if len(result) != 0 {
+		t.Errorf("expected empty map, got %d entries", len(result))
+	}
+}
+
+// ── MarkMessagesDelivered edge cases ──
+
+func TestMarkMessagesDelivered(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	// Insert a DM.
+	dm, _ := s.InsertMessage("alice", "hello bob", "", "", "bob", "", "")
+
+	// Initially undelivered.
+	undelivered := s.GetUndeliveredDMs("bob", 10)
+	if len(undelivered) != 1 {
+		t.Fatalf("expected 1 undelivered DM, got %d", len(undelivered))
+	}
+
+	// Mark as delivered.
+	err = s.MarkMessagesDelivered([]string{dm.ID})
+	if err != nil {
+		t.Fatalf("MarkMessagesDelivered returned error: %v", err)
+	}
+
+	// Should now be empty.
+	undelivered = s.GetUndeliveredDMs("bob", 10)
+	if len(undelivered) != 0 {
+		t.Errorf("expected 0 undelivered after mark, got %d", len(undelivered))
+	}
+
+	// MarkMessagesDelivered with empty slice should be no-op.
+	err = s.MarkMessagesDelivered([]string{})
+	if err != nil {
+		t.Fatalf("MarkMessagesDelivered empty returned error: %v", err)
+	}
+}
+
+// ── Polls basic flow ──
+
+func TestPollLifecycle(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	now := time.Now().UnixMilli()
+	poll := &Poll{
+		ID:             "poll-1",
+		RoomID:         "public",
+		Creator:        "alice",
+		Question:       "What is your favorite color?",
+		Options:        []string{"Red", "Blue", "Green"},
+		MultipleChoice: false,
+		IsAnonymous:    true,
+		Votes:          make(map[int]int),
+		Voters:         make(map[int][]string),
+		CreatedAt:      now,
+	}
+
+	err = s.CreatePoll(poll)
+	if err != nil {
+		t.Fatalf("CreatePoll returned error: %v", err)
+	}
+
+	// Get the poll.
+	retrieved, err := s.GetPoll("poll-1")
+	if err != nil {
+		t.Fatalf("GetPoll returned error: %v", err)
+	}
+	if retrieved.Question != poll.Question {
+		t.Errorf("expected question '%s', got '%s'", poll.Question, retrieved.Question)
+	}
+	if len(retrieved.Options) != 3 {
+		t.Errorf("expected 3 options, got %d", len(retrieved.Options))
+	}
+	if !retrieved.IsAnonymous {
+		t.Error("expected IsAnonymous=true")
+	}
+	if retrieved.IsClosed {
+		t.Error("expected IsClosed=false initially")
+	}
+
+	// Vote on option 1.
+	err = s.VotePoll("poll-1", "bob", 1)
+	if err != nil {
+		t.Fatalf("VotePoll returned error: %v", err)
+	}
+
+	// Vote again (duplicate) should be no-op.
+	err = s.VotePoll("poll-1", "bob", 1)
+	if err != nil {
+		t.Fatalf("VotePoll duplicate returned error: %v", err)
+	}
+
+	retrieved, err = s.GetPoll("poll-1")
+	if err != nil {
+		t.Fatalf("GetPoll after vote returned error: %v", err)
+	}
+	if retrieved.Votes[1] != 1 {
+		t.Errorf("expected 1 vote for option 1, got %d", retrieved.Votes[1])
+	}
+	if len(retrieved.Voters[1]) != 1 || retrieved.Voters[1][0] != "bob" {
+		t.Errorf("expected voter 'bob', got %v", retrieved.Voters[1])
+	}
+
+	// Close the poll.
+	err = s.ClosePoll("poll-1")
+	if err != nil {
+		t.Fatalf("ClosePoll returned error: %v", err)
+	}
+	retrieved, err = s.GetPoll("poll-1")
+	if err != nil {
+		t.Fatalf("GetPoll after close returned error: %v", err)
+	}
+	if !retrieved.IsClosed {
+		t.Error("expected IsClosed=true after close")
+	}
+
+	// GetPoll for non-existent poll.
+	_, err = s.GetPoll("nonexistent")
+	if err == nil {
+		t.Error("expected error for non-existent poll")
+	}
+}
+
+// ── Group management extended ──
+
+func TestGroupUpdateNameAndTransferOwnership(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("old-devs", "alice")
+	s.AddGroupMember("old-devs", "bob")
+	s.InsertMessage("alice", "group msg", "", "", "", "old-devs", "")
+
+	// Rename group.
+	err = s.UpdateGroupName("old-devs", "new-devs")
+	if err != nil {
+		t.Fatalf("UpdateGroupName returned error: %v", err)
+	}
+
+	// Verify group_info updated.
+	info, err := s.GetGroupInfo("new-devs")
+	if err != nil {
+		t.Fatalf("GetGroupInfo after rename returned error: %v", err)
+	}
+	if info.Name != "new-devs" {
+		t.Errorf("expected 'new-devs', got '%s'", info.Name)
+	}
+
+	// Verify members migrated.
+	members := s.GetGroupMembers("new-devs")
+	if len(members) != 2 {
+		t.Errorf("expected 2 members after rename, got %d", len(members))
+	}
+
+	// Verify messages migrated.
+	ctx := context.Background()
+	msgs, err := s.ExportMessages(ctx, "", "", "new-devs", "", 0)
+	if err != nil {
+		t.Fatalf("ExportMessages after rename returned error: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Errorf("expected 1 message for renamed group, got %d", len(msgs))
+	}
+
+	// Transfer ownership.
+	err = s.TransferGroupOwnership("new-devs", "bob")
+	if err != nil {
+		t.Fatalf("TransferGroupOwnership returned error: %v", err)
+	}
+	info, err = s.GetGroupInfo("new-devs")
+	if err != nil {
+		t.Fatalf("GetGroupInfo after transfer returned error: %v", err)
+	}
+	if info.Owner != "bob" {
+		t.Errorf("expected owner 'bob', got '%s'", info.Owner)
+	}
+}
+
+func TestKickGroupMember(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("devs", "alice")
+	s.AddGroupMember("devs", "bob")
+
+	members := s.GetGroupMembers("devs")
+	if len(members) != 2 {
+		t.Fatalf("expected 2 members, got %d", len(members))
+	}
+
+	err = s.KickGroupMember("devs", "bob")
+	if err != nil {
+		t.Fatalf("KickGroupMember returned error: %v", err)
+	}
+
+	members = s.GetGroupMembers("devs")
+	if len(members) != 1 {
+		t.Errorf("expected 1 member after kick, got %d", len(members))
+	}
+	if members[0] != "alice" {
+		t.Errorf("expected 'alice' remaining, got '%s'", members[0])
+	}
+}
+
+func TestDeleteGroup(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("temp-group", "alice")
+	s.AddGroupMember("temp-group", "bob")
+
+	groups := s.GetAllGroups()
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+
+	err = s.DeleteGroup("temp-group")
+	if err != nil {
+		t.Fatalf("DeleteGroup returned error: %v", err)
+	}
+
+	groups = s.GetAllGroups()
+	if len(groups) != 0 {
+		t.Errorf("expected 0 groups after delete, got %d", len(groups))
+	}
+}
+
+// ── LeaveGroup basic ──
+
+func TestLeaveGroupNonOwner(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("devs", "alice")
+	s.AddGroupMember("devs", "bob")
+
+	// Non-owner leaves.
+	err = s.LeaveGroup("devs", "bob")
+	if err != nil {
+		t.Fatalf("LeaveGroup non-owner returned error: %v", err)
+	}
+
+	members := s.GetGroupMembers("devs")
+	if len(members) != 1 {
+		t.Errorf("expected 1 member after leave, got %d", len(members))
+	}
+}
+
+// ── GetGroupMemberRole and GetGroupOwner missing cases ──
+
+func TestGetGroupMemberRoleMissing(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("devs", "alice")
+
+	// Non-member should get an error.
+	_, err = s.GetGroupMemberRole("devs", "bob")
+	if err == nil {
+		t.Error("expected error for non-member role query")
+	}
+
+	// Non-existent group.
+	_, err = s.GetGroupOwner("nonexistent-group")
+	if err == nil {
+		t.Error("expected error for non-existent group owner")
+	}
+}
+
+// ── Pin/Unpin message ──
+
+func TestPinAndUnpinMessage(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	msg, _ := s.InsertMessage("alice", "important message", "", "room-1", "", "", "")
+
+	// Pin the message.
+	err = s.PinMessage("room-1", msg.ID, "bob")
+	if err != nil {
+		t.Fatalf("PinMessage returned error: %v", err)
+	}
+
+	pinned := s.GetPinnedMessages("room-1")
+	if len(pinned) != 1 {
+		t.Fatalf("expected 1 pinned message, got %d", len(pinned))
+	}
+	if pinned[0].ID != msg.ID {
+		t.Errorf("expected pinned msg ID '%s', got '%s'", msg.ID, pinned[0].ID)
+	}
+
+	// Unpin.
+	err = s.UnpinMessage("room-1", msg.ID)
+	if err != nil {
+		t.Fatalf("UnpinMessage returned error: %v", err)
+	}
+
+	pinned = s.GetPinnedMessages("room-1")
+	if len(pinned) != 0 {
+		t.Errorf("expected 0 pinned after unpin, got %d", len(pinned))
+	}
+}
+
+// ── GetMessageByID ──
+
+func TestGetMessageByIDNonExistent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	_, err = s.GetMessageByID("nonexistent-id")
+	if err == nil {
+		t.Error("expected error for non-existent message")
+	}
+}
+
+// ── GetGroupInfo missing ──
+
+func TestGetGroupInfoNonExistent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	_, err = s.GetGroupInfo("nonexistent-group")
+	if err == nil {
+		t.Error("expected error for non-existent group info")
+	}
+}
+
+// ── GroupMembersWithRoles empty ──
+
+func TestGetGroupMembersWithRolesEmpty(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	members := s.GetGroupMembersWithRoles("nonexistent-group")
+	if len(members) != 0 {
+		t.Errorf("expected 0 members for non-existent group, got %d", len(members))
 	}
 }
 
