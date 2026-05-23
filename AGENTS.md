@@ -36,7 +36,7 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 ## 当前增量
 
-性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.12），875 前端测试 / 50 文件 / E2E 98/101 / tsc 0 / ESLint 0 / CI 全绿。
+性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.12），910 前端测试 / 50 文件 / E2E 109/113 / tsc 0 / ESLint 0 / CI 全绿。
 
 此增量包含：
 - 前端测试扩展至 779 tests / 50 files（51.86% 行覆盖率）。
@@ -61,6 +61,9 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 - PM 审计修复：AI 助手默认展开、文件上传 >50MB 错误提示、麦克风权限拒绝反馈、语音录制提示 i18n、zh-CN publicChatSub 中文化、ChatInput disconnect 硬编码改用 t()。
 - 测试覆盖扩展：useWebSocket 3.37%→44.56%（+30）、JoinScreen 47.29%→81.08%（+18）、ChatInput +14（875 total）。
 - SW activate: clients.claim() 移入 event.waitUntil()。
+- ChatLayout 测试 +14（移动端侧栏、ThreadPanel、GroupInfoPanel、重连 banner、主题循环、More 菜单 — 30 tests total）。
+- E2E 错误路径 5 tests（重连、踢下线、无效邀请码、错误密码、空消息）。
+- kick 重连循环修复：kicked 事件后清空 reconnectUsername，阻止 ping-pong 重连。
 - 生产容器重启修复 WebSocket 连接堆积。
 
 ## 近期增量（v0.2.7）
