@@ -2100,7 +2100,7 @@ func sanitizeBotContent(content string) string {
 	return content
 }
 
-// isReservedUsername blocks system and infrastructure usernames.
+// IsReservedUsername blocks system and infrastructure usernames.
 func IsReservedUsername(username string) bool {
 	lower := strings.ToLower(username)
 	reserved := []string{"system", "server", "admin", "moderator", "mod", "root", "null", "undefined", "everyone", "all", "chat", "here", "channel"}

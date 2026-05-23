@@ -962,10 +962,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-		if hub.IsReservedUsername(username) {
-			writeJSONError(w, http.StatusBadRequest, "username is reserved", "RESERVED_USERNAME", requestID)
-			return
-		}
+	if hub.IsReservedUsername(username) {
+		writeJSONError(w, http.StatusBadRequest, "username is reserved", "RESERVED_USERNAME", requestID)
+		return
+	}
 
 	if len(password) < 6 {
 		writeJSONError(w, http.StatusBadRequest, "password must be at least 6 characters", "WEAK_PASSWORD", requestID)
