@@ -531,6 +531,7 @@ func (h *Hub) Run() {
 					// Close the old WebSocket to trigger cleanup in ReadPump/WritePump.
 					// Remove from clients first so unregister handler is a no-op.
 					delete(h.clients, c)
+					close(c.send)
 					c.conn.Close()
 					log.Printf("client kicked (new login): %s", c.username)
 					break
