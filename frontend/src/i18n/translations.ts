@@ -72,8 +72,11 @@ export interface TranslationDict {
     assistants: string;
     models: string;
     noFriends: string;
+    noFriendsHint: string;
     noGroups: string;
+    noGroupsHint: string;
     noDMs: string;
+    noDMsHint: string;
     createGroup: string;
     sendMessage: string;
     addFriend: string;
@@ -112,6 +115,7 @@ export interface TranslationDict {
     emptyDescription: string;
     newMessages: string;
     loadingOlder: string;
+    loadErrorRetry: string;
     newMessagesDivider: string;
     olderMessages: string;
     emptyDmTitle: string;
@@ -521,8 +525,11 @@ const zhCN: TranslationDict = {
     assistants: "助手",
     models: "模型",
     noFriends: "暂无好友",
+    noFriendsHint: "在线用户中点击用户名添加好友",
     noGroups: "暂无群组",
+    noGroupsHint: "点击上方 + 创建群组",
     noDMs: "暂无私信",
+    noDMsHint: "点击在线用户发起私信",
     createGroup: "创建群组",
     sendMessage: "发送消息",
     addFriend: "添加好友",
@@ -561,6 +568,7 @@ const zhCN: TranslationDict = {
     emptyDescription: "成为第一个发送消息的人吧！",
     newMessages: "{{count}} 条新消息",
     loadingOlder: "加载更早的消息...",
+    loadErrorRetry: "加载失败，点击重试",
     newMessagesDivider: "新消息",
     olderMessages: "更早的消息",
     emptyDmTitle: "暂无消息",
@@ -972,8 +980,11 @@ const enUS: TranslationDict = {
     assistants: "Assistants",
     models: "Models",
     noFriends: "No friends yet",
+    noFriendsHint: "Click a username in online users to add",
     noGroups: "No groups yet",
+    noGroupsHint: "Click + above to create a group",
     noDMs: "No DMs yet",
+    noDMsHint: "Click an online user to start a chat",
     createGroup: "Create Group",
     sendMessage: "Send Message",
     addFriend: "Add Friend",
@@ -1012,6 +1023,7 @@ const enUS: TranslationDict = {
     emptyDescription: "Be the first to send a message!",
     newMessages: "{{count}} new messages",
     loadingOlder: "Loading older messages...",
+    loadErrorRetry: "Failed to load — tap to retry",
     newMessagesDivider: "New messages",
     olderMessages: "Older messages",
     emptyDmTitle: "No messages yet",
