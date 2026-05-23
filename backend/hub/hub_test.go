@@ -3992,3 +3992,287 @@ func TestAssistantMentionTargetEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// --- DefaultRoomID tests ---
+
+// getRoomIDError is a simple error type for testing GetRoomID failure paths.
+type getRoomIDError string
+
+func (e getRoomIDError) Error() string { return string(e) }
+
+// errorOnGetRoomIDStore wraps mockStore but returns an error on GetRoomID.
+type errorOnGetRoomIDStore struct {
+	*mockStore
+}
+
+func (e *errorOnGetRoomIDStore) GetRoomID(name string) (string, error) {
+	return "", getRoomIDError("room not found")
+}
+
+func TestDefaultRoomID(t *testing.T) {
+	t.Run("returns existing room", func(t *testing.T) {
+		ms := &mockStore{}
+		ms.CreateRoom("公共聊天")
+		h := New(ms, nil, nil, "")
+		id := h.DefaultRoomID()
+		if id != "room-公共聊天" {
+			t.Errorf("expected room-公共聊天 for existing room, got %q", id)
+		}
+	})
+
+	t.Run("creates room when not found", func(t *testing.T) {
+		ms := &errorOnGetRoomIDStore{mockStore: &mockStore{}}
+		h := New(ms, nil, nil, "")
+		id := h.DefaultRoomID()
+		if id != "room-公共聊天" {
+			t.Errorf("expected room-公共聊天 from creation fallback, got %q", id)
+		}
+	})
+}
+
+// --- SendToUser offline edge case ---
+
+func TestSendToUser_OfflineReturnsFalse(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	data := []byte(`{"type":"dm","content":"hello"}`)
+	if h.SendToUser("ghost_user", data) {
+		t.Error("expected SendToUser to return false for user who never connected")
+	}
+
+	alice := &Client{username: "alice", send: make(chan []byte, 1)}
+	h.register <- alice
+	time.Sleep(10 * time.Millisecond)
+
+	if !h.SendToUser("alice", data) {
+		t.Error("expected SendToUser to return true while alice is online")
+	}
+
+	h.unregister <- alice
+	time.Sleep(10 * time.Millisecond)
+
+	if h.SendToUser("alice", data) {
+		t.Error("expected SendToUser to return false after alice disconnects")
+	}
+}
+
+// --- BroadcastStreamChunkToRoom tests ---
+
+func TestBroadcastStreamChunkToRoom(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-2"}
+	charlie := &Client{hub: h, username: "charlie", send: make(chan []byte, 10), currentRoomID: "room-1"}
+
+	h.mu.Lock()
+	h.clients[alice] = true
+	h.clients[bob] = true
+	h.clients[charlie] = true
+	h.mu.Unlock()
+
+	t.Run("specific room only delivers to room members", func(t *testing.T) {
+		h.BroadcastStreamChunkToRoom("bot", "hello room-1", false, "room-1")
+
+		select {
+		case raw := <-alice.send:
+			var msg Message
+			if err := json.Unmarshal(raw, &msg); err != nil {
+				t.Fatalf("unmarshal error: %v", err)
+			}
+			if msg.Type != "stream" || msg.Username != "bot" || msg.Content != "hello room-1" {
+				t.Errorf("unexpected message: %+v", msg)
+			}
+		default:
+			t.Fatal("expected alice in room-1 to receive stream chunk")
+		}
+
+		select {
+		case <-charlie.send:
+		default:
+			t.Fatal("expected charlie in room-1 to receive stream chunk")
+		}
+
+		select {
+		case msg := <-bob.send:
+			t.Fatalf("expected bob in room-2 NOT to receive, got %s", string(msg))
+		default:
+		}
+	})
+
+	t.Run("empty roomID broadcasts to all via broadcast channel", func(t *testing.T) {
+		h.BroadcastStreamChunkToRoom("agent", "global stream", true, "")
+
+		select {
+		case raw := <-h.broadcast:
+			var msg Message
+			if err := json.Unmarshal(raw, &msg); err != nil {
+				t.Fatalf("unmarshal error: %v", err)
+			}
+			if msg.Type != "stream" || msg.Username != "agent" || msg.Content != "global stream" || !msg.Done {
+				t.Errorf("unexpected broadcast stream message: %+v", msg)
+			}
+		default:
+			t.Fatal("expected stream chunk on broadcast channel when roomID is empty")
+		}
+	})
+
+	h.mu.Lock()
+	delete(h.clients, alice)
+	delete(h.clients, bob)
+	delete(h.clients, charlie)
+	h.mu.Unlock()
+}
+
+// --- IsOnline tests ---
+
+func TestIsOnline(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	if h.IsOnline("alice") {
+		t.Error("expected IsOnline to return false for user who never connected")
+	}
+
+	alice := &Client{username: "alice", send: make(chan []byte, 1)}
+	h.register <- alice
+	time.Sleep(10 * time.Millisecond)
+
+	if !h.IsOnline("alice") {
+		t.Error("expected IsOnline to return true after alice connects")
+	}
+
+	if h.IsOnline("bob") {
+		t.Error("expected IsOnline to return false for bob who never connected")
+	}
+
+	h.unregister <- alice
+	time.Sleep(10 * time.Millisecond)
+
+	if h.IsOnline("alice") {
+		t.Error("expected IsOnline to return false after alice disconnects")
+	}
+}
+
+// --- BroadcastToGroup tests ---
+
+func TestBroadcastToGroup(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	h.CreateGroup("team", "alice")
+	h.AddGroupMember("team", "bob")
+
+	alice := &Client{username: "alice", send: make(chan []byte, 1)}
+	bob := &Client{username: "bob", send: make(chan []byte, 1)}
+	dave := &Client{username: "dave", send: make(chan []byte, 1)}
+
+	h.register <- alice
+	h.register <- bob
+	h.register <- dave
+	time.Sleep(10 * time.Millisecond)
+
+	data := []byte(`{"type":"group_msg","content":"via BroadcastToGroup"}`)
+	h.BroadcastToGroup("team", data)
+
+	for _, c := range []*Client{alice, bob} {
+		select {
+		case received := <-c.send:
+			if string(received) != string(data) {
+				t.Errorf("%s: expected %q, got %q", c.username, string(data), string(received))
+			}
+		default:
+			t.Errorf("expected group member %s to receive via BroadcastToGroup", c.username)
+		}
+	}
+
+	select {
+	case msg := <-dave.send:
+		t.Fatalf("expected dave (non-member) NOT to receive, got %s", string(msg))
+	default:
+	}
+
+	h.SendToGroup("team", []byte(`{"via":"SendToGroup"}`))
+	for _, c := range []*Client{alice, bob} {
+		select {
+		case <-c.send:
+		default:
+			t.Errorf("expected %s to receive via SendToGroup alias", c.username)
+		}
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	h.unregister <- dave
+	time.Sleep(10 * time.Millisecond)
+}
+
+// --- ValidateUsername edge cases ---
+
+func TestValidateUsername_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		username string
+		valid    bool
+	}{
+		{name: "single underscore", username: "_", valid: true},
+		{name: "19 chars", username: "1234567890123456789", valid: true},
+		{name: "20 chars underscore", username: "1234567890123456789_", valid: true},
+		{name: "21 chars with letter", username: "a12345678901234567890", valid: false},
+		{name: "pure chinese", username: "你好世界测试用户名称", valid: true},
+		{name: "mixed cn digit underscore", username: "用户_2024_test", valid: true},
+		{name: "contains newline", username: "alice\nbob", valid: false},
+		{name: "contains tab", username: "alice\tbob", valid: false},
+		{name: "dollar sign", username: "user$name", valid: false},
+		{name: "contains dot", username: "alice.bob", valid: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ValidateUsername(tc.username)
+			if result != tc.valid {
+				t.Errorf("ValidateUsername(%q) = %v, want %v", tc.username, result, tc.valid)
+			}
+		})
+	}
+}
+
+// --- ValidateGroupName edge cases ---
+
+func TestValidateGroupName_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name      string
+		groupName string
+		valid     bool
+	}{
+		{name: "single underscore", groupName: "_", valid: true},
+		{name: "single hyphen", groupName: "-", valid: true},
+		{name: "29 chars", groupName: "12345678901234567890123456789", valid: true},
+		{name: "30 chars with hyphen", groupName: "12345678901234567890123456789-", valid: true},
+		{name: "31 chars with letter", groupName: "a123456789012345678901234567890", valid: false},
+		{name: "all allowed specials", groupName: "团队_A-B C", valid: true},
+		{name: "pure chinese within limit", groupName: "开发团队讨论组开发团队讨论组开发团队讨论组开发团队讨论组", valid: true},
+		{name: "exclamation mark", groupName: "team!chat", valid: false},
+		{name: "dollar sign", groupName: "team$chat", valid: false},
+		{name: "percent sign", groupName: "team%chat", valid: false},
+		{name: "asterisk", groupName: "team*chat", valid: false},
+		{name: "parenthesis", groupName: "team(chat)", valid: false},
+		{name: "contains newline", groupName: "team\nchat", valid: false},
+		{name: "contains tab", groupName: "team\tchat", valid: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ValidateGroupName(tc.groupName)
+			if result != tc.valid {
+				t.Errorf("ValidateGroupName(%q) = %v, want %v", tc.groupName, result, tc.valid)
+			}
+		})
+	}
+}

@@ -216,4 +216,158 @@ describe("ThreadPanel", () => {
 
     expect(onSendReply).toHaveBeenCalledWith("Nice thread!");
   });
+
+  // === Keyboard interaction tests ===
+
+  it("sends reply on Enter key (without Shift)", () => {
+    const onSendReply = vi.fn();
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={onSendReply}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Write a reply...");
+    fireEvent.change(textarea, { target: { value: "Enter reply" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    expect(onSendReply).toHaveBeenCalledWith("Enter reply");
+  });
+
+  it("clears input after sending via Enter", () => {
+    const onSendReply = vi.fn();
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={onSendReply}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText(
+      "Write a reply...",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "Reply text" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    expect(textarea.value).toBe("");
+  });
+
+  it("does NOT send on Shift+Enter (allows newline)", () => {
+    const onSendReply = vi.fn();
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={onSendReply}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Write a reply...");
+    fireEvent.change(textarea, { target: { value: "Multi\nline" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+
+    expect(onSendReply).not.toHaveBeenCalled();
+  });
+
+  it("does NOT send on Enter with empty content", () => {
+    const onSendReply = vi.fn();
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={onSendReply}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Write a reply...");
+    fireEvent.change(textarea, { target: { value: "" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    expect(onSendReply).not.toHaveBeenCalled();
+  });
+
+  it("does NOT send on Enter with whitespace-only content", () => {
+    const onSendReply = vi.fn();
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={onSendReply}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Write a reply...");
+    fireEvent.change(textarea, { target: { value: "   " } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    expect(onSendReply).not.toHaveBeenCalled();
+  });
+
+  it("closes on Escape key", () => {
+    vi.useFakeTimers();
+    const onClose = vi.fn();
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={onClose}
+        onSendReply={vi.fn()}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Write a reply...");
+    fireEvent.keyDown(textarea, { key: "Escape" });
+
+    vi.advanceTimersByTime(200);
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+  });
+
+  it("send button is disabled when reply content is empty", () => {
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={vi.fn()}
+      />,
+    );
+
+    const sendButton = screen.getByRole("button", { name: "Write a reply..." });
+    expect(sendButton).toBeDisabled();
+  });
+
+  it("send button is disabled when reply content is only whitespace", () => {
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={vi.fn()}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Write a reply...");
+    fireEvent.change(textarea, { target: { value: "   " } });
+
+    const sendButton = screen.getByRole("button", { name: "Write a reply..." });
+    expect(sendButton).toBeDisabled();
+  });
 });
