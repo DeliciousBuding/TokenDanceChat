@@ -30,16 +30,30 @@ type mockStore struct {
 	allFriends  map[string][]string
 	allGroups   map[string][]string
 	allProfiles []store.UserProfile
+
+	// Enhanced state for reaction, poll, and message edit tests.
+	reactions    map[string]map[string][]string // messageID -> emoji -> []username
+	polls        map[string]*Poll               // pollID -> poll
+	messagesByID map[string]StoredMessage       // messageID -> message
 }
 
 func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error) {
 	msg := StoredMessage{
-		ID:        "mock-id-" + username,
+		ID:        "mock-id-" + username + "-" + content[:min(8, len(content))],
 		Username:  username,
 		Content:   content,
 		Timestamp: time.Now().UnixMilli(),
+		ReplyToID: replyToID,
+		RoomID:    roomID,
+		ToUser:    toUser,
+		GroupName: groupName,
+		ThreadID:  threadID,
 	}
 	m.messages = append(m.messages, msg)
+	if m.messagesByID == nil {
+		m.messagesByID = make(map[string]StoredMessage)
+	}
+	m.messagesByID[msg.ID] = msg
 	return msg, nil
 }
 
@@ -80,22 +94,76 @@ func (m *mockStore) DeleteRoom(roomID string) error {
 	return nil
 }
 func (m *mockStore) ToggleReaction(messageID, emoji, username string) (map[string][]string, error) {
-	return nil, nil
+	if m.reactions == nil {
+		m.reactions = make(map[string]map[string][]string)
+	}
+	if m.reactions[messageID] == nil {
+		m.reactions[messageID] = make(map[string][]string)
+	}
+	users := m.reactions[messageID][emoji]
+	found := false
+	for i, u := range users {
+		if u == username {
+			users = append(users[:i], users[i+1:]...)
+			found = true
+			break
+		}
+	}
+	if !found {
+		users = append(users, username)
+	}
+	m.reactions[messageID][emoji] = users
+	// Remove empty emoji entries.
+	if len(users) == 0 {
+		delete(m.reactions[messageID], emoji)
+	}
+	return m.reactions[messageID], nil
 }
 func (m *mockStore) GetReactionsForMessages(messageIDs []string) map[string]map[string][]string {
-	return nil
+	result := make(map[string]map[string][]string)
+	if m.reactions == nil {
+		return result
+	}
+	for _, id := range messageIDs {
+		if r, ok := m.reactions[id]; ok && len(r) > 0 {
+			result[id] = r
+		}
+	}
+	return result
 }
 func (m *mockStore) UpdateMessage(messageID, content string) (StoredMessage, error) {
-	return StoredMessage{}, nil
+	if m.messagesByID == nil {
+		return StoredMessage{}, nil
+	}
+	msg, ok := m.messagesByID[messageID]
+	if !ok {
+		return StoredMessage{}, nil
+	}
+	msg.Content = content
+	msg.Edited = true
+	m.messagesByID[messageID] = msg
+	return msg, nil
 }
 func (m *mockStore) GetMessageByID(messageID string) (StoredMessage, error) {
+	if m.messagesByID != nil {
+		if msg, ok := m.messagesByID[messageID]; ok {
+			return msg, nil
+		}
+	}
 	for _, msg := range m.messages {
 		if msg.ID == messageID {
 			return msg, nil
 		}
 	}
-	return StoredMessage{}, nil
+	return StoredMessage{}, errNotFound
 }
+
+// errNotFound is a sentinel error for missing resources in mockStore.
+var errNotFound = &mockError{"not found"}
+
+type mockError struct{ msg string }
+
+func (e *mockError) Error() string { return e.msg }
 
 func (m *mockStore) SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error) {
 	return nil, nil
@@ -140,10 +208,51 @@ func (m *mockStore) GetUserProfile(username string) (*store.UserProfile, error) 
 func (m *mockStore) UpdateUserStatus(username, status string) error                 { return nil }
 func (m *mockStore) UpdateUserLastSeen(username string) error                       { return nil }
 func (m *mockStore) GetAllUserProfiles() ([]store.UserProfile, error)               { return m.allProfiles, nil }
-func (m *mockStore) CreatePoll(poll *Poll) error                                    { return nil }
-func (m *mockStore) GetPoll(pollID string) (*Poll, error)                           { return nil, nil }
-func (m *mockStore) VotePoll(pollID string, username string, optionIndex int) error { return nil }
-func (m *mockStore) ClosePoll(pollID string) error                                  { return nil }
+func (m *mockStore) CreatePoll(poll *Poll) error {
+	if m.polls == nil {
+		m.polls = make(map[string]*Poll)
+	}
+	m.polls[poll.ID] = poll
+	return nil
+}
+func (m *mockStore) GetPoll(pollID string) (*Poll, error) {
+	if m.polls != nil {
+		if p, ok := m.polls[pollID]; ok {
+			return p, nil
+		}
+	}
+	return nil, nil
+}
+func (m *mockStore) VotePoll(pollID string, username string, optionIndex int) error {
+	if m.polls == nil {
+		return nil
+	}
+	p, ok := m.polls[pollID]
+	if !ok {
+		return nil
+	}
+	if p.IsClosed {
+		return nil
+	}
+	if p.Votes == nil {
+		p.Votes = make(map[int]int)
+	}
+	if p.Voters == nil {
+		p.Voters = make(map[int][]string)
+	}
+	p.Votes[optionIndex]++
+	p.Voters[optionIndex] = append(p.Voters[optionIndex], username)
+	return nil
+}
+func (m *mockStore) ClosePoll(pollID string) error {
+	if m.polls != nil {
+		if p, ok := m.polls[pollID]; ok {
+			p.IsClosed = true
+			return nil
+		}
+	}
+	return nil
+}
 func (m *mockStore) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error {
 	return nil
 }
@@ -4437,4 +4546,847 @@ func TestConnectionCountAfterAllDisconnect(t *testing.T) {
 	if h.ConnectionCount() != 0 {
 		t.Errorf("expected 0 connections after all disconnect, got %d", h.ConnectionCount())
 	}
+}
+
+// --- Typing indicator tests ---
+
+func TestTypingBroadcast(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10)}
+	charlie := &Client{hub: h, username: "charlie", send: make(chan []byte, 10)}
+	h.register <- alice
+	h.register <- bob
+	h.register <- charlie
+	time.Sleep(10 * time.Millisecond)
+
+	h.BroadcastTyping("alice", "typing", "dm", "bob")
+
+	// Sender should NOT receive.
+	select {
+	case msg := <-alice.send:
+		t.Fatalf("sender should not receive typing broadcast, got %s", string(msg))
+	default:
+	}
+
+	// bob should receive.
+	var got Message
+	select {
+	case payload := <-bob.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode typing error: %v", err)
+		}
+		if got.Type != "typing" || got.Username != "alice" {
+			t.Fatalf("expected typing from alice, got type=%q username=%q", got.Type, got.Username)
+		}
+		if got.Context != "dm" || got.To != "bob" {
+			t.Fatalf("expected context=dm to=bob, got context=%q to=%q", got.Context, got.To)
+		}
+	default:
+		t.Fatal("bob should receive typing broadcast")
+	}
+
+	// charlie should also receive.
+	select {
+	case payload := <-charlie.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode typing error: %v", err)
+		}
+		if got.Type != "typing" {
+			t.Fatalf("expected typing for charlie, got type=%q", got.Type)
+		}
+	default:
+		t.Fatal("charlie should receive typing broadcast")
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	h.unregister <- charlie
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestTypingStop(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10)}
+	h.register <- alice
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	h.BroadcastTyping("alice", "typing_stop", "public", "")
+
+	// Sender should NOT receive typing_stop.
+	select {
+	case msg := <-alice.send:
+		t.Fatalf("sender should not receive typing_stop, got %s", string(msg))
+	default:
+	}
+
+	// bob should receive typing_stop.
+	var got Message
+	select {
+	case payload := <-bob.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode typing_stop error: %v", err)
+		}
+		if got.Type != "typing_stop" || got.Username != "alice" {
+			t.Fatalf("expected typing_stop from alice, got type=%q username=%q", got.Type, got.Username)
+		}
+	default:
+		t.Fatal("bob should receive typing_stop")
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestTypingRateLimit(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	// First call allowed.
+	if !h.ShouldBroadcastTyping("alice") {
+		t.Error("first typing call should be allowed")
+	}
+
+	// Immediate second call denied (within 3s cooldown).
+	if h.ShouldBroadcastTyping("alice") {
+		t.Error("second typing call within 3s should be rate-limited")
+	}
+
+	// Different user tracked independently.
+	if !h.ShouldBroadcastTyping("bob") {
+		t.Error("different user should not be rate-limited by alice's cooldown")
+	}
+
+	// Manually expire alice's cooldown.
+	h.mu.Lock()
+	h.typingRateLimit["alice"] = time.Now().Add(-4 * time.Second)
+	h.mu.Unlock()
+
+	// Now allowed again.
+	if !h.ShouldBroadcastTyping("alice") {
+		t.Error("typing should be allowed after 3s cooldown expires")
+	}
+
+	// After this, should be denied again.
+	if h.ShouldBroadcastTyping("alice") {
+		t.Error("should be rate-limited again after second allowed call")
+	}
+}
+
+// --- Reaction tests ---
+
+func TestAddReaction(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10)}
+	h.register <- alice
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	alice.handleReaction(Message{ID: "msg-1", Emoji: "👍"})
+
+	// Both clients should receive reaction_update via broadcast.
+	var got Message
+	select {
+	case payload := <-alice.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode reaction_update error: %v", err)
+		}
+		if got.Type != "reaction_update" || got.ID != "msg-1" {
+			t.Fatalf("expected reaction_update for msg-1, got type=%q id=%q", got.Type, got.ID)
+		}
+		if got.Reactions == nil || len(got.Reactions["👍"]) == 0 || got.Reactions["👍"][0] != "alice" {
+			t.Fatalf("expected reaction map to include alice, got %v", got.Reactions)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("alice should receive reaction_update")
+	}
+
+	select {
+	case payload := <-bob.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode reaction_update error: %v", err)
+		}
+		if got.Type != "reaction_update" {
+			t.Fatalf("bob should receive reaction_update, got type=%q", got.Type)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("bob should receive reaction_update")
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestRemoveReaction(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10)}
+	h.register <- alice
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	// Add a reaction first.
+	alice.handleReaction(Message{ID: "msg-1", Emoji: "👍"})
+	// Drain pending messages.
+	<-alice.send
+	<-bob.send
+
+	// Toggle the same reaction off.
+	alice.handleReaction(Message{ID: "msg-1", Emoji: "👍"})
+
+	// Reaction should now be removed (empty emoji entry).
+	var got Message
+	select {
+	case payload := <-alice.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode reaction_update error: %v", err)
+		}
+		if got.Type != "reaction_update" {
+			t.Fatalf("expected reaction_update, got type=%q", got.Type)
+		}
+		// After removal, the emoji key should be absent.
+		if reactions, ok := got.Reactions["👍"]; ok && len(reactions) > 0 {
+			t.Fatalf("expected 👍 reactions to be empty after toggle-off, got %v", reactions)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("alice should receive reaction_update after toggle-off")
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestReactionBroadcast(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10)}
+	charlie := &Client{hub: h, username: "charlie", send: make(chan []byte, 10)}
+	h.register <- alice
+	h.register <- bob
+	h.register <- charlie
+	time.Sleep(10 * time.Millisecond)
+
+	bob.handleReaction(Message{ID: "msg-2", Emoji: "❤️"})
+
+	// All clients (including bob) should receive the broadcast.
+	clients := []struct {
+		name string
+		ch   chan []byte
+	}{
+		{"alice", alice.send},
+		{"bob", bob.send},
+		{"charlie", charlie.send},
+	}
+	for _, c := range clients {
+		var got Message
+		select {
+		case payload := <-c.ch:
+			if err := json.Unmarshal(payload, &got); err != nil {
+				t.Fatalf("%s: decode error: %v", c.name, err)
+			}
+			if got.Type != "reaction_update" || got.ID != "msg-2" {
+				t.Fatalf("%s: expected reaction_update for msg-2, got type=%q id=%q", c.name, got.Type, got.ID)
+			}
+		case <-time.After(200 * time.Millisecond):
+			t.Fatalf("%s should receive reaction_update broadcast", c.name)
+		}
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	h.unregister <- charlie
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestReactionEmptyUsername(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	anon := &Client{hub: h, send: make(chan []byte, 10)}
+	h.register <- anon
+	time.Sleep(10 * time.Millisecond)
+
+	// Reaction with empty username should be silently ignored.
+	anon.handleReaction(Message{ID: "msg-1", Emoji: "👍"})
+	select {
+	case msg := <-anon.send:
+		t.Fatalf("expected no reaction broadcast for empty username, got %s", string(msg))
+	default:
+	}
+
+	h.unregister <- anon
+	time.Sleep(10 * time.Millisecond)
+}
+
+// --- Message edit tests ---
+
+func TestEditMessage(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Insert a message as alice so alice can edit it.
+	stored, _ := ms.InsertMessage("alice", "original content", "", "room-1", "", "", "")
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	h.register <- alice
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	alice.handleMessageEdit(Message{ID: stored.ID, Content: "edited content"})
+
+	// Both in-room clients should receive message_edit.
+	var got Message
+	select {
+	case payload := <-alice.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode message_edit error: %v", err)
+		}
+		if got.Type != "message_edit" || got.ID != stored.ID {
+			t.Fatalf("expected message_edit for %s, got type=%q id=%q", stored.ID, got.Type, got.ID)
+		}
+		if got.Content != "edited content" || !got.Edited {
+			t.Fatalf("expected edited=true content='edited content', got edited=%v content=%q", got.Edited, got.Content)
+		}
+	default:
+		t.Fatal("alice should receive message_edit")
+	}
+
+	select {
+	case payload := <-bob.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode message_edit error: %v", err)
+		}
+		if got.Type != "message_edit" {
+			t.Fatalf("bob should receive message_edit, got type=%q", got.Type)
+		}
+	default:
+		t.Fatal("bob should receive message_edit")
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestEditMessageNotFound(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	h.register <- alice
+	time.Sleep(10 * time.Millisecond)
+
+	// Try editing a non-existent message.
+	alice.handleMessageEdit(Message{ID: "nonexistent", Content: "should not work"})
+
+	// No broadcast should occur (message not found).
+	select {
+	case msg := <-alice.send:
+		t.Fatalf("expected no message for edit of nonexistent message, got %s", string(msg))
+	default:
+	}
+
+	h.unregister <- alice
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestEditMessageNotOwner(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Insert a message as bob.
+	stored, _ := ms.InsertMessage("bob", "bob's message", "", "room-1", "", "", "")
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	h.register <- alice
+	time.Sleep(10 * time.Millisecond)
+
+	// alice tries to edit bob's message.
+	alice.handleMessageEdit(Message{ID: stored.ID, Content: "alice trying to edit"})
+
+	// Should receive NOT_OWNER error.
+	var got Message
+	select {
+	case payload := <-alice.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode error: %v", err)
+		}
+		if got.Type != "error" || got.ErrorCode != "NOT_OWNER" {
+			t.Fatalf("expected NOT_OWNER error, got type=%q code=%q", got.Type, got.ErrorCode)
+		}
+	default:
+		t.Fatal("expected NOT_OWNER error when editing another user's message")
+	}
+
+	h.unregister <- alice
+	time.Sleep(10 * time.Millisecond)
+}
+
+// --- Poll lifecycle tests ---
+
+func TestCreatePoll(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	h.register <- alice
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	poll := &Poll{
+		ID:             "poll-1",
+		Question:       "What is your favorite color?",
+		Options:        []string{"Red", "Blue", "Green"},
+		MultipleChoice: false,
+		IsAnonymous:    true,
+	}
+	alice.handlePollCreate(Message{Poll: poll})
+
+	// Both clients in room-1 should receive poll_created.
+	var got Message
+	select {
+	case payload := <-alice.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode poll_created error: %v", err)
+		}
+		if got.Type != "poll_created" || got.ID != "poll-1" {
+			t.Fatalf("expected poll_created for poll-1, got type=%q id=%q", got.Type, got.ID)
+		}
+		if got.Poll == nil || got.Poll.Question != "What is your favorite color?" {
+			t.Fatal("expected poll data in broadcast")
+		}
+		if got.Username != "alice" {
+			t.Fatalf("expected poll creator=alice, got %q", got.Username)
+		}
+	default:
+		t.Fatal("alice should receive poll_created")
+	}
+
+	select {
+	case payload := <-bob.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode poll_created error: %v", err)
+		}
+		if got.Type != "poll_created" {
+			t.Fatalf("bob should receive poll_created, got type=%q", got.Type)
+		}
+	default:
+		t.Fatal("bob should receive poll_created")
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestVotePoll(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Seed a poll in the store.
+	poll := &Poll{
+		ID:      "poll-vote-1",
+		RoomID:  "room-1",
+		Creator: "alice",
+		Question: "Yes or No?",
+		Options: []string{"Yes", "No"},
+		Votes:   make(map[int]int),
+		Voters:  make(map[int][]string),
+	}
+	ms.CreatePoll(poll)
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	h.register <- alice
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	alice.handlePollVote(Message{ID: "poll-vote-1", OptionIndex: 0})
+
+	// Both should receive poll_vote_update.
+	var got Message
+	select {
+	case payload := <-alice.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode poll_vote_update error: %v", err)
+		}
+		if got.Type != "poll_vote_update" || got.ID != "poll-vote-1" {
+			t.Fatalf("expected poll_vote_update for poll-vote-1, got type=%q id=%q", got.Type, got.ID)
+		}
+		if got.Poll == nil || got.Poll.Votes[0] != 1 {
+			t.Fatalf("expected 1 vote for option 0, got %v", got.Poll)
+		}
+	default:
+		t.Fatal("alice should receive poll_vote_update")
+	}
+
+	select {
+	case payload := <-bob.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode poll_vote_update error: %v", err)
+		}
+		if got.Type != "poll_vote_update" {
+			t.Fatalf("bob should receive poll_vote_update, got type=%q", got.Type)
+		}
+	default:
+		t.Fatal("bob should receive poll_vote_update")
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestClosePoll(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Seed a poll owned by alice.
+	poll := &Poll{
+		ID:      "poll-close-1",
+		RoomID:  "room-1",
+		Creator: "alice",
+		Question: "Should we proceed?",
+		Options: []string{"Yes", "No"},
+		Votes:   map[int]int{0: 3, 1: 1},
+		Voters:  map[int][]string{0: {"a", "b", "c"}, 1: {"d"}},
+	}
+	ms.CreatePoll(poll)
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	h.register <- alice
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	alice.handlePollClose(Message{ID: "poll-close-1"})
+
+	// Both should receive poll_closed.
+	var got Message
+	select {
+	case payload := <-alice.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode poll_closed error: %v", err)
+		}
+		if got.Type != "poll_closed" || got.ID != "poll-close-1" {
+			t.Fatalf("expected poll_closed for poll-close-1, got type=%q id=%q", got.Type, got.ID)
+		}
+	default:
+		t.Fatal("alice should receive poll_closed")
+	}
+
+	select {
+	case payload := <-bob.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode poll_closed error: %v", err)
+		}
+		if got.Type != "poll_closed" {
+			t.Fatalf("bob should receive poll_closed, got type=%q", got.Type)
+		}
+	default:
+		t.Fatal("bob should receive poll_closed")
+	}
+
+	// Verify poll is actually closed in store.
+	closed, _ := ms.GetPoll("poll-close-1")
+	if closed == nil || !closed.IsClosed {
+		t.Fatal("expected poll to be closed in store")
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestClosePollNotOwner(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Seed a poll owned by alice.
+	poll := &Poll{
+		ID:      "poll-owner-1",
+		RoomID:  "room-1",
+		Creator: "alice",
+		Question: "Test?",
+		Options: []string{"A", "B"},
+	}
+	ms.CreatePoll(poll)
+
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	// bob (not the creator) tries to close.
+	bob.handlePollClose(Message{ID: "poll-owner-1"})
+
+	// Should receive NOT_OWNER error.
+	var got Message
+	select {
+	case payload := <-bob.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode error: %v", err)
+		}
+		if got.Type != "error" || got.ErrorCode != "NOT_OWNER" {
+			t.Fatalf("expected NOT_OWNER error, got type=%q code=%q", got.Type, got.ErrorCode)
+		}
+	default:
+		t.Fatal("expected NOT_OWNER error when non-creator closes poll")
+	}
+
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestPollVoteUpdate(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	poll := &Poll{
+		ID:      "poll-vu-1",
+		RoomID:  "room-1",
+		Creator: "alice",
+		Question: "Pick one",
+		Options: []string{"Option A", "Option B", "Option C"},
+		Votes:   map[int]int{},
+		Voters:  map[int][]string{},
+	}
+	ms.CreatePoll(poll)
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	charlie := &Client{hub: h, username: "charlie", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	h.register <- alice
+	h.register <- bob
+	h.register <- charlie
+	time.Sleep(10 * time.Millisecond)
+
+	// Multiple users vote sequentially.
+	alice.handlePollVote(Message{ID: "poll-vu-1", OptionIndex: 0})
+	<-alice.send   // drain
+	<-bob.send     // drain
+	<-charlie.send // drain
+
+	bob.handlePollVote(Message{ID: "poll-vu-1", OptionIndex: 1})
+	<-alice.send   // drain
+	<-bob.send     // drain
+	<-charlie.send // drain
+
+	charlie.handlePollVote(Message{ID: "poll-vu-1", OptionIndex: 0})
+	// Read the final update.
+	select {
+	case <-alice.send:
+	default:
+		t.Fatal("alice should receive final vote update")
+	}
+	<-bob.send
+	<-charlie.send
+
+	// Verify final vote counts.
+	final, _ := ms.GetPoll("poll-vu-1")
+	if final.Votes[0] != 2 {
+		t.Fatalf("expected 2 votes for option 0, got %d", final.Votes[0])
+	}
+	if final.Votes[1] != 1 {
+		t.Fatalf("expected 1 vote for option 1, got %d", final.Votes[1])
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	h.unregister <- charlie
+	time.Sleep(10 * time.Millisecond)
+}
+
+// --- DM routing tests ---
+
+func TestDMDelivery(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10)}
+	h.register <- alice
+	h.register <- bob
+	time.Sleep(10 * time.Millisecond)
+
+	alice.handleDMMessage(Message{To: "bob", Content: "Hello Bob!"})
+
+	// Bob should receive the DM.
+	var got Message
+	select {
+	case payload := <-bob.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode dm_message error: %v", err)
+		}
+		if got.Type != "dm_message" {
+			t.Fatalf("expected dm_message for bob, got type=%q", got.Type)
+		}
+		if got.Username != "alice" || got.Content != "Hello Bob!" {
+			t.Fatalf("expected from=alice content='Hello Bob!', got from=%q content=%q", got.Username, got.Content)
+		}
+		if got.To != "bob" || got.From != "alice" {
+			t.Fatalf("expected to=bob from=alice, got to=%q from=%q", got.To, got.From)
+		}
+	default:
+		t.Fatal("bob should receive DM")
+	}
+
+	// Alice should receive an echo.
+	select {
+	case payload := <-alice.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode dm echo error: %v", err)
+		}
+		if got.Type != "dm_message" {
+			t.Fatalf("expected dm_message echo to alice, got type=%q", got.Type)
+		}
+		if got.To != "bob" {
+			t.Fatalf("expected echo to=bob, got to=%q", got.To)
+		}
+	default:
+		t.Fatal("alice should receive DM echo")
+	}
+
+	h.unregister <- alice
+	h.unregister <- bob
+	time.Sleep(10 * time.Millisecond)
+}
+
+func TestDMOfflineRecipient(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
+	h.register <- alice
+	time.Sleep(10 * time.Millisecond)
+
+	// bob is NOT registered (offline).
+	alice.handleDMMessage(Message{To: "bob", Content: "Are you there?"})
+
+	// Alice should still get the echo.
+	var got Message
+	select {
+	case payload := <-alice.send:
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("decode dm echo error: %v", err)
+		}
+		if got.Type != "dm_message" {
+			t.Fatalf("expected dm_message echo, got type=%q", got.Type)
+		}
+	default:
+		t.Fatal("alice should receive DM echo even when recipient is offline")
+	}
+
+	// The DM should be persisted in store.
+	stored := ms.GetMessages(10, 0)
+	found := false
+	for _, m := range stored {
+		if m.Username == "alice" && m.Content == "Are you there?" && m.ToUser == "bob" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected DM to be persisted in store for offline recipient")
+	}
+
+	h.unregister <- alice
+	time.Sleep(10 * time.Millisecond)
+}
+
+// --- Broadcast fanout tests ---
+
+func TestBroadcastMultipleClients(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	go h.Run()
+	defer h.Stop()
+
+	// Register 5 clients in the same room.
+	const numClients = 5
+	clients := make([]*Client, numClients)
+	for i := 0; i < numClients; i++ {
+		clients[i] = &Client{
+			hub:           h,
+			username:      "user" + string(rune('0'+i)),
+			send:          make(chan []byte, 10),
+			currentRoomID: "room-shared",
+		}
+		h.register <- clients[i]
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	data, _ := json.Marshal(Message{Type: "fanout_test", Content: "broadcast to all"})
+	h.BroadcastToRoom(data, "room-shared")
+
+	// All clients should receive the message.
+	for i, c := range clients {
+		select {
+		case payload := <-c.send:
+			var got Message
+			if err := json.Unmarshal(payload, &got); err != nil {
+				t.Fatalf("client %d: decode error: %v", i, err)
+			}
+			if got.Type != "fanout_test" {
+				t.Fatalf("client %d (user%c): expected type=fanout_test, got %q", i, rune('0'+i), got.Type)
+			}
+		default:
+			t.Fatalf("client %d (user%c) should receive broadcast", i, rune('0'+i))
+		}
+	}
+
+	// Cleanup.
+	for _, c := range clients {
+		h.unregister <- c
+	}
+	time.Sleep(10 * time.Millisecond)
 }
