@@ -36,7 +36,7 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 ## 当前增量
 
-性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.12），910 前端测试 / 50 文件 / E2E 109/113 / tsc 0 / ESLint 0 / CI 全绿。
+性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.12），**1002** 前端测试 / 50 文件 / E2E 127/134 / tsc 0 / ESLint 0 / CI 全绿。
 
 此增量包含：
 - 前端测试扩展至 779 tests / 50 files（51.86% 行覆盖率）。
@@ -176,6 +176,32 @@ git grep -n -E 'password.*[0-9]{4,}|sk-[a-zA-Z0-9]{20,}' -- ':!.git' ':!node_mod
 - `gpt-image-2` mockup 可作为布局、图标、密度、层级的艺术方向参考，但验收仍需真实浏览器截图。
 - 安全敏感 UI（如 webhook secret）保持一次性 secret 与常规持久化状态分离。
 - 滚动容器工程约束：flex-1 子元素需要 overflow-y-auto 滚动时，其父容器必须是 flex 容器（`display: flex`），否则高度约束断裂。Tailwind 等价为父容器加 `flex`，子容器 `flex-1 overflow-y-auto` 方可工作。
+
+### i18n 规则（2026-05-24 更新）
+
+- 用户可见字符串**必须**通过 `t()` 解析，禁止内联双语三元 `lang === "zh-CN" ? "..." : "..."`。
+- 工具函数（formatTime/formatDate/formatLastSeen）接受 `t` 函数参数而非 `lang` 字符串。
+- 新增 i18n key 必须在 `TranslationDict` interface、zh-CN、en-US 三处同步添加。
+- 交叉审查时运行 i18n-scan skill 检测硬编码字符串和缺失 key。
+
+### WebSocket connect 规则（2026-05-24 更新）
+
+- `connect()` 方法使用 `connectGeneration` 计数器跟踪连接代数。
+- 所有异步 handler（onopen/onclose/onerror/onmessage/timeout）必须以 `if (gen !== this.connectGeneration) return;` 守卫，防止旧 socket 事件污染新连接状态。
+- `disconnect()` 递增 generation 使旧 onclose 被忽略。
+- `kicked` 事件后清空 `reconnectUsername` 防止 ping-pong 重连循环。
+
+### Service Worker 规则（2026-05-24 更新）
+
+- Static assets 使用 **stale-while-revalidate** 策略（非 cache-first），确保部署后浏览器自动拉取新资源。
+- `CACHE_NAME` 每次 SW 行为变更时递增（tdchat-v2 → tdchat-v3）。
+- `self.clients.claim()` 必须在 `event.waitUntil()` 内调用。
+- 部署后验证：`curl -s https://<host>/ | grep -o 'index-[^"]*\\.js'` 确认 hash 匹配。
+
+### 移动端规则（2026-05-24 更新）
+
+- 工具栏按钮默认在所有视口尺寸可见（`flex` + `sm:flex`，不用 `hidden sm:flex`）。
+- 工具栏使用 `overflow-x-auto` 处理窄屏滚动，无需隐藏按钮。
 
 ## 后端规则
 
