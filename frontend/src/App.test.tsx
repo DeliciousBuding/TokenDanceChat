@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { I18nProvider } from "@/i18n/context";
 
 // Mock WebSocket before any imports that use it
@@ -92,6 +92,8 @@ describe("App smoke test", () => {
         <App />
       </I18nProvider>,
     );
+    // Default is now login; navigate to guest view where the title lives.
+    fireEvent.click(screen.getByLabelText("返回"));
     expect(screen.getByText("TokenDance Chat")).toBeTruthy();
   });
 

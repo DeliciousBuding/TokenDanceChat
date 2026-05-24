@@ -84,6 +84,11 @@ function renderJoinScreen() {
   );
 }
 
+/** Navigate from the default login view to the guest view by clicking the back button. */
+function goToGuestView() {
+  fireEvent.click(screen.getByLabelText("返回"));
+}
+
 describe("JoinScreen", () => {
   beforeEach(() => {
     localStorageMock.clear();
@@ -95,27 +100,32 @@ describe("JoinScreen", () => {
   describe("表单渲染", () => {
     it("显示标题 TokenDance Chat", () => {
       renderJoinScreen();
+      goToGuestView();
       expect(screen.getByText("TokenDance Chat")).toBeTruthy();
     });
 
     it("显示副标题", () => {
       renderJoinScreen();
+      goToGuestView();
       expect(screen.getByText("AgentHub 实时聊天验证 Demo · AI 助手 @TokenBot @PicoClaw 随时待命")).toBeTruthy();
     });
 
     it("显示用户名输入框", () => {
       renderJoinScreen();
+      goToGuestView();
       const input = screen.getByPlaceholderText("你的用户名...");
       expect(input).toBeTruthy();
     });
 
     it("显示加入按钮", () => {
       renderJoinScreen();
+      goToGuestView();
       expect(screen.getByRole("button", { name: /游客加入/ })).toBeTruthy();
     });
 
     it("显示底部版权提示", () => {
       renderJoinScreen();
+      goToGuestView();
       expect(screen.getByText("公共聊天室 · 文明交流")).toBeTruthy();
     });
   });
@@ -123,6 +133,7 @@ describe("JoinScreen", () => {
   describe("表单验证", () => {
     it("空用户名提交时显示错误", () => {
       renderJoinScreen();
+      goToGuestView();
       // Button is disabled when input is empty, so submit the form directly
       const form = document.querySelector("form")!;
       fireEvent.submit(form);
@@ -131,6 +142,7 @@ describe("JoinScreen", () => {
 
     it("1个字符用户名提交时显示太短错误", () => {
       renderJoinScreen();
+      goToGuestView();
       const input = screen.getByPlaceholderText("你的用户名...");
       fireEvent.change(input, { target: { value: "A" } });
       const button = screen.getByRole("button", { name: /游客加入/ });
@@ -140,6 +152,7 @@ describe("JoinScreen", () => {
 
     it("输入有效字符后清除错误", () => {
       renderJoinScreen();
+      goToGuestView();
       // First trigger an error via form submit (button is disabled)
       const form = document.querySelector("form")!;
       fireEvent.submit(form);
@@ -155,6 +168,7 @@ describe("JoinScreen", () => {
 
     it("按回车键触发表单提交", () => {
       renderJoinScreen();
+      goToGuestView();
       const input = screen.getByPlaceholderText("你的用户名...");
       fireEvent.keyDown(input, { key: "Enter" });
       expect(screen.getByText("请输入用户名")).toBeTruthy();
@@ -164,12 +178,14 @@ describe("JoinScreen", () => {
   describe("语言切换", () => {
     it("语言切换按钮存在", () => {
       renderJoinScreen();
+      goToGuestView();
       // The lang toggle button shows the opposite language: "English" in zh-CN
       expect(screen.getByText("English")).toBeTruthy();
     });
 
     it("点击语言按钮切换到英文", () => {
       renderJoinScreen();
+      goToGuestView();
       const langBtn = screen.getByText("English");
       fireEvent.click(langBtn);
       // After switching to en-US, the button should show "中文"
@@ -182,6 +198,7 @@ describe("JoinScreen", () => {
   describe("ThemeToggle", () => {
     it("ThemeToggle 按钮存在", () => {
       renderJoinScreen();
+      goToGuestView();
       // ThemeToggle renders a button with aria-label starting with "Theme:"
       const themeBtn = document.querySelector('[aria-label^="Theme:"]');
       expect(themeBtn).toBeTruthy();
@@ -192,6 +209,7 @@ describe("JoinScreen", () => {
     it("从 localStorage 加载已保存的用户名", () => {
       localStorageMock.setItem("tokendance:username", "SavedUser");
       renderJoinScreen();
+      goToGuestView();
       const input = screen.getByPlaceholderText("你的用户名...") as HTMLInputElement;
       expect(input.value).toBe("SavedUser");
     });
@@ -203,6 +221,7 @@ describe("JoinScreen", () => {
     it("超时错误显示对应提示", async () => {
       mockConnect.mockRejectedValueOnce(new ChatError(ErrorCode.TIMEOUT, "timeout"));
       renderJoinScreen();
+      goToGuestView();
 
       const input = screen.getByPlaceholderText("你的用户名...");
       fireEvent.change(input, { target: { value: "TestUser" } });
@@ -214,6 +233,7 @@ describe("JoinScreen", () => {
     it("连接关闭错误显示对应提示", async () => {
       mockConnect.mockRejectedValueOnce(new ChatError(ErrorCode.CLOSED, "closed"));
       renderJoinScreen();
+      goToGuestView();
 
       const input = screen.getByPlaceholderText("你的用户名...");
       fireEvent.change(input, { target: { value: "TestUser" } });
@@ -225,6 +245,7 @@ describe("JoinScreen", () => {
     it("无法连接错误显示对应提示", async () => {
       mockConnect.mockRejectedValueOnce(new ChatError(ErrorCode.CANNOT_CONNECT, "cannot-connect"));
       renderJoinScreen();
+      goToGuestView();
 
       const input = screen.getByPlaceholderText("你的用户名...");
       fireEvent.change(input, { target: { value: "TestUser" } });
@@ -236,6 +257,7 @@ describe("JoinScreen", () => {
     it("普通 Error 显示其 message", async () => {
       mockConnect.mockRejectedValueOnce(new Error("Something broke"));
       renderJoinScreen();
+      goToGuestView();
 
       const input = screen.getByPlaceholderText("你的用户名...");
       fireEvent.change(input, { target: { value: "TestUser" } });
@@ -248,6 +270,8 @@ describe("JoinScreen", () => {
   describe("子视图切换", () => {
     it("从 guest 切换到 login 再返回 guest", () => {
       renderJoinScreen();
+      // Default is now login; go to guest first.
+      goToGuestView();
 
       // Click "登录" to go to login sub-view
       fireEvent.click(screen.getByRole("button", { name: /登录/ }));
@@ -262,6 +286,8 @@ describe("JoinScreen", () => {
 
     it("从 guest 切换到 register 再返回 guest", () => {
       renderJoinScreen();
+      // Default is now login; go to guest first.
+      goToGuestView();
 
       // Click "注册" to go to register sub-view
       fireEvent.click(screen.getByRole("button", { name: /注册/ }));
@@ -276,6 +302,8 @@ describe("JoinScreen", () => {
 
     it("从 guest -> login -> 切换到 register -> 返回 guest", () => {
       renderJoinScreen();
+      // Default is now login; go to guest first.
+      goToGuestView();
 
       // guest → login
       fireEvent.click(screen.getByRole("button", { name: /登录/ }));
@@ -292,6 +320,8 @@ describe("JoinScreen", () => {
 
     it("从 guest -> register -> 切换到 login -> 返回 guest", () => {
       renderJoinScreen();
+      // Default is now login; go to guest first.
+      goToGuestView();
 
       // guest → register
       fireEvent.click(screen.getByRole("button", { name: /注册/ }));
@@ -308,10 +338,9 @@ describe("JoinScreen", () => {
   });
 
   describe("Login 表单验证", () => {
-    /** Navigate to the login sub-view from the guest screen. */
+    /** Navigate to the login sub-view. Default is already login, so just render. */
     function goToLogin() {
       renderJoinScreen();
-      fireEvent.click(screen.getByRole("button", { name: /登录/ }));
     }
 
     it("空用户名时提交显示输入用户名错误", () => {
@@ -350,10 +379,11 @@ describe("JoinScreen", () => {
   });
 
   describe("Register 表单验证", () => {
-    /** Navigate to the register sub-view from the guest screen. */
+    /** Navigate to the register sub-view from the default login view. */
     function goToRegister() {
       renderJoinScreen();
-      fireEvent.click(screen.getByRole("button", { name: /注册/ }));
+      // From login, click "还没有账号？去注册" to reach register
+      fireEvent.click(screen.getByText("还没有账号？去注册"));
     }
 
     it("空用户名提交显示对应错误", () => {

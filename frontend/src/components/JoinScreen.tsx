@@ -35,7 +35,7 @@ export function JoinScreen() {
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(false);
-  const [subView, setSubView] = useState<SubView>("guest");
+  const [subView, setSubView] = useState<SubView>("login");
   const { setView, setUsername: setStoreUsername, setGuest } = useChatStore();
   const { connect } = useWebSocket();
 
