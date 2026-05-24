@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "@/i18n/context";
 
@@ -23,6 +24,8 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (open) dialogRef.current?.focus(); }, [open]);
   if (!open) return null;
 
   return (
@@ -41,6 +44,8 @@ export function ConfirmDialog({
       {/* Dialog */}
       <div
         className="relative z-10 w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-2xl animate-scale-in"
+        ref={dialogRef}
+        tabIndex={-1}
         role="alertdialog"
         aria-modal="true"
         aria-label={title}

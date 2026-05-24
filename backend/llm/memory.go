@@ -55,7 +55,7 @@ func (m *Memory) SetPersistPath(path string) error {
 	defer f.Close()
 	var loaded []Message
 	if err := json.NewDecoder(io.LimitReader(f, 1<<20)).Decode(&loaded); err != nil {
-		// Corrupted file, start fresh.
+		log.Printf("llm memory: failed to decode persisted messages, starting fresh: %v", err)
 		return nil
 	}
 	m.messages = loaded
