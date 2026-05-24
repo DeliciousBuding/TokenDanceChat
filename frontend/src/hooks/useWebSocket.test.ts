@@ -648,6 +648,57 @@ describe("useWebSocket", () => {
       );
     });
 
+    it("routes online_users to setOnlineUsers", () => {
+      renderHook(() => useWebSocket());
+
+      dispatchWS("online_users", {
+        online: ["alice", "bob", "charlie"],
+      });
+
+      expect(useChatStore.getState().onlineUsers).toEqual(["alice", "bob", "charlie"]);
+    });
+
+    it("routes kicked to reset store, set view to join, and disconnect", () => {
+      // Start with some state to verify it gets reset.
+      useChatStore.setState({
+        connected: true,
+        messages: [{ id: "m1", username: "alice", content: "hi", timestamp: 1000 }],
+        view: "chat",
+      });
+      const { result } = renderHook(() => useWebSocket());
+
+      dispatchWS("kicked", { content: "You were kicked" });
+
+      const state = useChatStore.getState();
+      // Store should be reset and view set to "join".
+      expect(state.view).toBe("join");
+      expect(state.connected).toBe(false);
+      expect(state.messages).toEqual([]);
+      // chatAPI.disconnect should have been called via the hook's disconnect callback.
+      expect(mockChatAPI.disconnect).toHaveBeenCalled();
+    });
+
+    it("routes message_delete to deleteMessage and removePoll", () => {
+      useChatStore.setState({
+        messages: [
+          { id: "msg-del", username: "alice", content: "remove me", timestamp: 1000 },
+          { id: "msg-keep", username: "bob", content: "keep me", timestamp: 2000 },
+        ],
+        polls: {
+          "msg-del": { id: "msg-del", question: "Delete?", options: ["Yes"], is_closed: false },
+        },
+      });
+      renderHook(() => useWebSocket());
+
+      dispatchWS("message_delete", { id: "msg-del" });
+
+      const state = useChatStore.getState();
+      expect(state.messages).toHaveLength(1);
+      expect(state.messages[0].id).toBe("msg-keep");
+      // Poll associated with deleted message should also be removed.
+      expect(state.polls["msg-del"]).toBeUndefined();
+    });
+
     it("routes block_list to setBlockedUsers", () => {
       renderHook(() => useWebSocket());
 

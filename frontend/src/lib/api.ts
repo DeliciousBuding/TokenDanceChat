@@ -529,7 +529,7 @@ class ChatAPI {
     if (!username) return;
 
     if (this.reconnectAttempt >= this.maxReconnectAttempts) {
-      console.warn("Max reconnection attempts reached");
+      console.warn("Max reconnection attempts reached", { attempt: this.reconnectAttempt, username: this.reconnectUsername });
       this.dispatch("reconnect_failed", { type: "reconnect_failed", attempt: this.reconnectAttempt });
       return;
     }
@@ -568,7 +568,7 @@ class ChatAPI {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
     } else {
-      console.warn("WebSocket not connected, cannot send message");
+      console.warn("WebSocket not connected, cannot send", { type: (data as { type?: string }).type });
     }
   }
 
