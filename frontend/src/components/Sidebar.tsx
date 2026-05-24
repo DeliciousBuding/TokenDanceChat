@@ -626,7 +626,7 @@ export function Sidebar({
                   const count = unreadByConversation[item.key];
                   if (count) {
                     return (
-                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge shrink-0">
+                      <span data-testid="unread-badge" className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground animate-pulse-badge shrink-0">
                         {count > 99 ? "99+" : count}
                       </span>
                     );

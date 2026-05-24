@@ -338,8 +338,7 @@ test.describe("Notification & Sound", () => {
 
       // On user A's sidebar, the DM entry for user B should now show an unread badge.
       // The badge is a span with the count inside the DM partner entry.
-      // It uses the animate-pulse-badge class.
-      const unreadBadge = sidebarA.locator("span.animate-pulse-badge");
+      const unreadBadge = sidebarA.locator("[data-testid='unread-badge']");
       const badgeVisible = await unreadBadge.first().isVisible().catch(() => false);
 
       if (!badgeVisible) {
