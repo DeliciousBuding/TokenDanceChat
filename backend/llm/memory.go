@@ -247,6 +247,28 @@ func (m *Memory) buildMemoryMarkdown() string {
 	return sb.String()
 }
 
+// EstimateTokens returns a rough token count for a message based on character-level heuristics.
+// English text: ~4 characters per token. CJK characters: ~1 token per character.
+func EstimateTokens(text string) int {
+	cjk := 0
+	nonCJK := 0
+	for _, r := range text {
+		if r >= 0x4E00 && r <= 0x9FFF || r >= 0x3400 && r <= 0x4DBF ||
+			r >= 0x3040 && r <= 0x309F || r >= 0x30A0 && r <= 0x30FF ||
+			r >= 0xAC00 && r <= 0xD7AF {
+			cjk++
+		} else if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
+			// Whitespace contributes 0 tokens.
+		} else {
+			nonCJK++
+		}
+	}
+	if cjk+nonCJK == 0 {
+		return 0
+	}
+	return cjk + (nonCJK+3)/4
+}
+
 // extractTopic extracts a short topic summary from a message.
 // Takes the first sentence or first meaningful chunk, truncated to ~60 chars.
 func extractTopic(content string) string {
