@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, type TouchEvent as ReactTouchEvent } from "react";
+import { useRef, useCallback, useState, useEffect, type TouchEvent as ReactTouchEvent } from "react";
 
 export interface SwipeHandlers {
   onSwipeLeft?: () => void;
@@ -105,6 +105,7 @@ export function useTouchGestures(handlers: SwipeHandlers) {
     },
     [handlers, clearLongPress],
   );
+  useEffect(() => () => { clearLongPress(); }, [clearLongPress]);
 
   return {
     onTouchStart,
