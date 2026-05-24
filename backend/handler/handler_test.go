@@ -219,6 +219,101 @@ func (m *mockStore) VerifyWebhookSecret(url, secret string) (*store.Webhook, boo
 	return nil, false, nil
 }
 
+// mockStoreScheduled actually stores scheduled messages for testing.
+type mockStoreScheduled struct {
+	mockStore
+	scheduled []store.ScheduledMessage
+}
+
+func (m *mockStoreScheduled) ScheduleMessage(msg store.ScheduledMessage) error {
+	m.scheduled = append(m.scheduled, msg)
+	return nil
+}
+
+func (m *mockStoreScheduled) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) {
+	var result []store.ScheduledMessage
+	for _, sm := range m.scheduled {
+		if sm.Username == username {
+			result = append(result, sm)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockStoreScheduled) CancelScheduledMessage(id, username string) error {
+	for i, sm := range m.scheduled {
+		if sm.ID == id {
+			m.scheduled = append(m.scheduled[:i], m.scheduled[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+func newTestHandlerScheduled() *Handler {
+	ms := &mockStoreScheduled{}
+	h := hub.New(ms, nil, nil, "")
+	go h.Run()
+	return New(h, ms, "/tmp/test-uploads")
+}
+
+// mockStoreThreaded stores thread_id with messages for thread reply testing.
+type mockStoreThreaded struct {
+	mockStore
+}
+
+func (m *mockStoreThreaded) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (hub.StoredMessage, error) {
+	msg := hub.StoredMessage{
+		ID:        "mock-id-" + username,
+		Username:  username,
+		Content:   content,
+		Timestamp: time.Now().UnixMilli(),
+		ReplyToID: replyToID,
+		RoomID:    roomID,
+		ToUser:    toUser,
+		GroupName: groupName,
+		ThreadID:  threadID,
+	}
+	m.messages = append(m.messages, msg)
+	return msg, nil
+}
+
+func (m *mockStoreThreaded) GetThreadMessages(parentMessageID string) []hub.StoredMessage {
+	var result []hub.StoredMessage
+	for _, msg := range m.messages {
+		if msg.ThreadID == parentMessageID {
+			result = append(result, msg)
+		}
+	}
+	return result
+}
+
+func (m *mockStoreThreaded) GetMessageByID(messageID string) (hub.StoredMessage, error) {
+	for _, msg := range m.messages {
+		if msg.ID == messageID {
+			return msg, nil
+		}
+	}
+	return hub.StoredMessage{}, errors.New("not found")
+}
+
+func (m *mockStoreThreaded) GetRoomMessages(roomID string, limit int, before int64) []hub.StoredMessage {
+	var result []hub.StoredMessage
+	for _, msg := range m.messages {
+		if msg.RoomID == roomID {
+			result = append(result, msg)
+		}
+	}
+	return result
+}
+
+func newTestHandlerThreaded() *Handler {
+	ms := &mockStoreThreaded{}
+	h := hub.New(ms, nil, nil, "")
+	go h.Run()
+	return New(h, ms, "/tmp/test-uploads")
+}
+
 func TestWebhookHandlerVerifiesHashedSecret(t *testing.T) {
 	s, err := store.New(":memory:")
 	if err != nil {
