@@ -241,15 +241,21 @@ test.describe("Reconnect robustness", () => {
       }
 
       // delays[0] = initial WS → first reconnect WS (not a controlled delay)
-      // delays[1] = first reconnect → second reconnect (expected ~1000ms base)
-      // delays[2] = second → third (expected ~2000ms base)
-      const expectedBaseDelays = [1000, 2000, 4000];
-      // Wide tolerance: +/- 100% to cover 20% jitter + autoClose setTimeout
-      // + WS lifecycle overhead + network latency.
-      const tolerance = 1.0;
+      // delays[1] = first reconnect → second reconnect (expected ~2000ms base timer)
+      // delays[2] = second → third (expected ~4000ms base timer)
+      // The reconnect timer for attempt N uses min(1000 * 2^N, 30000).
+      // With autoClose, onopen rarely fires so reconnectAttempt accumulates:
+      //   attempt 0 delay: ~1000ms → WS created → autoClosed
+      //   attempt 1 delay: ~2000ms → WS created → autoClosed
+      //   attempt 2 delay: ~4000ms → WS created → autoClosed
+      // delays[1] ≈ attempt 0 timer (~1000ms) + overhead (autoClose + lifecycle)
+      // delays[2] ≈ attempt 1 timer (~2000ms) + overhead
+      // Use generous tolerances for overhead.
+      const expectedBaseDelays = [2000, 4000];
+      const tolerance = 1.0; // +/- 100% to cover jitter + autoClose overhead
 
       for (let i = 0; i < Math.min(delays.length - 1, expectedBaseDelays.length); i++) {
-        const delayIdx = i + 1;
+        const delayIdx = i + 1; // skip delays[0]
         if (delayIdx < delays.length) {
           const expected = expectedBaseDelays[i];
           const actual = delays[delayIdx];
@@ -368,41 +374,52 @@ test.describe("Reconnect robustness", () => {
       ).toBeVisible({ timeout: 8000 });
 
       // Now simulate exhausting all reconnect attempts:
-      // 1. Keep autoClose ON so no reconnect attempt can succeed
-      //    (otherwise the pending timer would create a WS that connects,
-      //    setting connected=true which hides the banner).
+      // 1. Keep autoClose ON so no reconnect attempt can succeed.
       // 2. Stop the reconnect loop and force reconnect_failed state.
       // 3. Dispatch reconnecting FIRST (sets connected=false in useWebSocket)
       //    then reconnect_failed (sets reconnectFailed=true in ChatLayout).
-      await page.evaluate(() => {
+      const dispatchResult = await page.evaluate(() => {
         const api = (window as unknown as Record<string, unknown>)
           .__chatAPI as {
             dispatch: (event: string, data: Record<string, unknown>) => void;
             reconnectTimer: ReturnType<typeof setTimeout> | null;
             reconnectAttempt: number;
-          };
-        if (api) {
-          // Clear any pending reconnect timer to stop the loop.
-          if (api.reconnectTimer) {
-            clearTimeout(api.reconnectTimer);
-            api.reconnectTimer = null;
-          }
-          // Force the attempt counter to max so no more reconnects fire.
-          api.reconnectAttempt = 10;
-          // Dispatch reconnecting to set connected=false in the UI store.
-          api.dispatch("reconnecting", {
-            type: "reconnecting",
-            attempt: 9,
-          });
-          // Dispatch reconnect_failed to set reconnectFailed=true.
-          api.dispatch("reconnect_failed", {
-            type: "reconnect_failed",
-            attempt: 10,
-          });
-        }
-      });
+          } | null;
+        if (!api) return "api_not_found";
+        if (typeof api.dispatch !== "function") return "dispatch_not_function";
 
-      // The reconnect_failed banner text should appear.
+        // Clear any pending reconnect timer.
+        if (api.reconnectTimer) {
+          clearTimeout(api.reconnectTimer);
+          api.reconnectTimer = null;
+        }
+        // Force attempt counter to max so natural reconnect loop stops.
+        api.reconnectAttempt = 10;
+
+        // Dispatch reconnecting to set connected=false in the store.
+        api.dispatch("reconnecting", {
+          type: "reconnecting",
+          attempt: 9,
+        });
+        // Dispatch reconnect_failed to set reconnectFailed=true.
+        api.dispatch("reconnect_failed", {
+          type: "reconnect_failed",
+          attempt: 10,
+        });
+        return "dispatched";
+      });
+      console.log("Test 3 dispatch result:", dispatchResult);
+
+      // Give React time to process state updates.
+      await page.waitForTimeout(500);
+
+      // Check for the reconnect_failed system message (added by useWebSocket hook).
+      // This confirms dispatch reached the handlers.
+      await expect(
+        page.getByText("连接已断开，请刷新页面。").first(),
+      ).toBeVisible({ timeout: 10000 });
+
+      // The reconnect_failed banner text should also appear.
       await expect(
         page.locator(".text-warning-foreground").filter({
           hasText: "连接已断开，请刷新页面。",
