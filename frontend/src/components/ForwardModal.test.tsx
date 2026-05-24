@@ -119,4 +119,58 @@ describe("ForwardModal", () => {
     expect(preview).toBeTruthy();
     expect(preview.textContent!.length).toBeLessThan(210);
   });
+
+  // --- New tests: recipient search/filter, selection, send button, forward, empty state ---
+
+  it("switches selected recipient when clicking a different user", () => {
+    render(<ForwardModal message={message} onClose={onClose} onForward={onForward} />);
+    fireEvent.click(screen.getByText("bob"));
+    const bobBtn = screen.getByText("bob").closest("button")!;
+    expect(bobBtn.className).toContain("ring-1");
+    // switch to charlie
+    fireEvent.click(screen.getByText("charlie"));
+    const charlieBtn = screen.getByText("charlie").closest("button")!;
+    expect(charlieBtn.className).toContain("ring-1");
+    // bob loses highlight — ring-1 removed, hover:bg-accent remains
+    expect(bobBtn.className).not.toContain("ring-1");
+  });
+
+  it("keeps recipient selected when clicking the same user again", () => {
+    render(<ForwardModal message={message} onClose={onClose} onForward={onForward} />);
+    fireEvent.click(screen.getByText("bob"));
+    fireEvent.click(screen.getByText("bob"));
+    const bobBtn = screen.getByText("bob").closest("button")!;
+    expect(bobBtn.className).toContain("ring-1");
+  });
+
+  it("has send button disabled when no recipient is selected", () => {
+    render(<ForwardModal message={message} onClose={onClose} onForward={onForward} />);
+    const sendBtn = screen.getByText("转发").closest("button")!;
+    expect(sendBtn.disabled).toBe(true);
+  });
+
+  it("forwards messages containing special characters", () => {
+    const specialMsg: ChatMessage = {
+      id: "msg-3",
+      username: "bob",
+      content: '<img src=x onerror=alert(1)> & "quotes"',
+      timestamp: Date.now(),
+    };
+    render(<ForwardModal message={specialMsg} onClose={onClose} onForward={onForward} />);
+    fireEvent.click(screen.getByText("charlie"));
+    fireEvent.click(screen.getByText("转发"));
+    expect(onForward).toHaveBeenCalledWith("msg-3", "charlie");
+  });
+
+  it("renders no user selection buttons when only self is online", () => {
+    (useChatStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      onlineUsers: ["alice"],
+      username: "alice",
+    });
+    render(<ForwardModal message={message} onClose={onClose} onForward={onForward} />);
+    expect(screen.getByText("暂无在线用户")).toBeTruthy();
+    // bob and charlie should not appear as text anywhere
+    expect(screen.queryByText("bob")).toBeNull();
+    expect(screen.queryByText("charlie")).toBeNull();
+  });
 });

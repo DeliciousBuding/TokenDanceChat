@@ -153,4 +153,85 @@ describe("ConfirmDialog", () => {
     fireEvent.click(backdrop!);
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
+
+  // --- New tests: confirm/cancel triggers, title/message, destructive, Escape ---
+
+  it("calls onConfirm with destructive variant styling", () => {
+    const onConfirm = vi.fn();
+    render(
+      <ConfirmDialog
+        open={true}
+        title="永久删除"
+        message="此操作无法撤销"
+        variant="destructive"
+        confirmLabel="确认删除"
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+      />,
+    );
+    const confirmBtn = screen.getByText("确认删除");
+    expect(confirmBtn.className).toContain("bg-destructive");
+    fireEvent.click(confirmBtn);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders without message paragraph when message prop is omitted", () => {
+    render(
+      <ConfirmDialog
+        open={true}
+        title="仅标题"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("仅标题")).toBeTruthy();
+    const dialog = screen.getByRole("alertdialog");
+    const paragraphs = dialog.querySelectorAll("p");
+    expect(paragraphs.length).toBe(0);
+  });
+
+  it("renders custom title, message, and confirm label", () => {
+    render(
+      <ConfirmDialog
+        open={true}
+        title="自定义标题"
+        message="自定义消息内容"
+        confirmLabel="知道了"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("自定义标题")).toBeTruthy();
+    expect(screen.getByText("自定义消息内容")).toBeTruthy();
+    expect(screen.getByText("知道了")).toBeTruthy();
+  });
+
+  it("calls onCancel when Escape key is pressed on the dialog", () => {
+    const onCancel = vi.fn();
+    render(
+      <ConfirmDialog
+        open={true}
+        title="确认删除？"
+        onConfirm={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape", code: "Escape" });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onCancel with custom cancelLabel on click", () => {
+    const onCancel = vi.fn();
+    render(
+      <ConfirmDialog
+        open={true}
+        title="测试"
+        cancelLabel="返回"
+        onConfirm={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+    fireEvent.click(screen.getByText("返回"));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
 });

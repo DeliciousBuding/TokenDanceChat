@@ -44,6 +44,9 @@ export function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onCancel();
+        }}
       >
         {/* Close button */}
         <button
