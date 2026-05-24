@@ -458,3 +458,809 @@ func TestExtractFact(t *testing.T) {
 		}
 	}
 }
+
+// --- Provider selection tests ---
+
+func TestChatRoutesToCorrectProvider(t *testing.T) {
+	t.Run("openai", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v1/chat/completions" {
+				t.Errorf("openai provider should hit /v1/chat/completions, got %s", r.URL.Path)
+			}
+			if auth := r.Header.Get("Authorization"); !strings.HasPrefix(auth, "Bearer ") {
+				t.Errorf("openai provider should use Bearer auth, got %q", auth)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{
+					{"message": map[string]any{"content": "OK"}},
+				},
+			})
+		}))
+		defer server.Close()
+
+		client := New(Config{
+			Provider: "openai",
+			APIKey:   "sk-test",
+			Model:    "gpt-4",
+			BaseURL:  server.URL,
+		})
+		_, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "hi"}})
+		if err != nil {
+			t.Fatalf("Chat returned error: %v", err)
+		}
+	})
+
+	t.Run("anthropic", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v1/messages" {
+				t.Errorf("anthropic provider should hit /v1/messages, got %s", r.URL.Path)
+			}
+			if auth := r.Header.Get("x-api-key"); auth != "sk-ant-test" {
+				t.Errorf("anthropic provider should use x-api-key header, got %q", auth)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"content": []map[string]any{
+					{"type": "text", "text": "OK"},
+				},
+			})
+		}))
+		defer server.Close()
+
+		client := New(Config{
+			Provider: "anthropic",
+			APIKey:   "sk-ant-test",
+			Model:    "claude-sonnet-4-20250514",
+			BaseURL:  server.URL,
+		})
+		_, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "hi"}})
+		if err != nil {
+			t.Fatalf("Chat returned error: %v", err)
+		}
+	})
+}
+
+func TestChatUnknownProviderReturnsError(t *testing.T) {
+	client := New(Config{
+		Provider: "gemini",
+		APIKey:   "sk-test",
+		Model:    "gemini-pro",
+	})
+
+	_, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "hi"}})
+	if err == nil {
+		t.Fatal("expected error for unknown provider, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown provider") {
+		t.Errorf("error should mention unknown provider, got: %v", err)
+	}
+}
+
+func TestChatStreamRoutesToCorrectProvider(t *testing.T) {
+	t.Run("openai stream path", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v1/chat/completions" {
+				t.Errorf("stream should hit /v1/chat/completions, got %s", r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"OK\"}}]}\n\n")
+			_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+		}))
+		defer server.Close()
+
+		client := New(Config{
+			Provider: "openai",
+			APIKey:   "sk-test",
+			Model:    "gpt-4",
+			BaseURL:  server.URL,
+		})
+		err := client.ChatStream(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "hi"}}, func(chunk string) error {
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("ChatStream returned error: %v", err)
+		}
+	})
+
+	t.Run("anthropic stream path", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v1/messages" {
+				t.Errorf("anthropic stream should hit /v1/messages, got %s", r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = fmt.Fprint(w, "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"Hi\"}}\n\n")
+		}))
+		defer server.Close()
+
+		client := New(Config{
+			Provider: "anthropic",
+			APIKey:   "sk-ant-test",
+			Model:    "claude-sonnet-4-20250514",
+			BaseURL:  server.URL,
+		})
+		err := client.ChatStream(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "hi"}}, func(chunk string) error {
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("ChatStream returned error: %v", err)
+		}
+	})
+}
+
+// --- Prompt building tests ---
+
+func TestOpenAIPromptBuilding(t *testing.T) {
+	var capturedBody openaiRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"content": "OK"}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "gpt-4o",
+		BaseURL:  server.URL,
+	})
+	client.SetSystemPrompt("You are a test bot.")
+
+	_, err := client.Chat(context.Background(), client.systemPrompt, []Message{
+		{Role: "user", Content: "hello", Username: "alice"},
+		{Role: "assistant", Content: "hi"},
+	})
+	if err != nil {
+		t.Fatalf("Chat returned error: %v", err)
+	}
+
+	if capturedBody.Model != "gpt-4o" {
+		t.Errorf("model = %q, want gpt-4o", capturedBody.Model)
+	}
+	if capturedBody.MaxTokens != 8192 {
+		t.Errorf("max_tokens = %d, want 8192", capturedBody.MaxTokens)
+	}
+	if len(capturedBody.Messages) != 3 {
+		t.Fatalf("expected 3 messages (system + 2), got %d", len(capturedBody.Messages))
+	}
+	if capturedBody.Messages[0].Role != "system" {
+		t.Errorf("first message role = %q, want system", capturedBody.Messages[0].Role)
+	}
+	if capturedBody.Messages[0].Content != "You are a test bot." {
+		t.Errorf("system prompt = %q, want %q", capturedBody.Messages[0].Content, "You are a test bot.")
+	}
+	if capturedBody.Messages[1].Role != "user" {
+		t.Errorf("second message role = %q, want user", capturedBody.Messages[1].Role)
+	}
+	if capturedBody.Messages[1].Content != "hello" {
+		t.Errorf("second message content = %q, want hello", capturedBody.Messages[1].Content)
+	}
+	if capturedBody.Messages[2].Role != "assistant" {
+		t.Errorf("third message role = %q, want assistant", capturedBody.Messages[2].Role)
+	}
+	if capturedBody.Messages[2].Content != "hi" {
+		t.Errorf("third message content = %q, want hi", capturedBody.Messages[2].Content)
+	}
+}
+
+func TestAnthropicPromptBuilding(t *testing.T) {
+	var capturedSystem string
+	var capturedMessages []anthropicMessage
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body anthropicRequest
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		capturedSystem = body.System
+		capturedMessages = body.Messages
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"content": []map[string]any{
+				{"type": "text", "text": "OK"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "anthropic",
+		APIKey:   "sk-ant-test",
+		Model:    "claude-sonnet-4-20250514",
+		BaseURL:  server.URL,
+	})
+	client.SetSystemPrompt("You are Claude, a helpful assistant.")
+
+	_, err := client.Chat(context.Background(), client.systemPrompt, []Message{
+		{Role: "user", Content: "What is 2+2?"},
+		{Role: "assistant", Content: "4"},
+	})
+	if err != nil {
+		t.Fatalf("Chat returned error: %v", err)
+	}
+
+	if capturedSystem != "You are Claude, a helpful assistant." {
+		t.Errorf("system = %q, want %q", capturedSystem, "You are Claude, a helpful assistant.")
+	}
+	if len(capturedMessages) != 2 {
+		t.Fatalf("expected 2 messages (user + assistant, no system message in array), got %d", len(capturedMessages))
+	}
+	if capturedMessages[0].Role != "user" {
+		t.Errorf("first message role = %q, want user", capturedMessages[0].Role)
+	}
+	if capturedMessages[0].Content != "What is 2+2?" {
+		t.Errorf("first message content = %q, want %q", capturedMessages[0].Content, "What is 2+2?")
+	}
+	if capturedMessages[1].Role != "assistant" {
+		t.Errorf("second message role = %q, want assistant", capturedMessages[1].Role)
+	}
+}
+
+func TestPromptBuildingEmptyMessages(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body openaiRequest
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		// With empty messages, should still have the system message.
+		if len(body.Messages) != 1 {
+			t.Errorf("expected 1 message (system only), got %d", len(body.Messages))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"content": "OK"}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "gpt-4o",
+		BaseURL:  server.URL,
+	})
+	_, err := client.Chat(context.Background(), client.systemPrompt, []Message{})
+	if err != nil {
+		t.Fatalf("Chat with empty messages returned error: %v", err)
+	}
+}
+
+// --- Streaming tests ---
+
+func TestChatStreamMultipleChunks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\" \"}}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"World\"}}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	var chunks []string
+	err := client.ChatStream(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}}, func(chunk string) error {
+		chunks = append(chunks, chunk)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ChatStream returned error: %v", err)
+	}
+	if len(chunks) != 3 {
+		t.Fatalf("expected 3 chunks, got %d: %#v", len(chunks), chunks)
+	}
+	if chunks[0] != "Hello" || chunks[1] != " " || chunks[2] != "World" {
+		t.Errorf("chunks = %#v, want [Hello, ' ', World]", chunks)
+	}
+}
+
+func TestChatStreamDoneSignal(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		// Only DONE signal, no content chunks.
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	var chunks []string
+	err := client.ChatStream(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}}, func(chunk string) error {
+		chunks = append(chunks, chunk)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ChatStream returned error: %v", err)
+	}
+	if len(chunks) != 0 {
+		t.Errorf("expected 0 chunks for DONE-only stream, got %d: %#v", len(chunks), chunks)
+	}
+}
+
+func TestChatStreamEmptyLines(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		// Empty lines and comments should be skipped.
+		_, _ = fmt.Fprint(w, "\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"X\"}}]}\n\n")
+		_, _ = fmt.Fprint(w, "\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	var chunks []string
+	err := client.ChatStream(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}}, func(chunk string) error {
+		chunks = append(chunks, chunk)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ChatStream returned error: %v", err)
+	}
+	if len(chunks) != 1 || chunks[0] != "X" {
+		t.Errorf("expected 1 chunk 'X', got %#v", chunks)
+	}
+}
+
+func TestChatStreamAllReasoningContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		// Only reasoning_content, no regular content.
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"thinking...\"}}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"more thinking\"}}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	var chunks []string
+	err := client.ChatStream(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}}, func(chunk string) error {
+		chunks = append(chunks, chunk)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ChatStream returned error: %v", err)
+	}
+	if len(chunks) != 0 {
+		t.Errorf("expected 0 chunks (reasoning_content ignored), got %d: %#v", len(chunks), chunks)
+	}
+}
+
+func TestChatStreamCallbackError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"chunk1\"}}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"chunk2\"}}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	expectedErr := fmt.Errorf("callback aborted")
+	var chunks []string
+	err := client.ChatStream(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}}, func(chunk string) error {
+		chunks = append(chunks, chunk)
+		if chunk == "chunk1" {
+			return expectedErr
+		}
+		return nil
+	})
+	if err != expectedErr {
+		t.Errorf("expected callback error to propagate, got %v", err)
+	}
+	if len(chunks) != 1 {
+		t.Errorf("expected 1 chunk before abort, got %d: %#v", len(chunks), chunks)
+	}
+}
+
+func TestChatStreamWithFinishReason(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		finish := "stop"
+		chunk := openaiStreamChunk{
+			Choices: []struct {
+				Delta struct {
+					Content          string `json:"content"`
+					ReasoningContent string `json:"reasoning_content"`
+				} `json:"delta"`
+				FinishReason *string `json:"finish_reason"`
+			}{
+				{FinishReason: &finish},
+			},
+		}
+		data, _ := json.Marshal(chunk)
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	var chunks []string
+	err := client.ChatStream(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}}, func(chunk string) error {
+		chunks = append(chunks, chunk)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ChatStream returned error: %v", err)
+	}
+	// Finish reason chunk has no delta content, so nothing should be emitted.
+	if len(chunks) != 0 {
+		t.Errorf("expected 0 chunks for finish-only chunk, got %d: %#v", len(chunks), chunks)
+	}
+}
+
+// --- Error handling tests ---
+
+func TestChatNon200Status(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"message":"internal error"}}`))
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	userMsg, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
+	if err == nil {
+		t.Fatal("expected error for 500 status, got nil")
+	}
+	if !strings.Contains(err.Error(), "status 500") {
+		t.Errorf("error should mention status 500, got: %v", err)
+	}
+	// User-facing message should be a friendly apology.
+	if !strings.Contains(userMsg, "Sorry") {
+		t.Errorf("user message should be a friendly apology, got: %q", userMsg)
+	}
+}
+
+func TestChatUnauthorizedStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	_, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
+	if err == nil {
+		t.Fatal("expected error for 401 status, got nil")
+	}
+	if !strings.Contains(err.Error(), "status 401") {
+		t.Errorf("error should mention status 401, got: %v", err)
+	}
+}
+
+func TestChatInvalidJSONResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`not valid json {{{`))
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	userMsg, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+	if !strings.Contains(userMsg, "Sorry") {
+		t.Errorf("user message should be a friendly apology, got: %q", userMsg)
+	}
+}
+
+func TestChatEmptyChoices(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	userMsg, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
+	if err == nil {
+		t.Fatal("expected error for empty choices, got nil")
+	}
+	if !strings.Contains(err.Error(), "no choices in response") {
+		t.Errorf("error should mention no choices, got: %v", err)
+	}
+	if !strings.Contains(userMsg, "empty response") {
+		t.Errorf("user message should mention empty response, got: %q", userMsg)
+	}
+}
+
+func TestChatAPIErrorObject(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
+				"message": "model overloaded, please retry",
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	userMsg, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
+	if err == nil {
+		t.Fatal("expected error for API error object, got nil")
+	}
+	if !strings.Contains(err.Error(), "model overloaded") {
+		t.Errorf("error should contain API error message, got: %v", err)
+	}
+	if !strings.Contains(userMsg, "model overloaded") {
+		t.Errorf("user message should contain error detail, got: %q", userMsg)
+	}
+}
+
+func TestChatContextCanceled(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulate a slow response.
+		select {
+		case <-r.Context().Done():
+			return
+		}
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately.
+
+	userMsg, err := client.Chat(ctx, client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
+	if err == nil {
+		t.Fatal("expected error for canceled context, got nil")
+	}
+	if !strings.Contains(userMsg, "Sorry") {
+		t.Errorf("user message should be a friendly apology, got: %q", userMsg)
+	}
+}
+
+func TestChatStreamNon200Status(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`service unavailable`))
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	err := client.ChatStream(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}}, func(chunk string) error {
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected error for 503 status in stream, got nil")
+	}
+	if !strings.Contains(err.Error(), "status 503") {
+		t.Errorf("error should mention status 503, got: %v", err)
+	}
+}
+
+func TestChatEmptyContentFallbackToReasoning(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content":           "",
+						"reasoning_content": "step-by-step reasoning result",
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	got, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
+	if err != nil {
+		t.Fatalf("Chat returned error: %v", err)
+	}
+	if got != "step-by-step reasoning result" {
+		t.Errorf("Chat returned %q, want reasoning_content fallback", got)
+	}
+}
+
+func TestChatBothContentEmpty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content":           "",
+						"reasoning_content": "",
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := New(Config{
+		Provider: "openai",
+		APIKey:   "sk-test",
+		Model:    "test-model",
+		BaseURL:  server.URL,
+	})
+
+	userMsg, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
+	if err == nil {
+		t.Fatal("expected error when both content and reasoning are empty, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty message content") {
+		t.Errorf("error should mention empty message content, got: %v", err)
+	}
+	if !strings.Contains(userMsg, "empty response") {
+		t.Errorf("user message should mention empty response, got: %q", userMsg)
+	}
+}
+
+// --- Token counting tests ---
+
+func TestEstimateTokens(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  int
+	}{
+		{"empty string", "", 0},
+		{"whitespace only", "   \t\n  ", 0},
+		{"single word", "hello", 2},                            // 5 chars / 4 = 2
+		{"short phrase", "hello world", 3},                     // 10 chars / 4 = 3
+		{"sentence", "The quick brown fox jumps over the lazy dog", 9}, // 35 chars / 4 = 9
+		{"Chinese only", "你好世界", 4},                             // 4 CJK chars
+		{"Chinese sentence", "今天天气真好。", 7},                      // 6 CJK + 1 punct / 4 = 7
+		{"mixed CN/EN", "Hello 世界", 4},                          // 5 ASCII / 4 + 2 CJK = 4
+		{"code snippet", "func main() { return 0 }", 5},        // 17 chars / 4 = 5
+		{"long English", "This is a longer piece of text that should be approximately twenty tokens", 16},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := EstimateTokens(tt.input)
+			if got != tt.want {
+				t.Errorf("EstimateTokens(%q) = %d, want %d", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEstimateTokensScale(t *testing.T) {
+	// Verify that token count scales roughly linearly with text length.
+	short := EstimateTokens("a")
+	medium := EstimateTokens(strings.Repeat("a", 100))
+	long := EstimateTokens(strings.Repeat("a", 1000))
+
+	if short < 1 {
+		t.Errorf("single char should be >= 1 token, got %d", short)
+	}
+	if medium < 20 || medium > 30 {
+		t.Errorf("100 chars should be ~25 tokens, got %d", medium)
+	}
+	if long < 240 || long > 260 {
+		t.Errorf("1000 chars should be ~250 tokens, got %d", long)
+	}
+}
+
+func TestEstimateTokensCJKProportional(t *testing.T) {
+	// CJK characters should contribute ~1 token each.
+	cnTokens := EstimateTokens("你好世界测试文本内容")
+	if cnTokens < 8 || cnTokens > 10 {
+		t.Errorf("8 CJK chars should be ~8 tokens, got %d", cnTokens)
+	}
+
+	// Mixed content: CJK + ASCII.
+	mixedTokens := EstimateTokens("你好hello世界world")
+	// 4 CJK + 10 ASCII: 4 + ceil(10/4) = 4 + 3 = 7
+	if mixedTokens < 6 || mixedTokens > 8 {
+		t.Errorf("mixed CJK+ASCII should be ~7 tokens, got %d", mixedTokens)
+	}
+}
+
+func TestEstimateTokensMessageBulk(t *testing.T) {
+	// Simulate counting tokens for a full message array.
+	messages := []Message{
+		{Role: "system", Content: "You are a helpful assistant."},
+		{Role: "user", Content: "Hello, how are you?"},
+		{Role: "assistant", Content: "I'm doing well, thank you for asking!"},
+		{Role: "user", Content: "请帮我翻译这段文字。"},
+	}
+
+	total := 0
+	for _, msg := range messages {
+		total += EstimateTokens(msg.Content)
+	}
+	// Should be a reasonable number (not zero, not absurdly large).
+	if total < 10 {
+		t.Errorf("total tokens for 4 messages too low: %d", total)
+	}
+	if total > 50 {
+		t.Errorf("total tokens for 4 messages too high: %d", total)
+	}
+}
