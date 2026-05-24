@@ -67,6 +67,7 @@ type Store interface {
 	UpdateMessage(messageID, content string) (StoredMessage, error)
 	GetMessageByID(messageID string) (StoredMessage, error)
 	SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error)
+	SearchMessagesForUser(query, roomID, username string, limit int) ([]store.SearchResult, error)
 
 	// Friend persistence
 	AddFriend(username, friend string) error
@@ -174,6 +175,7 @@ type Store interface {
 	// User registration and authentication
 	RegisterUser(username, passwordHash, inviteCode string) error
 	VerifyUser(username, password string) (bool, error)
+	UserExists(username string) (bool, error)
 	GenerateInviteCode(creator string, maxUses int) (string, error)
 	ListInviteCodes(creator string) ([]store.InviteCodeRecord, error)
 	ValidateInviteCode(code string) (bool, error)
@@ -195,6 +197,11 @@ type Store interface {
 	ListWebhookAuditLogs(groupName string, limit int) ([]store.WebhookAuditLog, error)
 	GetWebhookByURL(url string) (*store.Webhook, error)
 	VerifyWebhookSecret(url, secret string) (*store.Webhook, bool, error)
+
+	// OIDC user management.
+	UpsertOIDCUser(sub, chatUsername, email, preferredUsername string) error
+	GetOIDCUserBySub(sub string) (*store.OIDCUser, error)
+	GetOIDCUserByUsername(username string) (*store.OIDCUser, error)
 }
 
 // CallSession represents an active call between two users.
@@ -250,6 +257,7 @@ type Message struct {
 	Blocked []string `json:"blocked,omitempty"`
 	Context string   `json:"context,omitempty"`
 	Preview string   `json:"preview,omitempty"`
+	Token   string   `json:"token,omitempty"`
 
 	// Group system
 	Group        string                  `json:"group,omitempty"`
@@ -358,6 +366,17 @@ type HubCommandResponse struct {
 	Data    map[string]any `json:"data,omitempty"`  // 响应数据
 	Error   string         `json:"error,omitempty"` // 错误信息
 }
+
+// OIDCTokenVerifier validates an OIDC access token for a chat username.
+type OIDCTokenVerifier interface {
+	VerifyOIDCJoinToken(username, token string) error
+}
+
+// SessionTokenVerifier validates an app session token for a chat username.
+type SessionTokenVerifier interface {
+	VerifySessionJoinToken(username, token string) error
+}
+
 type Hub struct {
 	// Registered clients.
 	clients map[*Client]bool
@@ -373,6 +392,12 @@ type Hub struct {
 
 	// Store for message persistence.
 	store Store
+
+	// OIDC token verifier is set by the HTTP handler when OIDC is enabled.
+	oidcVerifier OIDCTokenVerifier
+
+	// Session token verifier is set by the HTTP handler for registered local users.
+	sessionVerifier SessionTokenVerifier
 
 	// StartTime is the time the hub was created.
 	StartTime time.Time
@@ -477,6 +502,40 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 		callRooms:       make(map[string]*CallRoom),
 		done:            make(chan struct{}),
 	}
+}
+
+// SetOIDCTokenVerifier configures WebSocket join validation for OIDC-linked users.
+func (h *Hub) SetOIDCTokenVerifier(verifier OIDCTokenVerifier) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.oidcVerifier = verifier
+}
+
+func (h *Hub) verifyOIDCJoinToken(username, token string) error {
+	h.mu.RLock()
+	verifier := h.oidcVerifier
+	h.mu.RUnlock()
+	if verifier == nil {
+		return fmt.Errorf("OIDC token verifier unavailable")
+	}
+	return verifier.VerifyOIDCJoinToken(username, token)
+}
+
+// SetSessionTokenVerifier configures WebSocket join validation for registered users.
+func (h *Hub) SetSessionTokenVerifier(verifier SessionTokenVerifier) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.sessionVerifier = verifier
+}
+
+func (h *Hub) verifySessionJoinToken(username, token string) error {
+	h.mu.RLock()
+	verifier := h.sessionVerifier
+	h.mu.RUnlock()
+	if verifier == nil {
+		return fmt.Errorf("session token verifier unavailable")
+	}
+	return verifier.VerifySessionJoinToken(username, token)
 }
 
 // LoadPersistedState restores friends and groups from the store into memory.

@@ -66,8 +66,8 @@ describe("CustomEmojiPicker", () => {
 
   it("renders custom emojis in grid when available", () => {
     storeState.customEmojis = [
-      { name: "cat", url: "https://example.com/cat.png", uploader: "testuser" },
-      { name: "dog", url: "https://example.com/dog.png", uploader: "otheruser" },
+      { id: "e1", room_id: "public", created_at: 1, name: "cat", url: "https://example.com/cat.png", uploader: "testuser" },
+      { id: "e2", room_id: "public", created_at: 2, name: "dog", url: "https://example.com/dog.png", uploader: "otheruser" },
     ];
     render(<CustomEmojiPicker onSelect={vi.fn()} onClose={vi.fn()} />);
 
@@ -83,7 +83,7 @@ describe("CustomEmojiPicker", () => {
 
   it("clicking an emoji calls onSelect with :name: format and onClose", () => {
     storeState.customEmojis = [
-      { name: "cat", url: "https://example.com/cat.png", uploader: "testuser" },
+      { id: "e1", room_id: "public", created_at: 1, name: "cat", url: "https://example.com/cat.png", uploader: "testuser" },
     ];
     const onSelect = vi.fn();
     const onClose = vi.fn();
@@ -124,8 +124,8 @@ describe("CustomEmojiPicker", () => {
 
   it("shows delete button only for emojis uploaded by current user", () => {
     storeState.customEmojis = [
-      { name: "cat", url: "https://example.com/cat.png", uploader: "testuser" },
-      { name: "dog", url: "https://example.com/dog.png", uploader: "otheruser" },
+      { id: "e1", room_id: "public", created_at: 1, name: "cat", url: "https://example.com/cat.png", uploader: "testuser" },
+      { id: "e2", room_id: "public", created_at: 2, name: "dog", url: "https://example.com/dog.png", uploader: "otheruser" },
     ];
     render(<CustomEmojiPicker onSelect={vi.fn()} onClose={vi.fn()} />);
 
@@ -136,7 +136,7 @@ describe("CustomEmojiPicker", () => {
 
   it("clicking delete button calls sendCustomEmojiDelete", () => {
     storeState.customEmojis = [
-      { name: "cat", url: "https://example.com/cat.png", uploader: "testuser" },
+      { id: "e1", room_id: "public", created_at: 1, name: "cat", url: "https://example.com/cat.png", uploader: "testuser" },
     ];
     render(<CustomEmojiPicker onSelect={vi.fn()} onClose={vi.fn()} />);
 

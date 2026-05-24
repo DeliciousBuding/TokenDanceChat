@@ -7,6 +7,8 @@ import {
   loginUser,
   generateInviteCode,
   listInviteCodes,
+  fetchPublicMessages,
+  SESSION_TOKEN_STORAGE_KEY,
 } from "@/lib/api";
 import type { SearchResult } from "@/lib/api";
 
@@ -18,6 +20,7 @@ globalThis.fetch = mockFetch;
 
 beforeEach(() => {
   mockFetch.mockReset();
+  window.localStorage.clear();
 });
 
 // ===========================================================================
@@ -75,7 +78,7 @@ describe("registerUser", () => {
   }
 
   it("sends a POST to /api/register with the correct JSON body", async () => {
-    mockJsonResponse({ success: true, username });
+    mockJsonResponse({ success: true, username, session_token: "session-token-1" });
 
     await registerUser(username, password, inviteCode);
 
@@ -91,11 +94,11 @@ describe("registerUser", () => {
   });
 
   it("resolves with RegisterResponse on success", async () => {
-    mockJsonResponse({ success: true, username });
+    mockJsonResponse({ success: true, username, session_token: "session-token-1" });
 
     const result = await registerUser(username, password, inviteCode);
 
-    expect(result).toEqual({ success: true, username });
+    expect(result).toEqual({ success: true, username, session_token: "session-token-1" });
   });
 
   it("throws the server error message when the response is not ok", async () => {
@@ -136,7 +139,7 @@ describe("loginUser", () => {
   }
 
   it("sends a POST to /api/login with the correct JSON body", async () => {
-    mockJsonResponse({ success: true, username });
+    mockJsonResponse({ success: true, username, session_token: "session-token-1" });
 
     await loginUser(username, password);
 
@@ -147,11 +150,11 @@ describe("loginUser", () => {
   });
 
   it("resolves with LoginResponse on success", async () => {
-    mockJsonResponse({ success: true, username });
+    mockJsonResponse({ success: true, username, session_token: "session-token-1" });
 
     const result = await loginUser(username, password);
 
-    expect(result).toEqual({ success: true, username });
+    expect(result).toEqual({ success: true, username, session_token: "session-token-1" });
   });
 
   it("throws the server error message on failure", async () => {
@@ -196,6 +199,7 @@ describe("loginUser", () => {
 // ===========================================================================
 describe("generateInviteCode", () => {
   it("POSTs to /api/invite/generate with username and max_uses", async () => {
+    window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, "session-token-1");
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ code: "ABC123" }),
@@ -206,6 +210,10 @@ describe("generateInviteCode", () => {
     const [url, init] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/invite/generate");
     expect(init.method).toBe("POST");
+    expect(init.headers).toEqual({
+      "Content-Type": "application/json",
+      Authorization: "Bearer session-token-1",
+    });
     expect(JSON.parse(init.body)).toEqual({ username: "charlie", max_uses: 3 });
   });
 
@@ -229,6 +237,7 @@ describe("generateInviteCode", () => {
 // ===========================================================================
 describe("listInviteCodes", () => {
   it("GETs /api/invite/list with the username as a query param", async () => {
+    window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, "session-token-1");
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ codes: [] }),
@@ -236,8 +245,9 @@ describe("listInviteCodes", () => {
 
     await listInviteCodes("eve");
 
-    const [url] = mockFetch.mock.calls[0];
+    const [url, init] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/invite/list?username=eve");
+    expect(init.headers).toEqual({ Authorization: "Bearer session-token-1" });
   });
 
   it("returns the codes array on success", async () => {
@@ -380,6 +390,89 @@ describe("chatAPI", () => {
 
   it("readyState returns WebSocket.CLOSED when no connection is active", () => {
     expect(chatAPI.readyState).toBe(WebSocket.CLOSED);
+  });
+});
+
+describe("chatAPI reconnect authentication", () => {
+  const OriginalWebSocket = globalThis.WebSocket;
+  let sockets: FakeWebSocket[] = [];
+
+  class FakeWebSocket {
+    static CONNECTING = 0;
+    static OPEN = 1;
+    static CLOSING = 2;
+    static CLOSED = 3;
+
+    readyState = FakeWebSocket.CONNECTING;
+    sent: string[] = [];
+    onopen: ((event: Event) => void) | null = null;
+    onmessage: ((event: MessageEvent) => void) | null = null;
+    onclose: ((event: CloseEvent) => void) | null = null;
+    onerror: ((event: Event) => void) | null = null;
+    url: string;
+
+    constructor(url: string) {
+      this.url = url;
+      sockets.push(this);
+    }
+
+    send(data: string) {
+      this.sent.push(data);
+    }
+
+    close() {
+      this.readyState = FakeWebSocket.CLOSED;
+      this.onclose?.({} as CloseEvent);
+    }
+
+    open() {
+      this.readyState = FakeWebSocket.OPEN;
+      this.onopen?.({} as Event);
+    }
+
+    receive(data: unknown) {
+      this.onmessage?.({ data: JSON.stringify(data) } as MessageEvent);
+    }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    sockets = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    (chatAPI as any).reconnectBaseDelay = 1000;
+    (chatAPI as any).reconnectMaxDelay = 30000;
+    (chatAPI as any).reconnectAttempt = 0;
+  });
+
+  afterEach(() => {
+    chatAPI.disconnect();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.stubGlobal("WebSocket", OriginalWebSocket);
+  });
+
+  it("keeps the OIDC token when reconnecting after an established socket drops", async () => {
+    const connected = chatAPI.connect("alice", "access-token-1");
+
+    sockets[0].open();
+    expect(JSON.parse(sockets[0].sent[0])).toEqual({
+      type: "join",
+      username: "alice",
+      token: "access-token-1",
+    });
+    sockets[0].receive({ type: "history", messages: [] });
+    await expect(connected).resolves.toBeUndefined();
+
+    sockets[0].close();
+    await vi.advanceTimersByTimeAsync(1000);
+    sockets[1].open();
+
+    expect(JSON.parse(sockets[1].sent[0])).toEqual({
+      type: "join",
+      username: "alice",
+      token: "access-token-1",
+    });
   });
 });
 
@@ -1878,6 +1971,44 @@ describe("chatAPI fetchLinkPreview", () => {
 });
 
 // ===========================================================================
+// HTTP method — fetchPublicMessages
+// ===========================================================================
+describe("fetchPublicMessages", () => {
+  it("GETs /api/messages with the requested limit", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ messages: [] }),
+    } as unknown as Response);
+
+    await fetchPublicMessages(25);
+
+    expect(mockFetch.mock.calls[0][0]).toBe("/api/messages?limit=25");
+  });
+
+  it("returns public messages from the response", async () => {
+    const messages = [
+      { id: "m1", username: "TokenBot", content: "Welcome", timestamp: 1000 },
+    ];
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ messages }),
+    } as unknown as Response);
+
+    await expect(fetchPublicMessages()).resolves.toEqual(messages);
+  });
+
+  it("returns an empty list on failed responses", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: "failed" }),
+    } as unknown as Response);
+
+    await expect(fetchPublicMessages()).resolves.toEqual([]);
+  });
+});
+
+// ===========================================================================
 // chatAPI HTTP method — uploadImage
 // ===========================================================================
 describe("chatAPI uploadImage", () => {
@@ -1886,6 +2017,7 @@ describe("chatAPI uploadImage", () => {
   });
 
   it("POSTs to /api/upload with the file in FormData", async () => {
+    window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, "session-token-1");
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ url: "https://cdn.example.com/img.png" }),
@@ -1897,6 +2029,7 @@ describe("chatAPI uploadImage", () => {
     const [url, init] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/upload");
     expect(init.method).toBe("POST");
+    expect(init.headers).toEqual({ Authorization: "Bearer session-token-1" });
     const fd = init.body as FormData;
     expect(fd.get("file")).toBe(file);
   });
@@ -1941,7 +2074,8 @@ describe("chatAPI uploadEmoji", () => {
     chatAPI.disconnect();
   });
 
-  it("POSTs to /api/upload/emoji with file and name in FormData", async () => {
+  it("POSTs to /api/emoji/upload with file and name in FormData", async () => {
+    window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, "session-token-1");
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ url: "https://cdn.example.com/emoji/cool.gif" }),
@@ -1951,8 +2085,9 @@ describe("chatAPI uploadEmoji", () => {
     await chatAPI.uploadEmoji(file, "cool_emoji");
 
     const [url, init] = mockFetch.mock.calls[0];
-    expect(url).toBe("/api/upload/emoji");
+    expect(url).toBe("/api/emoji/upload");
     expect(init.method).toBe("POST");
+    expect(init.headers).toEqual({ Authorization: "Bearer session-token-1" });
     const fd = init.body as FormData;
     expect(fd.get("file")).toBe(file);
     expect(fd.get("name")).toBe("cool_emoji");
@@ -1997,6 +2132,7 @@ describe("chatAPI exportChat", () => {
   });
 
   it("GETs /api/export with conversation and format params", async () => {
+    window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, "session-token-1");
     const blob = new Blob(["chat data"], { type: "application/json" });
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -2005,10 +2141,11 @@ describe("chatAPI exportChat", () => {
 
     await chatAPI.exportChat("dm:alice", "json");
 
-    const [url] = mockFetch.mock.calls[0];
+    const [url, init] = mockFetch.mock.calls[0];
     expect(url).toContain("/api/export?");
     expect(url).toContain("conversation=dm%3Aalice");
     expect(url).toContain("format=json");
+    expect(init.headers).toEqual({ Authorization: "Bearer session-token-1" });
   });
 
   it("includes username param when provided", async () => {
@@ -2082,6 +2219,7 @@ describe("chatAPI searchMessages", () => {
   ];
 
   it("GETs /api/search with query param", async () => {
+    window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, "session-token-1");
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ results: sampleResults }),
@@ -2089,9 +2227,10 @@ describe("chatAPI searchMessages", () => {
 
     await chatAPI.searchMessages("hello");
 
-    const [url] = mockFetch.mock.calls[0];
+    const [url, init] = mockFetch.mock.calls[0];
     expect(url).toContain("/api/search?");
     expect(url).toContain("q=hello");
+    expect(init.headers).toEqual({ Authorization: "Bearer session-token-1" });
   });
 
   it("includes room param when roomID is provided", async () => {

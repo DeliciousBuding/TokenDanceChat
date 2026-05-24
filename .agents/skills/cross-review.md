@@ -19,11 +19,9 @@ git fetch origin dev && git log --oneline origin/dev..HEAD
 # Full verification suite
 .\scripts\verify.ps1
 
-# Security leak scan (must produce zero output)
-git grep -n -E '\b(hk1|hk2|us1|us2|us3|gz1)\b' -- ':!.git' ':!node_modules' ':!AGENTS.md'
-git grep -n -E ':(3221)\b' -- ':!.git' ':!node_modules' ':!AGENTS.md'
-git grep -n -E 'password.*[0-9]{4,}|sk-[a-zA-Z0-9]{20,}' -- ':!.git' ':!node_modules' ':!AGENTS.md'
-git log --oneline --all --grep='hk1|hk2|3221'
+# Security leak scan
+Run the canonical submit-time leak scan commands from `AGENTS.md`.
+They must produce zero output, except for explicitly documented exclusions.
 
 # Whitespace hygiene
 git diff --check

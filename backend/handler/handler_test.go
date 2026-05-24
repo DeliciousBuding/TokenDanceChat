@@ -92,6 +92,9 @@ func (m *mockStore) GetMessageByID(messageID string) (hub.StoredMessage, error) 
 func (m *mockStore) SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error) {
 	return nil, nil
 }
+func (m *mockStore) SearchMessagesForUser(query, roomID, username string, limit int) ([]store.SearchResult, error) {
+	return m.SearchMessages(query, roomID, limit)
+}
 func (m *mockStore) AddFriend(username, friend string) error                          { return nil }
 func (m *mockStore) RemoveFriend(username, friend string) error                       { return nil }
 func (m *mockStore) GetAllFriends() map[string][]string                               { return nil }
@@ -135,6 +138,64 @@ func newTestHandler() *Handler {
 	h := hub.New(ms, nil, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
+}
+
+func authorizeTestRequest(t *testing.T, h *Handler, req *http.Request, username string) {
+	t.Helper()
+	token, err := h.issueSessionToken(username)
+	if err != nil {
+		t.Fatalf("failed to issue test session token: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+}
+
+func assertJSONErrorCode(t *testing.T, resp *http.Response, want string) {
+	t.Helper()
+	var payload map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode JSON error response: %v", err)
+	}
+	if payload["code"] != want {
+		t.Fatalf("expected code %s, got %q", want, payload["code"])
+	}
+}
+
+func TestProtectedRESTRequiresSession(t *testing.T) {
+	ResetRateLimiter()
+	h := newTestHandler()
+
+	tests := []struct {
+		name    string
+		method  string
+		path    string
+		body    io.Reader
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{name: "search", method: http.MethodGet, path: "/api/search?q=hello", handler: h.Search},
+		{name: "export", method: http.MethodGet, path: "/api/export?conversation=public", handler: h.ExportMessages},
+		{name: "upload image", method: http.MethodPost, path: "/api/upload", handler: h.UploadImage},
+		{name: "upload emoji", method: http.MethodPost, path: "/api/emoji/upload", handler: h.UploadEmoji},
+		{name: "invite generate", method: http.MethodPost, path: "/api/invite/generate", body: strings.NewReader(`{"username":"alice"}`), handler: h.InviteGenerate},
+		{name: "invite list", method: http.MethodGet, path: "/api/invite/list?username=alice", handler: h.InviteList},
+		{name: "admin stats", method: http.MethodGet, path: "/api/admin/stats", handler: h.AdminStats},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, tt.body)
+			req.RemoteAddr = fmt.Sprintf("192.0.2.%d:1234", 180+i)
+			w := httptest.NewRecorder()
+
+			tt.handler(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("expected status 401, got %d: %s", resp.StatusCode, w.Body.String())
+			}
+			assertJSONErrorCode(t, resp, "AUTH_REQUIRED")
+		})
+	}
 }
 
 func (m *mockStore) UpsertUserProfile(username, displayName, avatarURL, bio, status string, lastSeen int64) error {
@@ -189,6 +250,7 @@ func (m *mockStore) GetCallHistory(username string, limit int) ([]store.CallReco
 }
 func (m *mockStore) RegisterUser(username, passwordHash, inviteCode string) error { return nil }
 func (m *mockStore) VerifyUser(username, password string) (bool, error)           { return true, nil }
+func (m *mockStore) UserExists(username string) (bool, error)                     { return false, nil }
 func (m *mockStore) GenerateInviteCode(creator string, maxUses int) (string, error) {
 	return "TESTCODE", nil
 }
@@ -211,13 +273,22 @@ func (m *mockStore) DeleteWebhook(id, groupName, deletedBy string) error        
 func (m *mockStore) RotateWebhookSecret(id, groupName, secret, rotatedBy string) (*store.Webhook, error) {
 	return nil, nil
 }
-func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error)           { return nil, nil }
+func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error) { return nil, nil }
 func (m *mockStore) ListWebhookAuditLogs(groupName string, limit int) ([]store.WebhookAuditLog, error) {
 	return nil, nil
 }
-func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error)               { return nil, nil }
+func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error) { return nil, nil }
 func (m *mockStore) VerifyWebhookSecret(url, secret string) (*store.Webhook, bool, error) {
 	return nil, false, nil
+}
+func (m *mockStore) UpsertOIDCUser(sub, chatUsername, email, preferredUsername string) error {
+	return nil
+}
+func (m *mockStore) GetOIDCUserBySub(sub string) (*store.OIDCUser, error) {
+	return nil, fmt.Errorf("not found")
+}
+func (m *mockStore) GetOIDCUserByUsername(username string) (*store.OIDCUser, error) {
+	return nil, fmt.Errorf("not found")
 }
 
 // mockStoreScheduled actually stores scheduled messages for testing.
@@ -726,6 +797,7 @@ func TestUploadImageStoresViaMediaStore(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.UploadImage(w, req)
@@ -801,6 +873,7 @@ func TestUploadEmojiStoresViaMediaStore(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/emoji/upload", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.UploadEmoji(w, req)
@@ -1155,6 +1228,7 @@ func TestUploadRejectsInvalidFileType(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.UploadImage(w, req)
@@ -1192,6 +1266,7 @@ func TestUploadRejectsMissingFileField(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.UploadImage(w, req)
@@ -1324,6 +1399,7 @@ func TestAdminStatsHandler(t *testing.T) {
 	h := newTestHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/stats", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.AdminStats(w, req)
@@ -1366,6 +1442,7 @@ func TestInviteGenerate(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
 	req.RemoteAddr = "192.0.2.1:1234"
 	req.Header.Set("Content-Type", "application/json")
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.InviteGenerate(w, req)
@@ -1394,9 +1471,9 @@ func TestInviteGenerate(t *testing.T) {
 	}
 }
 
-// TestInviteGenerateMissingUsername verifies that POST /api/invite/generate
-// without a username returns 400 with code MISSING_USERNAME.
-func TestInviteGenerateMissingUsername(t *testing.T) {
+// TestInviteGenerateWithoutUsernameUsesSession verifies that POST
+// /api/invite/generate derives the creator from the authenticated session.
+func TestInviteGenerateWithoutUsernameUsesSession(t *testing.T) {
 	ResetRateLimiter()
 	h := newTestHandler()
 
@@ -1404,6 +1481,7 @@ func TestInviteGenerateMissingUsername(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
 	req.RemoteAddr = "192.0.2.2:1234"
 	req.Header.Set("Content-Type", "application/json")
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.InviteGenerate(w, req)
@@ -1411,16 +1489,16 @@ func TestInviteGenerateMissingUsername(t *testing.T) {
 	resp := w.Result()
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, w.Body.String())
 	}
 
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		t.Fatalf("failed to decode JSON: %v", err)
 	}
-	if result["code"] != "MISSING_USERNAME" {
-		t.Errorf("expected code MISSING_USERNAME, got %q", result["code"])
+	if result["code"] != "TESTCODE" {
+		t.Errorf("expected invite code TESTCODE, got %q", result["code"])
 	}
 }
 
@@ -1430,6 +1508,7 @@ func TestInviteList(t *testing.T) {
 	h := newTestHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/invite/list?username=alice", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.InviteList(w, req)
@@ -1455,12 +1534,13 @@ func TestInviteList(t *testing.T) {
 	}
 }
 
-// TestInviteListMissingUsername verifies that GET /api/invite/list without a
-// username query parameter returns 400.
-func TestInviteListMissingUsername(t *testing.T) {
+// TestInviteListWithoutUsernameUsesSession verifies that GET /api/invite/list
+// derives the creator from the authenticated session.
+func TestInviteListWithoutUsernameUsesSession(t *testing.T) {
 	h := newTestHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/invite/list", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.InviteList(w, req)
@@ -1468,16 +1548,16 @@ func TestInviteListMissingUsername(t *testing.T) {
 	resp := w.Result()
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, w.Body.String())
 	}
 
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		t.Fatalf("failed to decode JSON: %v", err)
 	}
-	if result["code"] != "MISSING_USERNAME" {
-		t.Errorf("expected code MISSING_USERNAME, got %q", result["code"])
+	if _, ok := result["codes"]; !ok {
+		t.Error("expected 'codes' key in response")
 	}
 }
 
@@ -1487,6 +1567,7 @@ func TestExportMessagesJSON(t *testing.T) {
 	h := newTestHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=public&username=alice", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.ExportMessages(w, req)
@@ -1518,6 +1599,7 @@ func TestExportMessagesText(t *testing.T) {
 	h := newTestHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=public&format=text&username=alice", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.ExportMessages(w, req)
@@ -1697,6 +1779,7 @@ func TestSearchMissingQuery(t *testing.T) {
 	h := newTestHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/search", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 	h.Search(w, req)
 
@@ -1714,6 +1797,63 @@ func TestSearchWrongMethod(t *testing.T) {
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected 405 for POST /api/search, got %d", w.Code)
+	}
+}
+
+type mockStoreSearchCapture struct {
+	mockStore
+	capturedQuery    string
+	capturedRoomID   string
+	capturedUsername string
+	capturedLimit    int
+}
+
+func (m *mockStoreSearchCapture) SearchMessagesForUser(query, roomID, username string, limit int) ([]store.SearchResult, error) {
+	m.capturedQuery = query
+	m.capturedRoomID = roomID
+	m.capturedUsername = username
+	m.capturedLimit = limit
+	return []store.SearchResult{
+		{
+			ID:        "search-1",
+			Username:  "alice",
+			Content:   "needle",
+			Timestamp: 1000,
+			Snippet:   "<mark>needle</mark>",
+		},
+	}, nil
+}
+
+func newTestHandlerWithSearchCapture() (*Handler, *mockStoreSearchCapture) {
+	ms := &mockStoreSearchCapture{}
+	h := hub.New(ms, nil, nil, "")
+	go h.Run()
+	return New(h, ms, "/tmp/test-uploads"), ms
+}
+
+func TestSearchUsesAuthenticatedUserScope(t *testing.T) {
+	h, capture := newTestHandlerWithSearchCapture()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/search?q=needle&room=room-1&limit=7", nil)
+	authorizeTestRequest(t, h, req, "alice")
+	w := httptest.NewRecorder()
+
+	h.Search(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if capture.capturedQuery != "needle" {
+		t.Errorf("expected query needle, got %q", capture.capturedQuery)
+	}
+	if capture.capturedRoomID != "room-1" {
+		t.Errorf("expected room room-1, got %q", capture.capturedRoomID)
+	}
+	if capture.capturedUsername != "alice" {
+		t.Errorf("expected authenticated username alice, got %q", capture.capturedUsername)
+	}
+	if capture.capturedLimit != 7 {
+		t.Errorf("expected limit 7, got %d", capture.capturedLimit)
 	}
 }
 
@@ -1775,6 +1915,7 @@ func TestExportMessagesInvalidFormat(t *testing.T) {
 	h := newTestHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=public&format=pdf&username=alice", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 	h.ExportMessages(w, req)
 
@@ -1783,15 +1924,16 @@ func TestExportMessagesInvalidFormat(t *testing.T) {
 	}
 }
 
-func TestExportMessagesMissingUsernameForDM(t *testing.T) {
+func TestExportMessagesDMUsesSessionUsername(t *testing.T) {
 	h := newTestHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=dm:bob", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 	h.ExportMessages(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for DM export without username, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for DM export using session username, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -2007,6 +2149,7 @@ func TestUploadEmojiInvalidFileType(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/emoji/upload", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.UploadEmoji(w, req)
@@ -2259,6 +2402,7 @@ func TestInviteGenerateInvalidJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
 	req.RemoteAddr = "192.0.2.3:1234"
 	req.Header.Set("Content-Type", "application/json")
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.InviteGenerate(w, req)
@@ -2542,7 +2686,7 @@ func TestRegisterPasswordTooShort(t *testing.T) {
 	ResetRateLimiter()
 	h := newTestHandler()
 
-	body := `{"username":"alice","password":"12345","invite_code":"VALIDCODE"}`
+	body := `{"username":"alice","password":"passx","invite_code":"VALIDCODE"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/register", strings.NewReader(body))
 	req.RemoteAddr = "192.0.2.10:1234"
 	req.Header.Set("Content-Type", "application/json")
@@ -2648,10 +2792,12 @@ func TestRegisterInvalidUsername(t *testing.T) {
 type mockStoreInviteCapture struct {
 	mockStore
 	capturedMaxUses int
+	capturedCreator string
 }
 
 func (m *mockStoreInviteCapture) GenerateInviteCode(creator string, maxUses int) (string, error) {
 	m.capturedMaxUses = maxUses
+	m.capturedCreator = creator
 	return "INVITEDEFAULT", nil
 }
 
@@ -2673,6 +2819,7 @@ func TestInviteGenerateDefaultMaxUses(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
 		req.RemoteAddr = "192.0.2.20:1234"
 		req.Header.Set("Content-Type", "application/json")
+		authorizeTestRequest(t, h, req, "alice")
 		w := httptest.NewRecorder()
 
 		h.InviteGenerate(w, req)
@@ -2697,6 +2844,7 @@ func TestInviteGenerateDefaultMaxUses(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
 		req.RemoteAddr = "192.0.2.21:1234"
 		req.Header.Set("Content-Type", "application/json")
+		authorizeTestRequest(t, h, req, "alice")
 		w := httptest.NewRecorder()
 
 		h.InviteGenerate(w, req)
@@ -2721,6 +2869,7 @@ func TestInviteGenerateDefaultMaxUses(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
 		req.RemoteAddr = "192.0.2.22:1234"
 		req.Header.Set("Content-Type", "application/json")
+		authorizeTestRequest(t, h, req, "alice")
 		w := httptest.NewRecorder()
 
 		h.InviteGenerate(w, req)
@@ -2736,6 +2885,33 @@ func TestInviteGenerateDefaultMaxUses(t *testing.T) {
 			t.Errorf("expected max_uses=10 when explicitly set, got %d", capture.capturedMaxUses)
 		}
 	})
+}
+
+func TestInviteGenerateUsesAuthenticatedUsername(t *testing.T) {
+	ResetRateLimiter()
+	h, capture := newTestHandlerWithInviteCapture()
+
+	body := `{"username":"mallory","max_uses":7}`
+	req := httptest.NewRequest(http.MethodPost, "/api/invite/generate", strings.NewReader(body))
+	req.RemoteAddr = "192.0.2.23:1234"
+	req.Header.Set("Content-Type", "application/json")
+	authorizeTestRequest(t, h, req, "alice")
+	w := httptest.NewRecorder()
+
+	h.InviteGenerate(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", resp.StatusCode, w.Body.String())
+	}
+	if capture.capturedCreator != "alice" {
+		t.Fatalf("expected invite creator to come from session username alice, got %q", capture.capturedCreator)
+	}
+	if capture.capturedMaxUses != 7 {
+		t.Fatalf("expected max_uses=7, got %d", capture.capturedMaxUses)
+	}
 }
 
 // --- Register reserved username tests ---
@@ -2901,6 +3077,7 @@ func TestExportMessagesVeryLargeLimit(t *testing.T) {
 	h, capture := newTestHandlerWithExportCapture()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export?limit=50000&username=alice", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 	h.ExportMessages(w, req)
 
@@ -2919,6 +3096,7 @@ func TestExportMessagesWithinLimit(t *testing.T) {
 	h, capture := newTestHandlerWithExportCapture()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export?limit=500&username=alice", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 	h.ExportMessages(w, req)
 
@@ -2937,6 +3115,7 @@ func TestExportMessagesZeroLimit(t *testing.T) {
 	h, capture := newTestHandlerWithExportCapture()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export?limit=0&username=alice", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 	h.ExportMessages(w, req)
 
@@ -3242,7 +3421,6 @@ func TestRateLimitMiddlewareReturns429(t *testing.T) {
 	}
 }
 
-
 // =============================================================================
 // Login flow tests
 // =============================================================================
@@ -3294,6 +3472,9 @@ func TestLoginSuccess(t *testing.T) {
 	}
 	if result["username"] != "alice" {
 		t.Errorf("expected username 'alice', got %v", result["username"])
+	}
+	if token, ok := result["session_token"].(string); !ok || token == "" {
+		t.Fatalf("expected non-empty session_token in login response, got %v", result["session_token"])
 	}
 }
 
@@ -3392,6 +3573,9 @@ func TestRegisterSuccess(t *testing.T) {
 	}
 	if result["username"] != "newuser" {
 		t.Errorf("expected username 'newuser', got %v", result["username"])
+	}
+	if token, ok := result["session_token"].(string); !ok || token == "" {
+		t.Fatalf("expected non-empty session_token in register response, got %v", result["session_token"])
 	}
 }
 
@@ -3914,6 +4098,7 @@ func TestUploadFile(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.UploadImage(w, req)
@@ -3950,6 +4135,7 @@ func TestUploadFileNoFile(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.UploadImage(w, req)
@@ -3994,6 +4180,7 @@ func TestUploadFileTooLarge(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/upload", pr)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.UploadImage(w, req)
@@ -4032,6 +4219,7 @@ func TestEmojiUpload(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/emoji/upload", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 
 	h.UploadEmoji(w, req)

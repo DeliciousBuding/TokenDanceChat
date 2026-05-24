@@ -83,7 +83,7 @@ export function MessageTranscript({
   highlight,
   scrollContainerRef,
 }: MessageTranscriptProps) {
-  const { t, lang } = useTranslation();
+  const { t } = useTranslation();
   const {
     messages,
     username,
@@ -751,12 +751,13 @@ export function MessageTranscript({
           )}
 
           {hiddenCount > 0 && (
-            <div className="flex items-center gap-3 px-4 py-2">
-              <div className="h-px flex-1 bg-primary/30" />
-              <span className="text-[10px] font-medium text-primary whitespace-nowrap">
-                {t("transcript.olderMessages")}
-              </span>
-              <div className="h-px flex-1 bg-primary/30" />
+            <div className="px-4 py-2">
+              <div className="text-center mb-2">
+                <span className="text-[11px] font-medium text-[var(--text-tertiary)] tracking-wide uppercase">
+                  {t("transcript.olderMessages")}
+                </span>
+              </div>
+              <hr className="border-t border-[var(--border-subtle)]" />
             </div>
           )}
 
@@ -790,12 +791,13 @@ export function MessageTranscript({
               return (
                 <div key={group.message.id}>
                   {gi === newMessagesDividerIndex && (
-                    <div className="flex items-center gap-3 py-2">
-                      <div className="h-px flex-1 bg-primary/30" />
-                      <span className="text-xs font-medium text-primary shrink-0">
-                        {t("transcript.newMessagesDivider")}
-                      </span>
-                      <div className="h-px flex-1 bg-primary/30" />
+                    <div className="py-2">
+                      <div className="text-center mb-2">
+                        <span className="text-[11px] font-medium text-[var(--text-tertiary)] tracking-wide uppercase">
+                          {t("transcript.newMessagesDivider")}
+                        </span>
+                      </div>
+                      <hr className="border-t border-[var(--border-subtle)]" />
                     </div>
                   )}
                   {dateSep}
@@ -811,12 +813,13 @@ export function MessageTranscript({
             return (
               <div key={groupMessages[0].id}>
                 {gi === newMessagesDividerIndex && (
-                  <div className="flex items-center gap-3 py-2">
-                    <div className="h-px flex-1 bg-primary/30" />
-                    <span className="text-xs font-medium text-primary shrink-0">
-                      {t("transcript.newMessagesDivider")}
-                    </span>
-                    <div className="h-px flex-1 bg-primary/30" />
+                  <div className="py-2">
+                    <div className="text-center mb-2">
+                      <span className="text-[11px] font-medium text-[var(--text-tertiary)] tracking-wide uppercase">
+                        {t("transcript.newMessagesDivider")}
+                      </span>
+                    </div>
+                    <hr className="border-t border-[var(--border-subtle)]" />
                   </div>
                 )}
                 {dateSep}

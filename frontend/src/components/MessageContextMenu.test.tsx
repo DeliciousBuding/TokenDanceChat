@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { I18nProvider } from "@/i18n/context";
 import { MessageContextMenu } from "@/components/MessageContextMenu";
 import type { ChatMessage } from "@/lib/api";

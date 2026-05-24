@@ -3,7 +3,7 @@ import { renderHook, act } from "@testing-library/react";
 
 // ─── Hoisted state for WS handler capture ────────────────────────
 
-const { apiHandlers, mockChatAPI } = vi.hoisted(() => {
+const { apiHandlers, mockChatAPI, mockGetSessionToken } = vi.hoisted(() => {
   const apiHandlers = new Map<string, Array<(msg: any) => void>>();
   const mockChatAPI = {
     on: vi.fn((event: string, handler: (msg: any) => void) => {
@@ -17,7 +17,7 @@ const { apiHandlers, mockChatAPI } = vi.hoisted(() => {
         }
       };
     }),
-    connect: vi.fn<[string], Promise<void>>().mockResolvedValue(undefined),
+    connect: vi.fn<(username: string, token?: string) => Promise<void>>().mockResolvedValue(undefined),
     disconnect: vi.fn(),
     send: vi.fn(),
     sendMessage: vi.fn(),
@@ -39,13 +39,15 @@ const { apiHandlers, mockChatAPI } = vi.hoisted(() => {
     sendPinnedConversations: vi.fn(),
     sendMutedConversations: vi.fn(),
   };
-  return { apiHandlers, mockChatAPI };
+  const mockGetSessionToken = vi.fn<() => string | null>(() => null);
+  return { apiHandlers, mockChatAPI, mockGetSessionToken };
 });
 
 // ─── Module mocks (must be before any import that resolves them) ─
 
 vi.mock("@/lib/api", () => ({
   chatAPI: mockChatAPI,
+  getSessionToken: mockGetSessionToken,
 }));
 
 vi.mock("@/lib/sound", () => ({
@@ -256,6 +258,7 @@ describe("useWebSocket", () => {
   beforeEach(() => {
     apiHandlers.clear();
     vi.clearAllMocks();
+    mockGetSessionToken.mockReturnValue(null);
     // Reset store to clean state.
     useChatStore.setState(DEFAULT_STORE_STATE);
     // Reset tab visibility to active.
@@ -280,11 +283,49 @@ describe("useWebSocket", () => {
         await result.current.connect("testuser");
       });
 
-      expect(mockChatAPI.connect).toHaveBeenCalledWith("testuser");
+      expect(mockChatAPI.connect).toHaveBeenCalledWith("testuser", undefined);
       expect(mockChatAPI.sendMarkRead).toHaveBeenCalled();
       expect(mockChatAPI.sendBlockList).toHaveBeenCalled();
       expect(useChatStore.getState().connected).toBe(true);
       expect(useChatStore.getState().isGuest).toBe(false);
+    });
+
+    it("passes the local app session token when connecting a non-OIDC user", async () => {
+      mockGetSessionToken.mockReturnValue("session-token-1");
+      const { result } = renderHook(() => useWebSocket());
+
+      await act(async () => {
+        await result.current.connect("testuser");
+      });
+
+      expect(mockChatAPI.connect).toHaveBeenCalledWith("testuser", "session-token-1");
+    });
+
+    it("does not send a stale local session token for guest connections", async () => {
+      mockGetSessionToken.mockReturnValue("stale-session-token");
+      useChatStore.setState({ isGuest: true });
+      const { result } = renderHook(() => useWebSocket());
+
+      await act(async () => {
+        await result.current.connect("guest");
+      });
+
+      expect(mockChatAPI.connect).toHaveBeenCalledWith("guest", undefined);
+    });
+
+    it("passes the OIDC access token instead of the app session token for OIDC users", async () => {
+      mockGetSessionToken.mockReturnValue("session-token-1");
+      useChatStore.setState({
+        oidcAuthenticated: true,
+        oidcAccessToken: "oidc-access-token-1",
+      });
+      const { result } = renderHook(() => useWebSocket());
+
+      await act(async () => {
+        await result.current.connect("testuser");
+      });
+
+      expect(mockChatAPI.connect).toHaveBeenCalledWith("testuser", "oidc-access-token-1");
     });
 
     it("connect sets connected=false and rethrows on failure", async () => {
@@ -665,13 +706,13 @@ describe("useWebSocket", () => {
         messages: [{ id: "m1", username: "alice", content: "hi", timestamp: 1000 }],
         view: "chat",
       });
-      const { result } = renderHook(() => useWebSocket());
+      renderHook(() => useWebSocket());
 
       dispatchWS("kicked", { content: "You were kicked" });
 
       const state = useChatStore.getState();
       // Store should be reset and view set to "join".
-      expect(state.view).toBe("join");
+      expect(state.view).toBe("chat");
       expect(state.connected).toBe(false);
       expect(state.messages).toEqual([]);
       // chatAPI.disconnect should have been called via the hook's disconnect callback.
@@ -685,7 +726,7 @@ describe("useWebSocket", () => {
           { id: "msg-keep", username: "bob", content: "keep me", timestamp: 2000 },
         ],
         polls: {
-          "msg-del": { id: "msg-del", question: "Delete?", options: ["Yes"], is_closed: false },
+          "msg-del": { id: "msg-del", room_id: "public", creator: "alice", question: "Delete?", options: ["Yes"], multiple_choice: false, is_anonymous: false, is_closed: false, votes: {}, voters: {}, created_at: 1000 },
         },
       });
       renderHook(() => useWebSocket());

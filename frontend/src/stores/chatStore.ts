@@ -16,7 +16,7 @@ function loadLastReadTimestamps(username: string): Record<string, number> {
   }
 }
 
-export type ViewState = "join" | "chat";
+export type ViewState = "chat";
 
 export interface DM {
   username: string;
@@ -223,6 +223,15 @@ interface ChatState {
   setUsername: (username: string) => void;
   setConnected: (connected: boolean) => void;
   setGuest: (isGuest: boolean) => void;
+  // Auth modal & guest preview.
+  showAuthModal: boolean;
+  setShowAuthModal: (show: boolean) => void;
+  // OIDC auth state.
+  oidcAuthenticated: boolean;
+  oidcAccessToken: string | null;
+  oidcRefreshToken: string | null;
+  setOidcAuth: (accessToken: string, refreshToken: string) => void;
+  clearOidcAuth: () => void;
   addMessage: (message: ChatMessage) => void;
   deleteMessage: (id: string) => void;
   addSystemMessage: (content: string, timestamp: number) => void;
@@ -302,10 +311,14 @@ interface ChatState {
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  view: "join",
+  view: "chat" as ViewState,
   username: "",
   connected: false,
   isGuest: false,
+  showAuthModal: false,
+  oidcAuthenticated: false,
+  oidcAccessToken: null,
+  oidcRefreshToken: null,
   messages: [],
   historyLoaded: false,
   reactionsByMessageId: {},
@@ -353,6 +366,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setUsername: (username) => set({ username, lastReadTimestamps: loadLastReadTimestamps(username) }),
   setConnected: (connected) => set({ connected }),
   setGuest: (isGuest) => set({ isGuest }),
+  setOidcAuth: (accessToken, refreshToken) =>
+    set({ oidcAuthenticated: true, oidcAccessToken: accessToken, oidcRefreshToken: refreshToken }),
+  clearOidcAuth: () =>
+    set({ oidcAuthenticated: false, oidcAccessToken: null, oidcRefreshToken: null }),
+  setShowAuthModal: (show) => set({ showAuthModal: show }),
   addMessage: (message) =>
     set((state) => {
       // Filter out messages from blocked users.
@@ -846,10 +864,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       } catch { /* ignore */ }
     }
     set({
-      view: "join",
+      view: "chat" as ViewState,
       username: "",
       connected: false,
       isGuest: false,
+      showAuthModal: false,
+      oidcAuthenticated: false,
+      oidcAccessToken: null,
+      oidcRefreshToken: null,
       messages: [],
       historyLoaded: false,
       reactionsByMessageId: {},

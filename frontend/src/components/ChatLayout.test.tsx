@@ -283,38 +283,35 @@ describe("ChatLayout", () => {
   });
 
   describe("连接状态", () => {
-    it("connected=false 时显示断线横幅", () => {
+    it("connected=false 时在标题旁显示重连状态点", () => {
       useChatStore.setState({ connected: false });
       renderChatLayout();
-      expect(screen.getByText("连接已断开，正在尝试重新连接...")).toBeTruthy();
+      expect(screen.getAllByTitle("正在重新连接 (第 1 次)...").length).toBeGreaterThanOrEqual(1);
     });
 
-    it("connected=false 时不显示重载按钮（等待自动重连）", () => {
+    it("connected=false 时不显示旧横幅或重载按钮", () => {
       useChatStore.setState({ connected: false });
       renderChatLayout();
-      // Reload button should only appear after reconnect_failed, not on initial disconnect.
+      expect(screen.queryByText("连接已断开，正在尝试重新连接...")).toBeFalsy();
       expect(screen.queryByText("刷新页面")).toBeFalsy();
     });
 
-    it("reconnect_failed 后显示重载按钮", async () => {
+    it("reconnect_failed 后在标题旁显示失败状态点", async () => {
       useChatStore.setState({ connected: false });
       renderChatLayout();
-      // Simulate reconnect_failed via chatAPI event dispatch.
       await act(async () => {
         (chatAPI as any).dispatch("reconnect_failed", { type: "reconnect_failed", attempt: 10 });
       });
-      expect(screen.getByText("刷新页面")).toBeTruthy();
+      expect(screen.getAllByTitle("连接已断开，请刷新页面。").length).toBeGreaterThanOrEqual(1);
     });
 
-    it("点击重载按钮触发 reload", async () => {
+    it("reconnect_failed 不再渲染旧重载按钮", async () => {
       useChatStore.setState({ connected: false });
       renderChatLayout();
-      // Must set reconnectFailed state before the reload button appears.
       await act(async () => {
         (chatAPI as any).dispatch("reconnect_failed", { type: "reconnect_failed", attempt: 10 });
       });
-      fireEvent.click(screen.getByText("刷新页面"));
-      expect(mockReload).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText("刷新页面")).toBeFalsy();
     });
   });
 
@@ -354,20 +351,20 @@ describe("ChatLayout", () => {
     it("点击打开侧边栏按钮显示遮罩层", () => {
       renderChatLayout();
       // 遮罩层初始不存在 (use div selector to avoid matching lucide SVG icons)
-      expect(document.querySelector('div[aria-hidden="true"]')).toBeFalsy();
+      expect(document.querySelector('div.fixed.inset-0[aria-hidden="true"]')).toBeFalsy();
       fireEvent.click(screen.getByLabelText("打开侧边栏"));
       // 遮罩层出现
-      expect(document.querySelector('div[aria-hidden="true"]')).toBeTruthy();
+      expect(document.querySelector('div.fixed.inset-0[aria-hidden="true"]')).toBeTruthy();
     });
 
     it("点击遮罩层关闭侧边栏", () => {
       renderChatLayout();
       fireEvent.click(screen.getByLabelText("打开侧边栏"));
-      const backdrop = document.querySelector('div[aria-hidden="true"]');
+      const backdrop = document.querySelector('div.fixed.inset-0[aria-hidden="true"]');
       expect(backdrop).toBeTruthy();
       fireEvent.click(backdrop!);
       // 遮罩层消失
-      expect(document.querySelector('div[aria-hidden="true"]')).toBeFalsy();
+      expect(document.querySelector('div.fixed.inset-0[aria-hidden="true"]')).toBeFalsy();
     });
   });
 
@@ -424,14 +421,14 @@ describe("ChatLayout", () => {
     });
   });
 
-  describe("重连横幅状态", () => {
-    it("显示带尝试次数的重连消息", async () => {
+  describe("重连状态点", () => {
+    it("显示带尝试次数的重连状态", async () => {
       useChatStore.setState({ connected: false });
       renderChatLayout();
       await act(async () => {
         (chatAPI as any).dispatch("reconnecting", { type: "reconnecting", attempt: 0 });
       });
-      expect(screen.getByText("正在重新连接 (第 1 次)...")).toBeTruthy();
+      expect(screen.getAllByTitle("正在重新连接 (第 1 次)...").length).toBeGreaterThanOrEqual(1);
     });
 
     it("不同尝试次数显示不同计数", async () => {
@@ -441,10 +438,10 @@ describe("ChatLayout", () => {
         (chatAPI as any).dispatch("reconnecting", { type: "reconnecting", attempt: 4 });
       });
       // attempt + 1 = 5
-      expect(screen.getByText("正在重新连接 (第 5 次)...")).toBeTruthy();
+      expect(screen.getAllByTitle("正在重新连接 (第 5 次)...").length).toBeGreaterThanOrEqual(1);
     });
 
-    it("重连成功后清除横幅", async () => {
+    it("重连成功后清除状态点", async () => {
       useChatStore.setState({ connected: false });
       renderChatLayout();
       await act(async () => {
@@ -452,18 +449,19 @@ describe("ChatLayout", () => {
       });
       // connected 应恢复
       expect(useChatStore.getState().connected).toBe(true);
-      // 横幅不应再显示
+      // 旧横幅和标题状态点都不应再显示
       expect(screen.queryByText("连接已断开，正在尝试重新连接...")).toBeFalsy();
+      expect(screen.queryByTitle("正在重新连接 (第 1 次)...")).toBeFalsy();
     });
 
-    it("reconnect_failed 不显示重连次数，只显示刷新按钮", async () => {
+    it("reconnect_failed 不显示重连次数，只显示失败状态", async () => {
       useChatStore.setState({ connected: false });
       renderChatLayout();
       await act(async () => {
         (chatAPI as any).dispatch("reconnect_failed", { type: "reconnect_failed", attempt: 10 });
       });
-      // 显示失败消息，而非尝试次数
-      expect(screen.getByText("连接已断开，请刷新页面。")).toBeTruthy();
+      expect(screen.queryByTitle("正在重新连接 (第 11 次)...")).toBeFalsy();
+      expect(screen.getAllByTitle("连接已断开，请刷新页面。").length).toBeGreaterThanOrEqual(1);
     });
   });
 

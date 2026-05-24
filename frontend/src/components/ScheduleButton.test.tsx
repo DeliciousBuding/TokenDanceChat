@@ -26,7 +26,7 @@ describe("ScheduleButton", () => {
   it("shows active visual indicator when scheduled=true", () => {
     render(<ScheduleButton onSchedule={vi.fn()} scheduled={true} />);
     const button = screen.getByLabelText("schedule.scheduleMessage");
-    expect(button.className).toContain("bg-primary/10");
+    expect(button.className).toContain("bg-[var(--accent)]/10");
   });
 
   it("does not show active indicator when scheduled=false", () => {

@@ -237,6 +237,18 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 		log.Printf("media uploads configured for WebDAV endpoint %s", endpoint)
 	}
 
+	// OIDC setup (TokenDance ID integration).
+	oidcEnabled := parseEnvBool(os.Getenv("CHAT_OIDC_ENABLED"))
+	oidcIssuer := os.Getenv("CHAT_OIDC_ISSUER")
+	oidcClientID := os.Getenv("CHAT_OIDC_CLIENT_ID")
+	oidcRedirectURI := os.Getenv("CHAT_OIDC_REDIRECT_URI")
+	if err := hdlr.SetupOIDC(oidcEnabled, oidcClientID, oidcIssuer, oidcRedirectURI); err != nil {
+		return nil, nil, nil, fmt.Errorf("OIDC setup failed: %w", err)
+	}
+	if oidcEnabled {
+		log.Printf("oidc: enabled — issuer=%s client_id=%s", oidcIssuer, oidcClientID)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", hdlr.HealthCheck)
 	mux.HandleFunc("/api/messages", hdlr.GetMessages)
@@ -258,6 +270,16 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	mux.HandleFunc("/uploads/emojis/", hdlr.ServeEmoji)
 	mux.HandleFunc("/uploads/", hdlr.ServeUpload)
 	mux.HandleFunc("/ws", hdlr.HandleWebSocket)
+
+	// OIDC routes (only registered when enabled).
+	if oidcEnabled {
+		mux.HandleFunc("/api/oidc/config", hdlr.OIDCConfigHandler)
+		mux.HandleFunc("/api/oidc/login", hdlr.OIDCLogin)
+		mux.HandleFunc("/api/oidc/callback", hdlr.OIDCCallback)
+		mux.HandleFunc("/api/oidc/exchange", hdlr.OIDCExchange)
+		mux.HandleFunc("/api/oidc/refresh", hdlr.OIDCRefresh)
+		mux.HandleFunc("/api/oidc/redeem", hdlr.OIDCRedeem)
+	}
 
 	fs := http.FileServer(http.Dir(frontendDist))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

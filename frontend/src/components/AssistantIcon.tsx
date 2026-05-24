@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { Bot, Workflow } from "lucide-react";
-import { getLobeIconURL, type AssistantDefinition, type AssistantModel } from "@/lib/assistantRegistry";
+import { DeepSeek, Qwen, Kimi, Zhipu, Minimax, OpenAI, Anthropic } from "@lobehub/icons";
 import { cn } from "@/lib/utils";
+import { type AssistantDefinition, type AssistantModel } from "@/lib/assistantRegistry";
 
 interface AssistantIconProps {
   assistant?: AssistantDefinition;
@@ -22,43 +22,46 @@ const innerSizeClass = {
   lg: "h-5 w-5",
 };
 
+const knownProviders = new Set(["deepseek", "qwen", "kimi", "zhipu", "minimax", "openai", "anthropic"]);
+
+function ProviderColorIcon({ icon, sizePx }: { icon: string; sizePx: number }) {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const icons: Record<string, any> = { DeepSeek, Qwen, Kimi, Zhipu, Minimax, OpenAI, Anthropic };
+  const key = { deepseek: "DeepSeek", qwen: "Qwen", kimi: "Kimi", zhipu: "Zhipu", minimax: "Minimax", openai: "OpenAI", anthropic: "Anthropic" }[icon];
+  if (!key) return null;
+  const Provider = icons[key];
+  return <Provider.Color size={sizePx} />;
+}
+
 export function AssistantIcon({ assistant, model, size = "md", className }: AssistantIconProps) {
-  const [failed, setFailed] = useState(false);
   const activeModel = model ?? assistant?.model;
   const icon = activeModel?.icon;
+  const px = size === "sm" ? 16 : size === "md" ? 20 : 24;
 
-  if (icon && !failed) {
+  if (icon && knownProviders.has(icon)) {
     return (
       <span
         className={cn(
-          "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-background",
+          "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--border-base)] bg-[var(--bg-base)]",
           sizeClass[size],
           className,
         )}
       >
-        <img
-          src={getLobeIconURL(icon)}
-          alt={activeModel?.providerName ?? assistant?.name ?? "model"}
-          className="h-full w-full object-contain p-1"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => setFailed(true)}
-        />
+        <ProviderColorIcon icon={icon} sizePx={px} />
       </span>
     );
   }
 
-  const Icon = assistant?.kind === "agent" ? Workflow : Bot;
+  const Icn = assistant?.kind === "agent" ? Workflow : Bot;
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-lg border border-border bg-accent text-muted-foreground",
+        "inline-flex shrink-0 items-center justify-center rounded-lg border border-[var(--border-base)] bg-[var(--bg-2)] text-[var(--text-secondary)]",
         sizeClass[size],
         className,
       )}
     >
-      <Icon className={innerSizeClass[size]} />
+      <Icn className={innerSizeClass[size]} />
     </span>
   );
 }
-

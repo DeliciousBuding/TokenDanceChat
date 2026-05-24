@@ -1,120 +1,338 @@
 @import "tailwindcss";
 
-/* OKLCH-based color system with light as the default app posture. */
+/* ─── TokenDance Design System (aionui 1:1 replica) ─── */
+
 :root {
-  --background: oklch(0.98 0.01 260);
-  --foreground: oklch(0.12 0.01 260);
-  --primary: oklch(55% 0.194 13.428);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.95 0.01 260);
-  --secondary-foreground: oklch(0.12 0.01 260);
-  --muted: oklch(0.95 0.01 260);
-  --muted-foreground: oklch(0.45 0.01 260);
-  --card: oklch(0.97 0.01 260);
-  --card-foreground: oklch(0.12 0.01 260);
-  --accent: oklch(0.95 0.01 260);
-  --accent-foreground: oklch(0.12 0.01 260);
-  --destructive: oklch(0.45 0.22 25);
-  --destructive-foreground: oklch(0.98 0.01 260);
-  --border: oklch(0.88 0.01 260);
-  --input: oklch(0.88 0.01 260);
-  --ring: oklch(55% 0.194 13.428);
-  --ring-focus: oklch(55% 0.194 13.428 / 0.5);
-  --warning: oklch(0.55 0.18 85);
-  --warning-foreground: oklch(0.12 0.01 260);
+  /* Canvas & surface — macOS Ventura light */
+  --bg-base: #f5f5f7;
+  --bg-1: #ececf0;
+  --bg-2: #e4e4e8;
+  --bg-3: #d1d1d6;
+  --bg-4: #c7c7cc;
+  --bg-5: #aeaeb2;
+  --bg-6: #8e8e93;
+  --bg-hover: #e8e8ed;
+  --bg-active: #d8d8de;
+
+  /* Glass surfaces */
+  --surface-glass: rgba(255, 255, 255, 0.72);
+  --surface-glass-strong: rgba(255, 255, 255, 0.85);
+  --surface-glass-dark: rgba(28, 28, 30, 0.75);
+
+  /* Text hierarchy — Apple label colors */
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #aeaeb2;
+  --text-disabled: #c7c7cc;
+
+  /* Brand / Accent — macOS blue */
+  --accent: #007aff;
+  --accent-hover: #0060cc;
+  --brand: var(--accent);
+  --brand-light: #e8f2ff;
+  --brand-hover: var(--accent-hover);
+
+  /* Semantic — Apple system colors */
+  --primary: var(--accent);
+  --success: #34c759;
+  --warning: #ff9500;
+  --danger: #ff3b30;
+  --red: #ff3b30;
+  --green: #34c759;
+  --orange: #ff9500;
+  --yellow: #ffcc00;
+
+  /* Borders */
+  --border-base: #d1d1d6;
+  --border-light: #e4e4e8;
+  --border-glass: rgba(255, 255, 255, 0.12);
+  --border-subtle: rgba(0, 0, 0, 0.06);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.15), 0 8px 16px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 32px 64px rgba(0, 0, 0, 0.2), 0 12px 24px rgba(0, 0, 0, 0.1);
+
+  /* Message fills */
+  --message-user-bg: #e8f2ff;
+  --message-tips-bg: #f0f6ff;
+  --dialog-fill-0: var(--bg-1);
+
+  /* aionui accent ramp (mapped to macOS blue) */
+  --aou-1: #e8f2ff;
+  --aou-2: #d0e4ff;
+  --aou-4: #7db8ff;
+  --aou-6: #007aff;
+
+  /* Radius */
+  --radius: 0.625rem;
+
+  /* TokenDance cross-app aliases */
+  --td-canvas: var(--bg-base);
+  --td-surface: var(--surface-glass-strong);
+  --td-tint: var(--bg-1);
+  --td-ink: var(--text-primary);
+  --td-ink-muted: var(--text-secondary);
+  --td-line: var(--border-subtle);
+  --td-plum: var(--brand);
+  --td-moss: var(--success);
+  --td-danger: var(--danger);
+  --td-focus: var(--ring);
+  --td-radius-control: var(--radius);
+  --td-radius-panel: var(--radius);
+
+  /* ─── shadcn/ui compat ─── */
+  --background: var(--bg-base);
+  --foreground: var(--text-primary);
+  --card: var(--dialog-fill-0);
+  --card-foreground: var(--text-primary);
+  --popover: var(--dialog-fill-0);
+  --popover-foreground: var(--text-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--bg-1);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-2);
+  --muted-foreground: var(--text-secondary);
+  --accent-shadcn: var(--bg-2);
+  --accent-shadcn-fg: var(--text-primary);
+  --destructive: var(--danger);
+  --destructive-foreground: #ffffff;
+  --border: var(--border-base);
+  --input: var(--border-base);
+  --ring: var(--accent);
+  --ring-focus: rgba(0, 122, 255, 0.25);
+  --warning-color: var(--warning);
+  --warning-foreground: var(--text-primary);
   --mention: oklch(0.55 0.18 30);
-  --mention-foreground: oklch(1 0 0);
-  --radius: 0.5rem;
+  --mention-foreground: #ffffff;
 }
 
 .dark {
-  --background: oklch(0.18 0.01 260);
-  --foreground: oklch(0.92 0.01 260);
-  --primary: oklch(71.2% 0.194 13.428);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.22 0.01 260);
-  --secondary-foreground: oklch(0.92 0.01 260);
-  --muted: oklch(0.22 0.01 260);
-  --muted-foreground: oklch(0.55 0.01 260);
-  --card: oklch(0.20 0.01 260);
-  --card-foreground: oklch(0.92 0.01 260);
-  --accent: oklch(0.22 0.01 260);
-  --accent-foreground: oklch(0.92 0.01 260);
-  --destructive: oklch(0.55 0.22 25);
-  --destructive-foreground: oklch(0.98 0.01 260);
-  --border: oklch(0.26 0.01 260);
-  --input: oklch(0.26 0.01 260);
-  --ring: oklch(71.2% 0.194 13.428);
-  --ring-focus: oklch(71.2% 0.194 13.428 / 0.5);
-  --warning: oklch(0.65 0.18 85);
-  --warning-foreground: oklch(0.18 0.01 260);
-  --mention: oklch(0.65 0.18 30);
-  --mention-foreground: oklch(1 0 0);
+  /* Canvas & surface — true macOS dark appearance */
+  --bg-base: #0d0d0f;
+  --bg-1: #1c1c1e;
+  --bg-2: #2c2c2e;
+  --bg-3: #3a3a3c;
+  --bg-4: #48484a;
+  --bg-5: #545456;
+  --bg-6: #6e6e70;
+  --bg-hover: #252527;
+  --bg-active: #333336;
+
+  /* Glass surfaces — macOS panel feel */
+  --surface-glass: rgba(30, 30, 32, 0.55);
+  --surface-glass-strong: rgba(38, 38, 40, 0.78);
+  --surface-glass-dark: rgba(28, 28, 30, 0.65);
+
+  /* Text hierarchy — refined for dark */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.28);
+  --text-disabled: rgba(255, 255, 255, 0.15);
+
+  /* Brand / Accent — macOS blue in dark */
+  --accent: #2f81f7;
+  --accent-hover: #4d9ff9;
+  --brand: var(--accent);
+  --brand-light: rgba(47, 129, 247, 0.1);
+  --brand-hover: var(--accent-hover);
+
+  /* Semantic */
+  --primary: var(--accent);
+  --success: #30d158;
+  --warning: #ff9f0a;
+  --danger: #ff453a;
+  --red: #ff453a;
+  --green: #30d158;
+  --orange: #ff9f0a;
+  --yellow: #ffd60a;
+
+  /* Borders — ghost edges */
+  --border-base: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.05);
+  --border-glass: rgba(255, 255, 255, 0.06);
+  --border-subtle: rgba(255, 255, 255, 0.03);
+
+  /* Shadows — deeper for dark mode */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.7);
+
+  /* Message fills */
+  --message-user-bg: rgba(47, 129, 247, 0.14);
+  --message-tips-bg: rgba(47, 129, 247, 0.08);
+  --dialog-fill-0: var(--bg-1);
+
+  /* aionui accent ramp */
+  --aou-1: rgba(47, 129, 247, 0.1);
+  --aou-2: rgba(47, 129, 247, 0.2);
+  --aou-4: rgba(47, 129, 247, 0.5);
+  --aou-6: #2f81f7;
+
+  /* ─── shadcn/ui dark compat ─── */
+  --background: var(--bg-base);
+  --foreground: var(--text-primary);
+  --card: var(--bg-1);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-1);
+  --popover-foreground: var(--text-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--bg-1);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-2);
+  --muted-foreground: var(--text-secondary);
+  --accent-shadcn: var(--bg-2);
+  --accent-shadcn-fg: var(--text-primary);
+  --destructive: var(--danger);
+  --destructive-foreground: #ffffff;
+  --border: var(--border-base);
+  --input: var(--border-base);
+  --ring: var(--accent);
+  --ring-focus: rgba(47, 129, 247, 0.25);
+  --warning-color: var(--warning);
+  --warning-foreground: var(--text-primary);
+  --mention: #ff9f0a;
+  --mention-foreground: #1c1c1e;
 }
 
 @theme {
+  /* ─── macOS glass design tokens ─── */
+  --color-bg-base: var(--bg-base);
+  --color-bg-1: var(--bg-1);
+  --color-bg-2: var(--bg-2);
+  --color-bg-3: var(--bg-3);
+  --color-bg-4: var(--bg-4);
+  --color-bg-5: var(--bg-5);
+  --color-bg-6: var(--bg-6);
+  --color-bg-hover: var(--bg-hover);
+  --color-bg-active: var(--bg-active);
+
+  --color-bg-surface-glass: var(--surface-glass);
+  --color-bg-surface-glass-strong: var(--surface-glass-strong);
+  --color-bg-surface-glass-dark: var(--surface-glass-dark);
+
+  --color-text-t-primary: var(--text-primary);
+  --color-text-t-secondary: var(--text-secondary);
+  --color-text-t-tertiary: var(--text-tertiary);
+  --color-text-t-disabled: var(--text-disabled);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-text-brand: var(--brand);
+  --color-bg-brand: var(--brand);
+  --color-bg-brand-light: var(--brand-light);
+  --color-bg-brand-hover: var(--brand-hover);
+
+  --color-border-b-base: var(--border-base);
+  --color-border-b-light: var(--border-light);
+  --color-border-glass: var(--border-glass);
+  --color-border-subtle: var(--border-subtle);
+
+  --color-bg-message-user: var(--message-user-bg);
+  --color-bg-message-tips: var(--message-tips-bg);
+  --color-bg-dialog-fill-0: var(--dialog-fill-0);
+
+  --color-aou-1: var(--aou-1);
+  --color-aou-2: var(--aou-2);
+  --color-aou-4: var(--aou-4);
+  --color-aou-6: var(--aou-6);
+
+  /* ─── shadcn/ui compat ─── */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--card);
-  --color-popover-foreground: var(--foreground);
-  --color-primary: var(--primary);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--accent);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-shadcn: var(--accent-shadcn);
+  --color-accent-shadcn-fg: var(--accent-shadcn-fg);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-ring-focus: var(--ring-focus);
-  --color-warning: var(--warning);
+  --color-warning: var(--warning-color);
   --color-warning-foreground: var(--warning-foreground);
   --color-mention: var(--mention);
   --color-mention-foreground: var(--mention-foreground);
-  --color-online: oklch(0.60 0.18 160);
-  --color-online-ring: oklch(0.50 0.15 160);
+  --color-online: #28c840;
+  --color-online-ring: rgba(40, 200, 64, 0.3);
 
+  /* macOS semantic aliases */
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-red: var(--red);
+  --color-green: var(--green);
+  --color-orange: var(--orange);
+  --color-yellow: var(--yellow);
+
+  /* ─── Radius ─── */
   --radius: var(--radius);
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+  /* ─── Fonts ─── */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 }
 
-/* Base layer */
+/* ───────── Base layer ───────── */
+
 @layer base {
   * {
-    border-color: var(--border);
+    border-color: var(--border-base);
   }
 
   html {
     font-family: var(--font-sans);
     scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: transparent transparent;
+  }
+
+  html:hover {
+    scrollbar-color: var(--border-base) transparent;
   }
 
   body {
-    background-color: var(--background);
-    color: var(--foreground);
+    background-color: var(--bg-base);
+    color: var(--text-primary);
     min-height: 100vh;
   }
 
-  /* Focus ring for keyboard navigation */
+  /* Focus ring: visible on all keyboard-reachable controls. */
   *:focus-visible {
-    outline: 2px solid oklch(71.2% 0.194 13.428 / 0.5);
-    outline-offset: 2px;
-    border-radius: var(--radius);
+    outline: none;
   }
 
-  /* Thin Kanna-style scrollbar */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  [role="menuitem"]:focus-visible,
+  [tabindex]:not([tabindex="-1"]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--ring-focus);
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid transparent;
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--ring-focus);
+  }
+
+  /* Thin scrollbar: hidden by default, visible on hover, 6px / 3px radius */
   ::-webkit-scrollbar {
     width: 6px;
   }
@@ -125,13 +343,125 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: var(--border);
+    background: transparent;
     border-radius: 3px;
   }
 
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--input);
+  html:hover ::-webkit-scrollbar-thumb {
+    background: var(--border-base);
   }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--bg-5);
+  }
+}
+
+/* ───────── Glass surfaces ───────── */
+
+.glass-header {
+  background-color: var(--surface-glass);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-glass);
+}
+
+.glass-strong {
+  background: var(--surface-glass-strong);
+  backdrop-filter: blur(30px) saturate(200%);
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  border: 1px solid var(--border-glass);
+}
+
+.glass-dark {
+  background: var(--surface-glass-dark);
+  backdrop-filter: blur(30px) saturate(200%);
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  border: 1px solid var(--border-glass);
+}
+
+/* ───────── macOS component classes ───────── */
+
+.mac-panel {
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+}
+
+.mac-input {
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mac-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.mac-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.mac-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: var(--accent);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.mac-button:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+}
+
+.mac-button:active {
+  transform: scale(0.97);
+}
+
+.mac-button-secondary {
+  background: var(--bg-1);
+  color: var(--accent);
+  border: 1px solid var(--border-subtle);
+}
+
+.mac-button-secondary:hover {
+  background: var(--bg-2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* ───────── Scrollbar hide utility ───────── */
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 /* ───────── Animations ───────── */
@@ -168,7 +498,7 @@
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(30px);
   }
   to {
     opacity: 1;
@@ -269,7 +599,7 @@
   100% { background-position: 400px 0; }
 }
 
-/* Pop for reaction toggle: scale 1 → 1.3 → 1 */
+/* Pop for reaction toggle */
 @keyframes pop {
   0% { transform: scale(1); }
   40% { transform: scale(1.3); }
@@ -296,10 +626,10 @@
 
 @keyframes inputGlow {
   0%, 100% {
-    box-shadow: 0 0 0 0 oklch(71.2% 0.194 13.428 / 0);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 0%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 3px oklch(71.2% 0.194 13.428 / 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent);
   }
 }
 
@@ -358,7 +688,7 @@
 }
 
 @utility animate-slide-up {
-  animation: slideUp 0.3s ease-out;
+  animation: slideUp 0.6s ease-out;
 }
 
 @utility animate-spring-up {
@@ -407,35 +737,35 @@
 @utility animate-shimmer {
   background: linear-gradient(
     90deg,
-    var(--muted) 0%,
-    var(--muted) 25%,
-    oklch(0.255 0.01 260) 40%,
-    oklch(0.28 0.01 260) 50%,
-    oklch(0.255 0.01 260) 60%,
-    var(--muted) 75%,
-    var(--muted) 100%
+    var(--bg-2) 0%,
+    var(--bg-2) 25%,
+    oklch(0.92 0.01 260) 40%,
+    oklch(0.95 0.01 260) 50%,
+    oklch(0.92 0.01 260) 60%,
+    var(--bg-2) 75%,
+    var(--bg-2) 100%
   );
   background-size: 800px 100%;
   animation: shimmer 2s ease-in-out infinite;
 }
 
+.dark .animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.03) 0%,
+    rgba(255,255,255,0.03) 25%,
+    rgba(255,255,255,0.06) 40%,
+    rgba(255,255,255,0.08) 50%,
+    rgba(255,255,255,0.06) 60%,
+    rgba(255,255,255,0.03) 75%,
+    rgba(255,255,255,0.03) 100%
+  );
+  background-size: 800px 100%;
+}
+
 @utility animate-menu-item {
   opacity: 0;
   animation: menuItemIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-.light .animate-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--muted) 0%,
-    var(--muted) 25%,
-    oklch(0.92 0.01 260) 40%,
-    oklch(0.95 0.01 260) 50%,
-    oklch(0.92 0.01 260) 60%,
-    var(--muted) 75%,
-    var(--muted) 100%
-  );
-  background-size: 800px 100%;
 }
 
 .input-glow:focus-within {
@@ -480,10 +810,11 @@
 
 /* Gradient overlay above input */
 .gradient-overlay-top {
-  background: linear-gradient(to top, var(--background), transparent);
+  background: linear-gradient(to top, var(--bg-base), transparent);
 }
 
-/* Markdown content styling */
+/* ───────── Markdown content styling ───────── */
+
 .markdown-body {
   line-height: 1.625;
   word-break: break-word;
@@ -498,22 +829,22 @@
 }
 
 .markdown-body code {
-  background: var(--muted);
+  background: var(--bg-2);
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
   font-size: 0.875em;
   font-family: var(--font-mono);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-base);
   color: oklch(0.75 0.14 40);
 }
 
 .markdown-body pre {
-  background: var(--secondary);
+  background: var(--bg-1);
   padding: 0.75rem 1rem;
   border-radius: 0.5rem;
   overflow-x: auto;
   margin: 0.5rem 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-base);
 }
 
 .markdown-body pre code {
@@ -522,11 +853,11 @@
   font-size: 0.8125rem;
   line-height: 1.5;
   border: none;
-  color: var(--foreground);
+  color: var(--text-primary);
 }
 
 .markdown-body a {
-  color: var(--primary);
+  color: var(--brand);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -546,16 +877,16 @@
 }
 
 .markdown-body ul li::marker {
-  color: var(--muted-foreground);
+  color: var(--text-secondary);
 }
 
 .markdown-body blockquote {
-  border-left: 3px solid oklch(71.2% 0.194 13.428 / 0.5);
+  border-left: 3px solid var(--brand);
   padding: 0.5rem 0.75rem;
   margin: 0.5rem 0;
-  background: oklch(71.2% 0.194 13.428 / 0.05);
+  background: var(--brand-light);
   border-radius: 0 0.375rem 0.375rem 0;
-  color: var(--muted-foreground);
+  color: var(--text-secondary);
 }
 
 .markdown-body blockquote p {
@@ -579,13 +910,13 @@
 
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-base);
   padding: 0.375rem 0.75rem;
   text-align: left;
 }
 
 .markdown-body th {
-  background: var(--muted);
+  background: var(--bg-2);
 }
 
 /* Headings */
@@ -605,19 +936,19 @@
 .markdown-body h3 { font-size: 1.0625rem; }
 .markdown-body h4 { font-size: 1rem; }
 .markdown-body h5 { font-size: 0.9375rem; }
-.markdown-body h6 { font-size: 0.875rem; color: var(--muted-foreground); }
+.markdown-body h6 { font-size: 0.875rem; color: var(--text-secondary); }
 
 /* Horizontal rule */
 .markdown-body hr {
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-base);
   margin: 0.75rem 0;
 }
 
 /* Bold / Italic */
 .markdown-body strong {
   font-weight: 600;
-  color: var(--foreground);
+  color: var(--text-primary);
 }
 
 .markdown-body em {
@@ -634,15 +965,14 @@
   display: block;
 }
 
-/* ---------- Responsive fixes ---------- */
+/* ───────── Typing indicator ───────── */
 
-/* Typing indicator dot animation (Telegram-style elastic bounce) */
 .typing-dot {
   display: inline-block;
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: oklch(71.2% 0.194 13.428 / 0.7);
+  background: var(--brand);
   animation: typingBounce 1.2s ease-in-out infinite both;
 }
 
@@ -665,12 +995,12 @@
   }
 }
 
-/* Reply preview border accent */
+/* ───────── Reply / Edit indicators ───────── */
+
 .reply-preview {
-  border-left-color: var(--border);
+  border-left-color: var(--border-base);
 }
 
-/* Reply / Edit indicator: spring slide-down */
 .reply-indicator-enter {
   animation: slideDownSpring 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -688,61 +1018,39 @@
   }
 }
 
-/* Friend request notification bar */
 .friend-request-bar {
   animation: slideDown 0.3s ease-out;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-    max-height: 0;
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    max-height: 50px;
-  }
-}
+/* ───────── Emoji picker scrollbar ───────── */
 
-/* Emoji picker custom scrollbar */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--border-base) transparent;
 }
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
-
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
-
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--border-base);
   border-radius: 2px;
 }
 
-/* Search jump-to-message highlight flash */
+/* ───────── Search highlight ───────── */
+
 @keyframes highlight-flash {
   0%, 100% { background-color: transparent; }
-  50% { background-color: oklch(71.2% 0.194 13.428 / 0.15); }
+  50% { background-color: color-mix(in srgb, var(--brand) 15%, transparent); }
 }
 .highlight-flash {
   animation: highlight-flash 2s ease-in-out;
 }
 
-@keyframes pop {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.3); }
-  100% { transform: scale(1); }
-}
-@utility animate-pop {
-  animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
+/* ───────── Context menu ───────── */
 
-/* Context menu backdrop with blur */
 .context-menu-backdrop {
   position: fixed;
   inset: 0;
@@ -753,7 +1061,6 @@
   animation: blurIn 0.25s ease-out;
 }
 
-/* Context menu panel */
 .context-menu {
   position: fixed;
   z-index: 100;
@@ -763,17 +1070,20 @@
   animation: scaleInOrigin 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Staggered message group entrance */
+/* ───────── Message group entrance ───────── */
+
 .message-group-enter {
   animation: springSlideUp 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-/* Image preview scale-in */
+/* ───────── Image preview ───────── */
+
 .image-preview-enter {
   animation: scaleIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* File-drop overlay with backdrop blur */
+/* ───────── File drop overlay ───────── */
+
 .file-drop-overlay {
   position: absolute;
   inset: 0;
@@ -784,20 +1094,20 @@
   background: oklch(0.18 0.01 260 / 0.88);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  border: 2px dashed var(--primary);
+  border: 2px dashed var(--brand);
   border-radius: 0.5rem;
   pointer-events: none;
   animation: blurIn 0.2s ease-out;
 }
 
-/* Recording mode transition */
+/* ───────── Recording mode ───────── */
+
 .recording-bar-enter {
   animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* ───────── Waveform / Voice message ───────── */
 
-/* Waveform visualizer bars (recording indicator) */
 @keyframes waveformBarAnim {
   0%, 100% { height: 4px; }
   50% { height: var(--wv-peak, 20px); }
@@ -807,11 +1117,10 @@
   width: 3px;
   min-height: 4px;
   border-radius: 2px;
-  background: var(--primary);
+  background: var(--brand);
   animation: waveformBarAnim 0.8s ease-in-out infinite;
 }
 
-/* Audio player waveform bars (playback visualization) */
 @keyframes audioWaveformBar {
   0%, 100% { height: var(--aw-base, 4px); }
   50% { height: var(--aw-peak, 14px); }
@@ -820,29 +1129,23 @@
 .audio-waveform-bar {
   width: 2px;
   border-radius: 1px;
-  background: var(--primary);
+  background: var(--brand);
   animation: audioWaveformBar 1.4s ease-in-out infinite;
   animation-play-state: paused;
 }
 
-/* When parent has .is-playing class, bars animate */
 .is-playing .audio-waveform-bar {
   animation-play-state: running;
 }
 
-/* Round the edges of audio player waveform when size changes */
 .audio-waveform-bar:nth-child(odd) {
   animation-direction: alternate;
 }
 
-/* ───────── Voice message bubble ───────── */
-
-/* Narrow voice message bubble */
 .voice-message-bubble {
   max-width: 280px !important;
 }
 
-/* Custom audio player */
 .custom-audio-player {
   display: flex;
   align-items: center;
@@ -866,7 +1169,7 @@
 
 .custom-audio-player .play-pause-btn:hover {
   transform: scale(1.08);
-  box-shadow: 0 0 12px oklch(71.2% 0.194 13.428 / 0.25);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--brand) 25%, transparent);
 }
 
 .custom-audio-player .play-pause-btn:active {
@@ -885,7 +1188,7 @@
 .custom-audio-player .time-display {
   font-size: 11px;
   font-family: var(--font-mono);
-  color: var(--muted-foreground);
+  color: var(--text-secondary);
   white-space: nowrap;
   min-width: 36px;
   text-align: right;
@@ -893,7 +1196,7 @@
 }
 
 .custom-audio-player .time-display .current-time {
-  color: var(--foreground);
+  color: var(--text-primary);
   opacity: 0.8;
 }
 
@@ -906,17 +1209,15 @@
   opacity: 0.5;
 }
 
-/* Microphone icon for voice messages */
 .voice-mic-icon {
   flex-shrink: 0;
-  color: var(--primary);
+  color: var(--brand);
   opacity: 0.7;
   margin-right: 2px;
 }
 
 /* ───────── Recording UI ───────── */
 
-/* Recording duration limit bar */
 .recording-limit-bar {
   height: 2px;
   background: oklch(0.55 0.22 25 / 0.2);
@@ -927,12 +1228,11 @@
 
 .recording-limit-bar-fill {
   height: 100%;
-  background: var(--destructive);
+  background: var(--danger);
   border-radius: 1px;
   transition: width 1s linear;
 }
 
-/* Slide-to-cancel track */
 .slide-cancel-track {
   position: relative;
   overflow: hidden;
@@ -946,23 +1246,21 @@
   justify-content: flex-end;
   padding-right: 12px;
   font-size: 11px;
-  color: var(--muted-foreground);
+  color: var(--text-secondary);
   opacity: 0;
   transition: opacity 0.2s;
   pointer-events: none;
 }
 
-/* When dragging left, show hint */
 .slide-cancel-dragging .slide-cancel-hint {
   opacity: 0.7;
 }
 
 .slide-cancel-threshold-reached .slide-cancel-hint {
   opacity: 1;
-  color: var(--destructive);
+  color: var(--danger);
 }
 
-/* Recording waveform visualizer */
 .recording-waveform {
   display: flex;
   align-items: center;
@@ -972,21 +1270,24 @@
   justify-content: center;
 }
 
-/* Sidebar conversation item hover border accent */
+/* ───────── Sidebar ───────── */
+
 .sidebar-conv-item {
   border-left: 2px solid transparent;
   transition: border-color 0.2s ease-out, background-color 0.2s ease-out, color 0.2s ease-out;
 }
 .sidebar-conv-item:hover {
-  border-left-color: var(--primary);
+  border-left-color: var(--brand);
 }
 
-/* Reaction count number transition */
+/* ───────── Reactions ───────── */
+
 .reaction-count {
   transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Respect reduced-motion preference */
+/* ───────── Reduced motion ───────── */
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

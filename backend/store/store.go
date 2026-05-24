@@ -10,8 +10,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"golang.org/x/crypto/bcrypt"
 	"fmt"
+	"golang.org/x/crypto/bcrypt"
 	"log"
 	"math/big"
 	"os"
@@ -588,6 +588,21 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	// Migration: oidc_users table for OIDC-authenticated users.
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS oidc_users (
+		sub TEXT PRIMARY KEY,
+		chat_username TEXT UNIQUE NOT NULL,
+		email TEXT DEFAULT '',
+		preferred_username TEXT DEFAULT '',
+		created_at INTEGER NOT NULL,
+		updated_at INTEGER NOT NULL
+	)`); err != nil {
+		log.Printf("store: migrate create oidc_users: %v", err)
+	}
+	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_oidc_users_chat_username ON oidc_users(chat_username)"); err != nil {
+		log.Printf("store: idx_oidc_users_chat_username: %v", err)
+	}
+
 	return nil
 }
 
@@ -998,8 +1013,18 @@ func sanitizeFTS5Query(q string) string {
 	return b.String()
 }
 
-// SearchMessages performs a full-text search over messages using FTS5.
+// SearchMessages performs an unscoped full-text search over messages using FTS5.
+// HTTP callers should use SearchMessagesForUser so private conversations are scoped.
 func (s *Store) SearchMessages(query string, roomID string, limit int) ([]SearchResult, error) {
+	return s.searchMessages(query, roomID, "", limit)
+}
+
+// SearchMessagesForUser performs a caller-scoped full-text search over messages.
+func (s *Store) SearchMessagesForUser(query, roomID, username string, limit int) ([]SearchResult, error) {
+	return s.searchMessages(query, roomID, strings.TrimSpace(username), limit)
+}
+
+func (s *Store) searchMessages(query, roomID, username string, limit int) ([]SearchResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -1016,7 +1041,21 @@ func (s *Store) SearchMessages(query string, roomID string, limit int) ([]Search
 	var err error
 
 	if roomID != "" {
-		rows, err = s.db.Query(`
+		if username != "" {
+			rows, err = s.db.Query(`
+					SELECT m.id, m.username, m.content, m.timestamp,
+						snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
+						bm25(messages_fts) AS rank
+					FROM messages_fts
+					JOIN messages m ON m.rowid = messages_fts.rowid
+					WHERE m.deleted = 0
+						AND messages_fts MATCH ?
+						AND messages_fts.room_id = ?
+						AND m.to_user = ''
+						AND m.group_name = ''
+					ORDER BY rank LIMIT ?`, query, roomID, limit)
+		} else {
+			rows, err = s.db.Query(`
 					SELECT m.id, m.username, m.content, m.timestamp,
 						snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
 						bm25(messages_fts) AS rank
@@ -1024,15 +1063,39 @@ func (s *Store) SearchMessages(query string, roomID string, limit int) ([]Search
 					JOIN messages m ON m.rowid = messages_fts.rowid
 					WHERE m.deleted = 0 AND messages_fts MATCH ? AND messages_fts.room_id = ?
 					ORDER BY rank LIMIT ?`, query, roomID, limit)
+		}
 	} else {
-		rows, err = s.db.Query(`
+		if username != "" {
+			rows, err = s.db.Query(`
 					SELECT m.id, m.username, m.content, m.timestamp,
 						snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
 						bm25(messages_fts) AS rank
 					FROM messages_fts
 					JOIN messages m ON m.rowid = messages_fts.rowid
-					WHERE messages_fts MATCH ?
+					WHERE m.deleted = 0
+						AND messages_fts MATCH ?
+						AND (
+							(m.to_user = '' AND m.group_name = '')
+							OR m.to_user = ?
+							OR (m.to_user != '' AND m.username = ?)
+							OR EXISTS (
+								SELECT 1
+								FROM group_members gm
+								WHERE gm.group_name = m.group_name
+									AND gm.username = ?
+							)
+						)
+					ORDER BY rank LIMIT ?`, query, username, username, username, limit)
+		} else {
+			rows, err = s.db.Query(`
+					SELECT m.id, m.username, m.content, m.timestamp,
+						snippet(messages_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet,
+						bm25(messages_fts) AS rank
+					FROM messages_fts
+					JOIN messages m ON m.rowid = messages_fts.rowid
+					WHERE m.deleted = 0 AND messages_fts MATCH ?
 					ORDER BY rank LIMIT ?`, query, limit)
+		}
 	}
 
 	if err != nil {
@@ -2856,6 +2919,22 @@ func (s *Store) VerifyUser(username, password string) (bool, error) {
 	return true, nil
 }
 
+// UserExists reports whether a local registered user owns the username.
+func (s *Store) UserExists(username string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var count int
+	err := s.db.QueryRow(
+		"SELECT COUNT(*) FROM users WHERE username = ?",
+		username,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // GenerateInviteCode creates a new random invite code for the given creator.
 func (s *Store) GenerateInviteCode(creator string, maxUses int) (string, error) {
 	s.mu.Lock()
@@ -2958,4 +3037,94 @@ func randomCode(length int) string {
 		result[i] = inviteCodeChars[n.Int64()]
 	}
 	return string(result)
+}
+
+// OIDCUser represents a user authenticated via OIDC (TokenDance ID).
+type OIDCUser struct {
+	Sub               string `json:"sub"`
+	ChatUsername      string `json:"chat_username"`
+	Email             string `json:"email"`
+	PreferredUsername string `json:"preferred_username"`
+	CreatedAt         int64  `json:"created_at"`
+	UpdatedAt         int64  `json:"updated_at"`
+}
+
+// UpsertOIDCUser inserts or updates an OIDC user mapping.
+func (s *Store) UpsertOIDCUser(sub, chatUsername, email, preferredUsername string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now().UnixMilli()
+
+	// Check if sub already exists.
+	var existingUsername string
+	err := s.db.QueryRow("SELECT chat_username FROM oidc_users WHERE sub = ?", sub).Scan(&existingUsername)
+	if err == nil {
+		// Update existing record.
+		_, err = s.db.Exec(
+			"UPDATE oidc_users SET email = ?, preferred_username = ?, updated_at = ? WHERE sub = ?",
+			email, preferredUsername, now, sub,
+		)
+		return err
+	}
+
+	// Handle username collision with suffix.
+	baseUsername := chatUsername
+	resolvedUsername := baseUsername
+	for attempt := 0; attempt < 5; attempt++ {
+		if attempt > 0 {
+			resolvedUsername = fmt.Sprintf("%s_%s_%d", baseUsername, sub[:min(8, len(sub))], attempt)
+		}
+		var count int
+		s.db.QueryRow("SELECT COUNT(*) FROM oidc_users WHERE chat_username = ?", resolvedUsername).Scan(&count)
+		if count == 0 {
+			s.db.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", resolvedUsername).Scan(&count)
+		}
+		if count == 0 {
+			break
+		}
+		if attempt == 4 {
+			resolvedUsername = fmt.Sprintf("%s_%s", baseUsername, sub[:min(8, len(sub))])
+			_ = s.db.QueryRow("SELECT COUNT(*) FROM oidc_users WHERE chat_username = ?", resolvedUsername).Scan(&count)
+			if count == 0 {
+				s.db.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", resolvedUsername).Scan(&count)
+			}
+		}
+	}
+
+	_, err = s.db.Exec(
+		"INSERT INTO oidc_users (sub, chat_username, email, preferred_username, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		sub, resolvedUsername, email, preferredUsername, now, now,
+	)
+	return err
+}
+
+// GetOIDCUserBySub retrieves an OIDC user by their OIDC sub claim.
+func (s *Store) GetOIDCUserBySub(sub string) (*OIDCUser, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var u OIDCUser
+	err := s.db.QueryRow(
+		"SELECT sub, chat_username, email, preferred_username, created_at, updated_at FROM oidc_users WHERE sub = ?",
+		sub,
+	).Scan(&u.Sub, &u.ChatUsername, &u.Email, &u.PreferredUsername, &u.CreatedAt, &u.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// GetOIDCUserByUsername retrieves an OIDC user by their chat username.
+func (s *Store) GetOIDCUserByUsername(username string) (*OIDCUser, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var u OIDCUser
+	err := s.db.QueryRow(
+		"SELECT sub, chat_username, email, preferred_username, created_at, updated_at FROM oidc_users WHERE chat_username = ?",
+		username,
+	).Scan(&u.Sub, &u.ChatUsername, &u.Email, &u.PreferredUsername, &u.CreatedAt, &u.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
 }

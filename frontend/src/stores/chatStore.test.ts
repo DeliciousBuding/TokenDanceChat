@@ -7,8 +7,8 @@ describe("chatStore", () => {
   });
 
   describe("connection state", () => {
-    it("starts at join view", () => {
-      expect(useChatStore.getState().view).toBe("join");
+    it("starts at chat view", () => {
+      expect(useChatStore.getState().view).toBe("chat");
     });
 
     it("sets username", () => {
@@ -419,7 +419,7 @@ describe("chatStore", () => {
       expect(s.username).toBe("");
       expect(s.connected).toBe(false);
       expect(s.messages).toHaveLength(0);
-      expect(s.view).toBe("join");
+      expect(s.view).toBe("chat");
     });
 
     it("resets all state fields including pendingImage, friends, groups", () => {
@@ -439,7 +439,7 @@ describe("chatStore", () => {
 
       useChatStore.getState().reset();
       const s = useChatStore.getState();
-      expect(s.view).toBe("join");
+      expect(s.view).toBe("chat");
       expect(s.username).toBe("");
       expect(s.connected).toBe(false);
       expect(s.messages).toHaveLength(0);
@@ -453,6 +453,41 @@ describe("chatStore", () => {
       expect(Object.keys(s.unreadByConversation)).toHaveLength(0);
       expect(s.currentChat).toEqual({ type: "public" });
       expect(s.replyTo).toBeNull();
+    });
+  });
+
+  describe("OIDC auth state", () => {
+    it("starts with oidcAuthenticated=false", () => {
+      const s = useChatStore.getState();
+      expect(s.oidcAuthenticated).toBe(false);
+      expect(s.oidcAccessToken).toBeNull();
+      expect(s.oidcRefreshToken).toBeNull();
+    });
+
+    it("setOidcAuth sets tokens and authenticated flag", () => {
+      useChatStore.getState().setOidcAuth("access-abc", "refresh-xyz");
+      const s = useChatStore.getState();
+      expect(s.oidcAuthenticated).toBe(true);
+      expect(s.oidcAccessToken).toBe("access-abc");
+      expect(s.oidcRefreshToken).toBe("refresh-xyz");
+    });
+
+    it("clearOidcAuth clears tokens and authenticated flag", () => {
+      useChatStore.getState().setOidcAuth("access", "refresh");
+      useChatStore.getState().clearOidcAuth();
+      const s = useChatStore.getState();
+      expect(s.oidcAuthenticated).toBe(false);
+      expect(s.oidcAccessToken).toBeNull();
+      expect(s.oidcRefreshToken).toBeNull();
+    });
+
+    it("reset clears OIDC state", () => {
+      useChatStore.getState().setOidcAuth("access", "refresh");
+      useChatStore.getState().reset();
+      const s = useChatStore.getState();
+      expect(s.oidcAuthenticated).toBe(false);
+      expect(s.oidcAccessToken).toBeNull();
+      expect(s.oidcRefreshToken).toBeNull();
     });
   });
 

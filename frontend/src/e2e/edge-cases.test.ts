@@ -219,7 +219,7 @@ test.describe("Edge Cases", () => {
     test("multiple DMs from same user only show once in sidebar", async ({
       page,
     }) => {
-      const name1 = await joinChat(page);
+      await joinChat(page);
 
       // Second user joins in a new tab.
       const page2 = await page.context().newPage();

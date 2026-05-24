@@ -202,7 +202,7 @@ describe("ChatInput", () => {
     });
 
     it("disconnected 时显示断连反馈消息", () => {
-      useChatStore.setState({ connected: false });
+      useChatStore.setState({ connected: false, username: "testuser" });
       renderChatInput();
       const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
       typeInTextarea(textarea, "Hello");
@@ -225,28 +225,21 @@ describe("ChatInput", () => {
       expect(onSend).not.toHaveBeenCalled();
     });
 
-    it("图片上传按钮存在", () => {
-      renderChatInput();
-      expect(screen.getByLabelText("上传图片")).toBeTruthy();
+    it("禁用状态下点击发送不会触发 onSend", () => {
+      const { onSend } = renderChatInput({ disabled: true });
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      typeInTextarea(textarea, "Hello world");
+      expect(onSend).not.toHaveBeenCalled();
     });
 
-    it("文件上传按钮存在", () => {
+    it("未登录预览态聚焦输入框时不渲染全屏格式化遮罩", () => {
+      useChatStore.setState({ username: "", connected: false });
       renderChatInput();
-      expect(screen.getByLabelText("上传文件")).toBeTruthy();
-    });
 
-    it("麦克风按钮存在", () => {
-      renderChatInput();
-      expect(screen.getByLabelText("录制语音")).toBeTruthy();
-    });
+      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      fireEvent.focus(textarea);
 
-    it("Markdown 格式化工具栏存在", () => {
-      renderChatInput();
-      expect(screen.getByLabelText("加粗")).toBeTruthy();
-      expect(screen.getByLabelText("斜体")).toBeTruthy();
-      expect(screen.getByLabelText("删除线")).toBeTruthy();
-      expect(screen.getByLabelText("代码")).toBeTruthy();
-      expect(screen.getByLabelText("引用")).toBeTruthy();
+      expect(document.querySelector(".fixed.inset-0.z-40")).toBeNull();
     });
 
     it("字符计数器显示", () => {
@@ -333,12 +326,12 @@ describe("ChatInput", () => {
       fireEvent.keyDown(textarea, { key: "ArrowDown" });
 
       const picoClawBtn = screen.getByText("PicoClaw").closest("button");
-      expect(picoClawBtn?.className).toContain("bg-accent");
+      expect(picoClawBtn?.className).toContain("bg-[var(--bg-hover)]");
 
       // ArrowUp back to first
       fireEvent.keyDown(textarea, { key: "ArrowUp" });
       const tokenBotBtn = screen.getByText("TokenBot").closest("button");
-      expect(tokenBotBtn?.className).toContain("bg-accent");
+      expect(tokenBotBtn?.className).toContain("bg-[var(--bg-hover)]");
     });
 
     it("Enter 在 mention 下拉中选择当前项", () => {
@@ -368,7 +361,7 @@ describe("ChatInput", () => {
   describe("文件拖拽 (file drag-and-drop)", () => {
     it("拖入文件时显示 drop overlay", () => {
       renderChatInput();
-      const container = document.querySelector(".relative.border-t")!;
+      const container = screen.getByTestId("chat-input");
 
       fireEvent.dragEnter(container);
       // Drop overlay text should appear
@@ -377,7 +370,7 @@ describe("ChatInput", () => {
 
     it("离开拖拽区域后 overlay 消失", () => {
       renderChatInput();
-      const container = document.querySelector(".relative.border-t")!;
+      const container = screen.getByTestId("chat-input");
 
       fireEvent.dragEnter(container);
       fireEvent.dragLeave(container);
@@ -387,7 +380,7 @@ describe("ChatInput", () => {
 
     it("拖拽超大文件显示错误提示", () => {
       renderChatInput();
-      const container = document.querySelector(".relative.border-t")!;
+      const container = screen.getByTestId("chat-input");
 
       const largeFile = new File([new ArrayBuffer(51 * 1024 * 1024)], "large.zip", {
         type: "application/zip",
@@ -405,7 +398,7 @@ describe("ChatInput", () => {
 
     it("dragOver 阻止默认行为", () => {
       renderChatInput();
-      const container = document.querySelector(".relative.border-t")!;
+      const container = screen.getByTestId("chat-input");
 
       // Just verify the handler runs without throwing
       fireEvent.dragOver(container);

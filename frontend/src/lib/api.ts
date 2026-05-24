@@ -412,6 +412,7 @@ class ChatAPI {
   private reconnectBaseDelay = 1000;
   private reconnectMaxDelay = 30000;
   private reconnectUsername: string | null = null;
+  private reconnectToken: string | null = null;
   private wasReconnecting = false;
   private connectGeneration = 0;
   private pendingJoin:
@@ -425,11 +426,12 @@ class ChatAPI {
     this.url = url;
   }
 
-  connect(username: string): Promise<void> {
+  connect(username: string, token?: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.ws?.close();
       const gen = ++this.connectGeneration;
       this.reconnectUsername = username;
+      this.reconnectToken = token ?? null;
       this.pendingJoin = { resolve, reject };
       this.ws = new WebSocket(this.url);
 
@@ -449,7 +451,9 @@ class ChatAPI {
         clearTimeout(timeout);
         if (!this.pendingJoin) return; // Timed out, ignore.
         this.reconnectAttempt = 0;
-        this.send({ type: "join", username });
+        const joinMsg: Record<string, unknown> = { type: "join", username };
+        if (token) joinMsg.token = token;
+        this.send(joinMsg);
       };
 
       this.ws.onmessage = (event) => {
@@ -478,6 +482,7 @@ class ChatAPI {
           // Handle kick while already connected — prevent reconnect loop.
           if (data.type === "kicked") {
             this.reconnectUsername = null;
+            this.reconnectToken = null;
             this.wasReconnecting = false;
           }
 
@@ -508,7 +513,11 @@ class ChatAPI {
             new ChatError(ErrorCode.CLOSED, "Connection closed"),
           );
           this.pendingJoin = null;
+          // Initial connection failed — do NOT auto-reconnect.
+          // The caller (tryAutoConnect or AuthModal) decides the next step.
+          return;
         }
+        // Established connection dropped — attempt automatic reconnection.
         this.attemptReconnect();
       };
 
@@ -555,7 +564,8 @@ class ChatAPI {
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectAttempt++;
-      this.connect(username).catch(() => {
+      const token = this.reconnectToken ?? undefined;
+      this.connect(username, token).catch(() => {
         // Error already logged in connect; onclose will trigger next attempt.
       });
     }, delay);
@@ -903,7 +913,11 @@ class ChatAPI {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const resp = await fetch("/api/upload", { method: "POST", body: formData });
+      const resp = await fetch("/api/upload", {
+        method: "POST",
+        headers: getSessionAuthHeaders(),
+        body: formData,
+      });
       if (!resp.ok) return null;
       const data = await resp.json() as { url: string };
       return data.url;
@@ -917,7 +931,11 @@ class ChatAPI {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("name", name);
-      const resp = await fetch("/api/upload/emoji", { method: "POST", body: formData });
+      const resp = await fetch("/api/emoji/upload", {
+        method: "POST",
+        headers: getSessionAuthHeaders(),
+        body: formData,
+      });
       if (!resp.ok) return null;
       const data = await resp.json() as { url: string };
       return data.url;
@@ -941,7 +959,9 @@ class ChatAPI {
   async exportChat(conversation: string, format: 'json' | 'text', username?: string): Promise<Blob> {
     const params = new URLSearchParams({ conversation, format });
     if (username) params.set("username", username);
-    const resp = await fetch(`/api/export?${params}`);
+    const resp = await fetch(`/api/export?${params}`, {
+      headers: getSessionAuthHeaders(),
+    });
     if (!resp.ok) {
       throw new Error("Export failed");
     }
@@ -952,7 +972,9 @@ class ChatAPI {
     try {
       const params = new URLSearchParams({ q: query });
       if (roomID) params.set("room", roomID);
-      const resp = await fetch(`/api/search?${params}`);
+      const resp = await fetch(`/api/search?${params}`, {
+        headers: getSessionAuthHeaders(),
+      });
       if (!resp.ok) return [];
       const data = await resp.json();
       return data.results ?? data as SearchResult[];
@@ -1036,6 +1058,8 @@ class ChatAPI {
   disconnect(): void {
     ++this.connectGeneration; // Stale onclose from old socket will be ignored
     this.wasReconnecting = false;
+    this.reconnectUsername = null;
+    this.reconnectToken = null;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -1060,14 +1084,43 @@ export const chatAPI = new ChatAPI(getDefaultWSURL());
 
 // --- Auth API (HTTP-based, not WebSocket) ---
 
+export const SESSION_TOKEN_STORAGE_KEY = "tokendance:sessionToken";
+
+export function getSessionToken(): string | null {
+  try {
+    return window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function persistSessionToken(token: string | null): void {
+  try {
+    if (token) {
+      window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, token);
+    } else {
+      window.localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // localStorage can be unavailable in restricted browser contexts.
+  }
+}
+
+export function getSessionAuthHeaders(): HeadersInit {
+  const token = getSessionToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export interface RegisterResponse {
   success: boolean;
   username: string;
+  session_token: string;
 }
 
 export interface LoginResponse {
   success: boolean;
   username: string;
+  session_token: string;
 }
 
 export interface InviteCode {
@@ -1111,7 +1164,7 @@ export async function loginUser(username: string, password: string): Promise<Log
 export async function generateInviteCode(username: string, maxUses: number = 5): Promise<{ code: string }> {
   const resp = await fetch("/api/invite/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getSessionAuthHeaders() },
     body: JSON.stringify({ username, max_uses: maxUses }),
   });
   if (!resp.ok) {
@@ -1122,11 +1175,80 @@ export async function generateInviteCode(username: string, maxUses: number = 5):
 }
 
 export async function listInviteCodes(username: string): Promise<InviteCode[]> {
-  const resp = await fetch(`/api/invite/list?username=${encodeURIComponent(username)}`);
+  const resp = await fetch(`/api/invite/list?username=${encodeURIComponent(username)}`, {
+    headers: getSessionAuthHeaders(),
+  });
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({ error: "Failed to list invite codes" }));
     throw new Error((data as { error?: string }).error || "Failed to list invite codes");
   }
   const json = await resp.json() as { codes: InviteCode[] };
   return json.codes || [];
+}
+
+export async function fetchPublicMessages(limit = 100): Promise<ChatMessage[]> {
+  try {
+    const params = new URLSearchParams({ limit: String(limit) });
+    const resp = await fetch(`/api/messages?${params}`);
+    if (!resp.ok) return [];
+    const data = await resp.json() as { messages?: ChatMessage[] };
+    return data.messages || [];
+  } catch {
+    return [];
+  }
+}
+
+// ─── OIDC (TokenDance ID) ──────────────────────────────────────────
+
+export interface OIDCConfig {
+  enabled: boolean;
+  issuer: string;
+  client_id: string;
+  redirect_uri: string;
+  auth_url: string;
+  token_url: string;
+}
+
+export interface OIDCExchangeResponse {
+  success: boolean;
+  username: string;
+  access_token: string;
+  refresh_token: string;
+  session_token: string;
+}
+
+export async function fetchOIDCConfig(): Promise<OIDCConfig> {
+  const resp = await fetch("/api/oidc/config");
+  if (!resp.ok) throw new Error("OIDC not available");
+  return (await resp.json()) as OIDCConfig;
+}
+
+export async function oidcExchangeCode(
+  code: string,
+  codeVerifier: string,
+): Promise<OIDCExchangeResponse> {
+  const resp = await fetch("/api/oidc/exchange", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, code_verifier: codeVerifier }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ error: "Token exchange failed" }));
+    throw new Error(
+      (data as { error?: string }).error || "Token exchange failed",
+    );
+  }
+  return (await resp.json()) as OIDCExchangeResponse;
+}
+
+export async function oidcRefreshToken(
+  refreshToken: string,
+): Promise<{ access_token: string; refresh_token: string }> {
+  const resp = await fetch("/api/oidc/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  if (!resp.ok) throw new Error("Token refresh failed");
+  return await resp.json();
 }

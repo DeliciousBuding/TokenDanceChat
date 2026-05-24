@@ -36,6 +36,11 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
     exclude: ['src/e2e/**', 'node_modules/**'],
+    server: {
+      deps: {
+        inline: ['@lobehub/icons', '@lobehub/ui'],
+      },
+    },
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],

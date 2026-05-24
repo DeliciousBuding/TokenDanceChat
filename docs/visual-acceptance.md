@@ -6,6 +6,7 @@ TokenDanceChat 是 AgentHub 的技术验证项目与可玩 Demo。视觉工作�
 
 - 主基调：明亮、克制的企业聊天 UI，风格参考 Feishu/Lark。
 - 交互手感：Telegram 级的输入框人机工程、可读的消息流、充足的移动端点击目标。
+- 材质方向：light-first 的克制液态玻璃只作为真实 UI 面板和控件材料使用，不做装饰性玻璃拟态。
 - 避免营销式 Hero 布局、装饰性卡片以及空洞的装饰空间。
 - 控件优先使用 lucide 图标；文字标签仅保留给需要明确语义的命令。
 
@@ -57,18 +58,18 @@ TokenDanceChat 是 AgentHub 的技术验证项目与可玩 Demo。视觉工作�
 针对本地生产构建运行可复用的 Playwright 验收脚本：
 
 ```powershell
-cd D:\Code\Projects\TokenDanceChat\frontend
+cd D:\Code\TokenDance\tokendance-chat\frontend
 npm run build
 
 # 在另一 shell 中通过 Go 后端托管构建产物。
-cd D:\Code\Projects\TokenDanceChat\backend
+cd D:\Code\TokenDance\tokendance-chat\backend
 $env:CHAT_DB_PATH = Join-Path $env:TEMP 'tdchat-visual-chat.db'
-$env:CHAT_FRONTEND_DIR = 'D:\Code\Projects\TokenDanceChat\frontend\dist'
+$env:CHAT_FRONTEND_DIR = 'D:\Code\TokenDance\tokendance-chat\frontend\dist'
 $env:CHAT_ADDR = ':8091'
 go run .
 
 # 随后采集截图与指标。
-cd D:\Code\Projects\TokenDanceChat\frontend
+cd D:\Code\TokenDance\tokendance-chat\frontend
 $env:VISUAL_BASE_URL = 'http://127.0.0.1:8091'
 npm run visual:acceptance
 ```
@@ -99,6 +100,26 @@ npm run visual:acceptance
 - 打开群组信息面板挤压了桌面标题图标按钮，导致定宽控件缩至约 30px；标题按钮现已通过 `flex-shrink-0` 保持 44px 下限。
 - 手动截图审阅随后发现桌面群组标题换行及首次群组空状态过于稀疏；最终脚本门控桌面标题单行稳定性及可见群组空状态内容。
 
+## 2026-05-25 验收
+
+最新通过的截图验收：
+
+- 输出目录：`C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-24T19-07-39-625Z`
+- 基线：由 Go 后端在 `http://127.0.0.1:18082` 托管生产构建，使用干净临时 SQLite 数据库。
+- 场景：七张截图，含 `desktop-light-group-info`、`mobile-light-format`。
+- 桌面 light 1440x900：textarea 1102x24px，输入框 96px，7 条可见消息，侧边栏模型预览 4 张，在线用户区域顶部 392px，无水平溢出，无控制台错误。
+- 桌面 light 群组信息 1440x900：右侧面板 384x900px 且右对齐，Webhook 行、rotate 按钮、audit log 均为 1，成员 1 行，一次性 secret 可见，群组空状态可见，侧边栏在线用户区域顶部 400px，无小控件门槛问题，无控制台错误。
+- 桌面 dark 1440x900：textarea 1102x24px，输入框 96px，7 条可见消息，侧边栏模型预览 4 张，在线用户区域顶部 392px，无水平溢出，无控制台错误。
+- 平板 light 768x1024：textarea 742x24px，输入框 104px，移动端标题宽度 580px，7 条可见消息，无水平溢出，无控制台错误。
+- 移动端 light/dark/format 390x844：textarea 364x24px，输入框 104px，标题宽度 202px 且 `公共聊天` 未截断，5 条可见消息，无水平溢出，无控制台错误。
+- 截图审阅确认：公共预览不再有全屏格式化遮罩挡住「加入聊天」，群组管理面板的 Webhook 和审计控件可读，移动端输入框和标题保持可用。
+
+截图验收捕获并修复了实际实现问题：
+
+- 未登录公共预览聚焦输入框时会打开全屏透明格式化遮罩，阻断 header 的「加入聊天」；现在 composer popover 只在已登录且输入框可用时打开。
+- 前端 `index.html` 引入 Google Fonts，但 Go 后端 runtime CSP 不允许该来源；现在前端和后端 CSP 对齐为系统字体，不再产生字体相关控制台错误。
+- 桌面侧边栏在线用户区域低于视觉门槛；将在线用户区移到 AI 助手区之前后，最新验收中桌面顶部稳定在 392px，group-info 场景为 400px。
+
 ## 当前参考 Prompt
 
 在图像生成工具与 API Key 可用时，与 `gpt-image-2` 配合使用。将输出视为视觉方向参考，而非直接照搬的源素材，且绝不替代真实浏览器截图验收。
@@ -109,10 +130,10 @@ Asset type: product UI reference for a web chat app
 Primary request: create a polished desktop and mobile chat interface reference for TokenDanceChat, an AgentHub validation demo where AI agents are contacts in an enterprise IM.
 Style/medium: high-fidelity SaaS product UI mockup, restrained Feishu/Lark enterprise workspace with Telegram-like message flow.
 Composition/framing: show one desktop 1440x900 chat workspace and one mobile 390x844 chat screen side by side; desktop has sidebar, conversation header, message transcript, and composer; mobile focuses on readable transcript and compact composer.
-Color palette: light mode first, warm neutral surfaces, one confident red/coral primary accent, subtle borders, dark mode variant hinted but not dominant.
+Color palette: light mode first, cool neutral canvas, white translucent UI materials, TokenDance plum/moss accents, subtle borders, dark mode variant hinted but not dominant.
 Typography: system UI, readable 14-16px body text, compact metadata, no tiny unreadable labels.
 Controls: lucide-style icon buttons, 44px mobile tap targets, compact but not cramped composer, clear send button, restrained toolbar.
-Constraints: no marketing hero, no decorative blob backgrounds, no glassmorphism, no fake brand logos, no unreadable microtext, no overlapping UI, no emoji as primary icons.
+Constraints: no marketing hero, no decorative blob backgrounds, restrained liquid glass only as functional UI material, no decorative glassmorphism, no fake brand logos, no unreadable microtext, no overlapping UI, no emoji as primary icons.
 ```
 
 ## 审查说明

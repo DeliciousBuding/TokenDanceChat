@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,13 +19,15 @@ import (
 
 // mockStore is a test implementation of the Store interface.
 type mockStore struct {
-	messages    []StoredMessage
-	rooms       []StoredRoom
-	groupRoles  map[string]string
-	webhooks    []store.Webhook
-	webhookByID map[string]store.Webhook
+	messages     []StoredMessage
+	rooms        []StoredRoom
+	groupRoles   map[string]string
+	webhooks     []store.Webhook
+	webhookByID  map[string]store.Webhook
 	auditLogs    []store.WebhookAuditLog
 	customEmojis []store.CustomEmoji
+	oidcUsers    map[string]*store.OIDCUser
+	users        map[string]bool
 
 	// Configurable return values for state restoration tests.
 	allFriends  map[string][]string
@@ -168,6 +171,9 @@ func (e *mockError) Error() string { return e.msg }
 func (m *mockStore) SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error) {
 	return nil, nil
 }
+func (m *mockStore) SearchMessagesForUser(query, roomID, username string, limit int) ([]store.SearchResult, error) {
+	return m.SearchMessages(query, roomID, limit)
+}
 func (m *mockStore) AddFriend(username, friend string) error                      { return nil }
 func (m *mockStore) RemoveFriend(username, friend string) error                   { return nil }
 func (m *mockStore) GetAllFriends() map[string][]string                           { return m.allFriends }
@@ -205,9 +211,9 @@ func (m *mockStore) UpsertUserProfile(username, displayName, avatarURL, bio, sta
 func (m *mockStore) GetUserProfile(username string) (*store.UserProfile, error) {
 	return &store.UserProfile{Username: username}, nil
 }
-func (m *mockStore) UpdateUserStatus(username, status string) error                 { return nil }
-func (m *mockStore) UpdateUserLastSeen(username string) error                       { return nil }
-func (m *mockStore) GetAllUserProfiles() ([]store.UserProfile, error)               { return m.allProfiles, nil }
+func (m *mockStore) UpdateUserStatus(username, status string) error   { return nil }
+func (m *mockStore) UpdateUserLastSeen(username string) error         { return nil }
+func (m *mockStore) GetAllUserProfiles() ([]store.UserProfile, error) { return m.allProfiles, nil }
 func (m *mockStore) CreatePoll(poll *Poll) error {
 	if m.polls == nil {
 		m.polls = make(map[string]*Poll)
@@ -295,7 +301,7 @@ func (m *mockStore) GetGroupMemberRole(groupName, username string) (string, erro
 	}
 	return "member", nil
 }
-func (m *mockStore) GetGroupOwner(groupName string) (string, error)                     { return "", nil }
+func (m *mockStore) GetGroupOwner(groupName string) (string, error) { return "", nil }
 func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error {
 	m.customEmojis = append(m.customEmojis, store.CustomEmoji{
 		ID: "emoji-" + name, Name: name, URL: url, Uploader: uploader, RoomID: roomID,
@@ -315,6 +321,12 @@ func (m *mockStore) GetCallHistory(username string, limit int) ([]store.CallReco
 }
 func (m *mockStore) RegisterUser(username, passwordHash, inviteCode string) error { return nil }
 func (m *mockStore) VerifyUser(username, password string) (bool, error)           { return true, nil }
+func (m *mockStore) UserExists(username string) (bool, error) {
+	if m.users == nil {
+		return false, nil
+	}
+	return m.users[username], nil
+}
 func (m *mockStore) GenerateInviteCode(creator string, maxUses int) (string, error) {
 	return "TESTCODE", nil
 }
@@ -417,6 +429,179 @@ func (m *mockStore) VerifyWebhookSecret(url, secret string) (*store.Webhook, boo
 		}
 	}
 	return nil, false, nil
+}
+
+func (m *mockStore) UpsertOIDCUser(sub, chatUsername, email, preferredUsername string) error {
+	if m.oidcUsers == nil {
+		m.oidcUsers = make(map[string]*store.OIDCUser)
+	}
+	m.oidcUsers[chatUsername] = &store.OIDCUser{
+		Sub:               sub,
+		ChatUsername:      chatUsername,
+		Email:             email,
+		PreferredUsername: preferredUsername,
+	}
+	return nil
+}
+func (m *mockStore) GetOIDCUserBySub(sub string) (*store.OIDCUser, error) {
+	for _, user := range m.oidcUsers {
+		if user.Sub == sub {
+			return user, nil
+		}
+	}
+	return nil, fmt.Errorf("not found")
+}
+func (m *mockStore) GetOIDCUserByUsername(username string) (*store.OIDCUser, error) {
+	if user, ok := m.oidcUsers[username]; ok {
+		return user, nil
+	}
+	return nil, fmt.Errorf("not found")
+}
+
+type mockSessionVerifier struct {
+	validTokens map[string]string
+}
+
+func (m mockSessionVerifier) VerifySessionJoinToken(username, token string) error {
+	if m.validTokens[token] != username {
+		return fmt.Errorf("invalid session token")
+	}
+	return nil
+}
+
+func TestHandleJoinRequiresTokenForOIDCUser(t *testing.T) {
+	ms := &mockStore{
+		oidcUsers: map[string]*store.OIDCUser{
+			"alice": {Sub: "oidc-sub-alice", ChatUsername: "alice"},
+		},
+	}
+	h := New(ms, nil, nil, "")
+	client := &Client{hub: h, send: make(chan []byte, 4), currentRoomID: h.DefaultRoomID()}
+
+	client.handleJoin(Message{Type: "join", Username: "alice"})
+
+	if client.username != "" {
+		t.Fatalf("expected OIDC-linked username without token to be rejected, got joined username %q", client.username)
+	}
+
+	select {
+	case raw := <-client.send:
+		var got Message
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatalf("join error payload was not JSON: %v", err)
+		}
+		if got.Type != "error" || got.ErrorCode != "OIDC_REQUIRED" {
+			t.Fatalf("expected OIDC_REQUIRED error, got type=%q code=%q content=%q", got.Type, got.ErrorCode, got.Content)
+		}
+	default:
+		t.Fatal("expected OIDC_REQUIRED error message")
+	}
+
+	select {
+	case <-h.register:
+		t.Fatal("expected rejected OIDC join not to register the client")
+	default:
+	}
+}
+
+func TestHandleJoinRequiresSessionTokenForRegisteredUser(t *testing.T) {
+	ms := &mockStore{users: map[string]bool{"alice": true}}
+	h := New(ms, nil, nil, "")
+	client := &Client{hub: h, send: make(chan []byte, 4), currentRoomID: h.DefaultRoomID()}
+
+	client.handleJoin(Message{Type: "join", Username: "alice"})
+
+	if client.username != "" {
+		t.Fatalf("expected registered username without token to be rejected, got joined username %q", client.username)
+	}
+
+	select {
+	case raw := <-client.send:
+		var got Message
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatalf("join error payload was not JSON: %v", err)
+		}
+		if got.Type != "error" || got.ErrorCode != "AUTH_REQUIRED" {
+			t.Fatalf("expected AUTH_REQUIRED error, got type=%q code=%q content=%q", got.Type, got.ErrorCode, got.Content)
+		}
+	default:
+		t.Fatal("expected AUTH_REQUIRED error message")
+	}
+
+	select {
+	case <-h.register:
+		t.Fatal("expected rejected registered-user join not to register the client")
+	default:
+	}
+}
+
+func TestHandleJoinRejectsWrongSessionTokenForRegisteredUser(t *testing.T) {
+	ms := &mockStore{users: map[string]bool{"alice": true, "bob": true}}
+	h := New(ms, nil, nil, "")
+	h.SetSessionTokenVerifier(mockSessionVerifier{validTokens: map[string]string{"bob-token": "bob"}})
+	client := &Client{hub: h, send: make(chan []byte, 4), currentRoomID: h.DefaultRoomID()}
+
+	client.handleJoin(Message{Type: "join", Username: "alice", Token: "bob-token"})
+
+	if client.username != "" {
+		t.Fatalf("expected registered username with wrong token to be rejected, got joined username %q", client.username)
+	}
+
+	select {
+	case raw := <-client.send:
+		var got Message
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatalf("join error payload was not JSON: %v", err)
+		}
+		if got.Type != "error" || got.ErrorCode != "AUTH_FAILED" {
+			t.Fatalf("expected AUTH_FAILED error, got type=%q code=%q content=%q", got.Type, got.ErrorCode, got.Content)
+		}
+	default:
+		t.Fatal("expected AUTH_FAILED error message")
+	}
+}
+
+func TestHandleJoinAcceptsSessionTokenForRegisteredUser(t *testing.T) {
+	ms := &mockStore{users: map[string]bool{"alice": true}}
+	h := New(ms, nil, nil, "")
+	h.SetSessionTokenVerifier(mockSessionVerifier{validTokens: map[string]string{"alice-token": "alice"}})
+	client := &Client{hub: h, send: make(chan []byte, 8), currentRoomID: h.DefaultRoomID()}
+
+	client.handleJoin(Message{Type: "join", Username: "alice", Token: "alice-token"})
+
+	if client.username != "alice" {
+		t.Fatalf("expected registered username with valid token to join, got %q", client.username)
+	}
+
+	select {
+	case got := <-h.register:
+		if got != client {
+			t.Fatal("expected registered client on hub register channel")
+		}
+	default:
+		t.Fatal("expected valid session join to register the client")
+	}
+}
+
+func TestHandleJoinAllowsGuestWithoutToken(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+	client := &Client{hub: h, send: make(chan []byte, 8), currentRoomID: h.DefaultRoomID()}
+
+	client.handleJoin(Message{Type: "join", Username: "guestuser"})
+
+	if client.username != "guestuser" {
+		t.Fatalf("expected unknown username to join as guest, got %q", client.username)
+	}
+
+	select {
+	case got := <-h.register:
+		if got != client {
+			t.Fatal("expected guest client on hub register channel")
+		}
+	default:
+		t.Fatal("expected guest join to register the client")
+	}
 }
 
 func TestNew(t *testing.T) {
@@ -5025,13 +5210,13 @@ func TestVotePoll(t *testing.T) {
 
 	// Seed a poll in the store.
 	poll := &Poll{
-		ID:      "poll-vote-1",
-		RoomID:  "room-1",
-		Creator: "alice",
+		ID:       "poll-vote-1",
+		RoomID:   "room-1",
+		Creator:  "alice",
 		Question: "Yes or No?",
-		Options: []string{"Yes", "No"},
-		Votes:   make(map[int]int),
-		Voters:  make(map[int][]string),
+		Options:  []string{"Yes", "No"},
+		Votes:    make(map[int]int),
+		Voters:   make(map[int][]string),
 	}
 	ms.CreatePoll(poll)
 
@@ -5085,13 +5270,13 @@ func TestClosePoll(t *testing.T) {
 
 	// Seed a poll owned by alice.
 	poll := &Poll{
-		ID:      "poll-close-1",
-		RoomID:  "room-1",
-		Creator: "alice",
+		ID:       "poll-close-1",
+		RoomID:   "room-1",
+		Creator:  "alice",
 		Question: "Should we proceed?",
-		Options: []string{"Yes", "No"},
-		Votes:   map[int]int{0: 3, 1: 1},
-		Voters:  map[int][]string{0: {"a", "b", "c"}, 1: {"d"}},
+		Options:  []string{"Yes", "No"},
+		Votes:    map[int]int{0: 3, 1: 1},
+		Voters:   map[int][]string{0: {"a", "b", "c"}, 1: {"d"}},
 	}
 	ms.CreatePoll(poll)
 
@@ -5148,11 +5333,11 @@ func TestClosePollNotOwner(t *testing.T) {
 
 	// Seed a poll owned by alice.
 	poll := &Poll{
-		ID:      "poll-owner-1",
-		RoomID:  "room-1",
-		Creator: "alice",
+		ID:       "poll-owner-1",
+		RoomID:   "room-1",
+		Creator:  "alice",
 		Question: "Test?",
-		Options: []string{"A", "B"},
+		Options:  []string{"A", "B"},
 	}
 	ms.CreatePoll(poll)
 
@@ -5188,13 +5373,13 @@ func TestPollVoteUpdate(t *testing.T) {
 	defer h.Stop()
 
 	poll := &Poll{
-		ID:      "poll-vu-1",
-		RoomID:  "room-1",
-		Creator: "alice",
+		ID:       "poll-vu-1",
+		RoomID:   "room-1",
+		Creator:  "alice",
 		Question: "Pick one",
-		Options: []string{"Option A", "Option B", "Option C"},
-		Votes:   map[int]int{},
-		Voters:  map[int][]string{},
+		Options:  []string{"Option A", "Option B", "Option C"},
+		Votes:    map[int]int{},
+		Voters:   map[int][]string{},
 	}
 	ms.CreatePoll(poll)
 

@@ -311,6 +311,36 @@ func (c *Client) handleJoin(msg Message) {
 		return
 	}
 
+	if _, err := c.hub.store.GetOIDCUserByUsername(username); err == nil {
+		if msg.Token == "" {
+			c.sendJoinError("OIDC authentication required", "OIDC_REQUIRED")
+			return
+		}
+		if err := c.hub.verifyOIDCJoinToken(username, msg.Token); err != nil {
+			c.sendJoinError("OIDC authentication failed", "OIDC_AUTH_FAILED")
+			return
+		}
+	} else {
+		registered, err := c.hub.store.UserExists(username)
+		if err != nil {
+			c.sendJoinError("authentication lookup failed", "AUTH_FAILED")
+			return
+		}
+		if registered {
+			if msg.Token == "" {
+				c.sendJoinError("authentication required", "AUTH_REQUIRED")
+				return
+			}
+			if err := c.hub.verifySessionJoinToken(username, msg.Token); err != nil {
+				c.sendJoinError("authentication failed", "AUTH_FAILED")
+				return
+			}
+		} else if msg.Token != "" {
+			c.sendJoinError("authentication failed", "AUTH_FAILED")
+			return
+		}
+	}
+
 	c.username = username
 	c.hub.SetLastSeen(c.username, time.Now().UnixMilli())
 	c.hub.register <- c
@@ -457,6 +487,18 @@ func (c *Client) handleJoin(msg Message) {
 	}
 }
 
+func (c *Client) sendJoinError(content, code string) {
+	errMsg, _ := json.Marshal(Message{
+		Type:      "error",
+		Content:   content,
+		ErrorCode: code,
+	})
+	select {
+	case c.send <- errMsg:
+	default:
+	}
+}
+
 func (c *Client) handleChatMessage(msg Message) {
 	if c.username == "" {
 		errMsg, _ := json.Marshal(Message{
@@ -599,8 +641,8 @@ func (c *Client) handleChatMessage(msg Message) {
 				go func() {
 					defer c.botResponding.Store(false)
 					ctxPC, cancelPC := context.WithTimeout(context.Background(), 60*time.Second)
-				defer cancelPC()
-				c.handleAgentResponsePicoClaw(ctxPC, content, currentRoom)
+					defer cancelPC()
+					c.handleAgentResponsePicoClaw(ctxPC, content, currentRoom)
 				}()
 			}
 		} else {

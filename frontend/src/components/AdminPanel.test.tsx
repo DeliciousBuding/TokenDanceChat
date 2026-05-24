@@ -18,6 +18,7 @@ const mockStats = {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  window.localStorage.clear();
   globalThis.fetch = vi.fn().mockResolvedValue({
     json: () => Promise.resolve(mockStats),
   });
@@ -34,10 +35,14 @@ describe("AdminPanel", () => {
   });
 
   it("renders admin dashboard when open", async () => {
+    window.localStorage.setItem("tokendance:sessionToken", "session-token-1");
     render(<AdminPanel open={true} onClose={vi.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByText("Admin Dashboard")).toBeTruthy();
+    });
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/admin/stats", {
+      headers: { Authorization: "Bearer session-token-1" },
     });
   });
 

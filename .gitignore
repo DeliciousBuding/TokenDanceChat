@@ -20,6 +20,7 @@ data/
 .env.local
 .env.*
 !.env.example
+*.local
 
 # Local handoff / private operations notes
 HANDOFF.md
@@ -29,6 +30,7 @@ server-secrets/
 
 # Local git worktrees
 .worktrees/
+.trash/
 
 # IDE
 .idea/

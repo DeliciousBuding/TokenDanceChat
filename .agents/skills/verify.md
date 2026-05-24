@@ -118,19 +118,8 @@ ESLint must pass with **0 errors**.
 
 Must produce **zero output** to pass. Run from repo root before every commit.
 
-```powershell
-# Server nicknames / SSH aliases
-git grep -n -E '\b(hk1|hk2|us1|us2|us3|gz1)\b' -- ':!.git' ':!node_modules' ':!AGENTS.md'
-
-# Internal ports
-git grep -n -E ':(3221)\b' -- ':!.git' ':!node_modules' ':!AGENTS.md'
-
-# Passwords and API keys (4+ digit password or sk- prefix tokens)
-git grep -n -E 'password.*[0-9]{4,}|sk-[a-zA-Z0-9]{20,}' -- ':!.git' ':!node_modules' ':!AGENTS.md'
-
-# Commit message leak audit
-git log --oneline --all --grep='hk1|hk2|3221'
-```
+Run the canonical submit-time leak scan commands from `AGENTS.md`.
+They must produce zero output, except for explicitly documented exclusions.
 
 If any command produces output: stop, remediate, do NOT push. Remediation requires desensitizing the file(s) + `git filter-branch` history rewrite + force push (per AGENTS.md Section "红线").
 
