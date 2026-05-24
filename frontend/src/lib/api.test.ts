@@ -8,6 +8,7 @@ import {
   generateInviteCode,
   listInviteCodes,
 } from "@/lib/api";
+import type { SearchResult } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Mock global fetch
@@ -1804,5 +1805,358 @@ describe("chatAPI group call room operations", () => {
       room_id: "room-1",
     });
     spy.mockRestore();
+  });
+});
+
+// ===========================================================================
+// chatAPI HTTP method — fetchLinkPreview
+// ===========================================================================
+describe("chatAPI fetchLinkPreview", () => {
+  afterEach(() => {
+    chatAPI.disconnect();
+  });
+
+  it("GETs /api/link-preview with URL-encoded url param", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ title: "Example", description: "desc", image: "img.png", url: "https://example.com" }),
+    } as unknown as Response);
+
+    await chatAPI.fetchLinkPreview("https://example.com/path?q=1");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/link-preview?url=https%3A%2F%2Fexample.com%2Fpath%3Fq%3D1");
+  });
+
+  it("returns parsed LinkPreviewData on success", async () => {
+    const preview = { title: "T", description: "D", image: "img.jpg", url: "https://a.com", site_name: "A" };
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => preview,
+    } as unknown as Response);
+
+    const result = await chatAPI.fetchLinkPreview("https://a.com");
+    expect(result).toEqual(preview);
+  });
+
+  it("returns null when response is not ok", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({}),
+    } as unknown as Response);
+
+    const result = await chatAPI.fetchLinkPreview("https://bad.com");
+    expect(result).toBeNull();
+  });
+
+  it("returns null on network error", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+    const result = await chatAPI.fetchLinkPreview("https://fail.com");
+    expect(result).toBeNull();
+  });
+});
+
+// ===========================================================================
+// chatAPI HTTP method — uploadImage
+// ===========================================================================
+describe("chatAPI uploadImage", () => {
+  afterEach(() => {
+    chatAPI.disconnect();
+  });
+
+  it("POSTs to /api/upload with the file in FormData", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ url: "https://cdn.example.com/img.png" }),
+    } as unknown as Response);
+
+    const file = new File(["content"], "test.png", { type: "image/png" });
+    await chatAPI.uploadImage(file);
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/upload");
+    expect(init.method).toBe("POST");
+    const fd = init.body as FormData;
+    expect(fd.get("file")).toBe(file);
+  });
+
+  it("returns the url string on success", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ url: "https://cdn.example.com/uploaded.png" }),
+    } as unknown as Response);
+
+    const file = new File(["data"], "photo.jpg");
+    const result = await chatAPI.uploadImage(file);
+    expect(result).toBe("https://cdn.example.com/uploaded.png");
+  });
+
+  it("returns null when response is not ok", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 413,
+      json: async () => ({ error: "File too large" }),
+    } as unknown as Response);
+
+    const file = new File(["big"], "big.bin");
+    const result = await chatAPI.uploadImage(file);
+    expect(result).toBeNull();
+  });
+
+  it("returns null on network error", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("Upload failed"));
+
+    const file = new File(["x"], "f.txt");
+    const result = await chatAPI.uploadImage(file);
+    expect(result).toBeNull();
+  });
+});
+
+// ===========================================================================
+// chatAPI HTTP method — uploadEmoji
+// ===========================================================================
+describe("chatAPI uploadEmoji", () => {
+  afterEach(() => {
+    chatAPI.disconnect();
+  });
+
+  it("POSTs to /api/upload/emoji with file and name in FormData", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ url: "https://cdn.example.com/emoji/cool.gif" }),
+    } as unknown as Response);
+
+    const file = new File(["gif-data"], "cool.gif", { type: "image/gif" });
+    await chatAPI.uploadEmoji(file, "cool_emoji");
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/upload/emoji");
+    expect(init.method).toBe("POST");
+    const fd = init.body as FormData;
+    expect(fd.get("file")).toBe(file);
+    expect(fd.get("name")).toBe("cool_emoji");
+  });
+
+  it("returns the url string on success", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ url: "https://cdn.example.com/e/cool.gif" }),
+    } as unknown as Response);
+
+    const file = new File(["gif"], "e.gif");
+    const result = await chatAPI.uploadEmoji(file, "my_emoji");
+    expect(result).toBe("https://cdn.example.com/e/cool.gif");
+  });
+
+  it("returns null when response is not ok", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: "Invalid emoji" }),
+    } as unknown as Response);
+
+    const result = await chatAPI.uploadEmoji(new File(["x"], "bad.txt"), "bad");
+    expect(result).toBeNull();
+  });
+
+  it("returns null on network error", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("Network down"));
+
+    const result = await chatAPI.uploadEmoji(new File(["x"], "e.gif"), "emoji");
+    expect(result).toBeNull();
+  });
+});
+
+// ===========================================================================
+// chatAPI HTTP method — exportChat
+// ===========================================================================
+describe("chatAPI exportChat", () => {
+  afterEach(() => {
+    chatAPI.disconnect();
+  });
+
+  it("GETs /api/export with conversation and format params", async () => {
+    const blob = new Blob(["chat data"], { type: "application/json" });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      blob: async () => blob,
+    } as unknown as Response);
+
+    await chatAPI.exportChat("dm:alice", "json");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain("/api/export?");
+    expect(url).toContain("conversation=dm%3Aalice");
+    expect(url).toContain("format=json");
+  });
+
+  it("includes username param when provided", async () => {
+    const blob = new Blob(["data"], { type: "text/plain" });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      blob: async () => blob,
+    } as unknown as Response);
+
+    await chatAPI.exportChat("group:devs", "text", "admin");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain("username=admin");
+  });
+
+  it("does not include username param when omitted", async () => {
+    const blob = new Blob(["data"], { type: "application/json" });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      blob: async () => blob,
+    } as unknown as Response);
+
+    await chatAPI.exportChat("dm:bob", "json");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).not.toContain("username=");
+  });
+
+  it("returns the Blob on success", async () => {
+    const blob = new Blob(["exported"], { type: "application/json" });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      blob: async () => blob,
+    } as unknown as Response);
+
+    const result = await chatAPI.exportChat("dm:alice", "json");
+    expect(result).toBe(blob);
+  });
+
+  it("throws 'Export failed' when response is not ok", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+    } as unknown as Response);
+
+    await expect(chatAPI.exportChat("dm:alice", "json")).rejects.toThrow("Export failed");
+  });
+
+  it("supports text format", async () => {
+    const blob = new Blob(["plain text"], { type: "text/plain" });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      blob: async () => blob,
+    } as unknown as Response);
+
+    const result = await chatAPI.exportChat("dm:bob", "text");
+    expect(result).toBe(blob);
+  });
+});
+
+// ===========================================================================
+// chatAPI HTTP method — searchMessages
+// ===========================================================================
+describe("chatAPI searchMessages", () => {
+  afterEach(() => {
+    chatAPI.disconnect();
+  });
+
+  const sampleResults: SearchResult[] = [
+    { id: "m1", username: "alice", content: "hello world", timestamp: 1000, snippet: "hello...", rank: 1 },
+  ];
+
+  it("GETs /api/search with query param", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ results: sampleResults }),
+    } as unknown as Response);
+
+    await chatAPI.searchMessages("hello");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain("/api/search?");
+    expect(url).toContain("q=hello");
+  });
+
+  it("includes room param when roomID is provided", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ results: [] }),
+    } as unknown as Response);
+
+    await chatAPI.searchMessages("test", "room-1");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain("room=room-1");
+  });
+
+  it("returns results array from data.results on success", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ results: sampleResults }),
+    } as unknown as Response);
+
+    const result = await chatAPI.searchMessages("hello");
+    expect(result).toEqual(sampleResults);
+  });
+
+  it("falls back to data as array when results field is missing", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => sampleResults,
+    } as unknown as Response);
+
+    const result = await chatAPI.searchMessages("hello");
+    expect(result).toEqual(sampleResults);
+  });
+
+  it("returns empty array when response is not ok", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: "fail" }),
+    } as unknown as Response);
+
+    const result = await chatAPI.searchMessages("query");
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty array on network error", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("Offline"));
+
+    const result = await chatAPI.searchMessages("query");
+    expect(result).toEqual([]);
+  });
+
+  it("URL-encodes the search query", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ results: [] }),
+    } as unknown as Response);
+
+    await chatAPI.searchMessages("hello world & special");
+
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toContain("q=hello+world+%26+special");
+  });
+});
+
+// ===========================================================================
+// chatAPI disconnect — reconnectTimer branch coverage
+// ===========================================================================
+describe("chatAPI disconnect with reconnect timer", () => {
+  afterEach(() => {
+    chatAPI.disconnect();
+  });
+
+  it("clears the reconnect timer when disconnect is called during reconnection", () => {
+    const fakeTimer = setTimeout(() => {}, 99999);
+    (chatAPI as any).reconnectTimer = fakeTimer;
+
+    const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+
+    chatAPI.disconnect();
+
+    expect(clearSpy).toHaveBeenCalledWith(fakeTimer);
+    expect((chatAPI as any).reconnectTimer).toBeNull();
+
+    clearSpy.mockRestore();
   });
 });
