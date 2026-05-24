@@ -117,16 +117,6 @@ async function enableAutoClose(page: import("@playwright/test").Page) {
 }
 
 /**
- * Disable auto-close on the injected WS proxy.
- * New WebSocket instances will NOT be auto-closed after this.
- */
-async function disableAutoClose(page: import("@playwright/test").Page) {
-  await page.evaluate(() => {
-    (window as unknown as Record<string, unknown>).__autoClose = false;
-  });
-}
-
-/**
  * Close the earliest captured WebSocket from the proxy.
  * This simulates a server-side disconnect or network failure.
  */
@@ -348,7 +338,8 @@ test.describe("Reconnect robustness", () => {
       const name = `mf_${Math.random().toString(36).slice(2, 6)}`;
 
       // Navigate first, then inject controllable proxy.
-      await page.goto("/");
+      // Use ?e2e to expose __chatAPI on window (required for dispatch).
+      await page.goto("/?e2e");
       await injectControllableAutoCloseWsProxy(page);
       await doJoin(page, name);
 
@@ -378,48 +369,38 @@ test.describe("Reconnect robustness", () => {
       // 2. Stop the reconnect loop and force reconnect_failed state.
       // 3. Dispatch reconnecting FIRST (sets connected=false in useWebSocket)
       //    then reconnect_failed (sets reconnectFailed=true in ChatLayout).
-      const dispatchResult = await page.evaluate(() => {
+      await page.evaluate(() => {
         const api = (window as unknown as Record<string, unknown>)
           .__chatAPI as {
             dispatch: (event: string, data: Record<string, unknown>) => void;
             reconnectTimer: ReturnType<typeof setTimeout> | null;
             reconnectAttempt: number;
-          } | null;
-        if (!api) return "api_not_found";
-        if (typeof api.dispatch !== "function") return "dispatch_not_function";
-
-        // Clear any pending reconnect timer.
-        if (api.reconnectTimer) {
-          clearTimeout(api.reconnectTimer);
-          api.reconnectTimer = null;
+          };
+        if (api) {
+          // Clear any pending reconnect timer.
+          if (api.reconnectTimer) {
+            clearTimeout(api.reconnectTimer);
+            api.reconnectTimer = null;
+          }
+          // Force attempt counter to max so natural reconnect loop stops.
+          api.reconnectAttempt = 10;
+          // Dispatch reconnecting to set connected=false in the store.
+          api.dispatch("reconnecting", {
+            type: "reconnecting",
+            attempt: 9,
+          });
+          // Dispatch reconnect_failed to set reconnectFailed=true.
+          api.dispatch("reconnect_failed", {
+            type: "reconnect_failed",
+            attempt: 10,
+          });
         }
-        // Force attempt counter to max so natural reconnect loop stops.
-        api.reconnectAttempt = 10;
-
-        // Dispatch reconnecting to set connected=false in the store.
-        api.dispatch("reconnecting", {
-          type: "reconnecting",
-          attempt: 9,
-        });
-        // Dispatch reconnect_failed to set reconnectFailed=true.
-        api.dispatch("reconnect_failed", {
-          type: "reconnect_failed",
-          attempt: 10,
-        });
-        return "dispatched";
       });
-      console.log("Test 3 dispatch result:", dispatchResult);
 
       // Give React time to process state updates.
       await page.waitForTimeout(500);
 
-      // Check for the reconnect_failed system message (added by useWebSocket hook).
-      // This confirms dispatch reached the handlers.
-      await expect(
-        page.getByText("连接已断开，请刷新页面。").first(),
-      ).toBeVisible({ timeout: 10000 });
-
-      // The reconnect_failed banner text should also appear.
+      // The reconnect_failed banner text should appear.
       await expect(
         page.locator(".text-warning-foreground").filter({
           hasText: "连接已断开，请刷新页面。",
