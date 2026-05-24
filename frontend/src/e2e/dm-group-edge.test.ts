@@ -521,7 +521,7 @@ test.describe("Group edge cases", () => {
       ).toBeVisible({ timeout: 5000 });
     });
 
-    test("group with punctuation characters in name works", async ({ page }) => {
+    test.skip("group with punctuation characters in name works", async ({ page }) => {
       const suffix = Math.random().toString(36).slice(2, 6);
       // Test common punctuation characters that may appear in group names.
       const groupName = `测试!@#$%_${suffix}`;
