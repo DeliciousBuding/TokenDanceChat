@@ -4951,3 +4951,331 @@ func TestGetMessageByIDWithReactions(t *testing.T) {
 	// Reactions map may or may not be populated in single-message fetch.
 	_ = retrieved.Reactions
 }
+
+// ── Webhook edge case: create with empty group name ──
+
+func TestCreateWebhookEmptyGroupName(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	err = s.CreateWebhook("wh-1", "", "wh-url", "secret-123", "alice")
+	if err != nil {
+		t.Fatalf("CreateWebhook with empty group name returned error: %v", err)
+	}
+
+	webhooks, err := s.ListWebhooks("")
+	if err != nil {
+		t.Fatalf("ListWebhooks with empty group returned error: %v", err)
+	}
+	if len(webhooks) != 1 {
+		t.Fatalf("expected 1 webhook for empty group, got %d", len(webhooks))
+	}
+	if webhooks[0].GroupName != "" {
+		t.Errorf("expected empty group name, got '%s'", webhooks[0].GroupName)
+	}
+	if webhooks[0].URL != "wh-url" {
+		t.Errorf("expected url 'wh-url', got '%s'", webhooks[0].URL)
+	}
+
+	// Clean up.
+	if err := s.DeleteWebhook("wh-1", "", "alice"); err != nil {
+		t.Fatalf("DeleteWebhook returned error: %v", err)
+	}
+}
+
+// ── Webhook edge case: rotate with invalid ID ──
+
+func TestRotateWebhookInvalidID(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	_, err = s.RotateWebhookSecret("wh-nonexistent", "team", "new-secret", "bob")
+	if err == nil {
+		t.Error("expected error when rotating non-existent webhook")
+	}
+}
+
+// ── Webhook edge case: delete non-existent ──
+
+func TestDeleteWebhookNonExistent(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	err = s.DeleteWebhook("wh-ghost", "team", "alice")
+	if err == nil {
+		t.Error("expected error when deleting non-existent webhook")
+	}
+
+	// Deleting a valid ID but wrong group should also fail.
+	s.CreateWebhook("wh-1", "devs", "wh-url", "secret-123", "alice")
+	err = s.DeleteWebhook("wh-1", "ops", "alice")
+	if err == nil {
+		t.Error("expected error when deleting webhook with wrong group name")
+	}
+
+	// Verify webhook was not deleted through the wrong-group call.
+	webhooks, err := s.ListWebhooks("devs")
+	if err != nil {
+		t.Fatalf("ListWebhooks returned error: %v", err)
+	}
+	if len(webhooks) != 1 {
+		t.Errorf("expected 1 webhook after failed delete, got %d", len(webhooks))
+	}
+}
+
+// ── Group edge case: add duplicate member ──
+
+func TestAddGroupMemberDuplicate(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("devs", "alice")
+
+	// Add bob once.
+	err = s.AddGroupMember("devs", "bob")
+	if err != nil {
+		t.Fatalf("AddGroupMember returned error: %v", err)
+	}
+
+	// Add bob again — should be a no-op (INSERT OR IGNORE).
+	err = s.AddGroupMember("devs", "bob")
+	if err != nil {
+		t.Fatalf("AddGroupMember duplicate returned error: %v", err)
+	}
+
+	members := s.GetGroupMembers("devs")
+	if len(members) != 2 {
+		t.Errorf("expected 2 members, got %d", len(members))
+	}
+	if members[0] != "alice" {
+		t.Errorf("expected first member 'alice', got '%s'", members[0])
+	}
+	if members[1] != "bob" {
+		t.Errorf("expected second member 'bob', got '%s'", members[1])
+	}
+
+	// Verify role is preserved for the owner.
+	ownerRole, err := s.GetGroupMemberRole("devs", "alice")
+	if err != nil {
+		t.Fatalf("GetGroupMemberRole returned error: %v", err)
+	}
+	if ownerRole != "owner" {
+		t.Errorf("expected role 'owner' for alice, got '%s'", ownerRole)
+	}
+}
+
+// ── Group edge case: remove non-member ──
+
+func TestRemoveGroupMemberNonMember(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.CreateGroup("devs", "alice")
+
+	// Remove a user who is not a member — should not error (DELETE WHERE is successful
+	// even when no rows match).
+	err = s.RemoveGroupMember("devs", "charlie")
+	if err != nil {
+		t.Errorf("RemoveGroupMember for non-member should not error, got: %v", err)
+	}
+
+	// Verify group is still intact.
+	members := s.GetGroupMembers("devs")
+	if len(members) != 1 {
+		t.Errorf("expected 1 member, got %d", len(members))
+	}
+	if members[0] != "alice" {
+		t.Errorf("expected member 'alice', got '%s'", members[0])
+	}
+}
+
+// ── Archive edge case: archive twice (idempotent) ──
+
+func TestArchiveConversationTwice(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	key := "dm:eve"
+
+	// Archive once.
+	err = s.ArchiveConversation("alice", key)
+	if err != nil {
+		t.Fatalf("ArchiveConversation returned error: %v", err)
+	}
+
+	// Archive again — should be no-op.
+	err = s.ArchiveConversation("alice", key)
+	if err != nil {
+		t.Fatalf("ArchiveConversation twice returned error: %v", err)
+	}
+
+	if !s.IsConversationArchived("alice", key) {
+		t.Error("expected conversation to still be archived after duplicate archive")
+	}
+
+	// Verify only one row exists.
+	var count int
+	if err := s.db.QueryRow(
+		"SELECT COUNT(*) FROM archived_conversations WHERE username = ? AND key = ?",
+		"alice", key,
+	).Scan(&count); err != nil {
+		t.Fatalf("failed to count archived rows: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 archived row, got %d", count)
+	}
+}
+
+// ── Archive edge case: unarchive non-archived conversation ──
+
+func TestUnarchiveConversationNonArchived(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	key := "dm:eve"
+
+	// Unarchive a conversation that was never archived — should not error.
+	err = s.UnarchiveConversation("alice", key)
+	if err != nil {
+		t.Errorf("UnarchiveConversation for non-archived conversation should not error, got: %v", err)
+	}
+
+	if s.IsConversationArchived("alice", key) {
+		t.Error("expected conversation not to be archived after unarchiving non-archived")
+	}
+}
+
+// ── Archive edge case: list empty ──
+
+func TestListArchivedConversationsEmpty(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	result := s.ListArchivedConversations("alice")
+	if result == nil {
+		t.Error("expected non-nil empty slice, got nil")
+	}
+	if len(result) != 0 {
+		t.Errorf("expected 0 archived conversations, got %d", len(result))
+	}
+
+	// Archive one, then check list.
+	s.ArchiveConversation("alice", "dm:bob")
+	result = s.ListArchivedConversations("alice")
+	if len(result) != 1 {
+		t.Errorf("expected 1 archived conversation, got %d", len(result))
+	}
+	if result[0] != "dm:bob" {
+		t.Errorf("expected key 'dm:bob', got '%s'", result[0])
+	}
+}
+
+// ── FTS5 search edge case: very long query ──
+
+func TestSearchMessagesVeryLongQuery(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.InsertMessage("alice", "the quick brown fox jumps over the lazy dog", "", "", "", "", "")
+
+	// Construct a very long query (10 KB).
+	longWord := strings.Repeat("abcdefghij", 1000) // 10,000 characters
+	results, err := s.SearchMessages(longWord, "", 10)
+	if err != nil {
+		t.Errorf("SearchMessages with very long query should not error: %v", err)
+	}
+	if len(results) != 0 {
+		// It's fine if results are returned; mainly verifying no error.
+		t.Logf("very long query returned %d results", len(results))
+	}
+
+	// Another edge: very long query with space-separated tokens.
+	longQuery := strings.Repeat("hello ", 2000) // 12,000 characters of "hello "
+	results, err = s.SearchMessages(longQuery, "", 10)
+	if err != nil {
+		t.Errorf("SearchMessages with very long multi-word query should not error: %v", err)
+	}
+	_ = results
+
+	// Verify database is still intact.
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM messages").Scan(&count); err != nil {
+		t.Fatalf("messages table query failed after long query search: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 message in table, got %d", count)
+	}
+}
+
+// ── FTS5 search edge case: search with CJK and emoji content ──
+
+func TestSearchMessagesCJKAndEmoji(t *testing.T) {
+	s, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("New(:memory:) returned error: %v", err)
+	}
+	defer s.Close()
+
+	s.InsertMessage("alice", "你好世界 hello world", "", "", "", "", "")
+	s.InsertMessage("bob", "emoji test 😀 🚀 💯", "", "", "", "", "")
+	s.InsertMessage("charlie", "混合CJKと日本語 and English", "", "", "", "", "")
+
+	// Search for CJK content should work without error.
+	results, err := s.SearchMessages("你好", "", 10)
+	if err != nil {
+		t.Errorf("SearchMessages with CJK query returned error: %v", err)
+	}
+	if len(results) == 0 {
+		t.Log("CJK search returned 0 results (tokenizer-dependent)")
+	}
+
+	// Search for English mixed with CJK.
+	results, err = s.SearchMessages("hello", "", 10)
+	if err != nil {
+		t.Errorf("SearchMessages with English query returned error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 result for 'hello', got %d", len(results))
+	}
+
+	// Emoji characters should not cause errors.
+	results, err = s.SearchMessages("😀", "", 10)
+	if err != nil {
+		t.Errorf("SearchMessages with emoji query returned error: %v", err)
+	}
+	_ = results
+
+	// Japanese Kana mixed text.
+	results, err = s.SearchMessages("日本語", "", 10)
+	if err != nil {
+		t.Errorf("SearchMessages with Japanese query returned error: %v", err)
+	}
+	_ = results
+}
