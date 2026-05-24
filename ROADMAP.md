@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 937 前端 / 50 文件 / E2E 109/113 / Backend 6/6 PASS
+发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: 975 前端 / 50 文件 / E2E 117/121 / Backend 6/6 PASS / Skills 6 活跃
 
 ## 当前目标
 
@@ -61,7 +61,11 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 - [x] MessageBubble 测试 +21（代码块、语音消息、GIF/贴纸、编辑标记、搜索高亮、回复预览、转发标记、删除消息 — 覆盖率 32%+）。
 - [x] 后端测试扩展 +12：handler 边界用例（CORS、rate limit、login/register/DM/group/upload）、ws 边界、hub 边界（含 Stop 幂等性验证）。
 - [x] 交叉审查驱动修复：api.ts gen guard 补全（onerror/onopen/onmessage/timeout）、ReadReceipt t 作用域、VideoCall formatTime 参数数量、SW activate clients.claim()。
-- [x] 容器重启修复生产 WebSocket 连接堆积问题。
+- [x] Sidebar 测试 +38：上下文菜单置顶/归档/文件夹操作、音效开关、好友标记、在线用户状态（55%→65%+，90 tests total）。
+- [x] VideoCall 测试 +27：铃声、计时器、PiP 拖拽、peer 网格、静音/摄像头/屏幕共享、通话状态机（25%+，35 tests total）。
+- [x] E2E 边界用例 +8：Poll 长问题/单选拒绝/特殊字符、Sidebar 去重/离开/清除搜索、多用户跨标签。
+- [x] Backend store +18：Message CRUD、Profile 更新、Friend 操作、Search 分页、Room CRUD。
+- [x] Kick 重连循环修复：kicked 后清空 reconnectUsername，阻止 ping-pong 重连。
 - [x] E2E production fixes x3（target 47/52）。
 - [x] nginx production fix：agenthub-chat.conf 冲突修复。
 - [x] 前端测试从 237 → 779 (+542 tests / +31 文件 / 51.86% 行覆盖率)。
