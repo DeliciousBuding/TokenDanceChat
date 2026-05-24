@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Send, X, User, Users } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
@@ -14,6 +14,8 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
   const { t } = useTranslation();
   const { onlineUsers, username } = useChatStore();
   const [selectedUser, setSelectedUser] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { dialogRef.current?.focus(); }, []);
 
   const availableUsers = onlineUsers.filter((u) => u !== username);
 
@@ -33,7 +35,14 @@ export function ForwardModal({ message, onClose, onForward }: ForwardModalProps)
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md mx-4 rounded-xl border border-border bg-card shadow-2xl animate-scale-in">
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("forward.title")}
+        onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+        className="relative w-full max-w-md mx-4 rounded-xl border border-border bg-card shadow-2xl animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h3 className="text-sm font-semibold text-foreground">{t("forward.title")}</h3>
