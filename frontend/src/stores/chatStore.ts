@@ -357,7 +357,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       // Filter out messages from blocked users.
       if (state.blockedUsers.includes(message.username)) return state;
-      const messages = [...state.messages, message];
+      // Deduplicate optimistic messages: if server echo matches an optimistic
+      // message (same content + username within 5s), replace the temp ID.
+      const isOptimistic = message.id.startsWith("optimistic_");
+      const messages = [...state.messages];
+      if (!isOptimistic) {
+        for (let i = messages.length - 1; i >= Math.max(0, messages.length - 5); i--) {
+          const m = messages[i];
+          if (
+            m.id.startsWith("optimistic_") &&
+            m.username === message.username &&
+            m.content === message.content &&
+            Math.abs(m.timestamp - message.timestamp) < 5000
+          ) {
+            // Replace optimistic with real message (keep real ID + timestamp).
+            messages[i] = { ...message, reactions: m.reactions };
+            return { ...state, messages };
+          }
+        }
+      }
+      messages.push(message);
       if (messages.length > MESSAGE_CAP) {
         messages.splice(0, messages.length - MESSAGE_CAP);
       }

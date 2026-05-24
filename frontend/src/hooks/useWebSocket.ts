@@ -153,29 +153,61 @@ export function useWebSocket() {
   const sendMessage = useCallback(
     (content: string) => {
       const state = useChatStore.getState();
+      // Optimistic: add message to store immediately so it appears without
+      // waiting for the server echo. The real message replaces it via dedup.
+      const tempId = `optimistic_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const optimistic: import("@/lib/api").ChatMessage = {
+        id: tempId,
+        username: state.username,
+        content,
+        timestamp: Date.now(),
+        edited: false,
+      };
+      addMessage(optimistic);
       chatAPI.sendMessage(content, state.replyTo || undefined);
       // Clear reply after sending.
       useChatStore.getState().setReplyTo(null);
     },
-    [],
+    [addMessage],
   );
 
   const sendDMMessage = useCallback(
     (to: string, content: string) => {
       const state = useChatStore.getState();
+      const tempId = `optimistic_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const optimistic: import("@/lib/api").ChatMessage = {
+        id: tempId,
+        username: state.username,
+        content,
+        timestamp: Date.now(),
+        from: state.username,
+        to,
+        edited: false,
+      };
+      addMessage(optimistic);
       chatAPI.sendDMMessage(to, content, state.replyTo || undefined);
       useChatStore.getState().setReplyTo(null);
     },
-    [],
+    [addMessage],
   );
 
   const sendGroupMessage = useCallback(
     (group: string, content: string) => {
       const state = useChatStore.getState();
+      const tempId = `optimistic_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const optimistic: import("@/lib/api").ChatMessage = {
+        id: tempId,
+        username: state.username,
+        content,
+        timestamp: Date.now(),
+        group,
+        edited: false,
+      };
+      addMessage(optimistic);
       chatAPI.sendGroupMessage(group, content, state.replyTo || undefined);
       useChatStore.getState().setReplyTo(null);
     },
-    [],
+    [addMessage],
   );
 
   const markRead = useCallback(() => {
