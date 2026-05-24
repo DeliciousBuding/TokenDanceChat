@@ -199,4 +199,95 @@ describe("GifPicker", () => {
     fireEvent.click(backdrop!);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // ---- New tests: API call verification, loading, error state ----
+
+  it("fetches trending endpoint on mount", async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      return mockFetchResponse(mockTrendingItems);
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    renderGifPicker();
+
+    await waitFor(() => {
+      const trendingCalls = fetchMock.mock.calls.filter(
+        (call: unknown[]) =>
+          typeof call[0] === "string" &&
+          (call[0] as string).includes("/api/giphy/trending"),
+      );
+      expect(trendingCalls.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("search triggers API call with correct query params", async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      return mockFetchResponse(mockSearchItems);
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    renderGifPicker();
+    const input = screen.getByPlaceholderText("Search GIFs");
+    fireEvent.change(input, { target: { value: "cat" } });
+
+    await waitFor(
+      () => {
+        const searchCalls = fetchMock.mock.calls.filter(
+          (call: unknown[]) =>
+            typeof call[0] === "string" &&
+            (call[0] as string).includes("/api/giphy/search"),
+        );
+        expect(searchCalls.length).toBeGreaterThan(0);
+        const searchUrl = searchCalls[0][0] as string;
+        expect(searchUrl).toContain("q=cat");
+        expect(searchUrl).toContain("type=gif");
+      },
+      { timeout: 2000 },
+    );
+  });
+
+  it("shows loading skeleton grid while fetch is pending", async () => {
+    // Use a controlled promise so we can assert while fetch is in-flight
+    let resolveFetch: (value: unknown) => void;
+    const fetchPromise = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+
+    global.fetch = vi.fn().mockImplementation(() =>
+      fetchPromise.then(() => ({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [],
+            pagination: { total_count: 0, count: 0, offset: 0 },
+          }),
+      })),
+    ) as unknown as typeof fetch;
+
+    renderGifPicker();
+
+    // Skeleton grid should appear while loading
+    await waitFor(() => {
+      const skeletons = document.querySelectorAll(".animate-pulse");
+      expect(skeletons.length).toBeGreaterThan(0);
+    });
+
+    // Clean up: resolve the fetch so the component can finish
+    resolveFetch!(undefined);
+  });
+
+  it("shows empty state when API request fails", async () => {
+    global.fetch = vi
+      .fn()
+      .mockRejectedValue(new Error("Network error")) as unknown as typeof fetch;
+
+    renderGifPicker();
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("No results found")).toBeTruthy();
+      },
+      { timeout: 2000 },
+    );
+  });
 });

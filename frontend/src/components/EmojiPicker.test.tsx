@@ -193,4 +193,65 @@ describe("EmojiPicker", () => {
 
     expect(mockSendCustomEmojiList).toHaveBeenCalledTimes(1);
   });
+
+  // ---- New tests: search, category tabs, recents ----
+
+  it("search filters across all categories and excludes non-matching emojis", async () => {
+    render(<EmojiPicker onSelect={vi.fn()} onClose={vi.fn()} />);
+
+    const input = screen.getByPlaceholderText("搜索表情...");
+    fireEvent.change(input, { target: { value: "😂" } });
+
+    await waitFor(() => {
+      // 😂 should be present (it matches the search term)
+      expect(screen.getByText("😂")).toBeTruthy();
+      // A Smileys emoji that does NOT contain 😂 should be absent
+      expect(screen.queryByText("😀")).toBeNull();
+    });
+  });
+
+  it("switching to Objects category shows object emojis and hides smileys", async () => {
+    render(<EmojiPicker onSelect={vi.fn()} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByText("物品"));
+
+    await waitFor(() => {
+      expect(screen.getByText("🎉")).toBeTruthy();
+      expect(screen.getByText("🔥")).toBeTruthy();
+      // A smiley from the previous category should not appear
+      expect(screen.queryByText("😀")).toBeNull();
+    });
+  });
+
+  it("shows recently used section when localStorage has recents", () => {
+    localStorage.setItem(
+      "tdchat:recent-emojis",
+      JSON.stringify(["🔥", "❤️", "💀"]),
+    );
+
+    render(<EmojiPicker onSelect={vi.fn()} onClose={vi.fn()} />);
+
+    // Section label visible
+    expect(screen.getByText("最近使用")).toBeTruthy();
+    // Recent emojis rendered as buttons
+    expect(screen.getByText("🔥")).toBeTruthy();
+    expect(screen.getByText("❤️")).toBeTruthy();
+    expect(screen.getByText("💀")).toBeTruthy();
+  });
+
+  it("clicking a recent emoji calls onSelect with the emoji and closes", () => {
+    localStorage.setItem(
+      "tdchat:recent-emojis",
+      JSON.stringify(["🔥", "❤️"]),
+    );
+
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    render(<EmojiPicker onSelect={onSelect} onClose={onClose} />);
+
+    fireEvent.click(screen.getByText("🔥"));
+
+    expect(onSelect).toHaveBeenCalledWith("🔥");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });
