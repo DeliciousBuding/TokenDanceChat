@@ -103,7 +103,7 @@ export const GifPicker = memo(function GifPicker({
       }
     };
 
-    debounceRef.current = setTimeout(load, search.trim() ? DEBOUNCE_MS : 0);
+    debounceRef.current = window.setTimeout(load, search.trim() ? DEBOUNCE_MS : 0);
     return () => clearTimeout(debounceRef.current);
   }, [search, activeTab]);
 

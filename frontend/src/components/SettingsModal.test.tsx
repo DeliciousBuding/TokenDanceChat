@@ -5,15 +5,11 @@ import { mockI18n } from "@/test-utils";
 
 const {
   mockSendProfileUpdate,
-  mockListInviteCodes,
-  mockExportChat,
   mockSetSoundEnabled,
   mockPlayMessageSound,
   storeState,
 } = vi.hoisted(() => ({
   mockSendProfileUpdate: vi.fn(),
-  mockListInviteCodes: vi.fn().mockResolvedValue([]),
-  mockExportChat: vi.fn(),
   mockSetSoundEnabled: vi.fn(),
   mockPlayMessageSound: vi.fn(),
   storeState: {
@@ -29,7 +25,6 @@ const {
         created_at: Date.now(),
       },
     },
-    scheduledMessages: [],
   } as Record<string, unknown>,
 }));
 
@@ -55,11 +50,8 @@ vi.mock("@/lib/sound", () => ({
 vi.mock("@/lib/api", () => ({
   chatAPI: {
     sendProfileUpdate: mockSendProfileUpdate,
-    exportChat: mockExportChat,
     uploadImage: vi.fn(),
   },
-  listInviteCodes: mockListInviteCodes,
-  generateInviteCode: vi.fn(),
 }));
 
 // Mock Avatar to avoid complex rendering dependencies
@@ -100,21 +92,20 @@ describe("SettingsModal", () => {
         created_at: Date.now(),
       },
     };
-    storeState.scheduledMessages = [];
   });
 
   it("renders when open=true", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    // Tab buttons render in both desktop and mobile, so each text appears twice
-    expect(screen.getAllByText("settings.profile").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("settings.appearance").length).toBeGreaterThanOrEqual(1);
+    // Sidebar nav items should be rendered (single sidebar, no mobile duplicate)
+    expect(screen.getByText("settings.profile")).toBeTruthy();
+    expect(screen.getByText("settings.appearance")).toBeTruthy();
+    expect(screen.getByText("settings.notifications")).toBeTruthy();
     // Profile tab content should be visible (display name input)
     expect(screen.getByDisplayValue("Test User")).toBeTruthy();
   });
 
   it("does not render when open=false", () => {
     const { container } = render(<SettingsModal open={false} onClose={onClose} />);
-    // SettingsModal returns null when closed
     expect(container.innerHTML).toBe("");
   });
 
@@ -127,8 +118,8 @@ describe("SettingsModal", () => {
 
   it("calls onClose when backdrop clicked", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    // The backdrop is the absolute div with bg-black/60
-    const backdrop = document.querySelector(".bg-black\\/60");
+    // The backdrop is the absolute div with bg-black/20 and backdrop-blur-sm
+    const backdrop = document.querySelector(".backdrop-blur-sm, [class*='bg-black\\/20']");
     expect(backdrop).toBeTruthy();
     fireEvent.click(backdrop!);
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -155,8 +146,8 @@ describe("SettingsModal", () => {
 
   it("switches to appearance tab and shows theme options", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    // Click the first appearance tab button (desktop variant)
-    fireEvent.click(screen.getAllByText("settings.appearance")[0]);
+    // Click appearance nav item in sidebar
+    fireEvent.click(screen.getByText("settings.appearance"));
     // Theme options should be visible
     expect(screen.getByText("settings.themeLight")).toBeTruthy();
     expect(screen.getByText("settings.themeDark")).toBeTruthy();
@@ -165,9 +156,11 @@ describe("SettingsModal", () => {
 
   it("switches to notifications tab and shows sound toggle", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    fireEvent.click(screen.getAllByText("settings.notifications")[0]);
+    fireEvent.click(screen.getByText("settings.notifications"));
     // Sound label should be visible
     expect(screen.getByText("settings.sound")).toBeTruthy();
+    // Sound on description
+    expect(screen.getByText("settings.soundOn")).toBeTruthy();
   });
 
   it("close button has accessible aria-label", () => {
@@ -179,42 +172,37 @@ describe("SettingsModal", () => {
 
   // ── Theme toggle ────────────────────────────────────
 
-  it("shows active indicator on default light theme in appearance tab", () => {
+  it("shows active ring on default light theme in appearance tab", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    fireEvent.click(screen.getAllByText("settings.appearance")[0]);
+    fireEvent.click(screen.getByText("settings.appearance"));
     const lightBtn = screen.getByText("settings.themeLight").closest("button")!;
-    // Default theme is "light" (set in localStorage beforeEach), dot appears
-    expect(lightBtn.querySelector(".h-2.w-2.rounded-full.bg-primary")).toBeTruthy();
-    expect(lightBtn.className).toContain("border-primary");
+    // Default theme is "light", so light card has ring-2
+    expect(lightBtn.className).toContain("ring-2");
   });
 
   it("switches to dark theme on click and persists to localStorage", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    fireEvent.click(screen.getAllByText("settings.appearance")[0]);
-    fireEvent.click(screen.getByText("settings.themeDark").closest("button")!);
+    fireEvent.click(screen.getByText("settings.appearance"));
+    fireEvent.click(screen.getByText("settings.themeDark"));
     expect(localStorageMock.getItem("tdchat-theme")).toBe("dark");
-    // Active indicator dot now on dark button
+    // Active ring now on dark button
     const darkBtn = screen.getByText("settings.themeDark").closest("button")!;
-    expect(darkBtn.querySelector(".h-2.w-2.rounded-full.bg-primary")).toBeTruthy();
-    expect(darkBtn.className).toContain("border-primary");
+    expect(darkBtn.className).toContain("ring-2");
     // Light button should no longer be active
     const lightBtn = screen.getByText("settings.themeLight").closest("button")!;
-    expect(lightBtn.querySelector(".h-2.w-2.rounded-full.bg-primary")).toBeFalsy();
+    expect(lightBtn.className).not.toContain("ring-2");
   });
 
   it("switches to system theme on click and persists to localStorage", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    fireEvent.click(screen.getAllByText("settings.appearance")[0]);
-    fireEvent.click(screen.getByText("settings.themeSystem").closest("button")!);
+    fireEvent.click(screen.getByText("settings.appearance"));
+    fireEvent.click(screen.getByText("settings.themeSystem"));
     expect(localStorageMock.getItem("tdchat-theme")).toBe("system");
   });
 
   // ── Language switch ─────────────────────────────────
 
   it("provides language switching through i18n context setLang", () => {
-    // SettingsModal does not contain a language selector UI (language switch
-    // lives in ChatLayout).  Verify the i18n mock integration is functional
-    // so any language-aware feature can call setLang.
     const i18n = mockI18n();
     i18n.setLang("en-US");
     expect(i18n.setLang).toHaveBeenCalledWith("en-US");
@@ -222,52 +210,93 @@ describe("SettingsModal", () => {
 
   // ── Notification preferences / Sound toggle ──────────
 
-  it("shows sound-on description and Volume2 icon when sound is enabled", () => {
+  it("shows sound-on description when sound is enabled", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    fireEvent.click(screen.getAllByText("settings.notifications")[0]);
+    fireEvent.click(screen.getByText("settings.notifications"));
     expect(screen.getByText("settings.soundOn")).toBeTruthy();
-    // Volume2 icon is rendered (soundOn = true by default from mock)
-    expect(document.querySelector(".lucide-volume2")).toBeTruthy();
   });
 
-  it("toggles sound off when sound button is clicked", () => {
+  it("toggles sound off when sound switch is clicked", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    fireEvent.click(screen.getAllByText("settings.notifications")[0]);
-    // Find the toggle button inside the sound row
-    const soundRow = screen.getByText("settings.sound").closest(".flex.items-center.justify-between")!;
-    const toggleBtn = soundRow.querySelector("button")!;
-    fireEvent.click(toggleBtn);
+    fireEvent.click(screen.getByText("settings.notifications"));
+    // Find all switches and click the first one (sound toggle)
+    const switches = screen.getAllByRole("switch");
+    expect(switches.length).toBeGreaterThanOrEqual(1);
+    // Sound switch should be checked initially (sound is enabled)
+    expect(switches[0].getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(switches[0]);
     expect(mockSetSoundEnabled).toHaveBeenCalledWith(false);
   });
 
-  it("calls setSoundEnabled when toggling sound off then on", () => {
-    // The mock returns true initially.  Click toggles it off, then another
-    // fresh click toggles it on again.
+  it("toggles sound switch aria state", () => {
     const { unmount } = render(<SettingsModal open={true} onClose={onClose} />);
-    fireEvent.click(screen.getAllByText("settings.notifications")[0]);
+    fireEvent.click(screen.getByText("settings.notifications"));
 
-    // Click toggle to turn sound off
-    const soundRow = screen.getByText("settings.sound").closest(".flex.items-center.justify-between")!;
-    const toggleBtn = soundRow.querySelector("button")!;
-    fireEvent.click(toggleBtn);
+    // First switch should be sound toggle, currently on
+    const switch1 = screen.getAllByRole("switch")[0];
+    expect(switch1.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(switch1);
     expect(mockSetSoundEnabled).toHaveBeenCalledWith(false);
 
     // Unmount and re-render fresh with sound enabled again
     unmount();
     render(<SettingsModal open={true} onClose={onClose} />);
-    fireEvent.click(screen.getAllByText("settings.notifications")[0]);
+    fireEvent.click(screen.getByText("settings.notifications"));
 
-    // The fresh component reads isSoundEnabled()=true again, so toggling
-    // off once more triggers setSoundEnabled(false) again.
-    const soundRow2 = screen.getByText("settings.sound").closest(".flex.items-center.justify-between")!;
-    fireEvent.click(soundRow2.querySelector("button")!);
+    const switch2 = screen.getAllByRole("switch")[0];
+    // Fresh mount with isSoundEnabled()=true, so switch starts checked
+    fireEvent.click(switch2);
     expect(mockSetSoundEnabled).toHaveBeenCalledWith(false);
   });
 
   it("plays test sound when test-sound button is clicked", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    fireEvent.click(screen.getAllByText("settings.notifications")[0]);
+    fireEvent.click(screen.getByText("settings.notifications"));
     fireEvent.click(screen.getByText("settings.testSound"));
     expect(mockPlayMessageSound).toHaveBeenCalled();
+  });
+
+  // ── Mention & Desktop notification toggles ──────────
+
+  it("renders mention notification toggle", () => {
+    render(<SettingsModal open={true} onClose={onClose} />);
+    fireEvent.click(screen.getByText("settings.notifications"));
+    // @mention toggle uses notificationPrefs label with @ prefix
+    expect(screen.getByText(/settings.notificationPrefs/)).toBeTruthy();
+    // There should be 3 switches: sound, mention, desktop
+    expect(screen.getAllByRole("switch").length).toBe(3);
+  });
+
+  it("toggles mention notification switch", () => {
+    render(<SettingsModal open={true} onClose={onClose} />);
+    fireEvent.click(screen.getByText("settings.notifications"));
+    const switches = screen.getAllByRole("switch");
+    // Second switch is mention toggle (initially checked)
+    expect(switches[1].getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(switches[1]);
+    expect(switches[1].getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("toggles desktop notification switch", () => {
+    render(<SettingsModal open={true} onClose={onClose} />);
+    fireEvent.click(screen.getByText("settings.notifications"));
+    const switches = screen.getAllByRole("switch");
+    // Third switch is desktop toggle (initially unchecked)
+    expect(switches[2].getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(switches[2]);
+    expect(switches[2].getAttribute("aria-checked")).toBe("true");
+  });
+
+  // ── Profile save ────────────────────────────────────
+
+  it("calls sendProfileUpdate when save button is clicked", () => {
+    render(<SettingsModal open={true} onClose={onClose} />);
+    fireEvent.click(screen.getByText("profile.save"));
+    expect(mockSendProfileUpdate).toHaveBeenCalledWith({
+      display_name: "Test User",
+      avatar_url: "",
+      bio: "Hello world",
+      status: "Online",
+    });
   });
 });

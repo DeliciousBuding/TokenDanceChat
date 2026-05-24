@@ -40,6 +40,8 @@ export interface TranslationDict {
     signingIn: string;
     back: string;
     backToLogin: string;
+    oidcLoginButton: string;
+    oidcError: string;
   };
   invite: {
     inviteCodes: string;
@@ -432,6 +434,7 @@ export interface TranslationDict {
     closeSidebar: string;
     openSidebar: string;
     moreActions: string;
+    addAttachment: string;
     removeImage: string;
     gif: string;
     ok: string;
@@ -500,6 +503,8 @@ const zhCN: TranslationDict = {
     signingIn: "正在登录...",
     back: "返回",
     backToLogin: "返回登录",
+    oidcLoginButton: "使用 TokenDance ID 登录",
+    oidcError: "OIDC 登录失败",
   },
   invite: {
     inviteCodes: "邀请码管理",
@@ -891,6 +896,7 @@ const zhCN: TranslationDict = {
     closeSidebar: "关闭侧边栏",
     openSidebar: "打开侧边栏",
     moreActions: "更多操作",
+    addAttachment: "添加附件",
     removeImage: "移除图片",
     gif: "GIF",
     ok: "确定",
@@ -962,6 +968,8 @@ const enUS: TranslationDict = {
     signingIn: "Signing in...",
     back: "Back",
     backToLogin: "Back to Login",
+    oidcLoginButton: "Login with TokenDance ID",
+    oidcError: "OIDC login failed",
   },
   invite: {
     inviteCodes: "Invite Codes",
@@ -1353,6 +1361,7 @@ const enUS: TranslationDict = {
     closeSidebar: "Close sidebar",
     openSidebar: "Open sidebar",
     moreActions: "More actions",
+    addAttachment: "Add attachment",
     removeImage: "Remove image",
     gif: "GIF",
     ok: "OK",

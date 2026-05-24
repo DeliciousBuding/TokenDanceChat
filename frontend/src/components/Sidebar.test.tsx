@@ -91,12 +91,6 @@ function renderSidebar(props?: {
   };
 }
 
-/** Helper: click the collapsible AI 助手 header to toggle expansion. Default is expanded. */
-function toggleAIAssistants() {
-  const header = screen.getByText("AI 助手");
-  fireEvent.click(header);
-}
-
 /** Helper: get the DM-section button for a partner by name. Always uses the last DOM match
  *  because DM section renders after pinned section. */
 function getDMButton(name: string): HTMLElement {
@@ -149,16 +143,31 @@ describe("Sidebar", () => {
       expect(screen.getByText("3")).toBeTruthy();
     });
 
-    it("在线用户为空时显示空状态", () => {
-      useChatStore.setState({ onlineUsers: [] });
-      renderSidebar();
-      expect(screen.getByText("暂无在线用户")).toBeTruthy();
+    it("在线用户区在 AI 助手区之前，保证桌面首屏密度", () => {
+      const { container } = renderSidebar();
+      const onlineSection = container.querySelector('[data-visual="sidebar-online-users"]');
+      const aiSection = screen.getByRole("button", { name: "AI 助手" });
+
+      expect(onlineSection).toBeTruthy();
+      expect(
+        onlineSection!.compareDocumentPosition(aiSection) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
     });
 
-    it("未连接且无在线用户时显示连接中指示而非空状态", () => {
-      useChatStore.setState({ connected: false, onlineUsers: [] });
+    it("在线用户为空时保留区域但不显示旧空状态文案", () => {
+      useChatStore.setState({ onlineUsers: [] });
       renderSidebar();
-      expect(screen.getByText("连接中...")).toBeTruthy();
+      expect(screen.getByText("在线用户")).toBeTruthy();
+      expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText("暂无在线用户")).toBeNull();
+    });
+
+    it("未连接且无在线用户时显示骨架而非旧空状态文案", () => {
+      useChatStore.setState({ connected: false, onlineUsers: [] });
+      const { container } = renderSidebar();
+      expect(container.querySelectorAll(".animate-shimmer").length).toBeGreaterThanOrEqual(3);
+      expect(screen.queryByText("连接中...")).toBeNull();
       expect(screen.queryByText("暂无在线用户")).toBeNull();
     });
 
@@ -235,7 +244,7 @@ describe("Sidebar", () => {
 
     it("展开后助手卡片显示在线状态点", () => {
       const { container } = renderSidebar();
-      const onlineDots = container.querySelectorAll(".bg-online");
+      const onlineDots = container.querySelectorAll(".bg-success");
       expect(onlineDots.length).toBeGreaterThan(0);
     });
 
@@ -248,8 +257,9 @@ describe("Sidebar", () => {
       renderSidebar();
       const deepseekMatches = screen.getAllByText("DeepSeek");
       expect(deepseekMatches.length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText("Qwen")).toBeTruthy();
-      expect(screen.getByText("Moonshot")).toBeTruthy();
+      // May match both sidebar text and SVG <title> — verify at least one match.
+      expect(screen.getAllByText("Qwen").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("Moonshot").length).toBeGreaterThanOrEqual(1);
     });
 
     it("展开后模型卡片有网格布局", () => {
@@ -301,9 +311,9 @@ describe("Sidebar", () => {
   });
 
   describe("私信区 (Direct Messages)", () => {
-    it("无历史消息时显示空状态", () => {
+    it("无历史消息时不显示旧空状态文案", () => {
       renderSidebar();
-      expect(screen.getByText("暂无私信")).toBeTruthy();
+      expect(screen.queryByText("暂无私信")).toBeNull();
     });
 
     it("有历史消息时出现私信区标题", () => {
@@ -330,9 +340,10 @@ describe("Sidebar", () => {
   });
 
   describe("群组区 (Groups)", () => {
-    it("无群组时显示空状态", () => {
+    it("无群组时不显示旧空状态文案", () => {
       renderSidebar();
-      expect(screen.getByText("暂无群组")).toBeTruthy();
+      expect(screen.getByText("群组")).toBeTruthy();
+      expect(screen.queryByText("暂无群组")).toBeNull();
     });
 
     it("有群组时显示群组名", () => {
@@ -379,7 +390,7 @@ describe("Sidebar", () => {
 
     it("显示在线指示点", () => {
       const { container } = renderSidebar();
-      const onlineDot = container.querySelector(".animate-pulse-dot");
+      const onlineDot = container.querySelector('[role="status"]');
       expect(onlineDot).toBeTruthy();
     });
   });

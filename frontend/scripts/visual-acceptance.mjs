@@ -49,6 +49,7 @@ async function newScenarioPage(browser, scenario, label) {
     ({ theme }) => {
       localStorage.setItem("tdchat-theme", theme);
       localStorage.setItem("tokendance:lang", "zh-CN");
+      localStorage.removeItem("tokendance:auth");
       localStorage.removeItem("tokendance:username");
     },
     { theme: scenario.theme },
@@ -60,8 +61,17 @@ async function newScenarioPage(browser, scenario, label) {
   });
   page.on("pageerror", (err) => errors.push(err.message));
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
-  await page.locator("input[type='text']").first().fill(label);
-  await page.keyboard.press("Enter");
+
+  await page.getByRole("button", { name: "加入聊天" }).first().click();
+  const guestInput = page.getByPlaceholder("你的用户名...");
+  await guestInput.fill(label);
+  const guestForm = page.locator("form").filter({ has: guestInput });
+  await guestForm.getByRole("button", { name: "加入聊天" }).click();
+  await page.waitForFunction(
+    (expected) => localStorage.getItem("tokendance:username") === expected,
+    label,
+    { timeout: 15000 },
+  );
   await page.locator("textarea").first().waitFor({ state: "visible", timeout: 15000 });
   return { context, page, errors };
 }
@@ -188,7 +198,7 @@ async function collectMetrics(page, scenario, errors) {
 
       const textarea = document.querySelector("textarea");
       const textareaRect = textarea?.getBoundingClientRect();
-      const composer = textarea?.closest(".relative.border-t");
+      const composer = textarea?.closest("[data-testid='chat-input']") || textarea?.closest(".relative.border-t");
       const composerRect = composer?.getBoundingClientRect();
       const log = document.querySelector("[role='log']");
       const logRect = log?.getBoundingClientRect();
@@ -488,7 +498,7 @@ async function main() {
       const { context, page, errors } = await newScenarioPage(browser, scenario, `Reviewer_${id}`);
 
       if (scenario.formatOpen) {
-        await page.getByLabel("Toggle formatting toolbar").click();
+        await page.getByLabel(/^(Markdown 格式|Markdown formatting|Toggle formatting toolbar)$/).click();
         await page.getByLabel("加粗").waitFor({ state: "visible", timeout: 5000 });
       }
       if (scenario.groupInfoOpen) {

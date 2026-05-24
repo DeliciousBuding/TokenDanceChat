@@ -2,6 +2,11 @@ package handler
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +36,17 @@ type Handler struct {
 	uploadsDir       string
 	mediaStore       MediaStore
 	linkPreviewCache map[string]linkPreviewResult
+	sessionSecret    []byte
+
+	// OIDC configuration.
+	oidcEnabled     bool
+	oidcClientID    string
+	oidcIssuer      string
+	oidcRedirectURI string
+	oidcConfig      *OIDCConfig
+	oidcStates      *OIDCStateStore
+	oidcTokens      *OIDCTokenStore
+	oidcJWKS        *oidcJWKSCache
 }
 
 // linkPreviewResult stores cached OpenGraph data for a URL.
@@ -48,6 +64,14 @@ type contextKey string
 
 const requestIDKey contextKey = "request_id"
 
+const sessionTokenTTL = 7 * 24 * time.Hour
+
+type sessionTokenPayload struct {
+	Username string `json:"username"`
+	Exp      int64  `json:"exp"`
+	Nonce    string `json:"nonce"`
+}
+
 // New creates a new Handler.
 func New(h *hub.Hub, s hub.Store, uploadsDir string) *Handler {
 	handler := &Handler{
@@ -56,10 +80,113 @@ func New(h *hub.Hub, s hub.Store, uploadsDir string) *Handler {
 		uploadsDir:       uploadsDir,
 		mediaStore:       NewLocalMediaStore(uploadsDir),
 		linkPreviewCache: make(map[string]linkPreviewResult),
+		sessionSecret:    loadSessionSecret(),
+	}
+	if h != nil {
+		h.SetSessionTokenVerifier(handler)
 	}
 	// Periodic cleanup of expired link preview cache entries.
 	go handler.pruneLinkPreviewCache()
 	return handler
+}
+
+func loadSessionSecret() []byte {
+	if secret := os.Getenv("CHAT_SESSION_SECRET"); secret != "" {
+		sum := sha256.Sum256([]byte(secret))
+		return sum[:]
+	}
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err == nil {
+		return secret
+	}
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))
+	return sum[:]
+}
+
+func (h *Handler) issueSessionToken(username string) (string, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return "", errors.New("username is required")
+	}
+	nonceBytes := make([]byte, 16)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return "", err
+	}
+	payload := sessionTokenPayload{
+		Username: username,
+		Exp:      time.Now().Add(sessionTokenTTL).Unix(),
+		Nonce:    base64.RawURLEncoding.EncodeToString(nonceBytes),
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	payloadPart := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	mac := hmac.New(sha256.New, h.sessionSecret)
+	mac.Write([]byte(payloadPart))
+	sigPart := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	return payloadPart + "." + sigPart, nil
+}
+
+func (h *Handler) verifySessionToken(token string) (string, bool) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", false
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", false
+	}
+	mac := hmac.New(sha256.New, h.sessionSecret)
+	mac.Write([]byte(parts[0]))
+	expected := mac.Sum(nil)
+	if subtle.ConstantTimeCompare(signature, expected) != 1 {
+		return "", false
+	}
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return "", false
+	}
+	var payload sessionTokenPayload
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return "", false
+	}
+	if payload.Username == "" || payload.Exp <= time.Now().Unix() {
+		return "", false
+	}
+	return payload.Username, true
+}
+
+// VerifySessionJoinToken validates a local app session token for WebSocket join.
+func (h *Handler) VerifySessionJoinToken(username, token string) error {
+	tokenUsername, ok := h.verifySessionToken(token)
+	if !ok {
+		return errors.New("invalid session token")
+	}
+	if tokenUsername != strings.TrimSpace(username) {
+		return errors.New("session username mismatch")
+	}
+	return nil
+}
+
+func (h *Handler) requireSession(w http.ResponseWriter, r *http.Request) (string, bool) {
+	requestID := requestIDFromContext(r.Context())
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	if auth == "" {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required", "AUTH_REQUIRED", requestID)
+		return "", false
+	}
+	const prefix = "Bearer "
+	if !strings.HasPrefix(auth, prefix) {
+		writeJSONError(w, http.StatusUnauthorized, "invalid auth token", "INVALID_AUTH_TOKEN", requestID)
+		return "", false
+	}
+	username, ok := h.verifySessionToken(strings.TrimSpace(strings.TrimPrefix(auth, prefix)))
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "invalid auth token", "INVALID_AUTH_TOKEN", requestID)
+		return "", false
+	}
+	return username, true
 }
 
 func (h *Handler) pruneLinkPreviewCache() {
@@ -262,6 +389,10 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
 		return
 	}
+	username, ok := h.requireSession(w, r)
+	if !ok {
+		return
+	}
 
 	q := r.URL.Query().Get("q")
 	if q == "" {
@@ -277,7 +408,7 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := h.store.SearchMessages(q, roomID, limit)
+	results, err := h.store.SearchMessagesForUser(q, roomID, username, limit)
 	if err != nil {
 		log.Printf("search error: %v", err)
 		writeJSONError(w, http.StatusInternalServerError, "search failed", "SEARCH_ERROR", requestID)
@@ -451,6 +582,9 @@ func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
 		return
 	}
+	if _, ok := h.requireSession(w, r); !ok {
+		return
+	}
 
 	// Limit request body to maxUploadSize.
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
@@ -535,6 +669,9 @@ func (h *Handler) UploadEmoji(w http.ResponseWriter, r *http.Request) {
 	requestID := requestIDFromContext(r.Context())
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+	if _, ok := h.requireSession(w, r); !ok {
 		return
 	}
 
@@ -803,10 +940,13 @@ func (h *Handler) ExportMessages(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
 		return
 	}
+	authUsername, ok := h.requireSession(w, r)
+	if !ok {
+		return
+	}
 
 	conversation := r.URL.Query().Get("conversation")
 	format := r.URL.Query().Get("format")
-	username := r.URL.Query().Get("username")
 
 	if format == "" {
 		format = "json"
@@ -836,7 +976,7 @@ func (h *Handler) ExportMessages(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasPrefix(conversation, "dm:"):
 		toUser = strings.TrimPrefix(conversation, "dm:")
-		currentUser = username
+		currentUser = authUsername
 		displayName = toUser
 	case strings.HasPrefix(conversation, "group:"):
 		groupName = strings.TrimPrefix(conversation, "group:")
@@ -849,11 +989,6 @@ func (h *Handler) ExportMessages(w http.ResponseWriter, r *http.Request) {
 		if conversation == "" || conversation == "public" {
 			displayName = "Public Chat"
 		}
-	}
-
-	if toUser != "" && currentUser == "" {
-		writeJSONError(w, http.StatusBadRequest, "username query parameter is required for DM export", "MISSING_USERNAME", requestID)
-		return
 	}
 
 	messages, err := h.store.ExportMessages(ctx, roomID, toUser, groupName, currentUser, limit)
@@ -996,12 +1131,19 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "registration failed", "SERVER_ERROR", requestID)
 		return
 	}
+	sessionToken, err := h.issueSessionToken(username)
+	if err != nil {
+		log.Printf("register: session token issue failed: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "registration failed", "SERVER_ERROR", requestID)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":  true,
-		"username": username,
+		"success":       true,
+		"username":      username,
+		"session_token": sessionToken,
 	})
 }
 
@@ -1051,11 +1193,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "invalid username or password", "INVALID_CREDENTIALS", requestID)
 		return
 	}
+	sessionToken, err := h.issueSessionToken(username)
+	if err != nil {
+		log.Printf("login: session token issue failed: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "login failed", "SERVER_ERROR", requestID)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":  true,
-		"username": username,
+		"success":       true,
+		"username":      username,
+		"session_token": sessionToken,
 	})
 }
 
@@ -1067,14 +1216,18 @@ func (h *Handler) InviteGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			ip = r.RemoteAddr
-		}
-		if !AuthAllow(ip) {
-			writeJSONError(w, http.StatusTooManyRequests, "too many attempts, try again later", "RATE_LIMITED", requestID)
-			return
-		}
+	authUsername, ok := h.requireSession(w, r)
+	if !ok {
+		return
+	}
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ip = r.RemoteAddr
+	}
+	if !AuthAllow(ip) {
+		writeJSONError(w, http.StatusTooManyRequests, "too many attempts, try again later", "RATE_LIMITED", requestID)
+		return
+	}
 	var body struct {
 		Username string `json:"username"`
 		MaxUses  int    `json:"max_uses"`
@@ -1084,18 +1237,12 @@ func (h *Handler) InviteGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username := strings.TrimSpace(body.Username)
-	if username == "" {
-		writeJSONError(w, http.StatusBadRequest, "username is required", "MISSING_USERNAME", requestID)
-		return
-	}
-
 	maxUses := body.MaxUses
 	if maxUses <= 0 {
 		maxUses = 5
 	}
 
-	code, err := h.store.GenerateInviteCode(username, maxUses)
+	code, err := h.store.GenerateInviteCode(authUsername, maxUses)
 	if err != nil {
 		log.Printf("generate invite code error: %v", err)
 		writeJSONError(w, http.StatusInternalServerError, "failed to generate invite code", "SERVER_ERROR", requestID)
@@ -1161,8 +1308,12 @@ func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 
 // AdminStats handles GET /api/admin/stats — returns server statistics.
 func (h *Handler) AdminStats(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+	if _, ok := h.requireSession(w, r); !ok {
 		return
 	}
 	stats := map[string]interface{}{
@@ -1184,14 +1335,12 @@ func (h *Handler) InviteList(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
 		return
 	}
-
-	username := r.URL.Query().Get("username")
-	if username == "" {
-		writeJSONError(w, http.StatusBadRequest, "username query parameter is required", "MISSING_USERNAME", requestID)
+	authUsername, ok := h.requireSession(w, r)
+	if !ok {
 		return
 	}
 
-	codes, err := h.store.ListInviteCodes(username)
+	codes, err := h.store.ListInviteCodes(authUsername)
 	if err != nil {
 		log.Printf("list invite codes error: %v", err)
 		writeJSONError(w, http.StatusInternalServerError, "failed to list invite codes", "SERVER_ERROR", requestID)

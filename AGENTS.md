@@ -1,6 +1,6 @@
 # TokenDanceChat Agent 指南
 
-最后更新：2026-05-24
+最后更新：2026-05-25
 
 ## 项目定位
 
@@ -13,7 +13,34 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 - React 19 + Zustand + Vite 客户端状态与 UI。
 - Agent-as-contact UX：TokenBot、PicoClaw、mentions、DM、群组协作、流式回复。
 
-本仓库不应演化为独立长期产品架构。可复用的经验应回流到 `D:\Code\AgentHub`。
+本仓库不应演化为独立长期产品架构。可复用的经验应回流到 `D:\Code\TokenDance\AgentHub`。
+
+在 `D:\Code\TokenDance` workspace 内做跨系统治理时，先读根级 `..\AGENTS.md` 和 `..\docs\`：
+- 身份/OIDC/鉴权：`..\docs\identity-auth.md`
+- 统一第三方登录：`..\docs\unified-login.md`
+- 产品矩阵/包装：`..\docs\product-matrix.md`
+- 生态产品需求队列：`..\docs\ecosystem-product-backlog.md`
+- Agent/SEO/i18n：`..\docs\agent-seo-i18n-packaging.md`
+- 设计系统：`..\docs\design-system.md`
+- 设计落地手册：`..\docs\design-implementation-playbook.md`
+- 文档治理：`..\docs\document-governance.md`
+- 治理评分和模板：`..\docs\governance-scorecard.md`、`..\docs\issue-templates.md`
+
+### TokenDance ID 登录边界
+
+TokenDanceChat 只作为 TokenDance ID relying party。不要在本仓库新增 GitHub、Google、飞书等直连第三方登录；provider 选择、TokenDance ID 账号自动创建和 OAuth 绑定都由 TokenDance ID 处理。Chat 侧只维护自己的 TokenDance ID OAuth client、回调、token 验证、聊天本地会话/重连语义。
+
+### 产品包装与 Agent 友好度
+
+TokenDanceChat 对外定位是 AgentHub 的 IM/Agent 交互验证场，不是独立长期产品线。公开 README、PWA metadata、`frontend/public/robots.txt`、`frontend/public/sitemap.xml`、`frontend/public/llms.txt` 必须保持这个定位。新增公开路由、离线页、语言入口或主要功能说明时，同步 `..\docs\agent-seo-i18n-packaging.md` 的检查项。
+
+OIDC、PWA/i18n、设计 token、公开包装或 AgentHub 验证类工作拆 issue 时，使用 `.github/ISSUE_TEMPLATE/tokendance-chat-governance.md`。
+需要把需求提升到生态级时，先对照 `..\docs\ecosystem-product-backlog.md`，尤其是 TokenDanceChat 的 OIDC session、PWA/offline/error i18n 和 AgentHub proving-ground 定位。
+
+### 设计系统边界
+
+UI 可以保留聊天产品的个性，但应逐步映射到 `..\docs\design-system.md` 的 TokenDance token intent：canvas、surface、ink、plum、moss、line、focus、radius。新增组件避免引入新的孤立颜色体系；密集聊天界面优先清晰、紧凑、可读，参考飞书/Lark 的工作感和 Telegram 的流畅消息体验。
+页面/组件重做、视觉 QA、截图验收或 token 变更必须同时读 `..\docs\design-implementation-playbook.md`。TokenDanceChat 的截图验收至少覆盖桌面和移动端的消息列表、composer、长消息、assistant/bot 状态或错误/空状态中与改动相关的场景。
 
 ## 持久化状态
 
@@ -36,7 +63,13 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 ## 当前增量
 
-性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.12），**1002** 前端测试 / 50 文件 / E2E 127/134 / tsc 0 / ESLint 0 / CI 全绿。
+OIDC 集成 (TokenDance ID) + 应用会话鉴权 + 性能优化 + UI 打磨 + 测试扩展 —— 持续推进（v0.2.13），**1078** 前端测试 / 52 文件 / 后端 6/6 / tsc 0 / ESLint 0 / CI 就绪；本轮 session/public-preview focused 回归 9 文件 / 369 tests。
+
+此增量包含：
+- **OIDC 集成 (TokenDance ID)**：Authorization Code + PKCE 流程，`/api/oidc/*` 5 个端点，oidc_users 表，WebSocket join token 验证，OidcLoginButton 前端组件，`App.tsx` OIDC 回调 redeem 与 `AuthModal` 登录入口。由 `CHAT_OIDC_ENABLED` 环境变量控制（默认 false，完全向后兼容）。
+- **应用会话鉴权**：login/register/OIDC redeem/exchange 返回 `session_token`；受保护 REST 端点使用 `Authorization: Bearer <session_token>`；本地注册用户 WebSocket join 发送应用 session token，OIDC 用户仍发送 OIDC access token，游客不发送 token。
+- 测试扩展至 1078 前端 / 52 文件，后端 OIDC handler 8 个测试全 PASS。
+- 原有增量（v0.2.12 积累）全部保留。
 
 此增量包含：
 - 前端测试扩展至 779 tests / 50 files（51.86% 行覆盖率）。
@@ -59,7 +92,7 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 - api.ts connect 竞态根治：connectGeneration 计数器替代 intentionalClose 布尔值，旧 onclose 在新 onopen 后触发时正确忽略。交叉审查发现 onerror/onopen/onmessage/timeout 缺少 gen guard → 已补全。
 - E2E 修复：back button "Back"→"返回"，group-call 邀请接受流程（acceptGroupInvite helper），button[aria-label] 重复选择器修复。
 - PM 审计修复：AI 助手默认展开、文件上传 >50MB 错误提示、麦克风权限拒绝反馈、语音录制提示 i18n、zh-CN publicChatSub 中文化、ChatInput disconnect 硬编码改用 t()。
-- 测试覆盖扩展：useWebSocket 3.37%→44.56%（+30）、JoinScreen 47.29%→81.08%（+18）、ChatInput +14（875 total）。
+- 测试覆盖扩展：useWebSocket 3.37%→44.56%（+30）、AuthModal/public preview 回归、ChatInput +14（875 total）。
 - SW activate: clients.claim() 移入 event.waitUntil()。
 - ChatLayout 测试 +14（移动端侧栏、ThreadPanel、GroupInfoPanel、重连 banner、主题循环、More 菜单 — 30 tests total）。
 - E2E 错误路径 5 tests（重连、踢下线、无效邀请码、错误密码、空消息）。
@@ -113,10 +146,10 @@ frontend/src/components/GroupInfoPanel.tsx
 
 ```powershell
 # 全量一键
-cd D:\Code\Projects\TokenDanceChat
+cd D:\Code\TokenDance\tokendance-chat
 .\scripts\verify.ps1
 # Backend focused webhook 回归
-cd D:\Code\Projects\TokenDanceChat\backend
+cd D:\Code\TokenDance\tokendance-chat\backend
 go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin|AuditListRedactsMetadataAndRequiresGroupAdmin)"
 go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPlaintextSecretMigrationHashesExistingRows|RotateWebhookSecretInvalidatesOldSecretAndAudits)"
 go test ./handler -run TestWebhookHandlerVerifiesHashedSecret
@@ -132,7 +165,7 @@ docker build --check -f Dockerfile .
 docker build --check -f Dockerfile.runtime .
 
 # Frontend focused webhook/store 回归
-cd D:\Code\Projects\TokenDanceChat\frontend
+cd D:\Code\TokenDance\tokendance-chat\frontend
 npm test -- --run src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx
 npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium
 
@@ -145,7 +178,7 @@ npm run build
 npm run visual:acceptance
 
 # 仓库 diff 卫生
-cd D:\Code\Projects\TokenDanceChat
+cd D:\Code\TokenDance\tokendance-chat
 git diff --check
 
 # 安全泄露检查（必须无声才算通过；AGENTS.md 自身的示例为预期豁免）

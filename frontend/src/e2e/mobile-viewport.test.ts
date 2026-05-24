@@ -251,7 +251,6 @@ test.describe("Mobile viewport (375x812)", () => {
       await joinChat(page);
 
       // Send button should be in disabled/empty state initially.
-      const sendBtn = page.getByRole("button", { name: "输入消息... (Shift+Enter 换行)" });
       // The aria-label on send button changes based on state; when empty it uses t("input.placeholder").
 
       const textarea = page.locator("textarea").first();
@@ -259,7 +258,6 @@ test.describe("Mobile viewport (375x812)", () => {
 
       // The send button should now be styled as active (hasContent).
       // We can verify by checking the Send icon is visible.
-      const sendIcon = page.locator('button svg.lucide-send').first();
       // The send button wraps a Send icon when content exists.
       await page.waitForTimeout(300);
 

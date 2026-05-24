@@ -258,7 +258,7 @@ test.describe("Notification & Sound", () => {
       page,
     }) => {
       // User A joins first, stays in public chat.
-      await joinChat(page);
+      const nameA = await joinChat(page);
       await expect(
         page.getByRole("button", { name: "断开连接" }),
       ).toBeVisible({ timeout: 5000 });

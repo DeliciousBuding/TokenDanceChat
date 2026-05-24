@@ -1,8 +1,8 @@
 # TokenDanceChat ROADMAP
 
-最后更新：2026-05-24（晚）
+最后更新：2026-05-25
 
-发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: **1078** 前端 / 50 文件 / E2E **160/166** / Backend **6/6** / Skills **6** 活跃 / CI 全绿
+发布: [v0.2.13](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.13) | Docker: `tokendancechat:v0.2.13` | 测试: **1078** 前端 / 52 文件 / Backend **6/6** / Skills **6** 活跃 / CI 全绿 | OIDC + session auth
 
 ## 当前目标
 
@@ -44,17 +44,26 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | P1 | Telegram UX | 快速消息列表、干净输入、移动端手势、copy/reply/edit 人体工学、打磨过渡、媒体查看器质量。 |
 | P1 | Agent-as-contact | 让 TokenBot/PicoClaw 感觉像 IM 联系人：DM、群组 mention、流式回复、模型/provider 可供性、工作流转移。 |
 | P2 | 运维/性能 | Health check、部署 checklist、bundle/runtime profiling、虚拟列表调优、WebSocket fanout/load check。 |
+| P2 | OIDC / 会话鉴权 | TokenDance ID 统一登录：`CHAT_OIDC_ENABLED` 控制；本地/OIDC 登录签发应用 `session_token`，保护 REST 与注册用户 WS join。 |
 | P2 | UI/美术方向 | 克制企业 UI + 流畅聊天交互；避免装饰性营销布局。 |
 
 ## 当前增量（dev）：测试覆盖 + 性能优化 + UI 打磨 + 工程基建
 
-状态：持续推进。896 tests / 50 files / tsc 0 / ESLint 0 / CI 就绪 / coverage 51.86%+ / E2E 105/108 / Backend 6/6 PASS。
+状态：持续推进。1078 tests / 52 files / tsc 0 / ESLint 0 / CI 就绪 / E2E 本地 public preview PASS / Backend 6/6 PASS；session/public-preview focused 回归 9 文件 / 369 tests。
 
+- [x] 应用会话鉴权：login/register/OIDC redeem/exchange 返回 HMAC `session_token`；受保护 REST 端点要求 `Authorization: Bearer <session_token>`；本地注册用户 WebSocket join 发送应用 session token，OIDC 用户仍发送 OIDC access token，游客不发送 token。
+- [x] REST 权限加固：search/export/upload/emoji/invite/admin stats 不再信任 query/body username；search 按认证用户过滤公开、DM、群组成员和 deleted 状态。
+- [x] 游客只读预览 P0：未登录首页通过 `GET /api/messages?limit=100` 拉取公开历史，接口失败时也结束骨架屏；保持不设置 username、不打开 WebSocket，点击「加入聊天」再进入 AuthModal 游客加入流程。
+- [x] 为游客预览添加 focused App/API 测试和当前 UI 的 Playwright 生产 smoke，避免旧认证入口 E2E 选择器误报。
+- [x] 修复未登录公共预览输入框聚焦时的全屏格式化遮罩拦截问题：composer popover 仅在已登录且输入框可用时打开，并以 ChatInput focused regression test 固化。
+- [x] 对齐前端 `index.html` 与 Go 后端 runtime CSP：移除 Google Fonts 外链，改用系统字体，避免视觉验收控制台 CSP 报错。
+- [x] 更新视觉验收脚本以适配当前 AuthModal 文案、composer selector 和 group-info Webhook/audit 场景。
+- [x] 完成 2026-05-25 视觉验收复核：desktop/tablet/mobile light/dark + group-info 截图和 metrics 全部无 issues，详见 `docs/visual-acceptance.md`。
 - [x] SW 缓存修复：CACHE_NAME tdchat-v3 + stale-while-revalidate 策略，防止部署后浏览器加载旧 JS/CSS。
 - [x] api.ts connect 竞态修复：connectGeneration 计数器替代 intentionalClose 布尔值，消除旧 onclose 在新 onopen 后触发的竞态。
 - [x] E2E 修复：back button label "Back" → "返回"（zh-CN context），3 个测试恢复。
 - [x] Group-call E2E 邀请接受：acceptGroupInvite helper，member 接受邀请后群组通话按钮出现。4/7 通过。
-- [x] 测试覆盖扩展：useWebSocket 3.37%→44.56%（+30 tests），JoinScreen 47.29%→81.08%（+18 tests），ChatInput +14 tests（875 total）。
+- [x] 测试覆盖扩展：useWebSocket 3.37%→44.56%（+30 tests）、AuthModal/public preview 回归、ChatInput +14 tests（875 total）。
 - [x] PM 审计全修复 (P1+P2)：AI 助手默认展开、文件上传错误提示、麦克风权限反馈、Sidebar 空状态 CTA 提示、分页超时重试按钮、移动端工具栏按钮可见、zh-CN 字符串全部中文化、录音提示 i18n。
 - [x] Utils i18n 重构：formatTime/formatDate/formatLastSeen 从 lang 参数改为 t() 函数，消除 8 处内联双语三元，新增 profile.today/yesterday 键。
 - [x] E2E 真实用户流：7 tests（emoji reaction、message edit、search、settings、GIF picker）。
@@ -214,6 +223,25 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-24 | `cd backend; go clean -testcache && go test ./...` | PASS, 6/6 (handler media +28, main +20, hub +19, store +18, picoclaw +23, llm +22) |
 | 2026-05-24 | `cd frontend; npx playwright test src/e2e/ --project=chromium` | 160/166 pass (3 group-call timing, 3 skipped) |
 | 2026-05-24 | `git checkout master && git merge dev && git push` | Merged (23x), 60+ files changed |
+| 2026-05-25 | `cd frontend; npm test -- --run src/App.test.tsx src/lib/api.test.ts` | PASS, 2 files / 176 tests |
+| 2026-05-25 | `cd frontend; npm test -- --run src/App.test.tsx -t StrictMode` | PASS, 1 focused test |
+| 2026-05-25 | `cd frontend; npm test -- --run src/App.test.tsx src/lib/api.test.ts src/components/ChatLayout.test.tsx src/components/Sidebar.test.tsx` | PASS, 4 files / 297 tests |
+| 2026-05-25 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-25 | `cd frontend; npm run build` | PASS, Vite chunk-size warning only |
+| 2026-05-25 | `cd frontend; E2E_BASE_URL=http://127.0.0.1:18080 npx playwright test src/e2e/public-preview-smoke.test.ts --project=chromium --workers=1` | PASS, 1/1 |
+| 2026-05-25 | `cd backend; go test ./...` | PASS, cached |
+| 2026-05-25 | `cd frontend; npm test -- --run src/components/ChatInput.test.tsx` | PASS, 44 tests |
+| 2026-05-25 | `cd frontend; npm test -- --run src/components/ChatInput.test.tsx src/components/Sidebar.test.tsx` | PASS, 2 files / 134 tests |
+| 2026-05-25 | `cd frontend; VISUAL_BASE_URL=http://127.0.0.1:18082 npm run visual:acceptance` | PASS, output `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-24T19-07-39-625Z`, all scenarios no issues |
+| 2026-05-25 | `cd backend; go test ./store -run TestSearchMessagesForUserFiltersPrivateAndDeletedResults` | PASS |
+| 2026-05-25 | `cd backend; go test ./handler -run TestSearchUsesAuthenticatedUserScope` | PASS |
+| 2026-05-25 | `cd backend; go test ./...` | PASS, backend/handler/store/hub/llm/picoclaw |
+| 2026-05-25 | `cd frontend; npm test -- --run` | PASS, 52 files / 1078 tests |
+| 2026-05-25 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-25 | `cd frontend; npm run build` | PASS, Vite chunk-size warning only |
+| 2026-05-25 | `cd frontend; npx eslint .` | PASS, 0 errors / 91 warnings |
+| 2026-05-25 | `git diff --check` | PASS, CRLF warnings only |
+| 2026-05-25 | submit-time leak scan (`git grep` x3 + `git log --grep`) | PASS, zero output |
 
 ## Review Gates
 

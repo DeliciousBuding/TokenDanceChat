@@ -426,7 +426,7 @@ test.describe("Poll Creation & Voting Flow", () => {
       // second WS with the same username and kick the page.)
       const question = `CloseTest_${Math.random().toString(36).slice(2, 6)}`;
       const options = ["Keep", "Archive", "Delete"];
-      const pollId = await createPollViaPage(page, question, options);
+      await createPollViaPage(page, question, options);
 
       await expect(page.getByText(question)).toBeVisible({ timeout: 10000 });
 

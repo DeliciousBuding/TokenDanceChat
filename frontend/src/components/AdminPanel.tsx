@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Users, MessageSquare, Hash, Group, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
+import { getSessionAuthHeaders } from "@/lib/api";
 
 interface AdminStats {
   total_messages: number;
@@ -25,7 +26,7 @@ export function AdminPanel({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    fetch("/api/admin/stats")
+    fetch("/api/admin/stats", { headers: getSessionAuthHeaders() })
       .then((r) => r.json())
       .then(setStats)
       .catch(() => {})

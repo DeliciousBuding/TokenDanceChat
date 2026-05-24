@@ -115,14 +115,14 @@ export function ScheduleButton({ onSchedule, disabled, scheduled }: ScheduleButt
         disabled={disabled}
         aria-label={t("schedule.scheduleMessage")}
         className={cn(
-          "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition-all duration-200",
+          "flex w-8 h-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-lg transition-all duration-200",
           scheduled
-            ? "border-primary/40 bg-primary/10 text-primary animate-pulse-once"
-            : "border-border bg-accent text-muted-foreground hover:bg-secondary hover:text-foreground",
+            ? "text-[var(--accent)] bg-[var(--accent)]/10 animate-pulse-once"
+            : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]",
           "disabled:cursor-not-allowed disabled:opacity-30",
         )}
       >
-        <Clock className={cn("h-4 w-4", scheduled && "text-primary")} />
+        <Clock size={15} strokeWidth={1.5} className={cn(scheduled && "text-[var(--accent)]")} />
       </button>
 
       {open && (

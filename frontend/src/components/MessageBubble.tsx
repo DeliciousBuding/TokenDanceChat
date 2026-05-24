@@ -149,15 +149,15 @@ const CodeBlock = memo(function CodeBlock({
   }, [code]);
 
   return (
-    <div className="relative group/code my-2 rounded-lg overflow-hidden border border-border">
+    <div className="relative group/code my-2 rounded-xl overflow-hidden border border-[var(--border-subtle)] bg-[var(--bg-2)]">
       {/* Header bar */}
-      <div className="flex items-center justify-between bg-muted px-3 py-1.5 border-b border-border">
-        <span className="text-[10px] text-muted-foreground/60 font-mono uppercase tracking-wider">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border-subtle)]">
+        <span className="text-[11px] text-[var(--text-tertiary)] font-mono uppercase tracking-wider">
           {language || "code"}
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/50 hover:text-foreground hover:bg-accent opacity-0 group-hover/code:opacity-100 transition-opacity"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] opacity-0 group-hover/code:opacity-100 transition-opacity"
           aria-label={t("a11y.copyCode")}
         >
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
@@ -165,7 +165,7 @@ const CodeBlock = memo(function CodeBlock({
         </button>
       </div>
       {/* Code content */}
-      <pre className="!bg-muted !p-3 !m-0 overflow-x-auto text-[0.8125rem] leading-relaxed">
+      <pre className="!bg-[var(--bg-2)] !p-3 !m-0 overflow-x-auto text-[0.8125rem] leading-relaxed">
         <code className={`language-${language || ""}`}>{code}</code>
       </pre>
     </div>
@@ -615,13 +615,13 @@ export const MessageBubble = memo(function MessageBubble({
     return () => window.removeEventListener("tdchat:close-emoji-picker", handler);
   }, []);
 
-  const hue = useMemo(
-    () => usernameHue(message.username),
+  const nameColor = useMemo(
+    () => {
+      const hue = usernameHue(message.username);
+      return `oklch(72% 0.16 ${hue})`;
+    },
     [message.username],
   );
-  const nameColor = `oklch(72% 0.16 ${hue})`;
-  const bubbleBg = `oklch(72% 0.16 ${hue} / 0.10)`;
-  const bubbleBorder = `oklch(72% 0.16 ${hue} / 0.18)`;
 
   // Get profile info for display name and avatar.
   const userProfiles = useChatStore((s) => s.userProfiles);
@@ -714,14 +714,15 @@ export const MessageBubble = memo(function MessageBubble({
         <span key={key}>
           {segParts.map((part, j) => {
             if (part.type === "mention") {
-              const isSelfMention = currentUsername === part.username;
               return (
                 <button
                   key={j}
                   onClick={() => setSelectedProfileUser(part.username)}
                   className={cn(
-                    "hover:underline cursor-pointer text-primary font-medium",
-                    isSelfMention ? "bg-primary/10 rounded-sm px-0.5" : "",
+                    "hover:underline cursor-pointer",
+                    isOwn
+                      ? "bg-[var(--accent)]/20 text-[var(--accent)] rounded-md px-1.5 py-0.5"
+                      : "bg-[var(--accent)]/12 text-[var(--accent)] rounded-md px-1.5 py-0.5",
                   )}
                 >
                   @{part.username}
@@ -762,7 +763,7 @@ export const MessageBubble = memo(function MessageBubble({
         return (
           <div className="flex items-center gap-2">
             <Mic className="voice-mic-icon h-4 w-4" />
-            <VoiceMessagePlayer audioUrl={audioUrl} primaryColor={isOwn ? bubbleBg : "var(--primary)"} />
+            <VoiceMessagePlayer audioUrl={audioUrl} primaryColor={isOwn ? "var(--message-user-bg)" : "var(--brand)"} />
           </div>
         );
       }
@@ -800,7 +801,7 @@ export const MessageBubble = memo(function MessageBubble({
 
     // Normal path (no highlight): render using existing logic.
     return renderSegment(processedContent, 0);
-  }, [message.content, currentUsername, isDeleted, t, emojiPreprocess, highlight, isOwn, bubbleBg]);
+  }, [message.content, currentUsername, isDeleted, t, emojiPreprocess, highlight, isOwn]);
 
   const paddingY =
     isGrouped && hideAvatar ? "py-0.5" : "py-1 sm:py-1.5";
@@ -820,7 +821,7 @@ export const MessageBubble = memo(function MessageBubble({
             <button
               onClick={() => { onReply(message); swipe.closeActions(); }}
               aria-label={t("input.replyTo")}
-              className="flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
+              className="flex w-11 h-11 items-center justify-center rounded-full border border-[var(--border-base)] bg-[var(--bg-base)] text-[var(--text-secondary)] hover:text-[var(--brand)] hover:bg-[var(--brand-light)] transition-colors"
             >
               <Reply className="h-4 w-4" />
             </button>
@@ -831,7 +832,7 @@ export const MessageBubble = memo(function MessageBubble({
               swipe.closeActions();
             }}
             aria-label={t("message.copy")}
-            className="flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
+            className="flex w-11 h-11 items-center justify-center rounded-full border border-[var(--border-base)] bg-[var(--bg-base)] text-[var(--text-secondary)] hover:text-[var(--brand)] hover:bg-[var(--brand-light)] transition-colors"
           >
             <Copy className="h-4 w-4" />
           </button>
@@ -839,7 +840,7 @@ export const MessageBubble = memo(function MessageBubble({
             <button
               onClick={() => { onForward(message); swipe.closeActions(); }}
               aria-label={t("message.forward")}
-              className="flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"
+              className="flex w-11 h-11 items-center justify-center rounded-full border border-[var(--border-base)] bg-[var(--bg-base)] text-[var(--text-secondary)] hover:text-[var(--brand)] hover:bg-[var(--brand-light)] transition-colors"
             >
               <Forward className="h-4 w-4" />
             </button>
@@ -848,7 +849,7 @@ export const MessageBubble = memo(function MessageBubble({
             <button
               onClick={() => { onDelete(message.id); swipe.closeActions(); }}
               aria-label={t("message.delete")}
-              className="flex h-11 w-11 flex-col items-center justify-center gap-0.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive/70 hover:text-destructive hover:bg-destructive/20 transition-colors"
+              className="flex w-11 h-11 items-center justify-center rounded-full border border-[var(--border-base)] bg-[var(--bg-base)] text-[var(--text-secondary)] hover:text-[var(--brand)] hover:bg-[var(--brand-light)] transition-colors"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -938,7 +939,7 @@ export const MessageBubble = memo(function MessageBubble({
           "flex min-w-0 flex-col",
           isVoiceMessage
             ? "max-w-[280px]"
-            : "max-w-[min(100%,42rem)] sm:max-w-[min(72%,40rem)]",
+            : "max-w-[70%]",
           isOwn ? "items-end" : "items-start",
         )}
       >
@@ -958,7 +959,7 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             )}
             {isOwn && !isGrouped && (
-              <span className="text-xs text-muted-foreground/60" title={formatFullTime(message.timestamp)}>
+              <span className="text-[11px] text-[var(--text-tertiary)]" title={formatFullTime(message.timestamp)}>
                 {formatTime(message.timestamp, t)}
                 {message.edited && (
                   <span className="text-[10px] text-muted-foreground/40 ml-1">
@@ -973,7 +974,7 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             )}
             {!isOwn && !isGrouped && (
-              <span className="text-[10px] text-muted-foreground/50" title={formatFullTime(message.timestamp)}>
+              <span className="text-[11px] text-[var(--text-tertiary)]" title={formatFullTime(message.timestamp)}>
                 {formatTime(message.timestamp, t)}
                 {(message as ChatMessage).mention_all && (
                   <span className="text-[10px] text-amber-500/70 ml-1 font-medium">
@@ -1022,21 +1023,13 @@ export const MessageBubble = memo(function MessageBubble({
 
         <div
           className={cn(
-            "relative rounded-[18px] text-[13.5px] leading-[1.58] shadow-[0_1px_1px_oklch(0_0_0_/_0.025)] sm:text-sm sm:leading-relaxed",
-            isVoiceMessage ? "px-2 py-2" : "px-3 py-2 sm:px-3.5 sm:py-2.5",
+            "relative text-[15px] leading-relaxed",
+            isVoiceMessage ? "px-2 py-2" : "px-4 py-2.5",
             isOwn
-              ? "rounded-br-md"
-              : "rounded-bl-md border border-border/70 bg-card/80",
+              ? "bg-[var(--accent)]/12 rounded-2xl rounded-br-md"
+              : "bg-[var(--bg-2)] rounded-2xl rounded-bl-md",
             isDeleted && "opacity-40",
           )}
-          style={
-            isOwn
-              ? {
-                  backgroundColor: bubbleBg,
-                  border: `1px solid ${bubbleBorder}`,
-                }
-              : undefined
-          }
         >
           {isEditing ? (
             <div className="flex flex-col gap-2 w-full min-w-[260px]">
@@ -1054,7 +1047,7 @@ export const MessageBubble = memo(function MessageBubble({
                     setIsEditing(false);
                   }
                 }}
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none resize-none"
+                className="w-full rounded-lg border border-[var(--hairline)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--ink-subtle)] outline-none focus:border-[var(--plum)] focus:ring-2 focus:ring-[var(--ring-focus)] resize-none"
                 style={{ minHeight: "60px", scrollbarWidth: "thin" }}
                 autoFocus
               />
@@ -1075,7 +1068,7 @@ export const MessageBubble = memo(function MessageBubble({
                       setIsEditing(false);
                     }
                   }}
-                  className="rounded-lg px-3 py-1 text-xs font-medium bg-primary text-primary-foreground hover:brightness-110 transition-colors"
+                  className="rounded-full bg-[var(--brand)] text-white px-3 py-1 text-xs font-medium hover:brightness-110 transition-colors"
                 >
                   {t("input.save")}
                 </button>
@@ -1103,11 +1096,11 @@ export const MessageBubble = memo(function MessageBubble({
               <button
                 type="button"
                 onClick={openContextMenuFromButton}
-                className="flex h-[44px] w-[44px] items-center justify-center rounded-lg border border-border/60 bg-background/90 text-muted-foreground/80 shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                className="flex w-8 h-8 items-center justify-center rounded-full bg-[var(--bg-1)]/90 backdrop-blur-sm text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
                 aria-label={t("message.contextMenu")}
                 title={t("message.contextMenu")}
               >
-                <MoreHorizontal className="h-5 w-5" />
+                <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.5} />
               </button>
             </div>
           )}
@@ -1143,7 +1136,7 @@ export const MessageBubble = memo(function MessageBubble({
                     );
                   }
                 }}
-                className="inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-border/50 bg-card hover:bg-accent transition-colors text-muted-foreground/70"
+                className="inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-[var(--border-subtle)] bg-[var(--bg-1)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-secondary)]"
                 aria-label={`${replyCount} replies`}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1163,10 +1156,10 @@ export const MessageBubble = memo(function MessageBubble({
                         handleAddReaction(emoji)
                       }
                       className={cn(
-                        "inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-border/50 bg-card hover:bg-accent transition-colors",
+                        "inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-[var(--border-subtle)] bg-[var(--bg-1)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-secondary)]",
                         currentUsername &&
                           users.includes(currentUsername) &&
-                          "border-border bg-accent",
+                          "bg-[var(--accent)]/10 border-[var(--accent)]/30",
                         recentlyToggledReaction === emoji && "animate-pop",
                       )}
                       aria-label={`${emoji} ${users.length} reactions`}
@@ -1221,7 +1214,7 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
             <span
               className={cn(
-                "text-[10px] text-muted-foreground/50 transition-opacity",
+                "text-[11px] text-[var(--text-tertiary)] transition-opacity",
                 forceShowTimestamp
                   ? "opacity-100"
                   : "opacity-0 group-hover:opacity-100",

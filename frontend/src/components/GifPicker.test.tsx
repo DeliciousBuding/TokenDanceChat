@@ -57,21 +57,22 @@ function mockFetchResponse(items: typeof mockTrendingItems) {
   });
 }
 
-function renderGifPicker(onSelect?: ReturnType<typeof vi.fn>, onClose?: ReturnType<typeof vi.fn>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderGifPicker(onSelect?: (...args: any[]) => any, onClose?: (...args: any[]) => any) {
   const selectFn = onSelect ?? vi.fn();
   const closeFn = onClose ?? vi.fn();
-  const result = render(<GifPicker onSelect={selectFn} onClose={closeFn} />);
+  const result = render(<GifPicker onSelect={selectFn as (markdown: string) => void} onClose={closeFn as () => void} />);
   return { ...result, onSelect: selectFn, onClose: closeFn };
 }
 
 describe("GifPicker", () => {
-  let originalFetch: typeof global.fetch;
+  let originalFetch: typeof window.fetch;
 
   beforeEach(() => {
-    originalFetch = global.fetch;
+    originalFetch = window.fetch;
     vi.clearAllMocks();
     // Default: return trending items for any fetch
-    global.fetch = vi.fn().mockImplementation((url: string) => {
+    window.fetch = vi.fn().mockImplementation((url: string) => {
       if (typeof url === "string" && url.includes("/api/giphy/search")) {
         return mockFetchResponse(mockSearchItems);
       }
@@ -80,7 +81,7 @@ describe("GifPicker", () => {
   });
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    window.fetch = originalFetch;
   });
 
   it("renders search input with placeholder", () => {
@@ -160,7 +161,7 @@ describe("GifPicker", () => {
 
     // After switching tabs, the component should re-fetch (trending stickers)
     await waitFor(() => {
-      const fetchCalls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+      const fetchCalls = (window.fetch as ReturnType<typeof vi.fn>).mock.calls;
       const stickerCall = fetchCalls.find(
         (call: string[]) => typeof call[0] === "string" && call[0].includes("type=sticker"),
       );
@@ -170,7 +171,7 @@ describe("GifPicker", () => {
 
   it("handles empty search results", async () => {
     // Override fetch to return empty data
-    global.fetch = vi.fn().mockResolvedValue({
+    window.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
@@ -203,10 +204,10 @@ describe("GifPicker", () => {
   // ---- New tests: API call verification, loading, error state ----
 
   it("fetches trending endpoint on mount", async () => {
-    const fetchMock = vi.fn().mockImplementation((url: string) => {
+    const fetchMock = vi.fn().mockImplementation((_url: string) => {
       return mockFetchResponse(mockTrendingItems);
     });
-    global.fetch = fetchMock as unknown as typeof fetch;
+    window.fetch = fetchMock as unknown as typeof fetch;
 
     renderGifPicker();
 
@@ -221,10 +222,10 @@ describe("GifPicker", () => {
   });
 
   it("search triggers API call with correct query params", async () => {
-    const fetchMock = vi.fn().mockImplementation((url: string) => {
+    const fetchMock = vi.fn().mockImplementation((_url: string) => {
       return mockFetchResponse(mockSearchItems);
     });
-    global.fetch = fetchMock as unknown as typeof fetch;
+    window.fetch = fetchMock as unknown as typeof fetch;
 
     renderGifPicker();
     const input = screen.getByPlaceholderText("Search GIFs");
@@ -253,7 +254,7 @@ describe("GifPicker", () => {
       resolveFetch = resolve;
     });
 
-    global.fetch = vi.fn().mockImplementation(() =>
+    window.fetch = vi.fn().mockImplementation(() =>
       fetchPromise.then(() => ({
         ok: true,
         json: () =>
@@ -277,7 +278,7 @@ describe("GifPicker", () => {
   });
 
   it("shows empty state when API request fails", async () => {
-    global.fetch = vi
+    window.fetch = vi
       .fn()
       .mockRejectedValue(new Error("Network error")) as unknown as typeof fetch;
 

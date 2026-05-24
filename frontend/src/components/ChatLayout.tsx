@@ -64,8 +64,10 @@ export function ChatLayout() {
     activeCall,
     setActiveCall,
     setIncomingCall,
-    isGuest,
+    setShowAuthModal,
   } = useChatStore();
+
+  const unauthenticated = !username;
   const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, forwardMessage, markRead } =
     useWebSocket();
 
@@ -495,7 +497,7 @@ export function ChatLayout() {
       {/* Main chat area */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden" style={{ paddingBottom: keyboardPadding }}>
         {/* Mobile top bar */}
-        <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-2 lg:hidden pt-safe">
+        <div className="flex items-center gap-2 glass-header border-b border-[var(--border-base)] px-3 py-2 lg:hidden pt-safe">
           <button
             onClick={() => setSidebarOpen(true)}
             aria-label={t("a11y.openSidebar")}
@@ -505,11 +507,29 @@ export function ChatLayout() {
           </button>
           <div className="min-w-0 flex-1 px-1">
             <h1
-              className="truncate text-[15px] font-semibold leading-5 text-foreground"
+              className="truncate text-[15px] font-semibold leading-5 text-foreground flex items-center gap-1.5"
               data-visual="mobile-chat-title"
             >
+              {!connected && (
+                <span className="relative flex h-2 w-2 flex-shrink-0" title={reconnectFailed ? t("system.reconnectFailed") : t("system.reconnecting", { attempt: String((reconnectAttempt ?? 0) + 1) })}>
+                  <span className={cn(
+                    "absolute inline-flex h-full w-full rounded-full",
+                    reconnectFailed ? "bg-danger" : "bg-warning",
+                    reconnectAttempt !== null && !reconnectFailed && "animate-ping opacity-40",
+                  )} />
+                  <span className={cn("relative inline-flex h-2 w-2 rounded-full", reconnectFailed ? "bg-danger" : "bg-warning")} />
+                </span>
+              )}
               {headerTitle}
             </h1>
+            {unauthenticated && (
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors mt-0.5"
+              >
+                {t("join.buttonJoin")}
+              </button>
+            )}
           </div>
           {/* Call buttons (mobile, DM only) */}
           {currentChat.type === "dm" && (
@@ -562,7 +582,7 @@ export function ChatLayout() {
               <MoreHorizontal className="h-5 w-5" />
             </button>
             {mobileActionsOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-xl border border-border bg-card py-1 shadow-xl animate-scale-in origin-top-right">
+              <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-16px border border-[var(--border-base)] bg-[var(--dialog-fill-0)] py-1 shadow-xl animate-scale-in origin-top-right">
                 <button
                   onClick={() => {
                     toggleLang();
@@ -616,7 +636,7 @@ export function ChatLayout() {
         </div>
 
         {/* Desktop header */}
-        <div className="hidden lg:flex items-center justify-between gap-4 border-b border-border bg-card px-6 py-3.5 transition-colors duration-300">
+        <div className="hidden lg:flex items-center justify-between gap-4 glass-header border-b border-[var(--border-base)] px-6 py-3.5 transition-colors duration-300">
           <div className="flex min-w-[13rem] max-w-[42%] flex-shrink-0 items-center gap-3">
             {/* Back to public chat button (when in DM or group) */}
             {currentChat.type !== "public" && (
@@ -641,12 +661,37 @@ export function ChatLayout() {
             <div className="min-w-0 flex-1">
               <h1
                 data-visual="desktop-chat-title"
-                className="truncate text-base font-semibold text-foreground"
+                className="truncate text-base font-semibold text-foreground flex items-center gap-2"
                 title={headerTitle}
               >
+                {!connected && (
+                  <span className="relative flex h-2 w-2 flex-shrink-0" title={reconnectFailed ? t("system.reconnectFailed") : t("system.reconnecting", { attempt: String((reconnectAttempt ?? 0) + 1) })}>
+                    <span className={cn(
+                      "absolute inline-flex h-full w-full rounded-full",
+                      reconnectFailed ? "bg-danger" : "bg-warning",
+                      reconnectAttempt !== null && !reconnectFailed && "animate-ping opacity-40",
+                    )} />
+                    <span className={cn(
+                      "relative inline-flex h-2 w-2 rounded-full",
+                      reconnectFailed ? "bg-danger" : "bg-warning",
+                    )} />
+                  </span>
+                )}
                 {headerTitle}
               </h1>
-              <p className="truncate text-xs text-muted-foreground">{headerSubtitle}</p>
+              {unauthenticated ? (
+                <p className="truncate text-xs text-muted-foreground flex items-center gap-2">
+                  <span className="opacity-60">{t("chat.guestWarning")}</span>
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="rounded-full bg-[var(--accent)]/10 px-2.5 py-0.5 text-[11px] font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors"
+                  >
+                    {t("join.buttonJoin")}
+                  </button>
+                </p>
+              ) : (
+                <p className="truncate text-xs text-muted-foreground">{headerSubtitle}</p>
+              )}
             </div>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-x-auto scrollbar-thin">
@@ -692,7 +737,7 @@ export function ChatLayout() {
                 {t("more.label")}
               </button>
               {showMoreMenu && (
-                <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-md shadow-md min-w-[180px] py-1">
+                <div className="absolute right-0 top-full mt-1 z-50 rounded-16px border border-[var(--border-base)] bg-[var(--dialog-fill-0)] shadow-md min-w-[180px] py-1">
                   <button
                     onClick={() => { toggleLang(); setShowMoreMenu(false); }}
                     className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
@@ -771,48 +816,9 @@ export function ChatLayout() {
           </div>
         </div>
 
-        {/* Guest mode warning */}
-        {isGuest && (
-          <div className="flex items-center gap-2 border-b border-warning/20 bg-warning/5 px-4 py-1.5 text-xs text-muted-foreground lg:px-6">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-warning/60">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            <span>{t("chat.guestWarning")}</span>
-          </div>
-        )}
-
-        {/* Connection lost / reconnecting banner */}
-        {!connected && (
-          <div className={cn(
-            "border-b border-warning/50 bg-warning/10 px-6 py-2 flex items-center gap-3 text-xs",
-            reconnectAttempt !== null && "animate-pulse",
-          )}>
-            <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-warning" />
-              <span className="text-warning-foreground font-medium">
-                {reconnectAttempt !== null
-                  ? t("system.reconnecting", { attempt: String(reconnectAttempt + 1) })
-                  : reconnectFailed
-                    ? t("system.reconnectFailed")
-                    : t("system.connectionLost")}
-              </span>
-            </div>
-            {reconnectFailed && (
-              <button
-                onClick={() => window.location.reload()}
-                className="ml-auto rounded-md px-2 py-0.5 text-[10px] text-warning hover:text-warning-foreground hover:bg-warning/20 transition-colors"
-              >
-                {t("error.reload")}
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Friend request notifications */}
         {pendingFriendRequests.length > 0 && currentChat.type === "public" && (
-          <div className="border-b border-border bg-card px-6 py-2 space-y-1">
+          <div className="border-b border-[var(--hairline)] bg-[var(--tint)] px-6 py-2 space-y-1">
             {pendingFriendRequests.map((req) => (
               <div
                 key={req.from}

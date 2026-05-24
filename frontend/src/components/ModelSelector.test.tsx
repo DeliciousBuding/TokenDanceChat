@@ -59,7 +59,7 @@ describe("ModelSelector", () => {
     it("已选择模型时显示模型 providerName", () => {
       const firstModel = modelCatalog[0];
       renderModelSelector(firstModel.id);
-      expect(screen.getByText(firstModel.providerName)).toBeTruthy();
+      expect(screen.getAllByText(firstModel.providerName).length).toBeGreaterThanOrEqual(1);
     });
 
     it("渲染下拉箭头图标", () => {
@@ -137,7 +137,7 @@ describe("ModelSelector", () => {
     it("已选中的模型旁显示 Check 图标", () => {
       const firstModel = modelCatalog[0];
       renderModelSelector(firstModel.id);
-      fireEvent.click(screen.getByText(firstModel.providerName));
+      fireEvent.click(screen.getAllByText(firstModel.providerName)[0]);
 
       // The currently selected option should have aria-selected
       const selectedOption = screen.getByRole("option", { selected: true });

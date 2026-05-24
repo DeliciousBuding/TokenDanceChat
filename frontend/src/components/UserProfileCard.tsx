@@ -13,7 +13,7 @@ interface UserProfileCardProps {
 }
 
 export function UserProfileCard({ username, onClose }: UserProfileCardProps) {
-  const { t, lang } = useTranslation();
+  const { t } = useTranslation();
   const {
     userStatusList,
     setSelectedProfileUser,

@@ -633,7 +633,7 @@ test.describe("Reaction edge cases", () => {
     test("multiple different reactions appear on a public message", async ({
       page,
     }) => {
-      const name = await joinChat(page);
+      await joinChat(page);
 
       // Send a message in public chat.
       const msg = `react_${Math.random().toString(36).slice(2, 8)}`;

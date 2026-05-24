@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { LinkPreview, MessageLinkPreviews, extractURLs } from "./LinkPreview";
 import type { LinkPreviewData } from "@/lib/api";
 

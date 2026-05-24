@@ -229,7 +229,6 @@ test.describe("Group chat flow", () => {
 
       // The sender's name should be visible (used as the message bubble label).
       // Scope to the main chat area to avoid matching the sidebar footer.
-      const mainArea = page.locator('[data-visual="desktop-chat-title"]').locator("..");
       // The username appears in a message bubble header.
       await expect(page.getByText(name).first()).toBeVisible({
         timeout: 10000,

@@ -28,7 +28,7 @@ export const SystemMessage = memo(function SystemMessage({
   content,
   timestamp,
 }: SystemMessageProps) {
-  const { t, lang } = useTranslation();
+  const { t } = useTranslation();
   const i18n = parseI18nContent(content);
   const displayText = i18n ? t(i18n.key, i18n.params) : content;
 

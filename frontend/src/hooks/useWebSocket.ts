@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef } from "react";
 import { useChatStore } from "@/stores/chatStore";
 import {
   chatAPI,
+  getSessionToken,
   type WSMessage,
   type ChatMessage,
   type ScheduledMessage,
@@ -130,11 +131,20 @@ export function useWebSocket() {
   } = useChatStore();
 
   const connect = useCallback(
-    async (name: string) => {
+    async (name: string, sessionToken?: string) => {
       try {
-        await chatAPI.connect(name);
+        const { isGuest, oidcAuthenticated, oidcAccessToken } = useChatStore.getState();
+        const token = oidcAuthenticated
+          ? oidcAccessToken ?? undefined
+          : isGuest
+            ? undefined
+            : sessionToken ?? getSessionToken() ?? undefined;
+        await chatAPI.connect(name, token);
         setConnected(true);
-        useChatStore.getState().setGuest(false);
+        // Only clear isGuest if it wasn't explicitly set by the caller (guest join).
+        if (!useChatStore.getState().isGuest) {
+          useChatStore.getState().setGuest(false);
+        }
         chatAPI.sendMarkRead();
         chatAPI.sendBlockList();
       } catch (err) {
@@ -460,9 +470,8 @@ export function useWebSocket() {
           content || i18nSys("system.kicked"),
           Date.now(),
         );
-        // Reset store state before redirecting to join screen.
+        // Reset store state and disconnect.
         useChatStore.getState().reset();
-        useChatStore.getState().setView("join");
         disconnect();
       }),
     );

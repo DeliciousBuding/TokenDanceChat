@@ -34,15 +34,15 @@ function mockTouchEvent(
 
 describe("useTouchGestures", () => {
   let handlers: SwipeHandlers;
-  let onSwipeLeft: ReturnType<typeof vi.fn>;
-  let onSwipeRight: ReturnType<typeof vi.fn>;
-  let onLongPress: ReturnType<typeof vi.fn>;
+  let onSwipeLeft = vi.fn<() => void>();
+  let onSwipeRight = vi.fn<() => void>();
+  let onLongPress = vi.fn<() => void>();
 
   beforeEach(() => {
     vi.useFakeTimers();
-    onSwipeLeft = vi.fn();
-    onSwipeRight = vi.fn();
-    onLongPress = vi.fn();
+    onSwipeLeft = vi.fn<() => void>();
+    onSwipeRight = vi.fn<() => void>();
+    onLongPress = vi.fn<() => void>();
     handlers = { onSwipeLeft, onSwipeRight, onLongPress };
   });
 
@@ -262,10 +262,10 @@ describe("useTouchGestures", () => {
 describe("usePullDownGesture", () => {
   let containerRef: React.RefObject<HTMLDivElement | null>;
   let handlers: PullDownHandlers;
-  let onPullDown: ReturnType<typeof vi.fn>;
+  let onPullDown = vi.fn<() => void>();
 
   beforeEach(() => {
-    onPullDown = vi.fn();
+    onPullDown = vi.fn<() => void>();
     handlers = { onPullDown };
     const div = { scrollTop: 0 } as HTMLDivElement;
     containerRef = { current: div };
@@ -418,9 +418,7 @@ describe("usePullDownGesture", () => {
     });
 
     act(() => {
-      result.current.onTouchEnd(
-        mockTouchEvent([], [{ clientX: 100, clientY: 100 }]),
-      );
+      result.current.onTouchEnd();
     });
 
     // Another gesture should still work (state was cleared).
@@ -461,9 +459,7 @@ describe("usePullDownGesture", () => {
 
     expect(() => {
       act(() => {
-        result.current.onTouchEnd(
-          mockTouchEvent([], [{ clientX: 100, clientY: 200 }]),
-        );
+        result.current.onTouchEnd();
       });
     }).not.toThrow();
   });
@@ -473,12 +469,12 @@ describe("usePullDownGesture", () => {
 
 describe("useSwipeableMessage", () => {
   let handlers: SwipeableMessageHandlers;
-  let onReply: ReturnType<typeof vi.fn>;
-  let onCopy: ReturnType<typeof vi.fn>;
+  let onReply = vi.fn<() => void>();
+  let onCopy = vi.fn<() => void>();
 
   beforeEach(() => {
-    onReply = vi.fn();
-    onCopy = vi.fn();
+    onReply = vi.fn<() => void>();
+    onCopy = vi.fn<() => void>();
     handlers = { onReply, onCopy, isOwn: false, disabled: false };
   });
 
@@ -563,9 +559,7 @@ describe("useSwipeableMessage", () => {
     });
 
     act(() => {
-      result.current.onTouchEnd(
-        mockTouchEvent([], [{ clientX: 50, clientY: 100 }]),
-      );
+      result.current.onTouchEnd();
     });
 
     // translateX should snap to -ACTION_WIDTH because |translateX| > ACTION_WIDTH * 0.4
@@ -588,9 +582,7 @@ describe("useSwipeableMessage", () => {
     });
 
     act(() => {
-      result.current.onTouchEnd(
-        mockTouchEvent([], [{ clientX: 270, clientY: 100 }]),
-      );
+      result.current.onTouchEnd();
     });
 
     // Should snap back to 0 since |translateX| <= ACTION_WIDTH * 0.4
@@ -612,9 +604,7 @@ describe("useSwipeableMessage", () => {
       );
     });
     act(() => {
-      result.current.onTouchEnd(
-        mockTouchEvent([], [{ clientX: 50, clientY: 100 }]),
-      );
+      result.current.onTouchEnd();
     });
 
     expect(result.current.showActions).toBe(true);
@@ -651,9 +641,7 @@ describe("useSwipeableMessage", () => {
 
     expect(() => {
       act(() => {
-        result.current.onTouchEnd(
-          mockTouchEvent([], [{ clientX: 240, clientY: 100 }]),
-        );
+        result.current.onTouchEnd();
       });
     }).not.toThrow();
   });

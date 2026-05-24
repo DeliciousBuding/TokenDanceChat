@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense, type KeyboardEvent, type ClipboardEvent } from "react";
-import { Send, Loader2, X, ImagePlus, Paperclip, Mic, Square, Bold, Italic, Strikethrough, Code, Quote, Link, Eye, EyeOff, Film } from "lucide-react";
+import { Send, Loader2, X, ImagePlus, Paperclip, Mic, Square, Bold, Italic, Strikethrough, Code, Quote, Link, Eye, EyeOff, Film, ArrowUp, SmilePlus, Plus } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn, hashString } from "@/lib/utils";
@@ -28,8 +28,8 @@ interface ChatInputProps {
   onUpload?: (file: File) => void;
 }
 
-const INPUT_MIN_HEIGHT = 48;
-const INPUT_MAX_HEIGHT = 160;
+const INPUT_MIN_HEIGHT = 24;
+const INPUT_MAX_HEIGHT = 120;
 export function ChatInput({
   onSend,
   disabled,
@@ -82,7 +82,6 @@ export function ChatInput({
   const [isComposing, setIsComposing] = useState(false);
   const [pulseButton, setPulseButton] = useState(false);
   const [disconnectFeedback, setDisconnectFeedback] = useState(false);
-  const [disconnectFlash, setDisconnectFlash] = useState(false);
   const hadContentRef = useRef(false);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
   const sendingRef = useRef(false);
@@ -99,7 +98,6 @@ export function ChatInput({
 
   // Formatting toolbar state
   const [previewOn, setPreviewOn] = useState(false);
-  const [formatToolbarOpen, setFormatToolbarOpen] = useState(false);
   const [linkInputVisible, setLinkInputVisible] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const linkInputRef = useRef<HTMLInputElement>(null);
@@ -112,6 +110,11 @@ export function ChatInput({
 
   // Gif picker state
   const [showGifPicker, setShowGifPicker] = useState(false);
+
+  // Format bubble & attach popover state
+  const [showFormatBubble, setShowFormatBubble] = useState(false);
+  const [showAttachPopover, setShowAttachPopover] = useState(false);
+  const attachPopoverRef = useRef<HTMLDivElement>(null);
 
   const handleCancelPointerDown = useCallback((e: React.PointerEvent) => {
     slideCancelStartX.current = e.clientX;
@@ -741,11 +744,17 @@ export function ChatInput({
     if (sendingRef.current) return;
     const trimmed = content.trim();
     if (!trimmed || disabled) return;
+
+    // Unauthenticated: show auth modal instead of sending.
+    const { username } = useChatStore.getState();
+    if (!username) {
+      useChatStore.getState().setShowAuthModal(true);
+      return;
+    }
+
     if (!connected) {
       // Keep content in input so user can retry when reconnected.
       setDisconnectFeedback(true);
-      setDisconnectFlash(true);
-      setTimeout(() => { if (mountedRef.current) setDisconnectFlash(false); }, 300);
       setTimeout(() => { if (mountedRef.current) setDisconnectFeedback(false); }, 3000);
       return;
     }
@@ -905,6 +914,22 @@ export function ChatInput({
     [content, emojiQuery],
   );
 
+  // Insert ":" at cursor to trigger emoji autocomplete
+  const handleEmojiButton = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const insertion = ":";
+    const newContent = content.slice(0, start) + insertion + content.slice(end);
+    setContent(newContent);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursor = start + insertion.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  }, [content]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       // @mention autocomplete keyboard handling
@@ -996,7 +1021,7 @@ export function ChatInput({
         handleSend();
       }
 
-      // ↑ key with empty input → edit last sent message (Telegram-style).
+      // ↑ key with empty input -> edit last sent message (Telegram-style).
       if (e.key === "ArrowUp" && !e.shiftKey && !content && !mentionActive && !slashActive && !emojiActive) {
         e.preventDefault();
         const allMessages = useChatStore.getState().messages;
@@ -1057,6 +1082,14 @@ export function ChatInput({
   );
 
   const hasContent = content.trim().length > 0;
+  const canOpenComposerPopovers = !disabled && Boolean(username);
+
+  useEffect(() => {
+    if (!canOpenComposerPopovers) {
+      setShowFormatBubble(false);
+      setShowAttachPopover(false);
+    }
+  }, [canOpenComposerPopovers]);
 
   // Determine placeholder based on chat context.
   const placeholder = useMemo(() => {
@@ -1071,9 +1104,19 @@ export function ChatInput({
     return t("input.placeholder");
   }, [currentChat, t]);
 
+  // Shared button class for toolbar and bottom-row icon buttons
+  const iconBtnClass = cn(
+    "flex h-11 w-11 items-center justify-center rounded-lg flex-shrink-0 transition-colors duration-150 lg:h-8 lg:w-8",
+    "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]",
+    "disabled:cursor-not-allowed disabled:opacity-30",
+  );
+
+  const toolbarBtnClass = (active = false) =>
+    cn(iconBtnClass, active && "text-[var(--accent)] bg-[var(--accent)]/10");
+
   return (
     <div
-      className="relative flex-shrink-0 border-t border-border bg-card pb-safe"
+      className="relative flex-shrink-0 rounded-2xl border border-[var(--border-glass)] bg-[var(--surface-glass-strong)] shadow-md pb-safe"
       data-testid="chat-input"
       onDragEnter={(e) => {
         e.preventDefault();
@@ -1115,15 +1158,15 @@ export function ChatInput({
     >
       {/* Reply indicator */}
       {replyTo && (
-        <div className="reply-indicator-enter flex items-center gap-2 px-4 pt-2">
-          <div className="flex-1 flex items-center gap-2 rounded-lg bg-card border border-border px-3 py-1.5">
-            <span className="text-xs text-muted-foreground">
+        <div className="reply-indicator-enter flex items-center gap-2 px-1 pt-1 pb-2">
+          <div className="flex-1 flex items-center gap-2 rounded-lg bg-[var(--bg-1)] border border-[var(--border-base)]/50 px-3 py-1.5">
+            <span className="text-xs text-[var(--text-tertiary)]">
               {t("input.replyTo")}{" "}
-              <span className="font-medium text-foreground/70">
+              <span className="font-medium text-[var(--text-secondary)]">
                 {replyTo.username}
               </span>
             </span>
-            <span className="text-xs text-muted-foreground truncate flex-1">
+            <span className="text-xs text-[var(--text-tertiary)] truncate flex-1">
               {replyTo.content.slice(0, 60)}
               {replyTo.content.length > 60 ? "..." : ""}
             </span>
@@ -1131,7 +1174,7 @@ export function ChatInput({
           <button
             onClick={() => setReplyTo(null)}
             aria-label={t("input.cancel")}
-            className="flex-shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -1140,19 +1183,19 @@ export function ChatInput({
 
       {/* Editing indicator */}
       {editingMessageId && !replyTo && (
-        <div className="reply-indicator-enter flex items-center gap-2 px-4 pt-2">
-          <div className="flex-1 flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-primary">
+        <div className="reply-indicator-enter flex items-center gap-2 px-1 pt-1 pb-2">
+          <div className="flex-1 flex items-center gap-2 rounded-lg bg-[var(--accent)]/10 border border-[var(--accent)]/20 px-3 py-1.5">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-[var(--accent)]">
               <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
             </svg>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-[var(--text-tertiary)]">
               {t("input.editingMessage")}
             </span>
           </div>
           <button
             onClick={() => { setEditingMessageId(null); setContent(""); }}
             aria-label={t("input.cancel")}
-            className="flex-shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -1161,13 +1204,13 @@ export function ChatInput({
 
       {/* Image preview */}
       {pendingImage && (
-        <div className="image-preview-enter px-4 pt-2">
-          <div className="flex items-start gap-3 rounded-xl border border-border bg-card/50 p-3 shadow-sm">
+        <div className="image-preview-enter px-1 pt-1 pb-2">
+          <div className="flex items-start gap-3 rounded-xl border border-[var(--border-base)]/40 bg-[var(--bg-1)]/60 p-3">
             <div className="relative flex-shrink-0">
               <img
                 src={pendingImage}
                 alt="Preview"
-                className="h-24 w-auto rounded-lg border border-border object-cover shadow-sm"
+                className="h-24 w-auto rounded-lg border border-[var(--border-base)]/30 object-cover shadow-sm"
                 onLoad={(e) => {
                   const img = e.currentTarget;
                   setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
@@ -1175,7 +1218,7 @@ export function ChatInput({
               />
               <button
                 onClick={handleCancelImage}
-                className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/90 transition-colors shadow-sm"
+                className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--danger)] text-white hover:brightness-110 transition-colors shadow-sm"
                 aria-label={t("a11y.removeImage")}
               >
                 <X className="h-3 w-3" />
@@ -1183,21 +1226,21 @@ export function ChatInput({
             </div>
             <div className="flex flex-col gap-1.5 min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-foreground/80 truncate">
+                <span className="text-xs font-medium text-[var(--text-secondary)] truncate">
                   {t("input.pastedImage")}
                 </span>
                 {imageDimensions && (
-                  <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
+                  <span className="text-[10px] text-[var(--text-tertiary)]/60 flex-shrink-0">
                     {imageDimensions.width} x {imageDimensions.height}
                   </span>
                 )}
               </div>
-              <div className="text-[10px] text-muted-foreground/50">
+              <div className="text-[10px] text-[var(--text-tertiary)]/50">
                 {estimateImageSize(pendingImage)}
               </div>
               <button
                 onClick={handleSendImage}
-                className="mt-1 flex items-center gap-1.5 self-start rounded-lg px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground hover:brightness-110 transition-all"
+                className="mt-1 flex items-center gap-1.5 self-start rounded-lg px-3 py-1.5 text-xs font-medium bg-[var(--accent)] text-white hover:brightness-110 transition-all"
               >
                 <Send className="h-3 w-3" />
                 {t("input.sendImage")}
@@ -1225,522 +1268,468 @@ export function ChatInput({
         aria-hidden="true"
       />
 
-      {/* Markdown formatting toolbar */}
-      {!isRecording && (
-        <div
-          className={cn(
-            "items-center gap-1 overflow-x-auto border-b border-border/60 bg-background/70 px-3 py-1.5 shadow-[inset_0_-1px_0_oklch(0_0_0_/_0.015)] scrollbar-thin sm:flex",
-            formatToolbarOpen ? "flex" : "hidden",
-          )}
-        >
-          <button
-            type="button"
-            onClick={handleFormatBold}
-            disabled={disabled}
-            aria-label={t("editor.bold")}
-            title={t("editor.bold") + " (Ctrl+B)"}
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            <Bold className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={handleFormatItalic}
-            disabled={disabled}
-            aria-label={t("editor.italic")}
-            title={t("editor.italic") + " (Ctrl+I)"}
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            <Italic className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={handleFormatStrikethrough}
-            disabled={disabled}
-            aria-label={t("editor.strikethrough")}
-            title={t("editor.strikethrough")}
-            className="h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex flex"
-          >
-            <Strikethrough className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={handleFormatCode}
-            disabled={disabled}
-            aria-label={t("editor.code")}
-            title={t("editor.code") + " (Ctrl+E)"}
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            <Code className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={insertQuote}
-            disabled={disabled}
-            aria-label={t("editor.quote")}
-            title={t("editor.quote")}
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            <Quote className="h-4 w-4" />
-          </button>
-
-          {/* GIF picker button */}
-          <button
-            type="button"
-            onClick={() => setShowGifPicker((p) => !p)}
-            disabled={disabled}
-            aria-label={t("a11y.gif")}
-            title={t("a11y.gifStickers")}
-            className={cn(
-              "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30",
-              showGifPicker
-                ? "bg-accent text-primary"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground",
-            )}
-          >
-            <Film className="h-4 w-4" />
-          </button>
-
-          {/* Link button with inline URL input */}
-          <div className="relative flex items-center">
-            <button
-              type="button"
-              onClick={handleFormatLink}
-              disabled={disabled}
-              aria-label={t("editor.link")}
-              title={t("editor.link") + " (Ctrl+K)"}
-              className={cn(
-                "h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30 sm:flex flex",
-                linkInputVisible
-                  ? "bg-accent text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
-              )}
-            >
-              <Link className="h-4 w-4" />
-            </button>
-            {linkInputVisible && (
-              <div className="flex items-center gap-1 animate-scale-in ml-1">
-                <input
-                  ref={linkInputRef}
-                  type="url"
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      commitLink();
-                    } else if (e.key === "Escape") {
-                      e.preventDefault();
-                      cancelLink();
-                    }
-                  }}
-                  placeholder={t("editor.linkUrl")}
-                  className="h-11 w-52 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                />
-                <button
-                  type="button"
-                  onClick={commitLink}
-                  className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:brightness-110 transition-colors"
-                  aria-label={t("a11y.ok")}
-                >
-                  <Send className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={cancelLink}
-                  className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                  aria-label={t("a11y.close")}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Preview toggle */}
-          <button
-            type="button"
-            onClick={() => setPreviewOn((p) => !p)}
-            disabled={disabled}
-            aria-label={t("editor.preview")}
-            title={t("editor.preview")}
-            className={cn(
-              "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-30",
-              previewOn
-                ? "bg-accent text-primary"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground",
-            )}
-          >
-            {previewOn ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* Recording indicator (replaces toolbar and input area when recording) */}
+      {/* Recording indicator */}
       {isRecording ? (
-        <div className="recording-bar-enter flex flex-col gap-2 px-4 py-3 transition-all duration-300 ease-out">
-          {/* Duration limit bar */}
-          <div className="recording-limit-bar">
-            <div
-              className="recording-limit-bar-fill"
-              style={{ width: `${Math.min((recordingTime / 300) * 100, 100)}%` }}
-            />
-          </div>
-
-          <div
-            className={cn(
-              "flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors duration-200",
-              slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD
-                ? "border-destructive/60 bg-destructive/15"
-                : "border-destructive/30 bg-destructive/5",
-            )}
-          >
-            {/* Pulsing red dot */}
-            <span className="relative flex h-3 w-3 flex-shrink-0">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-            </span>
-
-            {/* Recording time */}
-            <span className="text-sm font-mono text-destructive/80 tabular-nums flex-shrink-0 min-w-[44px]">
-              {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:{String(recordingTime % 60).padStart(2, '0')}
-            </span>
-
-            {/* Waveform visualizer */}
-            <div className="recording-waveform">
-              {[16, 24, 12, 20, 14].map((peak, i) => (
-                <div
-                  key={i}
-                  className="waveform-bar"
-                  style={{
-                    '--wv-peak': `${peak}px`,
-                    animationDelay: `${i * 0.12}s`,
-                  } as React.CSSProperties}
-                />
-              ))}
-            </div>
-
-            {/* Cancel button with slide-to-cancel gesture */}
-            <div
-              className={cn(
-                "slide-cancel-track relative flex-shrink-0",
-                slideCancelDragging && "slide-cancel-dragging",
-                slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD && "slide-cancel-threshold-reached",
-              )}
-              onPointerDown={handleCancelPointerDown}
-              onPointerMove={handleCancelPointerMove}
-              onPointerUp={handleCancelPointerUp}
-              onPointerCancel={handleCancelPointerUp}
-            >
-              <button
-                onClick={() => {
-                  if (!slideCancelDragging) cancelRecording();
-                }}
-                className={cn(
-                  "flex h-11 w-11 items-center justify-center rounded-xl border transition-colors",
-                  slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD
-                    ? "border-destructive/50 bg-destructive/20 text-destructive"
-                    : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-destructive",
-                )}
-                style={slideCancelDragging ? { transform: `translateX(${-slideCancelOffset}px)` } : undefined}
-                aria-label={t("a11y.cancelRecording")}
-              >
-                <X className="h-4 w-4" />
-              </button>
-              <span className="slide-cancel-hint">
-                {slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD ? t("input.releaseToCancel") : t("input.slideToCancel")}
-              </span>
-            </div>
-
-            {/* Stop / Send button */}
-            <button
-              onClick={stopRecording}
-              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:brightness-110 transition-colors"
-              aria-label={t("a11y.stopRecording")}
-            >
-              <Square className="h-4 w-4" fill="currentColor" />
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Input area */}
-          <div className="flex items-end gap-2 px-3 py-2.5 sm:px-4 sm:py-3">
-            <div className="flex items-center gap-1.5 pb-0.5 sm:gap-2 sm:pb-0">
-              <button
-                type="button"
-                onClick={() => setFormatToolbarOpen((open) => !open)}
-                disabled={disabled}
-                aria-label={t("editor.formatting")}
-                title={t("editor.formatting")}
-                className={cn(
-                  "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:hidden",
-                  formatToolbarOpen
-                    ? "bg-primary/10 text-primary"
-                    : "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground",
-                  "disabled:cursor-not-allowed disabled:opacity-30",
-                )}
-              >
-                <Bold className="h-[18px] w-[18px]" />
-              </button>
-
-              {/* Image upload button */}
-              <button
-                onClick={() => imageInputRef.current?.click()}
-                disabled={disabled}
-                aria-label={t("a11y.uploadImage")}
-                className={cn(
-                  "h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:flex sm:h-12 sm:w-12 flex",
-                  "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
-                )}
-              >
-                <ImagePlus className="h-[18px] w-[18px]" />
-              </button>
-
-              {/* File upload button */}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={disabled}
-                aria-label={t("a11y.uploadFile")}
-                className={cn(
-                  "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:h-12 sm:w-12",
-                  "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
-                )}
-              >
-                <Paperclip className="h-[18px] w-[18px]" />
-              </button>
-
-              {/* Mic button */}
-              <button
-                onClick={startRecording}
-                disabled={disabled}
-                aria-label={t("a11y.recordVoice")}
-                className={cn(
-                  "h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-colors duration-200 sm:h-12 sm:w-12",
-                  "bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30",
-                  hasContent ? "hidden" : "flex",
-                )}
-              >
-                <Mic className="h-[18px] w-[18px]" />
-              </button>
-
-            </div>
-
-            <div className="relative input-glow min-w-0 flex-1">
-              {/* @mention autocomplete dropdown */}
-              {mentionActive && (
-                <div
-                  ref={mentionRef}
-                  className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-border bg-card shadow-lg animate-scale-in z-20"
-                  style={{ maxHeight: "200px", overflowY: "auto" }}
-                >
-                  {mentionFiltered.map((user, idx) => (
-                    <button
-                      key={user}
-                      onClick={() => insertMention(user)}
-                      onMouseEnter={() => setMentionIndex(idx)}
-                      className={cn(
-                        "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
-                        idx === mentionIndex
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
-                    >
-                      <span
-                        className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-                        style={{
-                          background: `linear-gradient(135deg, oklch(65% 0.16 ${hashString(user) % 360}), oklch(58% 0.14 ${(hashString(user) + 45) % 360}))`,
-                        }}
-                      >
-                        {user.charAt(0).toUpperCase()}
-                      </span>
-                      <span className="truncate">{user}</span>
-                      {mentionableAssistants.some((assistant) => assistant.name === user) && (
-                        <span className="ml-auto rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
-                          {mentionableAssistants.find((assistant) => assistant.name === user)?.label}
-                        </span>
-                      )}
-                      {user === username && (
-                        <span className="ml-auto text-[10px] text-muted-foreground/50">
-                          {t("sidebar.you")}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Slash command dropdown */}
-              {slashActive && (
-                <div
-                  className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-border bg-card shadow-lg animate-scale-in z-20"
-                  style={{ maxHeight: "200px", overflowY: "auto" }}
-                >
-                  {slashFiltered.map((cmd, idx) => (
-                    <button
-                      key={cmd.command}
-                      onClick={() => insertSlashCommand(cmd.command)}
-                      onMouseEnter={() => setSlashIndex(idx)}
-                      className={cn(
-                        "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
-                        idx === slashIndex
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
-                    >
-                      <span className="text-xs font-mono font-semibold text-muted-foreground/70">
-                        /{cmd.command}
-                      </span>
-                      <span className="truncate">{cmd.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Emoji shortcut dropdown */}
-              {emojiActive && (
-                <div
-                  className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-border bg-card shadow-lg animate-scale-in z-20"
-                  style={{ maxHeight: "200px", overflowY: "auto" }}
-                >
-                  {emojiFiltered.map((item, idx) => (
-                    <button
-                      key={item.key}
-                      onClick={() => insertEmoji(item.key)}
-                      onMouseEnter={() => setEmojiIndex(idx)}
-                      className={cn(
-                        "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
-                        idx === emojiIndex
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
-                    >
-                      {item.custom ? (
-                        <img src={(item as unknown as { url: string }).url} alt={item.key} className="w-5 h-5 object-contain" />
-                      ) : (
-                        <span className="text-base">{item.emoji}</span>
-                      )}
-                      <span className="text-xs text-muted-foreground/70">
-                        :{item.key}:
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <textarea
-                ref={textareaRef}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                onCompositionStart={() => setIsComposing(true)}
-                onCompositionEnd={() => setIsComposing(false)}
-                placeholder={placeholder}
-                rows={1}
-                maxLength={2000}
-                disabled={disabled}
-                aria-label={placeholder}
-                className="block h-12 max-h-[160px] min-h-12 w-full resize-none overflow-y-hidden rounded-xl border border-border/70 bg-background/90 px-4 py-[13px] text-base leading-5 text-foreground placeholder:text-muted-foreground/60 shadow-[0_1px_2px_oklch(0_0_0_/_0.025)] outline-none transition-colors duration-200 focus-visible:border-primary/45 focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:outline-none disabled:opacity-50 sm:text-sm"
-                style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT }}
+        <div className="px-1">
+          <div className="recording-bar-enter flex flex-col gap-2 py-2 transition-all duration-300 ease-out">
+            {/* Duration limit bar */}
+            <div className="recording-limit-bar">
+              <div
+                className="recording-limit-bar-fill"
+                style={{ width: `${Math.min((recordingTime / 300) * 100, 100)}%` }}
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2">
-              {/* Schedule button */}
-              <div className="block">
-                <ScheduleButton
-                  onSchedule={handleSchedule}
-                  disabled={disabled || !hasContent}
-                  scheduled={hasScheduled}
-                />
+            <div
+              className={cn(
+                "flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors duration-200",
+                slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD
+                  ? "border-[var(--danger)]/60 bg-[var(--danger)]/15"
+                  : "border-[var(--danger)]/30 bg-[var(--danger)]/5",
+              )}
+            >
+              {/* Pulsing red dot */}
+              <span className="relative flex h-3 w-3 flex-shrink-0">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+              </span>
+
+              {/* Recording time */}
+              <span className="text-sm font-mono text-[var(--danger)]/80 tabular-nums flex-shrink-0 min-w-[44px]">
+                {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:{String(recordingTime % 60).padStart(2, '0')}
+              </span>
+
+              {/* Waveform visualizer */}
+              <div className="recording-waveform">
+                {[16, 24, 12, 20, 14].map((peak, i) => (
+                  <div
+                    key={i}
+                    className="waveform-bar"
+                    style={{
+                      '--wv-peak': `${peak}px`,
+                      animationDelay: `${i * 0.12}s`,
+                    } as React.CSSProperties}
+                  />
+                ))}
               </div>
 
-              {/* Send button */}
-              <button
-                ref={sendBtnRef}
-                onClick={handleSend}
-                disabled={disabled || !hasContent}
-                aria-label={
-                  disabled ? t("join.buttonConnecting") : hasScheduled ? t("schedule.schedule") : t("input.placeholder")
-                }
+              {/* Cancel button with slide-to-cancel gesture */}
+              <div
                 className={cn(
-                  "flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-transparent transition-all duration-300 ease-out",
-                  hasContent
-                    ? "bg-primary text-primary-foreground hover:brightness-110"
-                    : "bg-accent/50 text-muted-foreground/45",
-                  "disabled:cursor-not-allowed disabled:opacity-30",
-                  pulseButton && "animate-pulse-once",
-                  disconnectFlash && "ring-2 ring-red-500 border-red-400/60",
+                  "slide-cancel-track relative flex-shrink-0",
+                  slideCancelDragging && "slide-cancel-dragging",
+                  slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD && "slide-cancel-threshold-reached",
                 )}
-                onMouseEnter={(e) => {
-                  if (hasContent) {
-                    e.currentTarget.style.transform = "scale(1.05)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "scale(1)";
-                }}
+                onPointerDown={handleCancelPointerDown}
+                onPointerMove={handleCancelPointerMove}
+                onPointerUp={handleCancelPointerUp}
+                onPointerCancel={handleCancelPointerUp}
               >
-                {disabled ? (
-                  <Loader2 className="h-[18px] w-[18px] text-muted-foreground animate-spin" />
-                ) : (
-                  <Send className="h-[18px] w-[18px]" />
-                )}
+                <button
+                  onClick={() => {
+                    if (!slideCancelDragging) cancelRecording();
+                  }}
+                  className={cn(
+                    "flex h-11 w-11 items-center justify-center rounded-xl border transition-colors",
+                    slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD
+                      ? "border-[var(--danger)]/50 bg-[var(--danger)]/20 text-[var(--danger)]"
+                      : "border-[var(--border-base)] bg-[var(--bg-1)] text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--danger)]",
+                  )}
+                  style={slideCancelDragging ? { transform: `translateX(${-slideCancelOffset}px)` } : undefined}
+                  aria-label={t("a11y.cancelRecording")}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <span className="slide-cancel-hint">
+                  {slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD ? t("input.releaseToCancel") : t("input.slideToCancel")}
+                </span>
+              </div>
+
+              {/* Stop / Send button */}
+              <button
+                onClick={stopRecording}
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white hover:brightness-110 transition-colors"
+                aria-label={t("a11y.stopRecording")}
+              >
+                <Square className="h-4 w-4" fill="currentColor" />
               </button>
             </div>
           </div>
-        </>
-      )}
-
-      {/* Markdown preview */}
-      {!isRecording && previewOn && content.trim() && (
-        <div className="border-t border-border bg-muted/30 px-4 py-3">
-          <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/90 prose-p:my-1 prose-headings:my-1.5 prose-code:before:content-none prose-code:after:content-none prose-code:bg-accent/60 prose-code:rounded prose-code:px-1 prose-code:py-0.5 prose-pre:bg-muted prose-blockquote:border-l-primary/50">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {content}
-            </ReactMarkdown>
-          </div>
         </div>
-      )}
+      ) : (
+        <div className="p-3">
+          {/* Inline link URL input */}
+          {linkInputVisible && (
+            <div className="flex items-center gap-1.5 mb-2.5 animate-scale-in">
+              <input
+                ref={linkInputRef}
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitLink();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelLink();
+                  }
+                }}
+                placeholder={t("editor.linkUrl")}
+                className="flex-1 h-8 rounded-lg border border-[var(--border-base)] bg-[var(--bg-1)] px-3 text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50"
+              />
+              <button
+                type="button"
+                onClick={commitLink}
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-white hover:brightness-110 transition-colors flex-shrink-0"
+                aria-label={t("a11y.ok")}
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={cancelLink}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex-shrink-0"
+                aria-label={t("a11y.close")}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
 
-      {/* Character count */}
-      {!isRecording && content.length > 0 && (
-        <div className="flex justify-end px-4 pb-1">
-          <span
-            className={cn(
-              "text-[10px] transition-colors",
-              content.length > 1800
-                ? "text-destructive/70"
-                : "text-muted-foreground/40",
+          {/* ── Textarea ── */}
+          <div className="relative">
+            {/* @mention autocomplete dropdown */}
+            {mentionActive && (
+              <div
+                ref={mentionRef}
+                className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-[var(--border-base)] bg-[var(--surface-glass-strong)] backdrop-blur-xl shadow-lg animate-scale-in z-20"
+                style={{ maxHeight: "200px", overflowY: "auto" }}
+              >
+                {mentionFiltered.map((user, idx) => (
+                  <button
+                    key={user}
+                    onClick={() => insertMention(user)}
+                    onMouseEnter={() => setMentionIndex(idx)}
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
+                      idx === mentionIndex
+                        ? "bg-[var(--bg-hover)] text-[var(--text-primary)]"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]",
+                    )}
+                  >
+                    <span
+                      className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                      style={{
+                        background: `linear-gradient(135deg, oklch(65% 0.16 ${hashString(user) % 360}), oklch(58% 0.14 ${(hashString(user) + 45) % 360}))`,
+                      }}
+                    >
+                      {user.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="truncate">{user}</span>
+                    {mentionableAssistants.some((assistant) => assistant.name === user) && (
+                      <span className="ml-auto rounded border border-[var(--border-base)]/50 px-1.5 py-0.5 text-[10px] text-[var(--text-tertiary)]">
+                        {mentionableAssistants.find((assistant) => assistant.name === user)?.label}
+                      </span>
+                    )}
+                    {user === username && (
+                      <span className="ml-auto text-[10px] text-[var(--text-tertiary)]">
+                        {t("sidebar.you")}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
-            aria-live="polite"
-          >
-            {t("input.characters", { current: content.length, max: 2000 })}
-          </span>
-        </div>
-      )}
 
-      {/* Disconnect feedback */}
-      {disconnectFeedback && (
-        <div className="animate-fade-in px-4 pb-1.5">
-          <p className="text-xs text-destructive/70">
-            {t("system.disconnected")}
-          </p>
+            {/* Slash command dropdown */}
+            {slashActive && (
+              <div
+                className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-[var(--border-base)] bg-[var(--surface-glass-strong)] backdrop-blur-xl shadow-lg animate-scale-in z-20"
+                style={{ maxHeight: "200px", overflowY: "auto" }}
+              >
+                {slashFiltered.map((cmd, idx) => (
+                  <button
+                    key={cmd.command}
+                    onClick={() => insertSlashCommand(cmd.command)}
+                    onMouseEnter={() => setSlashIndex(idx)}
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
+                      idx === slashIndex
+                        ? "bg-[var(--bg-hover)] text-[var(--text-primary)]"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]",
+                    )}
+                  >
+                    <span className="text-xs font-mono font-semibold text-[var(--text-tertiary)]">
+                      /{cmd.command}
+                    </span>
+                    <span className="truncate">{cmd.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Emoji shortcut dropdown */}
+            {emojiActive && (
+              <div
+                className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-[var(--border-base)] bg-[var(--surface-glass-strong)] backdrop-blur-xl shadow-lg animate-scale-in z-20"
+                style={{ maxHeight: "200px", overflowY: "auto" }}
+              >
+                {emojiFiltered.map((item, idx) => (
+                  <button
+                    key={item.key}
+                    onClick={() => insertEmoji(item.key)}
+                    onMouseEnter={() => setEmojiIndex(idx)}
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
+                      idx === emojiIndex
+                        ? "bg-[var(--bg-hover)] text-[var(--text-primary)]"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]",
+                    )}
+                  >
+                    {item.custom ? (
+                      <img src={(item as unknown as { url: string }).url} alt={item.key} className="w-5 h-5 object-contain" />
+                    ) : (
+                      <span className="text-base">{item.emoji}</span>
+                    )}
+                    <span className="text-xs text-[var(--text-tertiary)]">
+                      :{item.key}:
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
+              onSelect={(e) => {
+                const target = e.currentTarget;
+                if (canOpenComposerPopovers && target.selectionStart !== target.selectionEnd) {
+                  setShowFormatBubble(true);
+                }
+              }}
+              onFocus={() => {
+                if (canOpenComposerPopovers) {
+                  setShowFormatBubble(true);
+                }
+              }}
+              placeholder={placeholder}
+              rows={1}
+              maxLength={2000}
+              disabled={disabled}
+              aria-label={placeholder}
+              className="block w-full resize-none overflow-y-hidden bg-transparent border-none shadow-none outline-none text-[15px] leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] disabled:opacity-50"
+              style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT, minHeight: INPUT_MIN_HEIGHT, maxHeight: INPUT_MAX_HEIGHT }}
+            />
+
+            {/* ── Formatting bubble (floating, contextual) ── */}
+            {showFormatBubble && canOpenComposerPopovers && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowFormatBubble(false)} />
+                <div
+                  className="absolute left-0 -top-11 z-50 flex items-center gap-0.5 rounded-xl border border-[var(--border-glass)] bg-[var(--surface-glass-strong)] backdrop-blur-xl shadow-lg px-1 py-1 animate-scale-in"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button type="button" onClick={handleFormatBold} disabled={disabled} aria-label={t("editor.bold")} title={t("editor.bold") + " (Ctrl+B)"} className={toolbarBtnClass()}>
+                    <Bold size={15} strokeWidth={1.5} />
+                  </button>
+                  <button type="button" onClick={handleFormatItalic} disabled={disabled} aria-label={t("editor.italic")} title={t("editor.italic") + " (Ctrl+I)"} className={toolbarBtnClass()}>
+                    <Italic size={15} strokeWidth={1.5} />
+                  </button>
+                  <button type="button" onClick={handleFormatStrikethrough} disabled={disabled} aria-label={t("editor.strikethrough")} title={t("editor.strikethrough")} className={toolbarBtnClass()}>
+                    <Strikethrough size={15} strokeWidth={1.5} />
+                  </button>
+                  <button type="button" onClick={handleFormatCode} disabled={disabled} aria-label={t("editor.code")} title={t("editor.code") + " (Ctrl+E)"} className={toolbarBtnClass()}>
+                    <Code size={15} strokeWidth={1.5} />
+                  </button>
+                  <button type="button" onClick={insertQuote} disabled={disabled} aria-label={t("editor.quote")} title={t("editor.quote")} className={toolbarBtnClass()}>
+                    <Quote size={15} strokeWidth={1.5} />
+                  </button>
+                  <button type="button" onClick={handleFormatLink} disabled={disabled} aria-label={t("editor.link")} title={t("editor.link") + " (Ctrl+K)"} className={toolbarBtnClass(linkInputVisible)}>
+                    <Link size={15} strokeWidth={1.5} />
+                  </button>
+                  <button type="button" onClick={() => setShowGifPicker((p) => !p)} disabled={disabled} aria-label={t("a11y.gif")} title={t("a11y.gifStickers")} className={toolbarBtnClass(showGifPicker)}>
+                    <Film size={15} strokeWidth={1.5} />
+                  </button>
+                  <button type="button" onClick={() => setPreviewOn((p) => !p)} disabled={disabled} aria-label={t("editor.preview")} title={t("editor.preview")} className={toolbarBtnClass(previewOn)}>
+                    {previewOn ? <EyeOff size={15} strokeWidth={1.5} /> : <Eye size={15} strokeWidth={1.5} />}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* ── Bottom row: + button + B toggle + send ── */}
+          <div className="flex items-center justify-between mt-2.5 relative">
+            {/* Left side: + button & B format toggle */}
+            <div className="flex items-center gap-1">
+              {/* + (Attach) button */}
+              <button
+                type="button"
+                onClick={() => setShowAttachPopover((p) => !p)}
+                disabled={!canOpenComposerPopovers}
+                aria-label={t("a11y.addAttachment")}
+                className={toolbarBtnClass(showAttachPopover)}
+              >
+                <Plus size={16} strokeWidth={1.5} />
+              </button>
+
+              {/* B (Format) toggle button */}
+              <button
+                type="button"
+                onClick={() => setShowFormatBubble((p) => !p)}
+                disabled={!canOpenComposerPopovers}
+                aria-label={t("editor.formatting")}
+                title={t("editor.formatting")}
+                className={toolbarBtnClass(showFormatBubble)}
+              >
+                <Bold size={15} strokeWidth={1.5} />
+              </button>
+            </div>
+
+            {/* Right side: Send button */}
+            <button
+              ref={sendBtnRef}
+              onClick={handleSend}
+              disabled={disabled || !hasContent}
+              aria-label={
+                disabled ? t("join.buttonConnecting") : hasScheduled ? t("schedule.schedule") : t("input.placeholder")
+              }
+              className={cn(
+                "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-all duration-200 ease-out lg:h-9 lg:w-9",
+                hasContent
+                  ? "bg-[var(--accent)] text-white hover:brightness-110 shadow-md shadow-[var(--accent)]/20"
+                  : "text-[var(--text-tertiary)]",
+                "disabled:cursor-not-allowed",
+                pulseButton && "animate-pulse-once",
+              )}
+            >
+              {disabled ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUp size={16} strokeWidth={2.5} />
+              )}
+            </button>
+
+            {/* ── Attach popover ── */}
+            {showAttachPopover && canOpenComposerPopovers && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowAttachPopover(false)} />
+                <div
+                  ref={attachPopoverRef}
+                  className="absolute bottom-full left-0 mb-2 z-50 flex items-center gap-1 rounded-xl border border-[var(--border-glass)] bg-[var(--surface-glass-strong)] backdrop-blur-xl shadow-lg px-1.5 py-1.5 animate-scale-in"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Image upload */}
+                  <button
+                    onClick={() => { imageInputRef.current?.click(); setShowAttachPopover(false); }}
+                    disabled={disabled}
+                    aria-label={t("a11y.uploadImage")}
+                    className={toolbarBtnClass()}
+                  >
+                    <ImagePlus size={15} strokeWidth={1.5} />
+                  </button>
+
+                  {/* File upload */}
+                  <button
+                    onClick={() => { fileInputRef.current?.click(); setShowAttachPopover(false); }}
+                    disabled={disabled}
+                    aria-label={t("a11y.uploadFile")}
+                    className={toolbarBtnClass()}
+                  >
+                    <Paperclip size={15} strokeWidth={1.5} />
+                  </button>
+
+                  {/* Emoji */}
+                  <button
+                    onClick={() => { handleEmojiButton(); setShowAttachPopover(false); }}
+                    disabled={disabled}
+                    aria-label={t("a11y.emoji")}
+                    className={toolbarBtnClass()}
+                  >
+                    <SmilePlus size={15} strokeWidth={1.5} />
+                  </button>
+
+                  {/* Gif */}
+                  <button
+                    onClick={() => { setShowGifPicker((p) => !p); setShowAttachPopover(false); }}
+                    disabled={disabled}
+                    aria-label={t("a11y.gif")}
+                    className={toolbarBtnClass()}
+                  >
+                    <Film size={15} strokeWidth={1.5} />
+                  </button>
+
+                  {/* Schedule */}
+                  <ScheduleButton
+                    onSchedule={(sendAt: number) => { handleSchedule(sendAt); setShowAttachPopover(false); }}
+                    disabled={disabled || !hasContent}
+                    scheduled={hasScheduled}
+                  />
+
+                  {/* Mic */}
+                  <button
+                    onClick={() => { startRecording(); setShowAttachPopover(false); }}
+                    disabled={disabled}
+                    aria-label={t("a11y.recordVoice")}
+                    className={toolbarBtnClass()}
+                  >
+                    <Mic size={15} strokeWidth={1.5} />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Markdown preview */}
+          {!isRecording && previewOn && content.trim() && (
+            <div className="mt-2.5 border-t border-[var(--border-base)]/30 pt-2.5">
+              <div className="prose prose-sm dark:prose-invert max-w-none text-[var(--text-primary)]/90 prose-p:my-1 prose-headings:my-1.5 prose-code:before:content-none prose-code:after:content-none prose-code:bg-[var(--bg-hover)] prose-code:rounded prose-code:px-1 prose-code:py-0.5 prose-pre:bg-[var(--bg-2)] prose-blockquote:border-l-[var(--accent)]/50">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {content}
+                </ReactMarkdown>
+              </div>
+            </div>
+          )}
+
+          {/* Character count */}
+          {content.length > 0 && (
+            <div className="flex justify-end mt-1">
+              <span
+                className={cn(
+                  "text-[10px] transition-colors",
+                  content.length > 1800
+                    ? "text-[var(--danger)]/70"
+                    : "text-[var(--text-tertiary)]/40",
+                )}
+                aria-live="polite"
+              >
+                {t("input.characters", { current: content.length, max: 2000 })}
+              </span>
+            </div>
+          )}
+
+          {/* Disconnect feedback */}
+          {disconnectFeedback && (
+            <div className="animate-fade-in mt-1">
+              <p className="text-xs text-[var(--danger)]/70">
+                {t("system.disconnected")}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
       {/* Drag-and-drop overlay */}
       {isDragOver && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary/50 rounded-lg m-1">
-          <div className="flex flex-col items-center gap-2 text-primary/70">
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--surface-glass-strong)]/90 backdrop-blur-md border-2 border-dashed border-[var(--accent)]/50 rounded-2xl m-0">
+          <div className="flex flex-col items-center gap-2 text-[var(--accent)]/70">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="17 8 12 3 7 8" />
@@ -1754,15 +1743,15 @@ export function ChatInput({
       {/* Upload progress bar */}
       {uploadProgress && (
         <div className="px-4 pt-2 animate-slide-up">
-          <div className="flex items-center gap-3 rounded-lg bg-muted/30 border border-border px-3 py-2">
-            <Loader2 className="h-4 w-4 text-primary animate-spin flex-shrink-0" />
+          <div className="flex items-center gap-3 rounded-lg bg-[var(--bg-2)]/30 border border-[var(--border-base)]/40 px-3 py-2">
+            <Loader2 className="h-4 w-4 text-[var(--accent)] animate-spin flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-foreground/70 truncate">{uploadProgress.fileName}</p>
-              <p className="text-[10px] text-muted-foreground/50">{t("file.uploading")}</p>
+              <p className="text-xs text-[var(--text-secondary)] truncate">{uploadProgress.fileName}</p>
+              <p className="text-[10px] text-[var(--text-tertiary)]">{t("file.uploading")}</p>
             </div>
-            <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden flex-shrink-0">
+            <div className="w-20 h-1.5 bg-[var(--bg-3)] rounded-full overflow-hidden flex-shrink-0">
               <div
-                className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+                className="h-full bg-[var(--accent)] rounded-full transition-all duration-300 ease-out"
                 style={{ width: `${Math.min(uploadProgress.progress, 100)}%` }}
               />
             </div>
@@ -1772,7 +1761,7 @@ export function ChatInput({
 
       {/* Drag error toast */}
       {dragError && (
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-medium animate-slide-up shadow-lg whitespace-nowrap">
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-[var(--danger)] text-white text-xs font-medium animate-slide-up shadow-lg whitespace-nowrap">
           {dragError}
         </div>
       )}
