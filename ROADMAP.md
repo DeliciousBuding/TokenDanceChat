@@ -2,7 +2,7 @@
 
 最后更新：2026-05-24（晚）
 
-发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: **1060** 前端 / 50 文件 / E2E 133/139 / Backend 6/6 PASS / Skills 6 活跃
+发布: [v0.2.12](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.12) | Docker: `tokendancechat:v0.2.12` | 测试: **1078** 前端 / 50 文件 / E2E **160/166** / Backend **6/6** / Skills **6** 活跃 / CI 全绿
 
 ## 当前目标
 
@@ -210,10 +210,10 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 896 tests |
 | 2026-05-24 | `cd backend; go test ./...` | PASS, 6/6 (handler +12 tests) |
 | 2026-05-24 | `cd frontend; E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/ --project=chromium` | 105/108 pass（3 group-call timing, 17 skipped, +7 real-user-flows） |
-| 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 1060 tests |
-| 2026-05-24 | `cd backend; go test ./...` | PASS, 6/6 (hub +19, store +18, handler +15, picoclaw +23) |
-| 2026-05-24 | `cd frontend; npx tsc --noEmit` | PASS |
-| 2026-05-24 | `git checkout master && git merge dev && git push` | Merged (15x), 38 files changed |
+| 2026-05-24 | `cd frontend; npm test` | PASS, 50 files / 1078 tests |
+| 2026-05-24 | `cd backend; go clean -testcache && go test ./...` | PASS, 6/6 (handler media +28, main +20, hub +19, store +18, picoclaw +23, llm +22) |
+| 2026-05-24 | `cd frontend; npx playwright test src/e2e/ --project=chromium` | 160/166 pass (3 group-call timing, 3 skipped) |
+| 2026-05-24 | `git checkout master && git merge dev && git push` | Merged (23x), 60+ files changed |
 
 ## Review Gates
 
