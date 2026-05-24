@@ -28,6 +28,7 @@ describe("ErrorCode", () => {
     expect(ErrorCode.TIMEOUT).toBe("ERR_TIMEOUT");
     expect(ErrorCode.CLOSED).toBe("ERR_CLOSED");
     expect(ErrorCode.CANNOT_CONNECT).toBe("ERR_CANNOT_CONNECT");
+    expect(ErrorCode.AUTH_FAILED).toBe("ERR_AUTH_FAILED");
   });
 
   it("all values are unique", () => {
@@ -170,6 +171,23 @@ describe("loginUser", () => {
     } as unknown as Response);
 
     await expect(loginUser(username, password)).rejects.toThrow("Login failed");
+  });
+
+  it("throws ChatError with AUTH_FAILED on HTTP 401", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: "Invalid credentials" }),
+    } as unknown as Response);
+
+    try {
+      await loginUser(username, password);
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ChatError);
+      expect((err as ChatError).code).toBe(ErrorCode.AUTH_FAILED);
+      expect((err as ChatError).message).toBe("Invalid credentials");
+    }
   });
 });
 

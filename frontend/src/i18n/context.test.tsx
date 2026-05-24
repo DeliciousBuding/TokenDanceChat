@@ -94,14 +94,14 @@ describe("I18nContext", () => {
           <LangSwitcher />
         </I18nProvider>,
       );
-      // 中文：AgentHub 实时聊天验证 Demo · AI 助手 @TokenBot @PicoClaw 随时待命
-      expect(screen.getByTestId("translated").textContent).toBe("AgentHub 实时聊天验证 Demo · AI 助手 @TokenBot @PicoClaw 随时待命");
+      // 中文：实时聊天 · AI 助手 @TokenBot @PicoClaw 在线陪伴
+      expect(screen.getByTestId("translated").textContent).toBe("实时聊天 · AI 助手 @TokenBot @PicoClaw 在线陪伴");
 
       fireEvent.click(screen.getByTestId("switch-lang"));
 
-      // 英文：AgentHub realtime chat demo · AI assistants @TokenBot @PicoClaw at your service
+      // 英文：Real-time chat · AI assistants @TokenBot @PicoClaw at your service
       expect(screen.getByTestId("translated").textContent).toBe(
-        "AgentHub realtime chat demo · AI assistants @TokenBot @PicoClaw at your service",
+        "Real-time chat · AI assistants @TokenBot @PicoClaw at your service",
       );
       expect(screen.getByTestId("lang").textContent).toBe("en-US");
     });

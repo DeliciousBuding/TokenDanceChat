@@ -17,6 +17,8 @@ export function mockI18n(overrides?: Record<string, string>) {
     "auth.registerButton": "注册",
     "auth.noAccount": "还没有账号？去注册",
     "auth.haveAccount": "已有账号？去登录",
+    "auth.back": "返回",
+    "auth.backToLogin": "返回登录",
     "auth.guestLogin": "返回游客模式",
     "auth.passwordMinLength": "密码不能少于6位",
     "auth.confirmNotMatch": "两次密码不一致",

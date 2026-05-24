@@ -107,7 +107,7 @@ describe("JoinScreen", () => {
     it("显示副标题", () => {
       renderJoinScreen();
       goToGuestView();
-      expect(screen.getByText("AgentHub 实时聊天验证 Demo · AI 助手 @TokenBot @PicoClaw 随时待命")).toBeTruthy();
+      expect(screen.getByText("实时聊天 · AI 助手 @TokenBot @PicoClaw 在线陪伴")).toBeTruthy();
     });
 
     it("显示用户名输入框", () => {

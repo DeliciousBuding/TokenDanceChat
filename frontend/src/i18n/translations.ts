@@ -38,6 +38,8 @@ export interface TranslationDict {
     confirmNotMatch: string;
     loginFailed: string;
     signingIn: string;
+    back: string;
+    backToLogin: string;
   };
   invite: {
     inviteCodes: string;
@@ -461,7 +463,7 @@ export interface TranslationDict {
 const zhCN: TranslationDict = {
   join: {
     title: "TokenDance Chat",
-    subtitle: "AgentHub 实时聊天验证 Demo · AI 助手 @TokenBot @PicoClaw 随时待命",
+    subtitle: "实时聊天 · AI 助手 @TokenBot @PicoClaw 在线陪伴",
     placeholder: "你的用户名...",
     buttonJoin: "加入聊天",
     buttonConnecting: "连接中...",
@@ -496,6 +498,8 @@ const zhCN: TranslationDict = {
     confirmNotMatch: "两次输入的密码不一致",
     loginFailed: "用户名或密码错误",
     signingIn: "正在登录...",
+    back: "返回",
+    backToLogin: "返回登录",
   },
   invite: {
     inviteCodes: "邀请码管理",
@@ -920,7 +924,7 @@ const zhCN: TranslationDict = {
 const enUS: TranslationDict = {
   join: {
     title: "TokenDance Chat",
-    subtitle: "AgentHub realtime chat demo · AI assistants @TokenBot @PicoClaw at your service",
+    subtitle: "Real-time chat · AI assistants @TokenBot @PicoClaw at your service",
     placeholder: "Your username...",
     buttonJoin: "Join Chat",
     buttonConnecting: "Connecting...",
@@ -956,6 +960,8 @@ const enUS: TranslationDict = {
     confirmNotMatch: "Passwords do not match",
     loginFailed: "Invalid username or password",
     signingIn: "Signing in...",
+    back: "Back",
+    backToLogin: "Back to Login",
   },
   invite: {
     inviteCodes: "Invite Codes",

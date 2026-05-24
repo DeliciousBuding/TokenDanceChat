@@ -2,8 +2,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 const mockLoginUser = vi.fn();
+const { MockChatError, mockErrorCode } = vi.hoisted(() => {
+  const mockErrorCode = { AUTH_FAILED: "ERR_AUTH_FAILED" };
+  class MockChatError extends Error {
+    code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+      this.name = "ChatError";
+    }
+  }
+  return { MockChatError, mockErrorCode };
+});
 vi.mock("@/lib/api", () => ({
   loginUser: (...args: unknown[]) => mockLoginUser(...args),
+  ChatError: MockChatError,
+  ErrorCode: mockErrorCode,
 }));
 
 vi.mock("@/i18n/context", () => ({
@@ -15,7 +29,8 @@ vi.mock("@/i18n/context", () => ({
         "auth.password": "密码",
         "auth.loginButton": "登录",
         "auth.noAccount": "还没有账号？去注册",
-        "auth.guestLogin": "返回游客模式",
+        "auth.back": "返回",
+        "auth.loginFailed": "用户名或密码错误",
         "auth.passwordMinLength": "密码不能少于6位",
         "join.errorEmpty": "用户名不能为空",
         "join.placeholder": "你的用户名...",
@@ -163,5 +178,17 @@ describe("LoginScreen", () => {
       expect(screen.getByRole("alert")).toBeTruthy();
     });
     expect(screen.getByText("未知错误")).toBeTruthy();
+  });
+
+  it("shows loginFailed error for 401/AUTH_FAILED ChatError", async () => {
+    mockLoginUser.mockRejectedValue(new MockChatError("ERR_AUTH_FAILED", "Invalid credentials"));
+    renderLogin();
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "testuser" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "wrong" } });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("用户名或密码错误")).toBeTruthy();
+    });
   });
 });

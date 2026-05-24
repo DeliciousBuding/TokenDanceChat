@@ -158,7 +158,7 @@ export function JoinScreen() {
                   onClick={() => { setSubView("login"); setError(""); setConnecting(false); }}
                   className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
                 >
-                  {t("auth.guestLogin")}
+                  {t("auth.backToLogin")}
                 </button>
               </div>
             ) : (

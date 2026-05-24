@@ -389,6 +389,7 @@ export const ErrorCode = {
   TIMEOUT: "ERR_TIMEOUT",
   CLOSED: "ERR_CLOSED",
   CANNOT_CONNECT: "ERR_CANNOT_CONNECT",
+  AUTH_FAILED: "ERR_AUTH_FAILED",
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
@@ -1098,7 +1099,11 @@ export async function loginUser(username: string, password: string): Promise<Log
   });
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({ error: "Login failed" }));
-    throw new Error((data as { error?: string }).error || "Login failed");
+    const msg = (data as { error?: string }).error || "Login failed";
+    if (resp.status === 401) {
+      throw new ChatError(ErrorCode.AUTH_FAILED, msg);
+    }
+    throw new Error(msg);
   }
   return await resp.json() as LoginResponse;
 }
