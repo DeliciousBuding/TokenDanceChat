@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, type FormEvent, type KeyboardEvent } from "react";
+import { useState, useCallback, useEffect, useRef, type FormEvent, type KeyboardEvent } from "react";
 import { MessageCircle, ArrowRight, Loader2, Globe } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -10,8 +10,9 @@ import { LoginScreen } from "./LoginScreen";
 import type { Language } from "@/i18n/translations";
 
 const USERNAME_STORAGE_KEY = "tokendance:username";
+const AUTH_STORAGE_KEY = "tokendance:auth";
 
-type SubView = "guest" | "login" | "register";
+type SubView = "guest" | "login" | "register" | "connecting";
 
 function getErrorMessage(err: unknown, t: (key: string) => string): string {
   if (err instanceof ChatError) {
@@ -62,6 +63,21 @@ export function JoinScreen() {
     [connect, setStoreUsername, setView, t],
   );
 
+  // Auto-login: if persistent auth flag exists, skip to connecting -> chat.
+  const handleJoinSuccessRef = useRef(handleJoinSuccess);
+  handleJoinSuccessRef.current = handleJoinSuccess;
+  useEffect(() => {
+    const isAuth = localStorage.getItem(AUTH_STORAGE_KEY);
+    const saved = localStorage.getItem(USERNAME_STORAGE_KEY);
+    if (isAuth === "true" && saved) {
+      setUsername(saved);
+      setSubView("connecting");
+      setConnecting(true);
+      setGuest(false);
+      handleJoinSuccessRef.current(saved);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleGuestJoin = useCallback(
     async (e?: FormEvent) => {
       e?.preventDefault();
@@ -97,8 +113,8 @@ export function JoinScreen() {
 
   const handleAuthSuccess = useCallback(
     (name: string) => {
-      // Switch to guest view first, then attempt auto-join
-      setSubView("guest");
+      // Transition directly to connecting spinner, bypass guest form.
+      setSubView("connecting");
       setUsername(name);
       setError("");
       setConnecting(true);
@@ -128,6 +144,35 @@ export function JoinScreen() {
   }, []);
 
   // Render auth screens managed by subView state.
+
+  // Connecting view — spinner shown during auth → chat transition.
+  if (subView === "connecting") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="animate-blur-in w-full max-w-md">
+          <div className="rounded-xl border border-border bg-card p-8 shadow-2xl transition-colors duration-300 text-center">
+            {error ? (
+              <div className="flex flex-col items-center gap-4">
+                <p className="text-sm text-destructive" role="alert">{error}</p>
+                <button
+                  onClick={() => { setSubView("login"); setError(""); setConnecting(false); }}
+                  className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+                >
+                  {t("auth.guestLogin")}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">{t("auth.signingIn")}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (subView === "register") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">

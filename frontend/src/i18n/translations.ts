@@ -37,6 +37,7 @@ export interface TranslationDict {
     passwordMaxLength: string;
     confirmNotMatch: string;
     loginFailed: string;
+    signingIn: string;
   };
   invite: {
     inviteCodes: string;
@@ -494,6 +495,7 @@ const zhCN: TranslationDict = {
     passwordMaxLength: "密码不能超过72个字符",
     confirmNotMatch: "两次输入的密码不一致",
     loginFailed: "用户名或密码错误",
+    signingIn: "正在登录...",
   },
   invite: {
     inviteCodes: "邀请码管理",
@@ -953,6 +955,7 @@ const enUS: TranslationDict = {
     passwordMaxLength: "Password must be at most 72 characters",
     confirmNotMatch: "Passwords do not match",
     loginFailed: "Invalid username or password",
+    signingIn: "Signing in...",
   },
   invite: {
     inviteCodes: "Invite Codes",

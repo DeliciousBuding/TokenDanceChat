@@ -67,6 +67,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
       try {
         const result = await registerUser(trimmedUsername, password, trimmedInvite);
         if (result.success) {
+          localStorage.setItem("tokendance:auth", "true");
           onSuccess(result.username);
         } else {
           setError(t("error.unknown"));
