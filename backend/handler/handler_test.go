@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -3890,5 +3891,670 @@ func TestGroupRemoveMember(t *testing.T) {
 	}
 	if aliceLeave.Group != "TempGroup" {
 		t.Errorf("alice leave group = %q, want 'TempGroup'", aliceLeave.Group)
+	}
+}
+
+// =============================================================================
+// File upload integration tests
+// =============================================================================
+
+// TestUploadFile verifies that POST /api/upload with a valid multipart file
+// returns 200 and JSON with url/filename.
+func TestUploadFile(t *testing.T) {
+	dir := t.TempDir()
+	h := newTestHandler()
+	h.uploadsDir = dir
+	h.mediaStore = NewLocalMediaStore(dir)
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "test.png")
+	part.Write([]byte("fake-png-data"))
+	writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	h.UploadImage(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if result["url"] == nil || result["url"] == "" {
+		t.Error("expected non-empty url in response")
+	}
+	if result["filename"] == nil || result["filename"] == "" {
+		t.Error("expected non-empty filename in response")
+	}
+}
+
+// TestUploadFileNoFile verifies that POST /api/upload without a file field
+// returns 400 with MISSING_FILE.
+func TestUploadFileNoFile(t *testing.T) {
+	h := newTestHandler()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	// Write a non-file field only.
+	writer.WriteField("other", "value")
+	writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	h.UploadImage(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result["code"] != "MISSING_FILE" {
+		t.Errorf("expected code MISSING_FILE, got %v", result["code"])
+	}
+}
+
+// TestUploadFileTooLarge verifies that POST /api/upload with a body exceeding
+// maxUploadSize (50MB) returns 400 with FILE_TOO_LARGE.
+func TestUploadFileTooLarge(t *testing.T) {
+	h := newTestHandler()
+
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+
+	go func() {
+		defer pw.Close()
+		part, err := writer.CreateFormFile("file", "large.bin")
+		if err != nil {
+			return
+		}
+		// Write more than 50 MB of data (1 MB chunks x 51).
+		chunk := bytes.Repeat([]byte("x"), 1024*1024)
+		for i := 0; i < 51; i++ {
+			if _, err := part.Write(chunk); err != nil {
+				return // pipe closed, max limit reached
+			}
+		}
+		writer.Close()
+	}()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/upload", pr)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	h.UploadImage(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected status 400 for too-large file, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result["code"] != "FILE_TOO_LARGE" {
+		t.Errorf("expected code FILE_TOO_LARGE, got %v", result["code"])
+	}
+}
+
+// =============================================================================
+// Emoji integration tests
+// =============================================================================
+
+// TestUploadEmoji verifies that POST /api/emoji/upload with a valid image file
+// returns 200 with url/filename containing the "emojis/" prefix.
+func TestEmojiUpload(t *testing.T) {
+	dir := t.TempDir()
+	h := newTestHandler()
+	h.uploadsDir = dir
+	h.mediaStore = NewLocalMediaStore(dir)
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "smile.png")
+	part.Write([]byte("fake-png-emoji-data"))
+	writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/emoji/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	h.UploadEmoji(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	url, _ := result["url"].(string)
+	if !strings.Contains(url, "/uploads/emojis/") {
+		t.Errorf("expected url to contain /uploads/emojis/, got %q", url)
+	}
+	if result["filename"] == nil || result["filename"] == "" {
+		t.Error("expected non-empty filename in response")
+	}
+}
+
+// TestEmojiServe verifies that GET /uploads/emojis/{filename} serves a
+// previously uploaded emoji file.
+func TestEmojiServe(t *testing.T) {
+	dir := t.TempDir()
+	emojiDir := filepath.Join(dir, "emojis")
+	os.MkdirAll(emojiDir, 0755)
+	os.WriteFile(filepath.Join(emojiDir, "test-emoji.png"), []byte("emoji-content"), 0644)
+
+	h := newTestHandler()
+	h.uploadsDir = dir
+	h.mediaStore = NewLocalMediaStore(dir)
+
+	req := httptest.NewRequest(http.MethodGet, "/uploads/emojis/test-emoji.png", nil)
+	w := httptest.NewRecorder()
+
+	h.ServeEmoji(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	data, _ := io.ReadAll(resp.Body)
+	if string(data) != "emoji-content" {
+		t.Errorf("expected body 'emoji-content', got %q", string(data))
+	}
+}
+
+// TestEmojiDelete verifies that sending custom_emoji_delete via WebSocket
+// removes the emoji and broadcasts custom_emoji_deleted.
+func TestEmojiDelete(t *testing.T) {
+	h := newTestHandler()
+	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("alice dial failed: %v", err)
+	}
+	defer alice.Close()
+
+	wsJoin(alice, "alice")
+
+	// Add a custom emoji first.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"custom_emoji_add","emoji_name":"test_emoji","emoji_url":"/uploads/emojis/abc.png"}`)); err != nil {
+		t.Fatalf("custom_emoji_add write failed: %v", err)
+	}
+
+	// Drain until we receive the custom_emoji_added broadcast.
+	addConfirm, ok := wsDrainUntil(alice, "custom_emoji_added", 5*time.Second)
+	if !ok {
+		t.Fatal("did not receive custom_emoji_added broadcast")
+	}
+	if addConfirm.EmojiName != "test_emoji" {
+		t.Errorf("expected emoji name 'test_emoji', got %q", addConfirm.EmojiName)
+	}
+
+	// Delete the emoji.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"custom_emoji_delete","emoji_name":"test_emoji"}`)); err != nil {
+		t.Fatalf("custom_emoji_delete write failed: %v", err)
+	}
+
+	delConfirm, ok := wsDrainUntil(alice, "custom_emoji_deleted", 5*time.Second)
+	if !ok {
+		t.Fatal("did not receive custom_emoji_deleted broadcast")
+	}
+	if delConfirm.EmojiName != "test_emoji" {
+		t.Errorf("expected deleted emoji name 'test_emoji', got %q", delConfirm.EmojiName)
+	}
+}
+
+// =============================================================================
+// Scheduled message integration tests (WebSocket)
+// =============================================================================
+
+// TestScheduledCreate verifies that sending schedule_message via WebSocket
+// returns a scheduled_message_confirm with the correct fields.
+func TestScheduledCreate(t *testing.T) {
+	h := newTestHandlerScheduled()
+	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("alice dial failed: %v", err)
+	}
+	defer alice.Close()
+
+	wsJoin(alice, "alice")
+
+	futureTime := time.Now().Add(1 * time.Hour).UnixMilli()
+	payload := `{"type":"schedule_message","content":"Scheduled hello","timestamp":` + fmt.Sprintf("%d", futureTime) + `}`
+
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := alice.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+		t.Fatalf("schedule_message write failed: %v", err)
+	}
+
+	confirm, ok := wsDrainUntil(alice, "scheduled_message_confirm", 5*time.Second)
+	if !ok {
+		t.Fatal("did not receive scheduled_message_confirm")
+	}
+	if confirm.Content != "Scheduled hello" {
+		t.Errorf("expected content 'Scheduled hello', got %q", confirm.Content)
+	}
+	if confirm.Timestamp != futureTime {
+		t.Errorf("expected timestamp %d, got %d", futureTime, confirm.Timestamp)
+	}
+}
+
+// TestScheduledList verifies that sending scheduled_messages_list via WebSocket
+// returns the user's scheduled messages.
+func TestScheduledList(t *testing.T) {
+	h := newTestHandlerScheduled()
+	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("alice dial failed: %v", err)
+	}
+	defer alice.Close()
+
+	wsJoin(alice, "alice")
+
+	// Schedule two messages.
+	futureTime := time.Now().Add(1 * time.Hour).UnixMilli()
+	for _, content := range []string{"First", "Second"} {
+		alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"schedule_message","content":"`+content+`","timestamp":`+fmt.Sprintf("%d", futureTime)+`}`))
+		wsSkipUntil(alice, "scheduled_message_confirm", 5*time.Second)
+	}
+
+	// Request list.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"scheduled_messages_list"}`)); err != nil {
+		t.Fatalf("scheduled_messages_list write failed: %v", err)
+	}
+
+	list, ok := wsDrainUntil(alice, "scheduled_messages_list", 5*time.Second)
+	if !ok {
+		t.Fatal("did not receive scheduled_messages_list")
+	}
+	if len(list.Messages) != 2 {
+		t.Errorf("expected 2 scheduled messages, got %d", len(list.Messages))
+	}
+}
+
+// TestScheduledDelete verifies that sending cancel_scheduled_message via
+// WebSocket cancels the scheduled message and returns confirmation.
+func TestScheduledDelete(t *testing.T) {
+	h := newTestHandlerScheduled()
+	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("alice dial failed: %v", err)
+	}
+	defer alice.Close()
+
+	wsJoin(alice, "alice")
+
+	// Schedule a message.
+	futureTime := time.Now().Add(1 * time.Hour).UnixMilli()
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"schedule_message","content":"To cancel","timestamp":`+fmt.Sprintf("%d", futureTime)+`}`))
+
+	confirm, ok := wsDrainUntil(alice, "scheduled_message_confirm", 5*time.Second)
+	if !ok {
+		t.Fatal("did not receive scheduled_message_confirm")
+	}
+	scheduledID := confirm.ID
+
+	// Cancel it.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"cancel_scheduled_message","id":"`+scheduledID+`"}`)); err != nil {
+		t.Fatalf("cancel_scheduled_message write failed: %v", err)
+	}
+
+	cancelConfirm, ok := wsDrainUntil(alice, "scheduled_message_cancelled", 5*time.Second)
+	if !ok {
+		t.Fatal("did not receive scheduled_message_cancelled")
+	}
+	if cancelConfirm.ID != scheduledID {
+		t.Errorf("expected cancelled ID %q, got %q", scheduledID, cancelConfirm.ID)
+	}
+
+	// Verify list is now empty.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"scheduled_messages_list"}`))
+	list, ok := wsDrainUntil(alice, "scheduled_messages_list", 5*time.Second)
+	if !ok {
+		t.Fatal("did not receive scheduled_messages_list after cancel")
+	}
+	if len(list.Messages) != 0 {
+		t.Errorf("expected 0 scheduled messages after cancel, got %d", len(list.Messages))
+	}
+}
+
+// =============================================================================
+// Call signaling integration tests (WebSocket)
+// =============================================================================
+
+// TestCallStart verifies that sending call_start via WebSocket creates a
+// call session and delivers call_incoming to the target user.
+func TestCallStart(t *testing.T) {
+	h := newTestHandler()
+	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("alice dial failed: %v", err)
+	}
+	defer alice.Close()
+
+	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("bob dial failed: %v", err)
+	}
+	defer bob.Close()
+
+	wsJoin(alice, "alice")
+	wsJoin(bob, "bob")
+
+	// Alice starts a call to Bob.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_start","to":"bob","call_type":"video","sdp":"fake-sdp-offer"}`)); err != nil {
+		t.Fatalf("call_start write failed: %v", err)
+	}
+
+	// Bob should receive call_incoming.
+	incoming, ok := wsDrainUntil(bob, "call_incoming", 5*time.Second)
+	if !ok {
+		t.Fatal("bob did not receive call_incoming")
+	}
+	if incoming.From != "alice" {
+		t.Errorf("expected call from 'alice', got %q", incoming.From)
+	}
+	if incoming.CallType != "video" {
+		t.Errorf("expected call_type 'video', got %q", incoming.CallType)
+	}
+	if incoming.SDP != "fake-sdp-offer" {
+		t.Errorf("expected SDP 'fake-sdp-offer', got %q", incoming.SDP)
+	}
+}
+
+// TestCallAccept verifies the full call accept flow: Alice calls Bob,
+// Bob accepts, Alice receives call_accepted.
+func TestCallAccept(t *testing.T) {
+	h := newTestHandler()
+	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("alice dial failed: %v", err)
+	}
+	defer alice.Close()
+
+	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("bob dial failed: %v", err)
+	}
+	defer bob.Close()
+
+	wsJoin(alice, "alice")
+	wsJoin(bob, "bob")
+
+	// Alice starts a call.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_start","to":"bob","call_type":"audio","sdp":"offer-sdp"}`))
+
+	// Bob receives incoming call.
+	incoming, ok := wsDrainUntil(bob, "call_incoming", 5*time.Second)
+	if !ok {
+		t.Fatal("bob did not receive call_incoming")
+	}
+
+	// Bob accepts with answer SDP.
+	bob.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := bob.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_accept","call_id":"`+incoming.CallID+`","call_type":"audio","sdp":"answer-sdp"}`)); err != nil {
+		t.Fatalf("call_accept write failed: %v", err)
+	}
+
+	// Alice should receive call_accepted with Bob's SDP.
+	accepted, ok := wsDrainUntil(alice, "call_accepted", 5*time.Second)
+	if !ok {
+		t.Fatal("alice did not receive call_accepted")
+	}
+	if accepted.From != "bob" {
+		t.Errorf("expected accepted from 'bob', got %q", accepted.From)
+	}
+	if accepted.SDP != "answer-sdp" {
+		t.Errorf("expected SDP 'answer-sdp', got %q", accepted.SDP)
+	}
+}
+
+// TestCallReject verifies that when Bob rejects Alice's call, Alice receives
+// call_rejected and the session is removed.
+func TestCallReject(t *testing.T) {
+	h := newTestHandler()
+	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("alice dial failed: %v", err)
+	}
+	defer alice.Close()
+
+	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("bob dial failed: %v", err)
+	}
+	defer bob.Close()
+
+	wsJoin(alice, "alice")
+	wsJoin(bob, "bob")
+
+	// Alice starts a call.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_start","to":"bob","call_type":"video"}`))
+
+	// Bob receives incoming.
+	incoming, ok := wsDrainUntil(bob, "call_incoming", 5*time.Second)
+	if !ok {
+		t.Fatal("bob did not receive call_incoming")
+	}
+
+	// Bob rejects.
+	bob.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := bob.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_reject","call_id":"`+incoming.CallID+`"}`)); err != nil {
+		t.Fatalf("call_reject write failed: %v", err)
+	}
+
+	// Alice should receive call_rejected.
+	rejected, ok := wsDrainUntil(alice, "call_rejected", 5*time.Second)
+	if !ok {
+		t.Fatal("alice did not receive call_rejected")
+	}
+	if rejected.From != "bob" {
+		t.Errorf("expected rejected from 'bob', got %q", rejected.From)
+	}
+	if rejected.Content != "call rejected" {
+		t.Errorf("expected content 'call rejected', got %q", rejected.Content)
+	}
+}
+
+// TestCallEnd verifies that either party can end an active call, and the
+// other party receives call_ended.
+func TestCallEnd(t *testing.T) {
+	h := newTestHandler()
+	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("alice dial failed: %v", err)
+	}
+	defer alice.Close()
+
+	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("bob dial failed: %v", err)
+	}
+	defer bob.Close()
+
+	wsJoin(alice, "alice")
+	wsJoin(bob, "bob")
+
+	// Alice starts and Bob accepts.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_start","to":"bob","call_type":"audio"}`))
+	incoming, ok := wsDrainUntil(bob, "call_incoming", 5*time.Second)
+	if !ok {
+		t.Fatal("bob did not receive call_incoming")
+	}
+	bob.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	bob.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_accept","call_id":"`+incoming.CallID+`","call_type":"audio"}`))
+	wsSkipUntil(alice, "call_accepted", 5*time.Second)
+
+	// Alice ends the call.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_end","call_id":"`+incoming.CallID+`"}`)); err != nil {
+		t.Fatalf("call_end write failed: %v", err)
+	}
+
+	// Bob should receive call_ended.
+	ended, ok := wsDrainUntil(bob, "call_ended", 5*time.Second)
+	if !ok {
+		t.Fatal("bob did not receive call_ended")
+	}
+	if ended.From != "alice" {
+		t.Errorf("expected ended from 'alice', got %q", ended.From)
+	}
+}
+
+// =============================================================================
+// Thread reply integration tests (WebSocket)
+// =============================================================================
+
+// TestThreadReply verifies that messages sent with thread_id are retrievable
+// via thread_messages request.
+func TestThreadReply(t *testing.T) {
+	h := newTestHandlerThreaded()
+	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("alice dial failed: %v", err)
+	}
+	defer alice.Close()
+
+	wsJoin(alice, "alice")
+
+	// Send a parent message first.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"message","content":"Parent message"}`)); err != nil {
+		t.Fatalf("parent message write failed: %v", err)
+	}
+	parentMsg, ok := wsDrainUntil(alice, "message", 5*time.Second)
+	if !ok {
+		t.Fatal("did not receive parent message broadcast")
+	}
+	parentID := parentMsg.ID
+
+	// Send two thread replies.
+	for _, content := range []string{"Reply one", "Reply two"} {
+		alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"message","content":"`+content+`","thread_id":"`+parentID+`"}`)); err != nil {
+			t.Fatalf("thread reply write failed: %v", err)
+		}
+		wsSkipUntil(alice, "message", 5*time.Second)
+	}
+
+	// Request thread messages.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"thread_messages","id":"`+parentID+`"}`)); err != nil {
+		t.Fatalf("thread_messages write failed: %v", err)
+	}
+
+	threadResp, ok := wsDrainUntil(alice, "thread_messages", 5*time.Second)
+	if !ok {
+		t.Fatal("did not receive thread_messages response")
+	}
+	if threadResp.ParentMessageID != parentID {
+		t.Errorf("expected ParentMessageID %q, got %q", parentID, threadResp.ParentMessageID)
+	}
+	if len(threadResp.Messages) != 2 {
+		t.Errorf("expected 2 thread messages, got %d", len(threadResp.Messages))
+	}
+}
+
+// TestThreadReplyNotFound verifies that requesting thread_messages for a
+// non-existent parent returns an empty message list.
+func TestThreadReplyNotFound(t *testing.T) {
+	h := newTestHandlerThreaded()
+	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("alice dial failed: %v", err)
+	}
+	defer alice.Close()
+
+	wsJoin(alice, "alice")
+
+	// Request threads for a non-existent parent.
+	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"thread_messages","id":"non-existent-id"}`)); err != nil {
+		t.Fatalf("thread_messages write failed: %v", err)
+	}
+
+	threadResp, ok := wsDrainUntil(alice, "thread_messages", 5*time.Second)
+	if !ok {
+		t.Fatal("did not receive thread_messages response")
+	}
+	if threadResp.ParentMessageID != "non-existent-id" {
+		t.Errorf("expected ParentMessageID 'non-existent-id', got %q", threadResp.ParentMessageID)
+	}
+	if len(threadResp.Messages) != 0 {
+		t.Errorf("expected 0 thread messages for non-existent parent, got %d", len(threadResp.Messages))
 	}
 }
