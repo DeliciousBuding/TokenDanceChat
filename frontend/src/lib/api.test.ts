@@ -481,7 +481,8 @@ describe("chatAPI.send", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     chatAPI.send({ type: "test" });
     expect(warn).toHaveBeenCalledWith(
-      "WebSocket not connected, cannot send message",
+      "WebSocket not connected, cannot send",
+      { type: "test" },
     );
     warn.mockRestore();
   });
