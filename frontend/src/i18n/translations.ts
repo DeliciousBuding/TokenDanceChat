@@ -452,6 +452,8 @@ export interface TranslationDict {
     scrollToBottom: string;
     gifStickers: string;
     online: string;
+    showPassword: string;
+    hidePassword: string;
   };
 }
 
@@ -906,6 +908,8 @@ const zhCN: TranslationDict = {
     scrollToBottom: "回到底部",
     gifStickers: "GIF 和贴纸",
     online: "在线",
+    showPassword: "显示密码",
+    hidePassword: "隐藏密码",
   },
 
 };
@@ -1363,6 +1367,8 @@ const enUS: TranslationDict = {
     scrollToBottom: "Scroll to bottom",
     gifStickers: "GIF & Stickers",
     online: "Online",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
   },
 
 };
