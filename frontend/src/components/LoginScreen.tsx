@@ -1,7 +1,7 @@
 import { useState, useCallback, type FormEvent, type KeyboardEvent } from "react";
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useTranslation } from "@/i18n/context";
-import { loginUser } from "@/lib/api";
+import { loginUser, ChatError, ErrorCode } from "@/lib/api";
 
 interface LoginScreenProps {
   onBack: () => void;
@@ -44,11 +44,10 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
           setError(t("error.unknown"));
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "";
-        // Map known server errors to user-friendly i18n messages.
-        if (msg.includes("not found") || msg.includes("invalid") || msg.includes("credentials")) {
+        if (err instanceof ChatError && err.code === ErrorCode.AUTH_FAILED) {
           setError(t("auth.loginFailed"));
         } else {
+          const msg = err instanceof Error ? err.message : "";
           setError(msg || t("error.unknown"));
         }
       } finally {
@@ -77,7 +76,7 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
           aria-label={t("a11y.back")}
         >
           <ArrowLeft className="h-4 w-4" />
-          {t("auth.guestLogin")}
+          {t("auth.back")}
         </button>
 
         {/* Title */}

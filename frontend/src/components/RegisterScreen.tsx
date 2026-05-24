@@ -110,7 +110,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
           aria-label={t("a11y.back")}
         >
           <ArrowLeft className="h-4 w-4" />
-          {t("auth.guestLogin")}
+          {t("auth.back")}
         </button>
 
         {/* Title */}

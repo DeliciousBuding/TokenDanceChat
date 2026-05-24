@@ -17,7 +17,7 @@ vi.mock("@/i18n/context", () => ({
         "auth.inviteCode": "邀请码",
         "auth.registerButton": "注册",
         "auth.haveAccount": "已有账号？去登录",
-        "auth.guestLogin": "返回游客模式",
+        "auth.back": "返回",
         "auth.passwordMinLength": "密码不能少于6位",
         "auth.confirmNotMatch": "两次密码不一致",
         "auth.invalidCode": "邀请码无效",
