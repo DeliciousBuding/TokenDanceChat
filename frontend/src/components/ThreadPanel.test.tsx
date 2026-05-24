@@ -370,4 +370,113 @@ describe("ThreadPanel", () => {
     const sendButton = screen.getByRole("button", { name: "Write a reply..." });
     expect(sendButton).toBeDisabled();
   });
+
+  // ── Reply input rendering ───────────────────────────
+
+  it("renders reply input textarea when panel is open", () => {
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={vi.fn()}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Write a reply...");
+    expect(textarea).toBeInTheDocument();
+    expect(textarea.tagName).toBe("TEXTAREA");
+  });
+
+  it("renders send button alongside the reply textarea", () => {
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={vi.fn()}
+      />,
+    );
+
+    const sendButton = screen.getByRole("button", { name: "Write a reply..." });
+    expect(sendButton).toBeInTheDocument();
+    // Send button starts disabled with empty content
+    expect(sendButton).toBeDisabled();
+  });
+
+  it("send button becomes enabled when reply text is entered", () => {
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={vi.fn()}
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Write a reply...");
+    fireEvent.change(textarea, { target: { value: "Hello" } });
+
+    const sendButton = screen.getByRole("button", { name: "Write a reply..." });
+    expect(sendButton).not.toBeDisabled();
+  });
+
+  // ── Loading state ───────────────────────────────────
+
+  it("shows placeholder while thread replies are loading (empty state)", () => {
+    // When threadMessages is empty, the component shows a placeholder
+    // message.  This is the visible "loading/empty" state before the
+    // server has returned any thread replies.
+    const parent = createMessage({ content: "Parent" });
+    render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={vi.fn()}
+      />,
+    );
+
+    // Placeholder text is shown in the message area
+    expect(screen.getByText("Write a reply...")).toBeInTheDocument();
+    // Reply input remains available (user can reply even while loading)
+    expect(screen.getByPlaceholderText("Write a reply...")).toBeInTheDocument();
+  });
+
+  it("transitions from empty to populated when replies arrive", () => {
+    const parent = createMessage({ content: "Parent" });
+    const replies = [
+      createMessage({ id: "r1", content: "First reply", username: "bob" }),
+    ];
+
+    const { rerender } = render(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={[]}
+        onClose={vi.fn()}
+        onSendReply={vi.fn()}
+      />,
+    );
+
+    // Initially empty
+    expect(screen.queryByText("First reply")).toBeFalsy();
+    expect(screen.getByText("Write a reply...")).toBeInTheDocument();
+
+    // Replies arrive — rerender with messages
+    rerender(
+      <ThreadPanel
+        parentMessage={parent}
+        threadMessages={replies}
+        onClose={vi.fn()}
+        onSendReply={vi.fn()}
+      />,
+    );
+
+    // Now reply content is visible and placeholder is gone
+    expect(screen.getByText("First reply")).toBeInTheDocument();
+    expect(screen.queryByText("Write a reply...")).toBeFalsy();
+  });
 });
