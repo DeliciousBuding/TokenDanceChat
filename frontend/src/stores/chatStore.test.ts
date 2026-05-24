@@ -486,4 +486,321 @@ describe("chatStore", () => {
       expect(stored["dm:Bob"]).toBeGreaterThan(0);
     });
   });
+
+  describe("setCurrentChat advanced", () => {
+    it("switches from DM to DM and marks previous DM as read", () => {
+      useChatStore.getState().setUsername("Alice");
+      useChatStore.getState().setCurrentChat({ type: "dm", username: "Bob" });
+      useChatStore.getState().setCurrentChat({ type: "dm", username: "Charlie" });
+      const s = useChatStore.getState();
+      expect(s.currentChat).toEqual({ type: "dm", username: "Charlie" });
+      expect(s.lastReadTimestamps["dm:Bob"]).toBeGreaterThan(0);
+    });
+
+    it("switches from group to public and marks group as read", () => {
+      useChatStore.getState().setUsername("Alice");
+      useChatStore.getState().setCurrentChat({ type: "group", name: "DevTeam" });
+      useChatStore.getState().setCurrentChat({ type: "public" });
+      const s = useChatStore.getState();
+      expect(s.currentChat).toEqual({ type: "public" });
+      expect(s.lastReadTimestamps["group:DevTeam"]).toBeGreaterThan(0);
+    });
+
+    it("switches from public to group and marks public as read", () => {
+      useChatStore.getState().setUsername("Alice");
+      useChatStore.getState().setCurrentChat({ type: "public" });
+      useChatStore.getState().setCurrentChat({ type: "group", name: "DevTeam" });
+      const s = useChatStore.getState();
+      expect(s.currentChat).toEqual({ type: "group", name: "DevTeam" });
+      expect(s.lastReadTimestamps["public"]).toBeGreaterThan(0);
+    });
+
+    it("clears pendingImage when switching chats", () => {
+      useChatStore.getState().setPendingImage("data:image/png;base64,abc123");
+      useChatStore.getState().setCurrentChat({ type: "dm", username: "Bob" });
+      expect(useChatStore.getState().pendingImage).toBeNull();
+      useChatStore.getState().setPendingImage("data:image/png;base64,xyz");
+      useChatStore.getState().setCurrentChat({ type: "group", name: "Team" });
+      expect(useChatStore.getState().pendingImage).toBeNull();
+    });
+  });
+
+  describe("addMessage edge cases", () => {
+    it("does not deduplicate by message ID (appends regardless)", () => {
+      useChatStore.getState().addMessage({
+        id: "dup-1", username: "Alice", content: "first", timestamp: 1000,
+      });
+      useChatStore.getState().addMessage({
+        id: "dup-1", username: "Alice", content: "second", timestamp: 2000,
+      });
+      const msgs = useChatStore.getState().messages;
+      expect(msgs).toHaveLength(2);
+      expect(msgs[0].id).toBe("dup-1");
+      expect(msgs[1].id).toBe("dup-1");
+      expect(msgs[0].content).toBe("first");
+      expect(msgs[1].content).toBe("second");
+    });
+
+    it("stores a message with all optional fields set", () => {
+      useChatStore.getState().addMessage({
+        id: "full-1",
+        username: "Alice",
+        content: "Check this out",
+        timestamp: 5000,
+        room_id: "room-1",
+        edited: true,
+        reactions: { "👍": ["Bob"], "❤️": ["Charlie"] },
+        reply_to_id: "msg-99",
+        reply_to_content: "original message",
+        reply_to_user: "Bob",
+        deleted: false,
+        to: "Charlie",
+        from: "Alice",
+        group: "DevTeam",
+        read_by: ["Charlie", "Dave"],
+        subtype: "file_share",
+        poll: {
+          id: "poll-1",
+          room_id: "room-1",
+          creator: "Alice",
+          question: "Pizza or tacos?",
+          options: ["Pizza", "Tacos"],
+          multiple_choice: false,
+          is_anonymous: true,
+          is_closed: false,
+          votes: { 0: 1, 1: 2 },
+          voters: { 0: ["Alice"], 1: ["Bob", "Charlie"] },
+          created_at: 4000,
+        },
+        thread_id: "thread-1",
+        mention_all: true,
+      });
+      const msg = useChatStore.getState().messages[0];
+      expect(msg.id).toBe("full-1");
+      expect(msg.reply_to_id).toBe("msg-99");
+      expect(msg.reply_to_user).toBe("Bob");
+      expect(msg.subtype).toBe("file_share");
+      expect(msg.thread_id).toBe("thread-1");
+      expect(msg.mention_all).toBe(true);
+      expect(msg.poll?.question).toBe("Pizza or tacos?");
+    });
+  });
+
+  describe("typing users", () => {
+    it("adds a typing user", () => {
+      useChatStore.getState().addTypingUser("Alice");
+      expect(useChatStore.getState().typingUsers).toContain("Alice");
+    });
+
+    it("does not duplicate a typing user", () => {
+      useChatStore.getState().addTypingUser("Alice");
+      useChatStore.getState().addTypingUser("Alice");
+      expect(useChatStore.getState().typingUsers).toHaveLength(1);
+    });
+
+    it("adds multiple distinct typing users", () => {
+      useChatStore.getState().addTypingUser("Alice");
+      useChatStore.getState().addTypingUser("Bob");
+      useChatStore.getState().addTypingUser("Charlie");
+      expect(useChatStore.getState().typingUsers).toEqual(["Alice", "Bob", "Charlie"]);
+    });
+
+    it("removes a typing user", () => {
+      useChatStore.getState().addTypingUser("Alice");
+      useChatStore.getState().addTypingUser("Bob");
+      useChatStore.getState().removeTypingUser("Alice");
+      expect(useChatStore.getState().typingUsers).toEqual(["Bob"]);
+    });
+
+    it("removeTypingUser is a no-op for non-typing users", () => {
+      useChatStore.getState().addTypingUser("Alice");
+      useChatStore.getState().removeTypingUser("Bob");
+      expect(useChatStore.getState().typingUsers).toEqual(["Alice"]);
+    });
+
+    it("setTypingUsers replaces the entire list", () => {
+      useChatStore.getState().addTypingUser("Alice");
+      useChatStore.getState().setTypingUsers(["Bob", "Charlie"]);
+      expect(useChatStore.getState().typingUsers).toEqual(["Bob", "Charlie"]);
+    });
+
+    it("reset clears typing users", () => {
+      useChatStore.getState().addTypingUser("Alice");
+      useChatStore.getState().addTypingUser("Bob");
+      useChatStore.getState().reset();
+      expect(useChatStore.getState().typingUsers).toHaveLength(0);
+    });
+  });
+
+  describe("user status", () => {
+    it("sets the full user status list", () => {
+      const statuses = [
+        { username: "Alice", online: true, last_seen: 1000 },
+        { username: "Bob", online: false, last_seen: 500 },
+      ];
+      useChatStore.getState().setUserStatusList(statuses);
+      expect(useChatStore.getState().userStatusList).toHaveLength(2);
+      expect(useChatStore.getState().userStatusList[0].username).toBe("Alice");
+      expect(useChatStore.getState().userStatusList[0].online).toBe(true);
+      expect(useChatStore.getState().userStatusList[1].online).toBe(false);
+    });
+
+    it("setUserStatusList with empty array clears the list", () => {
+      useChatStore.getState().setUserStatusList([
+        { username: "Alice", online: true, last_seen: 1000 },
+      ]);
+      useChatStore.getState().setUserStatusList([]);
+      expect(useChatStore.getState().userStatusList).toHaveLength(0);
+    });
+
+    it("updates a user profile status", () => {
+      useChatStore.getState().setUserProfile({
+        username: "Alice",
+        display_name: "Alice",
+        avatar_url: "",
+        bio: "",
+        status: "online",
+        last_seen: 1000,
+        created_at: 500,
+      });
+      useChatStore.getState().updateUserProfileStatus("Alice", "away");
+      expect(useChatStore.getState().userProfiles["Alice"].status).toBe("away");
+    });
+
+    it("updateUserProfileStatus is a no-op for unknown users", () => {
+      useChatStore.getState().updateUserProfileStatus("Nobody", "online");
+      expect(useChatStore.getState().userProfiles["Nobody"]).toBeUndefined();
+    });
+  });
+
+  describe("room management", () => {
+    it("sets the room list", () => {
+      const rooms = [
+        { id: "room-1", name: "General" },
+        { id: "room-2", name: "Random" },
+      ];
+      useChatStore.getState().setRooms(rooms);
+      expect(useChatStore.getState().rooms).toHaveLength(2);
+      expect(useChatStore.getState().rooms[0].name).toBe("General");
+    });
+
+    it("setRooms with empty array clears rooms", () => {
+      useChatStore.getState().setRooms([{ id: "room-1", name: "General" }]);
+      useChatStore.getState().setRooms([]);
+      expect(useChatStore.getState().rooms).toHaveLength(0);
+    });
+
+    it("sets the current room ID", () => {
+      useChatStore.getState().setCurrentRoomID("room-1");
+      expect(useChatStore.getState().currentRoomID).toBe("room-1");
+    });
+
+    it("reset clears rooms and currentRoomID", () => {
+      useChatStore.getState().setRooms([{ id: "room-1", name: "General" }]);
+      useChatStore.getState().setCurrentRoomID("room-1");
+      useChatStore.getState().reset();
+      expect(useChatStore.getState().rooms).toHaveLength(0);
+      expect(useChatStore.getState().currentRoomID).toBe("");
+    });
+  });
+
+  describe("poll management", () => {
+    const samplePoll = {
+      id: "poll-1",
+      room_id: "room-1",
+      creator: "Alice",
+      question: "Favorite color?",
+      options: ["Red", "Blue", "Green"],
+      multiple_choice: true,
+      is_anonymous: false,
+      is_closed: false,
+      votes: { 0: 2, 1: 1, 2: 0 },
+      voters: { 0: ["Alice", "Bob"], 1: ["Charlie"] },
+      created_at: 1000,
+    };
+
+    it("updatePoll adds a new poll to the store", () => {
+      useChatStore.getState().updatePoll("poll-1", samplePoll);
+      expect(useChatStore.getState().polls["poll-1"]).toEqual(samplePoll);
+    });
+
+    it("updatePoll overwrites an existing poll", () => {
+      useChatStore.getState().updatePoll("poll-1", samplePoll);
+      const updated = { ...samplePoll, is_closed: true };
+      useChatStore.getState().updatePoll("poll-1", updated);
+      expect(useChatStore.getState().polls["poll-1"].is_closed).toBe(true);
+    });
+
+    it("updatePoll supports multiple distinct polls", () => {
+      useChatStore.getState().updatePoll("poll-1", samplePoll);
+      useChatStore.getState().updatePoll("poll-2", { ...samplePoll, id: "poll-2" });
+      expect(Object.keys(useChatStore.getState().polls)).toHaveLength(2);
+      expect(useChatStore.getState().polls["poll-1"].id).toBe("poll-1");
+      expect(useChatStore.getState().polls["poll-2"].id).toBe("poll-2");
+    });
+
+    it("removePoll deletes a poll by ID", () => {
+      useChatStore.getState().updatePoll("poll-1", samplePoll);
+      useChatStore.getState().updatePoll("poll-2", { ...samplePoll, id: "poll-2" });
+      useChatStore.getState().removePoll("poll-1");
+      expect(useChatStore.getState().polls["poll-1"]).toBeUndefined();
+      expect(useChatStore.getState().polls["poll-2"]).toBeDefined();
+    });
+
+    it("removePoll is a no-op for unknown poll IDs", () => {
+      useChatStore.getState().updatePoll("poll-1", samplePoll);
+      useChatStore.getState().removePoll("nonexistent");
+      expect(useChatStore.getState().polls["poll-1"]).toBeDefined();
+      expect(Object.keys(useChatStore.getState().polls)).toHaveLength(1);
+    });
+
+    it("reset clears all polls", () => {
+      useChatStore.getState().updatePoll("poll-1", samplePoll);
+      useChatStore.getState().updatePoll("poll-2", { ...samplePoll, id: "poll-2" });
+      useChatStore.getState().reset();
+      expect(Object.keys(useChatStore.getState().polls)).toHaveLength(0);
+    });
+  });
+
+  describe("blocked users advanced", () => {
+    it("setBlockedUsers replaces the entire list", () => {
+      useChatStore.getState().addBlockedUser("Spammer1");
+      useChatStore.getState().addBlockedUser("Spammer2");
+      useChatStore.getState().setBlockedUsers(["Troll"]);
+      expect(useChatStore.getState().blockedUsers).toEqual(["Troll"]);
+    });
+
+    it("setBlockedUsers with empty array clears all blocks", () => {
+      useChatStore.getState().addBlockedUser("Spammer");
+      useChatStore.getState().setBlockedUsers([]);
+      expect(useChatStore.getState().blockedUsers).toHaveLength(0);
+    });
+
+    it("unblockUser is an alias for removeBlockedUser", () => {
+      useChatStore.getState().addBlockedUser("Spammer");
+      useChatStore.getState().removeBlockedUser("Spammer");
+      expect(useChatStore.getState().blockedUsers).not.toContain("Spammer");
+    });
+
+    it("isBlocked check works via addMessage filtering", () => {
+      useChatStore.getState().addBlockedUser("Spammer");
+      useChatStore.getState().addMessage({
+        id: "1", username: "Spammer", content: "Buy now!", timestamp: 1000,
+      });
+      useChatStore.getState().addMessage({
+        id: "2", username: "Friend", content: "Hello!", timestamp: 2000,
+      });
+      // Spammer's message should be filtered out, Friend's message should remain
+      const msgs = useChatStore.getState().messages;
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0].username).toBe("Friend");
+    });
+
+    it("resets clears blocked users", () => {
+      useChatStore.getState().addBlockedUser("A");
+      useChatStore.getState().addBlockedUser("B");
+      useChatStore.getState().reset();
+      expect(useChatStore.getState().blockedUsers).toHaveLength(0);
+    });
+  });
 });
