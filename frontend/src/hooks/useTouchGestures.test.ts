@@ -96,6 +96,8 @@ describe("useTouchGestures", () => {
     expect(onLongPress).not.toHaveBeenCalled();
   });
 
+  // ── Swipe left / right detection ──
+
   it("triggers swipe left when swiping left fast enough", () => {
     const { result } = renderHook(() => useTouchGestures(handlers));
 
@@ -110,6 +112,7 @@ describe("useTouchGestures", () => {
     });
 
     expect(onSwipeLeft).toHaveBeenCalledOnce();
+    expect(onSwipeRight).not.toHaveBeenCalled();
   });
 
   it("triggers swipe right when swiping right fast enough", () => {
@@ -122,6 +125,41 @@ describe("useTouchGestures", () => {
     act(() => {
       result.current.onTouchEnd(
         mockTouchEvent([], [{ clientX: 220, clientY: 100 }]), // dx = +120
+      );
+    });
+
+    expect(onSwipeRight).toHaveBeenCalledOnce();
+    expect(onSwipeLeft).not.toHaveBeenCalled();
+  });
+
+  it("triggers swipe left over long distance (distance gate, even when velocity is ambiguous)", () => {
+    const { result } = renderHook(() => useTouchGestures(handlers));
+
+    act(() => {
+      result.current.onTouchStart(mockTouchEvent([{ clientX: 300, clientY: 100 }]));
+    });
+
+    // Quick swipe of 200px horizontal, well past SWIPE_THRESHOLD*1.5=90
+    act(() => {
+      result.current.onTouchEnd(
+        mockTouchEvent([], [{ clientX: 100, clientY: 100 }]), // dx = -200
+      );
+    });
+
+    expect(onSwipeLeft).toHaveBeenCalledOnce();
+  });
+
+  it("triggers swipe right over long distance (distance gate)", () => {
+    const { result } = renderHook(() => useTouchGestures(handlers));
+
+    act(() => {
+      result.current.onTouchStart(mockTouchEvent([{ clientX: 50, clientY: 100 }]));
+    });
+
+    // Quick swipe of 200px horizontal
+    act(() => {
+      result.current.onTouchEnd(
+        mockTouchEvent([], [{ clientX: 250, clientY: 100 }]), // dx = +200
       );
     });
 
@@ -186,9 +224,40 @@ describe("useTouchGestures", () => {
       );
     });
   });
+
+  // ── Touch event cleanup on unmount ──
+
+  it("touch handlers are safe to call after unmount (no crash)", () => {
+    const { result, unmount } = renderHook(() =>
+      useTouchGestures(handlers),
+    );
+
+    act(() => {
+      result.current.onTouchStart(mockTouchEvent([{ clientX: 100, clientY: 200 }]));
+    });
+
+    unmount();
+
+    // All handlers should be callable without throwing after unmount.
+    expect(() => {
+      act(() => {
+        result.current.onTouchMove(
+          mockTouchEvent([{ clientX: 110, clientY: 210 }]),
+        );
+      });
+    }).not.toThrow();
+
+    expect(() => {
+      act(() => {
+        result.current.onTouchEnd(
+          mockTouchEvent([], [{ clientX: 110, clientY: 210 }]),
+        );
+      });
+    }).not.toThrow();
+  });
 });
 
-// ─── usePullDownGesture ────────────────────────────────────────────
+// ─── usePullDownGesture (mobile pull-down refresh) ─────────────────
 
 describe("usePullDownGesture", () => {
   let containerRef: React.RefObject<HTMLDivElement | null>;
@@ -367,6 +436,37 @@ describe("usePullDownGesture", () => {
 
     expect(onPullDown).toHaveBeenCalledOnce();
   });
+
+  // ── Touch event cleanup on unmount ──
+
+  it("touch handlers are safe to call after unmount (no crash)", () => {
+    const { result, unmount } = renderHook(() =>
+      usePullDownGesture(containerRef, handlers),
+    );
+
+    act(() => {
+      result.current.onTouchStart(mockTouchEvent([{ clientX: 100, clientY: 100 }]));
+    });
+
+    unmount();
+
+    // Calling handlers after unmount should not throw.
+    expect(() => {
+      act(() => {
+        result.current.onTouchMove(
+          mockTouchEvent([{ clientX: 100, clientY: 200 }]),
+        );
+      });
+    }).not.toThrow();
+
+    expect(() => {
+      act(() => {
+        result.current.onTouchEnd(
+          mockTouchEvent([], [{ clientX: 100, clientY: 200 }]),
+        );
+      });
+    }).not.toThrow();
+  });
 });
 
 // ─── useSwipeableMessage ───────────────────────────────────────────
@@ -525,5 +625,36 @@ describe("useSwipeableMessage", () => {
 
     expect(result.current.translateX).toBe(0);
     expect(result.current.showActions).toBe(false);
+  });
+
+  // ── Touch event cleanup on unmount ──
+
+  it("touch handlers are safe to call after unmount (no crash)", () => {
+    const { result, unmount } = renderHook(() =>
+      useSwipeableMessage(handlers),
+    );
+
+    act(() => {
+      result.current.onTouchStart(mockTouchEvent([{ clientX: 300, clientY: 100 }]));
+    });
+
+    unmount();
+
+    // Calling handlers after unmount should not throw.
+    expect(() => {
+      act(() => {
+        result.current.onTouchMove(
+          mockTouchEvent([{ clientX: 240, clientY: 100 }]),
+        );
+      });
+    }).not.toThrow();
+
+    expect(() => {
+      act(() => {
+        result.current.onTouchEnd(
+          mockTouchEvent([], [{ clientX: 240, clientY: 100 }]),
+        );
+      });
+    }).not.toThrow();
   });
 });
