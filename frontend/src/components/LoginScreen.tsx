@@ -38,6 +38,7 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
       try {
         const result = await loginUser(trimmedUsername, password);
         if (result.success) {
+          localStorage.setItem("tokendance:auth", "true");
           onSuccess(result.username);
         } else {
           setError(t("error.unknown"));
