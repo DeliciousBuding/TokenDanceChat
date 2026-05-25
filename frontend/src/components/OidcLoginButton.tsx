@@ -32,7 +32,8 @@ export function OidcLoginButton() {
   return (
     <a
       href="/api/oidc/login"
-      className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-base)] bg-[var(--bg-2)] px-4 py-2.5 text-[14px] text-[var(--text-primary)] hover:bg-[var(--bg-3)] transition-colors"
+      data-visual="auth-modal-oidc"
+      className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-base)] bg-[var(--bg-2)] px-4 text-[14px] text-[var(--text-primary)] hover:bg-[var(--bg-3)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
     >
       {t("auth.oidcLoginButton")}
     </a>

@@ -53,12 +53,28 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 
 - [x] 应用会话鉴权：login/register/OIDC redeem/exchange 返回 HMAC `session_token`；受保护 REST 端点要求 `Authorization: Bearer <session_token>`；本地注册用户 WebSocket join 发送应用 session token，OIDC 用户仍发送 OIDC access token，游客不发送 token。
 - [x] REST 权限加固：search/export/upload/emoji/invite/admin stats 不再信任 query/body username；search 按认证用户过滤公开、DM、群组成员和 deleted 状态。
+- [x] Group export 权限加固：`conversation=group:<name>` 导出前验证调用者群组成员身份，非成员返回 `NOT_IN_GROUP`，并补 focused regression。
+- [x] Webhook ingress 权限/资源边界加固：HTTP 入口仅接受 `Authorization: Bearer <secret>`，拒绝 query secret；请求体 8 KiB、content 2000 字符；sender 固定为服务端 `webhook`，前端/E2E 改为 header 调用。
+- [x] Webhook ingress 实时链路修复：HTTP POST 现在持久化为群组消息、携带真实消息 ID，并通过 `SendToGroup` 只分发给在线群成员；浏览器 E2E 验证群组消息中只显示一次。
+- [x] 前端 WebSocket 重复投递修复：`useWebSocket()` 多消费者共享一套事件订阅，`chatStore.addMessage` 按持久化 message ID 去重，避免 App/ChatLayout/AuthModal 多处挂载导致重复气泡。
+- [x] CI/部署验证基线加固：GitHub Actions 增加 public-preview production build smoke、视觉验收和 artifact 上传；`docker-compose.yml` 和 `scripts/verify.ps1` 显式建模 `CHAT_DB_PATH`、`CHAT_SESSION_SECRET`、OIDC 开关和 frontend dist。
+- [x] Compose 部署 fail-closed：`docker-compose.yml` 缺少 `CHAT_SESSION_SECRET` 时拒绝渲染配置，并透传 `CHAT_MEDIA_S3_*` / `CHAT_MEDIA_WEBDAV_*`；`.env.example` 默认不再 copy-enable 空 S3/OIDC 配置。
+- [x] OIDC provider 资源边界加固：discovery、JWKS、token exchange、refresh 统一走 5s timeout HTTP client，并对 provider 响应体设置大小上限；focused tests 覆盖 timeout 和 oversized response。
+- [x] OIDC runtime 资源边界加固：state/redeem token store 设置容量上限，满载时拒绝新建而不静默淘汰既有登录流程；store cleanup loop 可关闭，`SetupOIDC` 失败不安装 transient store，重配置会关闭旧 store；OIDC endpoint 独立 per-IP rate limit 提升为完整 redirect flow 预算；rate limiter 清理过期 IP entry。
+- [x] 可信反代客户端 IP：新增 `CHAT_TRUSTED_PROXY_CIDRS`，只有可信反代来源的 `X-Forwarded-For` / `X-Real-IP` 会参与 REST、auth、OIDC 和 WS 限流，避免 nginx 后所有用户共享同一 `RemoteAddr` bucket。
+- [x] 本地验证脚本防假绿：`scripts/verify.ps1` 在每个 native 命令后检查 `$LASTEXITCODE`，避免 `Select-Object`/`Out-Null` 管道吞掉 `go`/`npm`/`npx`/`docker`/`git` 失败状态；已用故意失败的 `GOFLAGS=-badflag` 反向烟测确认脚本会 exit 1。
+- [x] 本地视觉门不再静默跳过：`scripts/verify.ps1` 未提供 `VISUAL_BASE_URL` 时会自行启动临时生产后端、等待 `/api/health`，运行 `npm run visual:acceptance`，并在结束后清理临时 DB 和进程。
+- [x] 移动侧栏触控视觉门：`visual-acceptance.mjs` 新增 `mobile-light-sidebar-open` 场景，打开移动侧栏后对侧栏内可见控件做 44px hard gate；`Sidebar.tsx` 同步提升关闭、搜索、建群、主行、三点菜单和底部工具栏命中区。
+- [x] 交接报告脱敏：`docs/handoff-report-2026-05-25.md` 删除具体主机别名、内网 IP、宿主机端口、真实域名、容器路径和 SSH 命令，改为部署运行契约与本地/占位验证命令。
 - [x] 游客只读预览 P0：未登录首页通过 `GET /api/messages?limit=100` 拉取公开历史，接口失败时也结束骨架屏；保持不设置 username、不打开 WebSocket，点击「加入聊天」再进入 AuthModal 游客加入流程。
 - [x] 为游客预览添加 focused App/API 测试和当前 UI 的 Playwright 生产 smoke，避免旧认证入口 E2E 选择器误报。
 - [x] 修复未登录公共预览输入框聚焦时的全屏格式化遮罩拦截问题：composer popover 仅在已登录且输入框可用时打开，并以 ChatInput focused regression test 固化。
 - [x] 对齐前端 `index.html` 与 Go 后端 runtime CSP：移除 Google Fonts 外链，改用系统字体，避免视觉验收控制台 CSP 报错。
 - [x] 更新视觉验收脚本以适配当前 AuthModal 文案、composer selector 和 group-info Webhook/audit 场景。
 - [x] 完成 2026-05-25 视觉验收复核：desktop/tablet/mobile light/dark + group-info 截图和 metrics 全部无 issues，详见 `docs/visual-acceptance.md`。
+- [x] SettingsModal macOS/liquid-glass 增量：弹窗改为 portal 挂载到 `document.body`，避免桌面 Sidebar transform 捕获 fixed 定位；桌面/移动布局响应式收敛，所有设置弹窗内可视控件达到 44px 触控门槛；`visual-acceptance.mjs` 新增 desktop/mobile settings 场景并门控 tab label 裁剪。
+- [x] AuthModal macOS/liquid-glass 增量：认证卡片、tab、关闭、密码显示、主按钮、inline switch 和 OIDC 链接纳入 44px 触控目标；`visual-acceptance.mjs` 新增 desktop login 与 mobile register error 场景，门控 modal fit、tab label 裁剪、错误态可见性和弹窗内小控件。
+- [x] ChatInput composer macOS/liquid-glass 增量：composer 保持单一玻璃卡片，底部常驻 Markdown/图片/文件/emoji/GIF/定时/录音一排工具；桌面/移动端工具按钮和发送按钮保持 44px 触控目标，默认聚焦不再弹出旧 Markdown 浮层；`visual-acceptance.mjs` 门控 `composerTools=7/7`、`composerSmallControls=0` 和消息密度。
 - [x] SW 缓存修复：CACHE_NAME tdchat-v3 + stale-while-revalidate 策略，防止部署后浏览器加载旧 JS/CSS。
 - [x] api.ts connect 竞态修复：connectGeneration 计数器替代 intentionalClose 布尔值，消除旧 onclose 在新 onopen 后触发的竞态。
 - [x] E2E 修复：back button label "Back" → "返回"（zh-CN context），3 个测试恢复。
@@ -242,6 +258,69 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 | 2026-05-25 | `cd frontend; npx eslint .` | PASS, 0 errors / 91 warnings |
 | 2026-05-25 | `git diff --check` | PASS, CRLF warnings only |
 | 2026-05-25 | submit-time leak scan (`git grep` x3 + `git log --grep`) | PASS, zero output |
+| 2026-05-25 | `cd backend; go test ./handler -run "TestExportMessages(GroupRequiresMembership|GroupAllowsMember|DMUsesSessionUsername|JSON|Text|InvalidFormat|WrongMethod|VeryLargeLimit|WithinLimit|ZeroLimit)$" -count=1` | PASS |
+| 2026-05-25 | `cd backend; go test ./... -count=1` | PASS |
+| 2026-05-25 | `docker compose config` | PASS |
+| 2026-05-25 | `cd backend; go test ./handler -run "TestWebhookHandler(VerifiesHashedSecret|RejectsQuerySecret|RejectsOversizedBody|RejectsOversizedContent|UsesServerDerivedSender)$" -count=1` | PASS |
+| 2026-05-25 | `cd backend; go test ./... -count=1` | PASS, backend/handler/store/hub/llm/picoclaw |
+| 2026-05-25 | `cd frontend; npm test -- --run src/components/GroupInfoPanel.test.tsx src/stores/chatStore.test.ts src/hooks/useWebSocket.test.ts` | PASS, 3 files / 151 tests |
+| 2026-05-25 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-25 | `cd frontend; npx eslint .` | PASS, 0 errors / 90 warnings |
+| 2026-05-25 | `cd frontend; npm run build` | PASS, Vite chunk-size warning only |
+| 2026-05-25 | local Go backend serving latest `frontend/dist` + `E2E_BASE_URL=http://127.0.0.1:18135 npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium --workers=1 --reporter=line` | PASS, webhook message visible once as `webhook` |
+| 2026-05-25 | `docker compose config` | PASS |
+| 2026-05-25 | `rg -n "secret=|请立即复制，密钥|Copy now; the secret|Webhook secrets are passed|sender spoof|ci-webhook"` | PASS, only intentional test assertions/body-spoof fixture remain |
+| 2026-05-25 | `git diff --check` | PASS, CRLF warnings only |
+| 2026-05-25 | `$env:GOFLAGS='-badflag'; .\scripts\verify.ps1 -SkipVisual -SkipDocker` | EXPECTED FAIL, script exited 1 at `go test ./...`, proving native exit-code failures are no longer hidden by PowerShell pipelines |
+| 2026-05-25 | `cd frontend; npm test -- --run src/components/Sidebar.test.tsx` | PASS, 1 file / 91 tests |
+| 2026-05-25 | `cd frontend; npm run build` | PASS, Vite chunk-size warning only |
+| 2026-05-25 | `cd backend; go build -o backend.exe .` | PASS |
+| 2026-05-25 | local Go backend serving latest `frontend/dist` + `VISUAL_BASE_URL=http://127.0.0.1:18137 npm run visual:acceptance` | PASS, added `mobile-light-sidebar-open`; `sidebarSmallControls=0` |
+| 2026-05-25 | `.\scripts\verify.ps1 -SkipVisual -SkipDocker` | PASS, backend tests, frontend tests, tsc, frontend build, backend build, `git diff --check` |
+| 2026-05-25 | `Get-NetTCPConnection -LocalPort 18136,18137 -State Listen` | PASS, no lingering visual-test backend listeners |
+| 2026-05-25 | `rg -n "hk2|Tailscale|100\.|chat\.vectorcontrol\.tech|ssh |/app/data|/app/frontend|C:\\Users\\Ding\\server|生产 URL|容器日志|scp |docker exec|docker logs" docs\handoff-report-2026-05-25.md` | PASS, no matches after handoff report sanitization |
+| 2026-05-25 | `git diff --check` | PASS, CRLF warnings only |
+| 2026-05-25 | `cd backend; go test ./handler -run "Test(OIDCHTTPClientHasBoundedTimeout|ReadOIDCResponseBodyRejectsOversizedResponse|OIDCConfigHandler|OIDCLoginRedirect|OIDCCallbackSuccess|OIDCRefresh|OIDCExchange|VerifyOIDCJoinToken)$" -count=1` | PASS, OIDC provider timeout/body-cap regression |
+| 2026-05-25 | Compose env rendering check: missing `CHAT_SESSION_SECRET` then with `CHAT_SESSION_SECRET=compose-config-test-secret docker compose config` | PASS, missing secret exit 1; configured render exit 0 with S3/WebDAV/session envs present |
+| 2026-05-25 | `.\scripts\verify.ps1 -SkipDocker` | PASS, backend tests, frontend tests, tsc, frontend build, backend build, `git diff --check`, self-started visual backend on 8198; `mobile-light-sidebar-open sidebarSmallControls=0` |
+| 2026-05-25 | `rg -n "http\.Get|http\.PostForm|io\.ReadAll\(resp\.Body\)" backend\handler\oidc.go` | PASS, no unbounded OIDC provider calls remain |
+| 2026-05-25 | `cd backend; go test ./handler -run "Test(OIDCStateStoreRejectsNewEntriesAtCapacity|OIDCTokenStoreRejectsNewEntriesAtCapacity|RequestIPUsesForwardedForFromTrustedProxy|RequestIPIgnoresSpoofedForwardedForPrefix|RequestIPIgnoresForwardedForFromUntrustedRemote|OIDCAllowBudgetsFourCompleteRedirectFlows|RateLimiterPrunesExpiredIPEntries|OIDCLoginRateLimitedByIP|OIDCRefreshWrongMethodDoesNotConsumeOIDCRateLimit|OIDC(LoginRedirect|CallbackSuccess|Refresh|Exchange|VerifyOIDCJoinToken)|RateLimit|AuthAllow|WSAllow)$" -count=1` | PASS, OIDC runtime bounds + trusted proxy IP + rate-limit cleanup |
+| 2026-05-25 | `cd backend; go test ./handler -run "Test(OIDC|RateLimit|AuthAllow|WSAllow)" -count=5 -shuffle=on` | PASS, OIDC/rate-limit tests stable under shuffle/repeat |
+| 2026-05-25 | `cd backend; go test ./handler -count=1` | PASS, handler package full regression after spoofed XFF parser update |
+| 2026-05-25 | `cd backend; go test ./... -count=1` | PASS, backend/handler/store/hub/llm/picoclaw |
+| 2026-05-25 | `CHAT_SESSION_SECRET=compose-config-test-secret CHAT_TRUSTED_PROXY_CIDRS=127.0.0.1/32 docker compose config` | PASS, compose renders session secret and trusted proxy CIDRs |
+| 2026-05-25 | OIDC stale wording scan over root docs and `docs/` | PASS, no stale OIDC-open wording; new spoofed-prefix regression appears in handoff test lists |
+| 2026-05-25 | `git diff --check` | PASS, CRLF warnings only |
+| 2026-05-25 | `gofmt -w backend\handler\oidc.go backend\handler\oidc_test.go backend\handler\ratelimit.go backend\handler\ratelimit_test.go` | PASS |
+| 2026-05-25 | `cd backend; go test ./handler -run "Test(OIDCStateStoreCloseStopsCleanupLoop|OIDCTokenStoreCloseStopsCleanupLoop|SetupOIDCFailureDoesNotInstallTransientStores|SetupOIDCReconfigureClosesPreviousTransientStores|OIDCStateStoreRejectsNewEntriesAtCapacity|OIDCTokenStoreRejectsNewEntriesAtCapacity|RequestIPUsesForwardedForFromTrustedProxy|RequestIPIgnoresSpoofedForwardedForPrefix|RequestIPIgnoresForwardedForFromUntrustedRemote|OIDCAllowBudgetsFourCompleteRedirectFlows|RateLimiterPrunesExpiredIPEntries|OIDCLoginRateLimitedByIP|OIDCRefreshWrongMethodDoesNotConsumeOIDCRateLimit|OIDC(LoginRedirect|CallbackSuccess|CallbackInvalidState|Refresh|Exchange|VerifyOIDCJoinToken|ConfigHandler)|RateLimit|AuthAllow|WSAllow)$" -count=1` | PASS, OIDC store lifecycle + runtime bounds + trusted proxy IP + rate-limit cleanup |
+| 2026-05-25 | `cd backend; go test ./handler -run "Test(OIDC|RateLimit|AuthAllow|WSAllow)" -count=5 -shuffle=on` | PASS, OIDC/rate-limit tests stable under shuffle/repeat after store lifecycle changes |
+| 2026-05-25 | `cd backend; go test ./handler -count=1` | PASS, handler package full regression after store lifecycle changes |
+| 2026-05-25 | `cd backend; go test ./... -count=1` | PASS, backend/handler/store/hub/llm/picoclaw |
+| 2026-05-25 | `CHAT_SESSION_SECRET=compose-config-test-secret CHAT_TRUSTED_PROXY_CIDRS=127.0.0.1/32 docker compose config` | PASS, compose renders session secret and trusted proxy CIDRs |
+| 2026-05-25 | OIDC provider/static stale wording scans | PASS, no unbounded OIDC provider calls and no stale OIDC-open wording |
+| 2026-05-25 | `git diff --check` | PASS, CRLF warnings only |
+| 2026-05-25 | `cd frontend; npm test -- src/components/SettingsModal.test.tsx` | PASS, 1 file / 23 tests |
+| 2026-05-25 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-25 | `cd frontend; npm run build` | PASS, Vite chunk-size warning only |
+| 2026-05-25 | `cd backend; go build -o backend.exe .` | PASS |
+| 2026-05-25 | local Go backend serving latest `frontend/dist` + `VISUAL_BASE_URL=http://127.0.0.1:8198 npm run visual:acceptance` | PASS, output `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-24T23-17-29-081Z`; settings scenarios `720x560` desktop / `366x720` mobile, `settingsSmallControls=0`, tab labels not clipped |
+| 2026-05-25 | `Get-NetTCPConnection -LocalPort 8198 -State Listen` | PASS, no lingering visual-test backend listener |
+| 2026-05-25 | `node --check frontend\scripts\visual-acceptance.mjs` | PASS |
+| 2026-05-25 | `cd frontend; npm test -- src/components/AuthModal.test.tsx src/components/OidcLoginButton.test.tsx` | PASS, 2 files / 10 tests |
+| 2026-05-25 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-25 | `cd frontend; npm run build` | PASS, Vite chunk-size warning only |
+| 2026-05-25 | `cd backend; go build -o backend.exe .` | PASS |
+| 2026-05-25 | local Go backend serving latest `frontend/dist` + `VISUAL_BASE_URL=http://127.0.0.1:8198 npm run visual:acceptance` | PASS, output `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-24T23-50-02-927Z`; auth scenarios `380x346` desktop login / `358x502` mobile register error, `authSmallControls=0`, error alert visible |
+| 2026-05-25 | `Get-NetTCPConnection -LocalPort 8198 -State Listen` | PASS, no lingering visual-test backend listener |
+| 2026-05-25 | subagent read-only design review for next gap | Completed, recommended ChatInput composer convergence + dedicated visual gates |
+| 2026-05-25 | `node --check frontend\scripts\visual-acceptance.mjs` | PASS |
+| 2026-05-25 | `cd frontend; npm test -- src/components/ChatInput.test.tsx src/components/ScheduleButton.test.tsx` | PASS, 2 files / 50 tests |
+| 2026-05-25 | `cd frontend; npx tsc --noEmit` | PASS |
+| 2026-05-25 | `cd frontend; npm run build` | PASS, Vite chunk-size warning only |
+| 2026-05-25 | `cd backend; go build -o backend.exe .` | PASS |
+| 2026-05-25 | local Go backend serving latest `frontend/dist` + `VISUAL_BASE_URL=http://127.0.0.1:8198 npm run visual:acceptance` | PASS, output `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-25T00-15-30-088Z`; all 12 scenarios `composerTools=7/7`, `composerSmallControls=0`, no issues |
+| 2026-05-25 | `Get-NetTCPConnection -LocalPort 8198 -State Listen` | PASS, no lingering visual-test backend listener |
+| 2026-05-25 | `git diff --check` | PASS, CRLF warnings only |
 
 ## Review Gates
 

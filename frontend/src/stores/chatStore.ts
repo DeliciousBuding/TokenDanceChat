@@ -393,6 +393,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             return { ...state, messages };
           }
         }
+        if (messages.some((m) => m.id === message.id)) {
+          return state;
+        }
       }
       messages.push(message);
       if (messages.length > MESSAGE_CAP) {

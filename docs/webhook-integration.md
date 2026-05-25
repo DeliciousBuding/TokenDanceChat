@@ -1,6 +1,6 @@
 # Webhook 集成
 
-最后更新：2026-05-23
+最后更新：2026-05-25
 
 入站 webhook 允许群主或管理员创建一个群组范围的 HTTP 端点，用于向该群组发送消息。
 
@@ -16,6 +16,8 @@
 - 前端群组管理员控件依赖 `group_info.group_members` 角色数据；客户端在决定是否展示 Webhook 管理前应对其标准化。
 - Webhook 密钥在 SQLite 中以带版本号的加盐 HMAC 哈希形式持久化，并使用 constant-time 比较进行验证。
 - 现有明文 webhook 行在 store 启动时迁移为哈希。
+- HTTP 入口仅接受 `Authorization: Bearer <secret>`，不接受 query string 中的 secret。
+- HTTP 请求体限制为 8 KiB，`content` 限制为 2000 字符；发送者显示名由服务端固定为 `webhook`。
 
 ## WebSocket 控制事件
 
@@ -42,10 +44,11 @@
 }
 ```
 
-前端组装可用 HTTP URL 为：
+前端展示的 HTTP URL 不包含 secret；一次性 secret 只用于 `Authorization` header：
 
 ```text
-/api/webhook/{content}?secret={secret}
+/api/webhook/{content}
+Authorization: Bearer {secret}
 ```
 
 ### 列举
@@ -168,21 +171,21 @@
 请求：
 
 ```bash
-curl -X POST "https://chat.example.com/api/webhook/webhook-path?secret=secret-shown-once" \
+curl -X POST "https://chat.example.com/api/webhook/webhook-path" \
   -H "Content-Type: application/json" \
-  -d '{"content":"Deploy finished","username":"ci-bot"}'
+  -H "Authorization: Bearer secret-shown-once" \
+  -d '{"content":"Deploy finished"}'
 ```
 
 请求体：
 
 ```json
 {
-  "content": "Deploy finished",
-  "username": "ci-bot"
+  "content": "Deploy finished"
 }
 ```
 
-`username` 为可选字段，默认为 `webhook`。
+请求体只使用 `content`。消息进入群聊时的发送者显示名由服务端固定为 `webhook`，避免外部调用者伪装成普通用户。
 
 成功响应：
 
@@ -200,7 +203,7 @@ curl -X POST "https://chat.example.com/api/webhook/webhook-path?secret=secret-sh
 cd backend
 go test ./hub -run "TestWebhook(CreateReturnsSecretToCreator|ListDoesNotExposeSecrets|ListRequiresGroupAdmin)"
 go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPlaintextSecretMigrationHashesExistingRows)"
-go test ./handler -run TestWebhookHandlerVerifiesHashedSecret
+go test ./handler -run "TestWebhookHandler(VerifiesHashedSecret|RejectsQuerySecret|RejectsOversizedBody|RejectsOversizedContent|UsesServerDerivedSender)$"
 ```
 
 聚焦前端测试：
@@ -211,7 +214,7 @@ npm test -- --run src/lib/groupInfo.test.ts src/stores/chatStore.test.ts src/com
 npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium
 ```
 
-Playwright 入口测试须针对托管构建前端的本地 Go 后端运行。它覆盖完整浏览器路径：以群主身份加入，通过 UI 创建群组，打开群组管理面板，创建一次性 webhook，向生成的 HTTP URL 发送 POST 请求，并验证群组消息列表中显示 webhook 消息。
+Playwright 入口测试须针对托管构建前端的本地 Go 后端运行。它覆盖完整浏览器路径：以群主身份加入，通过 UI 创建群组，打开群组管理面板，创建一次性 webhook，用生成的 HTTP URL 加 `Authorization: Bearer` header 发送 POST 请求，并验证群组消息列表中显示 webhook 消息。
 
 更广泛的门禁：
 

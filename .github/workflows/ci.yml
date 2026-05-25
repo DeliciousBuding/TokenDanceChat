@@ -47,3 +47,58 @@ jobs:
           node-version: '22'
       - run: npm ci
       - run: npx eslint .
+
+  public-preview-smoke:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate compose config
+        env:
+          CHAT_SESSION_SECRET: ci-compose-config-secret
+        run: docker compose config
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run public preview smoke against production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CHAT_DB_PATH="$RUNNER_TEMP/tdchat-public-preview-smoke.db"
+          export CHAT_FRONTEND_DIR="$GITHUB_WORKSPACE/frontend/dist"
+          export CHAT_ADDR=":8199"
+          export CHAT_OIDC_ENABLED="false"
+          export CHAT_SESSION_SECRET="ci-public-preview-smoke-secret"
+          cd "$GITHUB_WORKSPACE/backend"
+          go run . > "$RUNNER_TEMP/tdchat-backend.log" 2>&1 &
+          backend_pid=$!
+          trap 'kill "$backend_pid" 2>/dev/null || true; cat "$RUNNER_TEMP/tdchat-backend.log"' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8199/api/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8199/api/health >/dev/null
+          cd "$GITHUB_WORKSPACE/frontend"
+          E2E_BASE_URL=http://127.0.0.1:8199 npx playwright test src/e2e/public-preview-smoke.test.ts --project=chromium --workers=1 --reporter=line
+          VISUAL_BASE_URL=http://127.0.0.1:8199 VISUAL_OUTPUT_DIR="$RUNNER_TEMP/tdchat-visual" npm run visual:acceptance
+      - name: Upload visual acceptance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-acceptance
+          path: ${{ runner.temp }}/tdchat-visual
+          if-no-files-found: ignore

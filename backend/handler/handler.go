@@ -66,6 +66,17 @@ const requestIDKey contextKey = "request_id"
 
 const sessionTokenTTL = 7 * 24 * time.Hour
 
+const (
+	defaultMessageLimit       = 100
+	maxMessageLimit           = 500
+	publicPreviewMessageLimit = 20
+)
+
+const (
+	maxWebhookBodySize      = 8 << 10 // 8 KiB
+	maxWebhookContentLength = 2000
+)
+
 type sessionTokenPayload struct {
 	Username string `json:"username"`
 	Exp      int64  `json:"exp"`
@@ -189,6 +200,25 @@ func (h *Handler) requireSession(w http.ResponseWriter, r *http.Request) (string
 	return username, true
 }
 
+func (h *Handler) optionalSession(w http.ResponseWriter, r *http.Request) (string, bool, bool) {
+	requestID := requestIDFromContext(r.Context())
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	if auth == "" {
+		return "", false, true
+	}
+	const prefix = "Bearer "
+	if !strings.HasPrefix(auth, prefix) {
+		writeJSONError(w, http.StatusUnauthorized, "invalid auth token", "INVALID_AUTH_TOKEN", requestID)
+		return "", false, false
+	}
+	username, ok := h.verifySessionToken(strings.TrimSpace(strings.TrimPrefix(auth, prefix)))
+	if !ok {
+		writeJSONError(w, http.StatusUnauthorized, "invalid auth token", "INVALID_AUTH_TOKEN", requestID)
+		return "", false, false
+	}
+	return username, true, true
+}
+
 func (h *Handler) pruneLinkPreviewCache() {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
@@ -223,31 +253,12 @@ func writeJSONError(w http.ResponseWriter, status int, msg, code, requestID stri
 }
 
 // CORSMiddleware restricts cross-origin requests to explicitly allowed origins.
-// Uses CHAT_ALLOWED_ORIGINS env var (comma-separated, "*" for all, ".example.com" for subdomains).
-// When unset, only same-origin requests are allowed.
+// CHAT_ALLOWED_ORIGINS accepts comma-separated origins such as
+// "https://chat.example.com" or "https://*.example.com". Wildcard "*" is not
+// accepted once bearer sessions are present.
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		allow := origin == "" // same-origin requests don't send Origin
-		if !allow {
-			if originURL, err := url.Parse(origin); err == nil {
-				originHost := originURL.Hostname()
-				allowed := os.Getenv("CHAT_ALLOWED_ORIGINS")
-				if allowed == "*" {
-					allow = true
-				} else if allowed != "" {
-					for _, o := range strings.Split(allowed, ",") {
-						o = strings.TrimSpace(o)
-						if strings.EqualFold(originHost, o) || (strings.HasPrefix(o, ".") && strings.HasSuffix(originHost, o)) {
-							allow = true
-							break
-						}
-					}
-				}
-			}
-		}
-
-		if allow {
+		if origin, ok := allowedOrigin(r); ok {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			if origin != "" {
 				w.Header().Set("Vary", "Origin")
@@ -314,10 +325,28 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit := 100
+	_, authenticated, ok := h.optionalSession(w, r)
+	if !ok {
+		return
+	}
+	if !authenticated && r.URL.Query().Get("before") != "" {
+		writeJSONError(w, http.StatusUnauthorized, "authentication required", "AUTH_REQUIRED", requestID)
+		return
+	}
+
+	limit := defaultMessageLimit
+	maxLimit := maxMessageLimit
+	if !authenticated {
+		limit = publicPreviewMessageLimit
+		maxLimit = publicPreviewMessageLimit
+	}
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 500 {
-			limit = parsed
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			if parsed > maxLimit {
+				limit = maxLimit
+			} else {
+				limit = parsed
+			}
 		}
 	}
 
@@ -492,6 +521,12 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 	// Fetch the URL.
 	client := &http.Client{
 		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			DialContext: guardedLinkPreviewDialContext(
+				resolveLinkPreviewHost,
+				(&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+			),
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if req.URL.Scheme != "https" || isPrivateHost(req.URL.Hostname()) {
 				return errors.New("redirect blocked")
@@ -925,15 +960,48 @@ func isPrivateHost(host string) bool {
 		return true // block unresolvable hosts (safety first)
 	}
 	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-			ip.IsPrivate() || ip.IsUnspecified() {
+		if isPrivateIP(ip) {
 			return true
 		}
 	}
 	return false
 }
 
-// ExportMessages handles GET /api/export?conversation=...&format=json|text&limit=...&username=...
+func isPrivateIP(ip net.IP) bool {
+	return ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsPrivate() || ip.IsUnspecified()
+}
+
+func resolveLinkPreviewHost(ctx context.Context, host string) ([]net.IP, error) {
+	return net.DefaultResolver.LookupIP(ctx, "ip", host)
+}
+
+func guardedLinkPreviewDialContext(
+	resolve func(context.Context, string) ([]net.IP, error),
+	dial func(context.Context, string, string) (net.Conn, error),
+) func(context.Context, string, string) (net.Conn, error) {
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, err
+		}
+		ips, err := resolve(ctx, host)
+		if err != nil {
+			return nil, err
+		}
+		if len(ips) == 0 {
+			return nil, errors.New("host resolved to no addresses")
+		}
+		for _, ip := range ips {
+			if isPrivateIP(ip) {
+				return nil, errors.New("resolved IP blocked")
+			}
+		}
+		return dial(ctx, network, net.JoinHostPort(ips[0].String(), port))
+	}
+}
+
+// ExportMessages handles GET /api/export?conversation=...&format=json|text&limit=...
 func (h *Handler) ExportMessages(w http.ResponseWriter, r *http.Request) {
 	requestID := requestIDFromContext(r.Context())
 	if r.Method != http.MethodGet {
@@ -980,6 +1048,10 @@ func (h *Handler) ExportMessages(w http.ResponseWriter, r *http.Request) {
 		displayName = toUser
 	case strings.HasPrefix(conversation, "group:"):
 		groupName = strings.TrimPrefix(conversation, "group:")
+		if _, err := h.store.GetGroupMemberRole(groupName, authUsername); err != nil {
+			writeJSONError(w, http.StatusForbidden, "not a member of this group", "NOT_IN_GROUP", requestID)
+			return
+		}
 		displayName = groupName
 	case conversation != "" && conversation != "public":
 		roomID = conversation
@@ -1067,11 +1139,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		ip = r.RemoteAddr
-	}
-	if !AuthAllow(ip) {
+	if !AuthAllow(requestIP(r)) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Retry-After", "60")
 		writeJSONError(w, http.StatusTooManyRequests, "too many attempts, try again later", "RATE_LIMITED", requestID)
@@ -1155,11 +1223,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		ip = r.RemoteAddr
-	}
-	if !AuthAllow(ip) {
+	if !AuthAllow(requestIP(r)) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Retry-After", "60")
 		writeJSONError(w, http.StatusTooManyRequests, "too many attempts, try again later", "RATE_LIMITED", requestID)
@@ -1220,11 +1284,7 @@ func (h *Handler) InviteGenerate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		ip = r.RemoteAddr
-	}
-	if !AuthAllow(ip) {
+	if !AuthAllow(requestIP(r)) {
 		writeJSONError(w, http.StatusTooManyRequests, "too many attempts, try again later", "RATE_LIMITED", requestID)
 		return
 	}
@@ -1268,8 +1328,15 @@ func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing webhook URL", http.StatusBadRequest)
 		return
 	}
-	// Verify secret from query param
-	secret := r.URL.Query().Get("secret")
+	// Verify secret from the Authorization header. Do not accept query-string
+	// secrets; URLs are commonly logged and copied.
+	const bearerPrefix = "Bearer "
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	if !strings.HasPrefix(auth, bearerPrefix) {
+		http.Error(w, "missing secret", http.StatusUnauthorized)
+		return
+	}
+	secret := strings.TrimSpace(strings.TrimPrefix(auth, bearerPrefix))
 	if secret == "" {
 		http.Error(w, "missing secret", http.StatusUnauthorized)
 		return
@@ -1280,27 +1347,50 @@ func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Parse JSON body
+	r.Body = http.MaxBytesReader(w, r.Body, maxWebhookBodySize)
 	var body struct {
-		Content  string `json:"content"`
-		Username string `json:"username"`
+		Content string `json:"content"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Content == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "webhook body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "invalid body: content required", http.StatusBadRequest)
 		return
 	}
-	sender := body.Username
-	if sender == "" {
-		sender = "webhook"
+	content := strings.TrimSpace(body.Content)
+	if content == "" {
+		http.Error(w, "invalid body: content required", http.StatusBadRequest)
+		return
 	}
-	// Broadcast to group via hub
+	if len([]rune(content)) > maxWebhookContentLength {
+		http.Error(w, "webhook content too long", http.StatusBadRequest)
+		return
+	}
+	storedMsg, err := h.store.InsertMessage("webhook", content, "", "", "", webhook.GroupName, "")
+	if err != nil {
+		log.Printf("webhook: failed to insert group message: %v", err)
+		http.Error(w, "failed to save webhook message", http.StatusInternalServerError)
+		return
+	}
+
 	msg := hub.Message{
 		Type:      "group_message",
+		ID:        storedMsg.ID,
 		Group:     webhook.GroupName,
-		Username:  sender,
-		Content:   body.Content,
-		Timestamp: time.Now().UnixMilli(),
+		Username:  "webhook",
+		Content:   content,
+		Timestamp: storedMsg.Timestamp,
 	}
-	h.hub.BroadcastJSON(msg)
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("webhook: failed to marshal group message: %v", err)
+		http.Error(w, "failed to send webhook message", http.StatusInternalServerError)
+		return
+	}
+	h.hub.SendToGroup(webhook.GroupName, data)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})

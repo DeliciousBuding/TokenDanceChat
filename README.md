@@ -152,8 +152,9 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 | `CHAT_AGENT_NAME` | `PicoClaw` | Agent 名称 |
 | `CHAT_PICOCLAW_URL` | — | PicoClaw WebSocket 地址 |
 | `CHAT_PICOCLAW_TOKEN` | — | PicoClaw 认证 Token |
-| `CHAT_ALLOWED_ORIGINS` | — | 允许的 WebSocket 来源（逗号分隔） |
-| `CHAT_SESSION_SECRET` | — | 应用 `session_token` HMAC 签名 secret；生产/共享环境必须稳定配置，否则重启后现有会话失效 |
+| `CHAT_ALLOWED_ORIGINS` | — | 允许的跨源 CORS/WebSocket browser origins，必须包含 scheme；示例：`https://chat.example.com,https://*.example.com`，`*` 不会放行跨源请求 |
+| `CHAT_TRUSTED_PROXY_CIDRS` | — | 可信反代 IP/CIDR；只有这些来源的 `X-Forwarded-For` / `X-Real-IP` 会用于 REST、OIDC、auth、WS 限流 |
+| `CHAT_SESSION_SECRET` | — | 应用 `session_token` HMAC 签名 secret；生产/共享环境必须稳定配置；`docker compose` 部署会强制要求该值 |
 | `CHAT_MEDIA_S3_ENDPOINT` | — | S3-compatible 媒体存储端点；配置后优先于 WebDAV |
 | `CHAT_MEDIA_S3_REGION` | — | S3 签名 region，S3-compatible 服务可用 `auto` |
 | `CHAT_MEDIA_S3_BUCKET` | — | 媒体对象 bucket |
@@ -163,10 +164,10 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 | `CHAT_MEDIA_S3_PREFIX` | `uploads` | 媒体对象前缀 |
 | `CHAT_MEDIA_S3_FORCE_PATH_STYLE` | `false` | 是否使用 path-style bucket URL |
 | `CHAT_MEDIA_WEBDAV_ENDPOINT` | — | WebDAV 媒体存储端点；仅在未配置 S3 时启用 |
-| `CHAT_OIDC_ENABLED` | `false` | 是否启用 TokenDance ID 登录 |
-| `CHAT_OIDC_ISSUER` | `https://id.vectorcontrol.tech` | OIDC issuer |
-| `CHAT_OIDC_CLIENT_ID` | `tokendance-chat` | TokenDance ID OAuth client id |
-| `CHAT_OIDC_REDIRECT_URI` | `http://localhost:8080/api/oidc/callback` | OIDC 回调地址，生产使用 `https://chat.vectorcontrol.tech/api/oidc/callback` |
+| `CHAT_OIDC_ENABLED` | `false` | 是否启用 OIDC 登录 |
+| `CHAT_OIDC_ISSUER` | — | OIDC issuer；启用 OIDC 时必须由部署环境提供 |
+| `CHAT_OIDC_CLIENT_ID` | — | OAuth client id；启用 OIDC 时必须由部署环境提供 |
+| `CHAT_OIDC_REDIRECT_URI` | `http://localhost:8080/api/oidc/callback` | OIDC 回调地址；生产使用部署域名的 `/api/oidc/callback` |
 
 ---
 
@@ -176,10 +177,12 @@ TokenDanceChat 是服务端型 OIDC consumer；详细步骤见 [docs/oidc-setup.
 
 | 项 | 当前实现 |
 |----|----------|
-| Callback | 本地 `http://localhost:8080/api/oidc/callback`；生产 `https://chat.vectorcontrol.tech/api/oidc/callback` |
+| Callback | 本地 `http://localhost:8080/api/oidc/callback`；生产使用部署域名的 `/api/oidc/callback` |
 | Token exchange | 后端 `/api/oidc/callback` 使用 Authorization Code + PKCE 兑换 token，并通过一次性 `oidc_rid` 交给前端 redeem |
 | Token storage | 后端临时保存 redeem token 5 分钟；前端 OIDC access/refresh token 只放 Zustand 内存；应用 `session_token` 存入 `tokendance:sessionToken`，用于 REST Bearer 鉴权和本地注册用户 WS join |
 | Refresh | `/api/oidc/refresh` 已实现并转发 TokenDance ID refresh flow；当前 UI 不持久化 refresh token，刷新页面后不会继续 OIDC token refresh |
+| Provider bounds | OIDC discovery、JWKS、token exchange、refresh 请求使用 5s HTTP timeout，并对 provider 响应体做大小上限检查 |
+| Runtime bounds | OIDC state/redeem token stores 有容量上限；满载时拒绝新建而不静默淘汰既有登录流程；cleanup loop 可关闭，`SetupOIDC` 失败不安装 transient store，重配置会关闭旧 store；OIDC endpoints 有独立 per-IP rate limit |
 | Logout | 当前 disconnect/logout 只清除本地聊天状态，不跳转 TokenDance ID `/logout` |
 | Validation boundary | 受保护 REST 端点要求 `Authorization: Bearer <session_token>`；WebSocket join 中 OIDC 用户发送 OIDC access token，本地注册用户发送应用 `session_token`，游客不发送 token |
 

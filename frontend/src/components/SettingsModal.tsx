@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X, Camera, Save, User, Palette, Bell,
   Sun, Moon, Monitor, Volume2, VolumeX,
@@ -37,6 +38,43 @@ function applyTheme(theme: Theme) {
   if (theme === "light") { root.classList.remove("dark"); root.classList.add("light"); }
   else if (theme === "dark") { root.classList.add("dark"); root.classList.remove("light"); }
   else { root.classList.toggle("dark", window.matchMedia("(prefers-color-scheme: dark)").matches); root.classList.remove("light"); }
+}
+
+function ToggleSwitch({
+  checked,
+  onClick,
+  ariaLabel,
+  visual,
+}: {
+  checked: boolean;
+  onClick: () => void;
+  ariaLabel: string;
+  visual: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      data-visual={visual}
+      onClick={onClick}
+      className="relative inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
+    >
+      <span
+        className={cn(
+          "absolute h-7 w-12 rounded-full transition-colors",
+          checked ? "bg-[var(--brand)]" : "bg-[var(--bg-3)]",
+        )}
+      />
+      <span
+        className={cn(
+          "relative inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform",
+          checked ? "translate-x-[10px]" : "-translate-x-[10px]",
+        )}
+      />
+    </button>
+  );
 }
 
 interface SettingsModalProps { open: boolean; onClose: () => void; }
@@ -97,20 +135,30 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
   const displayNameOrUser = displayName.trim() || username || "?";
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-3 py-4 sm:p-6"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm animate-fade-in" onClick={onClose} />
+      <div
+        data-visual="settings-backdrop"
+        className="absolute inset-0 bg-black/25 backdrop-blur-md animate-fade-in"
+        onClick={onClose}
+      />
 
       {/* Card */}
       <div
-        className="relative z-10 flex w-[680px] max-w-[calc(100vw-2rem)] h-[480px] max-h-[calc(100vh-4rem)] rounded-2xl shadow-xl overflow-hidden animate-scale-in"
+        data-visual="settings-modal"
+        className="glass-strong relative z-10 flex h-[calc(100vh-2rem)] max-h-[720px] w-full max-w-[720px] flex-col overflow-hidden rounded-[22px] shadow-[0_24px_80px_rgba(0,0,0,0.18)] animate-scale-in sm:h-[560px] sm:max-h-[calc(100vh-4rem)] sm:flex-row"
         style={{ background: 'var(--surface-glass-strong, rgba(255,255,255,0.85))' }}
       >
         {/* macOS-style close button */}
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-3 left-3 z-20 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+          data-visual="settings-close"
+          className="absolute left-2 top-2 z-20 flex h-11 w-11 items-center justify-center rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] sm:left-3 sm:top-3"
           style={{ color: 'var(--text-secondary)' }}
           onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -120,16 +168,23 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         </button>
 
         {/* Left Sidebar */}
-        <div className="w-[160px] flex-shrink-0 flex flex-col pt-14 pb-6 px-3 gap-0.5 border-r" style={{ borderColor: 'var(--border-light, var(--border-base))' }}>
+        <div
+          data-visual="settings-tab-list"
+          className="flex shrink-0 gap-2 border-b px-4 pb-3 pt-14 sm:w-[180px] sm:flex-col sm:border-b-0 sm:border-r sm:px-3 sm:pb-6 sm:pt-16"
+          style={{ borderColor: 'var(--border-light, var(--border-base))' }}
+        >
           {TABS.map(item => {
             const Icon = item.icon;
             const active = tab === item.key;
             return (
               <button
+                type="button"
                 key={item.key}
+                data-visual="settings-tab"
+                data-active={active ? "true" : "false"}
                 onClick={() => setTab(item.key)}
                 className={cn(
-                  "flex items-center gap-2.5 h-10 rounded-lg px-4 text-[13px] font-medium transition-colors text-left",
+                  "flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl px-2 text-[13px] font-medium transition-colors text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] sm:w-full sm:flex-none sm:justify-start sm:gap-2.5 sm:px-4",
                   active
                     ? "text-[var(--brand)]"
                     : "text-[var(--text-secondary)]"
@@ -139,17 +194,17 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
               >
                 <Icon size={16} strokeWidth={1.5} className="flex-shrink-0" />
-                <span>{t(item.labelKey)}</span>
+                <span className="min-w-0 truncate">{t(item.labelKey)}</span>
               </button>
             );
           })}
         </div>
 
         {/* Right Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 pt-14 relative">
+        <div data-visual="settings-content" className="relative flex-1 overflow-y-auto px-5 pb-5 pt-5 sm:p-8 sm:pt-14">
           {/* ── Profile Tab ── */}
           {tab === "profile" && (
-            <div className="flex flex-col h-full">
+            <div data-visual="settings-profile-panel" className="flex min-h-full flex-col">
               {/* Section title */}
               <p
                 className="text-[11px] font-semibold uppercase tracking-wider mb-6"
@@ -163,12 +218,15 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <div className="relative">
                   <Avatar src={avatarUrl || null} name={displayNameOrUser} size="lg" />
                   <button
+                    type="button"
                     onClick={() => fileRef.current?.click()}
                     disabled={uploading}
-                    className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full shadow-md transition-transform hover:scale-105 disabled:opacity-50 cursor-pointer"
+                    data-visual="settings-avatar-upload"
+                    className="absolute -bottom-3 -right-3 flex h-11 w-11 items-center justify-center rounded-full shadow-md transition-transform hover:scale-105 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     style={{ background: 'var(--brand)', color: '#fff' }}
+                    aria-label={t("profile.avatarUpload")}
                   >
-                    <Camera size={13} strokeWidth={1.5} />
+                    <Camera size={16} strokeWidth={1.5} />
                   </button>
                   <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} className="hidden" />
                   {uploading && (
@@ -289,9 +347,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               {/* Save button - fixed to bottom-right of content */}
               <div className="flex justify-end">
                 <button
+                  type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center gap-1.5 h-9 px-6 rounded-full text-[13px] font-medium text-white transition-all hover:brightness-110 disabled:opacity-50 cursor-pointer"
+                  data-visual="settings-save"
+                  className="flex min-h-11 items-center gap-2 rounded-full px-6 text-[13px] font-medium text-white transition-all hover:brightness-110 disabled:opacity-50 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
                   style={{ background: 'var(--brand)' }}
                 >
                   <Save size={14} strokeWidth={1.5} />
@@ -303,23 +363,26 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
           {/* ── Appearance Tab ── */}
           {tab === "appearance" && (
-            <div>
+            <div data-visual="settings-appearance-panel">
               <p
                 className="text-[11px] font-semibold uppercase tracking-wider mb-6"
                 style={{ color: 'var(--text-disabled, var(--text-secondary))' }}
               >
                 {t("settings.appearance")}
               </p>
-              <div className="grid grid-cols-3 gap-3">
+              <div data-visual="settings-theme-grid" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {THEME_OPTIONS.map(opt => {
                   const Icon = opt.icon;
                   const active = theme === opt.value;
                   return (
                     <button
+                      type="button"
                       key={opt.value}
                       onClick={() => setTheme(opt.value)}
+                      data-visual="settings-theme-option"
+                      data-active={active ? "true" : "false"}
                       className={cn(
-                        "flex flex-col items-center gap-2.5 rounded-xl border p-4 transition-all cursor-pointer",
+                        "flex min-h-[132px] flex-col items-center gap-2.5 rounded-xl border p-4 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]",
                         active
                           ? "ring-2 border-transparent"
                           : "hover:bg-[var(--bg-hover)]"
@@ -360,7 +423,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
           {/* ── Notifications Tab ── */}
           {tab === "notifications" && (
-            <div>
+            <div data-visual="settings-notifications-panel">
               <p
                 className="text-[11px] font-semibold uppercase tracking-wider mb-6"
                 style={{ color: 'var(--text-disabled, var(--text-secondary))' }}
@@ -386,22 +449,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   </div>
                 </div>
                 {/* Toggle Switch */}
-                <button
-                  role="switch"
-                  aria-checked={soundOn}
+                <ToggleSwitch
+                  checked={soundOn}
                   onClick={toggleSound}
-                  className={cn(
-                    "relative inline-flex h-6 w-10 items-center rounded-full transition-colors cursor-pointer",
-                    soundOn ? "bg-[var(--brand)]" : "bg-[var(--bg-3)]"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-block h-4.5 w-4.5 transform rounded-full bg-white transition-transform shadow-sm",
-                      soundOn ? "translate-x-[18px]" : "translate-x-[4px]"
-                    )}
-                  />
-                </button>
+                  ariaLabel={t("settings.sound")}
+                  visual="settings-sound-switch"
+                />
               </div>
 
               {/* @Mention toggle */}
@@ -415,22 +468,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     {mentionNotify ? "已开启" : "已关闭"}
                   </p>
                 </div>
-                <button
-                  role="switch"
-                  aria-checked={mentionNotify}
+                <ToggleSwitch
+                  checked={mentionNotify}
                   onClick={() => setMentionNotify(!mentionNotify)}
-                  className={cn(
-                    "relative inline-flex h-6 w-10 items-center rounded-full transition-colors cursor-pointer",
-                    mentionNotify ? "bg-[var(--brand)]" : "bg-[var(--bg-3)]"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-block h-4.5 w-4.5 transform rounded-full bg-white transition-transform shadow-sm",
-                      mentionNotify ? "translate-x-[18px]" : "translate-x-[4px]"
-                    )}
-                  />
-                </button>
+                  ariaLabel={t("settings.notificationPrefs")}
+                  visual="settings-mention-switch"
+                />
               </div>
 
               {/* Desktop notification toggle */}
@@ -443,28 +486,20 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     {desktopNotify ? "已开启" : "已关闭"}
                   </p>
                 </div>
-                <button
-                  role="switch"
-                  aria-checked={desktopNotify}
+                <ToggleSwitch
+                  checked={desktopNotify}
                   onClick={() => setDesktopNotify(!desktopNotify)}
-                  className={cn(
-                    "relative inline-flex h-6 w-10 items-center rounded-full transition-colors cursor-pointer",
-                    desktopNotify ? "bg-[var(--brand)]" : "bg-[var(--bg-3)]"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-block h-4.5 w-4.5 transform rounded-full bg-white transition-transform shadow-sm",
-                      desktopNotify ? "translate-x-[18px]" : "translate-x-[4px]"
-                    )}
-                  />
-                </button>
+                  ariaLabel="桌面通知"
+                  visual="settings-desktop-switch"
+                />
               </div>
 
               {/* Test sound button */}
               <button
+                type="button"
                 onClick={() => { playMessageSound(); }}
-                className="mt-6 w-full rounded-lg border px-4 py-2.5 text-[13px] transition-colors cursor-pointer"
+                data-visual="settings-test-sound"
+                className="mt-6 min-h-11 w-full rounded-lg border px-4 text-[13px] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
                 style={{
                   borderColor: 'var(--border-base)',
                   color: 'var(--text-secondary)',
@@ -484,6 +519,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

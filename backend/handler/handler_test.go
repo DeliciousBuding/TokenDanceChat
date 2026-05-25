@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -25,8 +26,11 @@ import (
 
 // mockStore is a test implementation of hub.Store.
 type mockStore struct {
-	messages []hub.StoredMessage
-	rooms    []hub.StoredRoom
+	messages          []hub.StoredMessage
+	rooms             []hub.StoredRoom
+	getMessagesLimit  int
+	getMessagesBefore int64
+	getMessagesCalls  int
 }
 
 func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (hub.StoredMessage, error) {
@@ -41,6 +45,12 @@ func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, 
 }
 
 func (m *mockStore) GetMessages(limit int, before int64) []hub.StoredMessage {
+	m.getMessagesLimit = limit
+	m.getMessagesBefore = before
+	m.getMessagesCalls++
+	if limit > 0 && limit < len(m.messages) {
+		return m.messages[:limit]
+	}
 	return m.messages
 }
 
@@ -404,7 +414,8 @@ func TestWebhookHandlerVerifiesHashedSecret(t *testing.T) {
 	h := hub.New(s, nil, nil, "")
 	handler := New(h, s, t.TempDir())
 
-	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL+"?secret="+secret, strings.NewReader(`{"content":"deploy finished","username":"ci"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(`{"content":"deploy finished","username":"ci"}`))
+	req.Header.Set("Authorization", "Bearer "+secret)
 	w := httptest.NewRecorder()
 
 	handler.WebhookHandler(w, req)
@@ -413,13 +424,181 @@ func TestWebhookHandlerVerifiesHashedSecret(t *testing.T) {
 		t.Fatalf("expected correct webhook secret to return 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	badReq := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL+"?secret=wrong", strings.NewReader(`{"content":"deploy finished"}`))
+	badReq := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(`{"content":"deploy finished"}`))
+	badReq.Header.Set("Authorization", "Bearer wrong")
 	badW := httptest.NewRecorder()
 
 	handler.WebhookHandler(badW, badReq)
 
 	if badW.Code != http.StatusNotFound {
 		t.Fatalf("expected wrong webhook secret to return 404, got %d", badW.Code)
+	}
+}
+
+func TestWebhookHandlerRejectsQuerySecret(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("store.New returned error: %v", err)
+	}
+	defer s.Close()
+
+	const (
+		webhookURL = "query-secret-hook"
+		secret     = "query-secret-must-not-work"
+	)
+	if err := s.CreateWebhook("wh-query", "team", webhookURL, secret, "alice"); err != nil {
+		t.Fatalf("CreateWebhook returned error: %v", err)
+	}
+
+	h := hub.New(s, nil, nil, "")
+	handler := New(h, s, t.TempDir())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL+"?secret="+secret, strings.NewReader(`{"content":"deploy finished"}`))
+	w := httptest.NewRecorder()
+
+	handler.WebhookHandler(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected query-string webhook secret to return 401, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestWebhookHandlerRejectsOversizedBody(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("store.New returned error: %v", err)
+	}
+	defer s.Close()
+
+	const (
+		webhookURL = "oversized-hook"
+		secret     = "oversized-body-secret"
+	)
+	if err := s.CreateWebhook("wh-oversized", "team", webhookURL, secret, "alice"); err != nil {
+		t.Fatalf("CreateWebhook returned error: %v", err)
+	}
+
+	h := hub.New(s, nil, nil, "")
+	handler := New(h, s, t.TempDir())
+
+	body := `{"content":"` + strings.Repeat("x", 9000) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+secret)
+	w := httptest.NewRecorder()
+
+	handler.WebhookHandler(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected oversized webhook body to return 413, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestWebhookHandlerRejectsOversizedContent(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("store.New returned error: %v", err)
+	}
+	defer s.Close()
+
+	const (
+		webhookURL = "oversized-content-hook"
+		secret     = "oversized-content-secret"
+	)
+	if err := s.CreateWebhook("wh-oversized-content", "team", webhookURL, secret, "alice"); err != nil {
+		t.Fatalf("CreateWebhook returned error: %v", err)
+	}
+
+	h := hub.New(s, nil, nil, "")
+	handler := New(h, s, t.TempDir())
+
+	body := `{"content":"` + strings.Repeat("x", 2001) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+secret)
+	w := httptest.NewRecorder()
+
+	handler.WebhookHandler(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected oversized webhook content to return 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestWebhookHandlerUsesServerDerivedSender(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatalf("store.New returned error: %v", err)
+	}
+	defer s.Close()
+
+	const (
+		webhookURL = "sender-hook"
+		secret     = "sender-secret"
+	)
+	if err := s.CreateGroup("team", "alice"); err != nil {
+		t.Fatalf("CreateGroup returned error: %v", err)
+	}
+	if err := s.CreateWebhook("wh-sender", "team", webhookURL, secret, "alice"); err != nil {
+		t.Fatalf("CreateWebhook returned error: %v", err)
+	}
+
+	hubInstance := hub.New(s, nil, nil, "")
+	hubInstance.LoadPersistedState()
+	go hubInstance.Run()
+	handler := New(hubInstance, s, t.TempDir())
+	srv := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+
+	member, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial member WebSocket: %v", err)
+	}
+	defer member.Close()
+	wsJoin(member, "alice")
+
+	observer, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial observer WebSocket: %v", err)
+	}
+	defer observer.Close()
+	wsJoin(observer, "observer")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(`{"content":"deploy finished","username":"spoofed-user"}`))
+	req.Header.Set("Authorization", "Bearer "+secret)
+	w := httptest.NewRecorder()
+
+	handler.WebhookHandler(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected webhook POST to return 200, got %d: %s", w.Code, w.Body.String())
+	}
+	msg, ok := wsDrainUntil(member, "group_message", 5*time.Second)
+	if !ok {
+		t.Fatal("group member did not receive webhook group_message")
+	}
+	if msg.ID == "" {
+		t.Fatal("expected webhook group_message to include a persisted message id")
+	}
+	if msg.Username != "webhook" {
+		t.Fatalf("expected server-derived webhook sender, got %q", msg.Username)
+	}
+	if msg.Group != "team" {
+		t.Fatalf("expected webhook group_message for group team, got %q", msg.Group)
+	}
+	if msg.Content != "deploy finished" {
+		t.Fatalf("expected webhook content to be broadcast, got %q", msg.Content)
+	}
+
+	if msg, ok := wsDrainUntil(observer, "group_message", 300*time.Millisecond); ok {
+		t.Fatalf("non-member observer received webhook group_message: %#v", msg)
+	}
+
+	exported, err := s.ExportMessages(context.Background(), "", "", "team", "alice", 10)
+	if err != nil {
+		t.Fatalf("ExportMessages returned error: %v", err)
+	}
+	if len(exported) != 1 || exported[0].ID != msg.ID || exported[0].Username != "webhook" || exported[0].Content != "deploy finished" {
+		t.Fatalf("expected webhook message to be persisted in group export, got %#v", exported)
 	}
 }
 
@@ -588,7 +767,7 @@ func TestCORSMiddleware(t *testing.T) {
 	})
 
 	t.Run("cross-origin allowed origin echoes back", func(t *testing.T) {
-		os.Setenv("CHAT_ALLOWED_ORIGINS", "example.com")
+		os.Setenv("CHAT_ALLOWED_ORIGINS", "https://example.com")
 		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -1288,10 +1467,10 @@ func TestUploadRejectsMissingFileField(t *testing.T) {
 }
 
 // TestCORSubdomainWildcard verifies that the CORS middleware supports the
-// subdomain wildcard pattern: setting CHAT_ALLOWED_ORIGINS=.example.com
-// allows any *.example.com origin.
+// explicit subdomain wildcard pattern: CHAT_ALLOWED_ORIGINS=https://*.example.com
+// allows any HTTPS *.example.com origin.
 func TestCORSubdomainWildcard(t *testing.T) {
-	os.Setenv("CHAT_ALLOWED_ORIGINS", ".example.com")
+	os.Setenv("CHAT_ALLOWED_ORIGINS", "https://*.example.com")
 	defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
 
 	handler := CORSMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1300,7 +1479,7 @@ func TestCORSubdomainWildcard(t *testing.T) {
 	}))
 
 	t.Run("subdomain allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://chat.local/test", nil)
 		req.Header.Set("Origin", "https://app.example.com")
 		w := httptest.NewRecorder()
 
@@ -1316,7 +1495,7 @@ func TestCORSubdomainWildcard(t *testing.T) {
 	})
 
 	t.Run("nested subdomain allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://chat.local/test", nil)
 		req.Header.Set("Origin", "https://chat.dev.example.com")
 		w := httptest.NewRecorder()
 
@@ -1332,7 +1511,7 @@ func TestCORSubdomainWildcard(t *testing.T) {
 	})
 
 	t.Run("bare domain without subdomain disallowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://chat.local/test", nil)
 		req.Header.Set("Origin", "https://example.com")
 		w := httptest.NewRecorder()
 
@@ -2038,6 +2217,10 @@ func TestGetMessagesWithLimitParam(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
+	ms := h.store.(*mockStore)
+	if ms.getMessagesLimit != publicPreviewMessageLimit {
+		t.Fatalf("expected unauthenticated public preview limit capped at %d, got %d", publicPreviewMessageLimit, ms.getMessagesLimit)
+	}
 }
 
 // --- Helper function tests ---
@@ -2089,6 +2272,33 @@ func TestIsPrivateHost(t *testing.T) {
 				t.Errorf("isPrivateHost(%q) = %v, want %v", tt.host, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLinkPreviewDialContextRejectsPrivateResolvedIP(t *testing.T) {
+	dialCalled := false
+	dialContext := guardedLinkPreviewDialContext(
+		func(ctx context.Context, host string) ([]net.IP, error) {
+			if host != "example.com" {
+				t.Fatalf("resolver host = %q, want example.com", host)
+			}
+			return []net.IP{net.ParseIP("127.0.0.1")}, nil
+		},
+		func(ctx context.Context, network, address string) (net.Conn, error) {
+			dialCalled = true
+			return nil, errors.New("unexpected dial")
+		},
+	)
+
+	conn, err := dialContext(context.Background(), "tcp", "example.com:443")
+	if err == nil {
+		t.Fatal("expected private resolved IP to be rejected")
+	}
+	if conn != nil {
+		t.Fatal("expected no connection for rejected private IP")
+	}
+	if dialCalled {
+		t.Fatal("expected private IP rejection before underlying dial")
 	}
 }
 
@@ -2262,7 +2472,7 @@ func TestCORSWildcardAll(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	t.Run("any origin allowed with wildcard", func(t *testing.T) {
+	t.Run("wildcard does not allow arbitrary origin", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.Header.Set("Origin", "https://any-random-domain.io")
 		w := httptest.NewRecorder()
@@ -2272,13 +2482,13 @@ func TestCORSWildcardAll(t *testing.T) {
 		resp := w.Result()
 		defer resp.Body.Close()
 
-		if resp.Header.Get("Access-Control-Allow-Origin") != "https://any-random-domain.io" {
-			t.Errorf("expected wildcard to echo origin, got %q",
+		if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+			t.Errorf("expected wildcard to be ignored for cross-origin request, got %q",
 				resp.Header.Get("Access-Control-Allow-Origin"))
 		}
 	})
 
-	t.Run("different origin also allowed with wildcard", func(t *testing.T) {
+	t.Run("different origin is also rejected with wildcard", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.Header.Set("Origin", "https://completely-different.example")
 		w := httptest.NewRecorder()
@@ -2288,8 +2498,8 @@ func TestCORSWildcardAll(t *testing.T) {
 		resp := w.Result()
 		defer resp.Body.Close()
 
-		if resp.Header.Get("Access-Control-Allow-Origin") != "https://completely-different.example" {
-			t.Errorf("expected wildcard to echo any origin, got %q",
+		if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+			t.Errorf("expected wildcard to be ignored for cross-origin request, got %q",
 				resp.Header.Get("Access-Control-Allow-Origin"))
 		}
 	})
@@ -2321,8 +2531,30 @@ func TestGetMessagesWithBeforeParam(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.GetMessages(w, req)
 
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthenticated before param, got %d: %s", resp.StatusCode, w.Body.String())
+	}
+	assertJSONErrorCode(t, resp, "AUTH_REQUIRED")
+
+	ms := h.store.(*mockStore)
+	if ms.getMessagesCalls != 0 {
+		t.Fatal("expected unauthenticated before request to stop before querying messages")
+	}
+}
+
+func TestGetMessagesWithBeforeParamAuthenticated(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/messages?before=1700000000000", nil)
+	authorizeTestRequest(t, h, req, "alice")
+	w := httptest.NewRecorder()
+	h.GetMessages(w, req)
+
 	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 with valid before param, got %d", w.Code)
+		t.Fatalf("expected 200 with authenticated before param, got %d", w.Code)
 	}
 
 	// Verify response is valid JSON with messages array.
@@ -2333,6 +2565,10 @@ func TestGetMessagesWithBeforeParam(t *testing.T) {
 	if _, ok := body["messages"]; !ok {
 		t.Error("expected 'messages' key in response")
 	}
+	ms := h.store.(*mockStore)
+	if ms.getMessagesBefore != 1700000000000 {
+		t.Fatalf("expected before timestamp passed to store, got %d", ms.getMessagesBefore)
+	}
 }
 
 func TestGetMessagesWithInvalidBefore(t *testing.T) {
@@ -2342,8 +2578,25 @@ func TestGetMessagesWithInvalidBefore(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.GetMessages(w, req)
 
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthenticated invalid before param, got %d: %s", resp.StatusCode, w.Body.String())
+	}
+	assertJSONErrorCode(t, resp, "AUTH_REQUIRED")
+}
+
+func TestGetMessagesWithInvalidBeforeAuthenticated(t *testing.T) {
+	h := newTestHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/messages?before=not-a-number", nil)
+	authorizeTestRequest(t, h, req, "alice")
+	w := httptest.NewRecorder()
+	h.GetMessages(w, req)
+
 	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 when invalid before is silently ignored, got %d", w.Code)
+		t.Errorf("expected 200 when authenticated invalid before is silently ignored, got %d", w.Code)
 	}
 
 	// Verify response is still valid JSON with messages array.
@@ -2354,17 +2607,22 @@ func TestGetMessagesWithInvalidBefore(t *testing.T) {
 	if _, ok := body["messages"]; !ok {
 		t.Error("expected 'messages' key in response with invalid before")
 	}
+	ms := h.store.(*mockStore)
+	if ms.getMessagesBefore != 0 {
+		t.Fatalf("expected invalid before to be ignored, got %d", ms.getMessagesBefore)
+	}
 }
 
 func TestGetMessagesWithLimitAndBefore(t *testing.T) {
 	h := newTestHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/messages?limit=10&before=1700000000000", nil)
+	authorizeTestRequest(t, h, req, "alice")
 	w := httptest.NewRecorder()
 	h.GetMessages(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 with limit and before params, got %d", w.Code)
+		t.Errorf("expected 200 with authenticated limit and before params, got %d", w.Code)
 	}
 
 	var body map[string]interface{}
@@ -2373,6 +2631,13 @@ func TestGetMessagesWithLimitAndBefore(t *testing.T) {
 	}
 	if _, ok := body["messages"]; !ok {
 		t.Error("expected 'messages' key in response")
+	}
+	ms := h.store.(*mockStore)
+	if ms.getMessagesLimit != 10 {
+		t.Fatalf("expected authenticated limit 10 passed to store, got %d", ms.getMessagesLimit)
+	}
+	if ms.getMessagesBefore != 1700000000000 {
+		t.Fatalf("expected authenticated before timestamp passed to store, got %d", ms.getMessagesBefore)
 	}
 }
 
@@ -3056,12 +3321,24 @@ func TestGiphyTrendingStickerType(t *testing.T) {
 // mockStoreExportCapture captures the limit argument passed to ExportMessages.
 type mockStoreExportCapture struct {
 	mockStore
-	capturedLimit int
+	capturedLimit     int
+	capturedGroupName string
+	exportCalled      bool
+	groupRoleErr      error
 }
 
 func (m *mockStoreExportCapture) ExportMessages(ctx context.Context, roomID, toUser, groupName, username string, limit int) ([]hub.StoredMessage, error) {
 	m.capturedLimit = limit
+	m.capturedGroupName = groupName
+	m.exportCalled = true
 	return nil, nil
+}
+
+func (m *mockStoreExportCapture) GetGroupMemberRole(groupName, username string) (string, error) {
+	if m.groupRoleErr != nil {
+		return "", m.groupRoleErr
+	}
+	return "member", nil
 }
 
 func newTestHandlerWithExportCapture() (*Handler, *mockStoreExportCapture) {
@@ -3128,6 +3405,46 @@ func TestExportMessagesZeroLimit(t *testing.T) {
 	// "return all messages".
 	if capture.capturedLimit != 0 {
 		t.Errorf("expected limit 0 (unlimited), got %d", capture.capturedLimit)
+	}
+}
+
+func TestExportMessagesGroupRequiresMembership(t *testing.T) {
+	h, capture := newTestHandlerWithExportCapture()
+	capture.groupRoleErr = errors.New("not a group member")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=group:secret", nil)
+	authorizeTestRequest(t, h, req, "alice")
+	w := httptest.NewRecorder()
+	h.ExportMessages(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-member group export, got %d: %s", resp.StatusCode, w.Body.String())
+	}
+	assertJSONErrorCode(t, resp, "NOT_IN_GROUP")
+	if capture.exportCalled {
+		t.Fatal("expected group export to stop before calling store.ExportMessages")
+	}
+}
+
+func TestExportMessagesGroupAllowsMember(t *testing.T) {
+	h, capture := newTestHandlerWithExportCapture()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=group:team", nil)
+	authorizeTestRequest(t, h, req, "alice")
+	w := httptest.NewRecorder()
+	h.ExportMessages(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for member group export, got %d: %s", w.Code, w.Body.String())
+	}
+	if !capture.exportCalled {
+		t.Fatal("expected store.ExportMessages to be called for member group export")
+	}
+	if capture.capturedGroupName != "team" {
+		t.Fatalf("expected groupName team passed to export, got %q", capture.capturedGroupName)
 	}
 }
 

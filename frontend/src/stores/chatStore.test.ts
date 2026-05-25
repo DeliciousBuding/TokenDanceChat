@@ -31,6 +31,19 @@ describe("chatStore", () => {
       expect(useChatStore.getState().messages[0].content).toBe("Hello");
     });
 
+    it("deduplicates messages by persisted id", () => {
+      useChatStore.getState().addMessage({
+        id: "persisted-1", username: "webhook", content: "Deploy finished", timestamp: 1000,
+      });
+      useChatStore.getState().addMessage({
+        id: "persisted-1", username: "webhook", content: "Deploy finished", timestamp: 1000,
+      });
+
+      const messages = useChatStore.getState().messages;
+      expect(messages).toHaveLength(1);
+      expect(messages[0].id).toBe("persisted-1");
+    });
+
     it("filters blocked user messages", () => {
       useChatStore.getState().addBlockedUser("Bob");
       useChatStore.getState().addMessage({
@@ -561,7 +574,7 @@ describe("chatStore", () => {
   });
 
   describe("addMessage edge cases", () => {
-    it("does not deduplicate by message ID (appends regardless)", () => {
+    it("deduplicates repeated messages by persisted id", () => {
       useChatStore.getState().addMessage({
         id: "dup-1", username: "Alice", content: "first", timestamp: 1000,
       });
@@ -569,11 +582,9 @@ describe("chatStore", () => {
         id: "dup-1", username: "Alice", content: "second", timestamp: 2000,
       });
       const msgs = useChatStore.getState().messages;
-      expect(msgs).toHaveLength(2);
+      expect(msgs).toHaveLength(1);
       expect(msgs[0].id).toBe("dup-1");
-      expect(msgs[1].id).toBe("dup-1");
       expect(msgs[0].content).toBe("first");
-      expect(msgs[1].content).toBe("second");
     });
 
     it("stores a message with all optional fields set", () => {

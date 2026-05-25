@@ -104,6 +104,15 @@ describe("SettingsModal", () => {
     expect(screen.getByDisplayValue("Test User")).toBeTruthy();
   });
 
+  it("exposes stable visual selectors for browser acceptance", () => {
+    render(<SettingsModal open={true} onClose={onClose} />);
+    expect(document.body.querySelector("[data-visual='settings-modal']")).toBeTruthy();
+    expect(document.body.querySelector("[data-visual='settings-tab-list']")).toBeTruthy();
+    expect(document.body.querySelectorAll("[data-visual='settings-tab']").length).toBe(3);
+    expect(document.body.querySelector("[data-visual='settings-content']")).toBeTruthy();
+    expect(document.body.querySelector("[data-visual='settings-profile-panel']")).toBeTruthy();
+  });
+
   it("does not render when open=false", () => {
     const { container } = render(<SettingsModal open={false} onClose={onClose} />);
     expect(container.innerHTML).toBe("");
@@ -118,8 +127,7 @@ describe("SettingsModal", () => {
 
   it("calls onClose when backdrop clicked", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
-    // The backdrop is the absolute div with bg-black/20 and backdrop-blur-sm
-    const backdrop = document.querySelector(".backdrop-blur-sm, [class*='bg-black\\/20']");
+    const backdrop = document.querySelector("[data-visual='settings-backdrop']");
     expect(backdrop).toBeTruthy();
     fireEvent.click(backdrop!);
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -163,11 +171,26 @@ describe("SettingsModal", () => {
     expect(screen.getByText("settings.soundOn")).toBeTruthy();
   });
 
+  it("keeps settings controls sized for touch targets", () => {
+    render(<SettingsModal open={true} onClose={onClose} />);
+    expect(document.body.querySelector("[data-visual='settings-save']")?.className).toContain("min-h-11");
+    expect(document.body.querySelector("[data-visual='settings-avatar-upload']")?.className).toContain("h-11");
+
+    fireEvent.click(screen.getByText("settings.notifications"));
+    for (const switchButton of screen.getAllByRole("switch")) {
+      expect(switchButton.className).toContain("h-11");
+      expect(switchButton.className).toContain("w-14");
+    }
+    expect(document.body.querySelector("[data-visual='settings-test-sound']")?.className).toContain("min-h-11");
+  });
+
   it("close button has accessible aria-label", () => {
     render(<SettingsModal open={true} onClose={onClose} />);
     const closeButton = screen.getByLabelText("friend.dismiss");
     expect(closeButton).toBeTruthy();
     expect(closeButton.tagName).toBe("BUTTON");
+    expect(closeButton.className).toContain("h-11");
+    expect(closeButton.className).toContain("w-11");
   });
 
   // ── Theme toggle ────────────────────────────────────
@@ -177,7 +200,7 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByText("settings.appearance"));
     const lightBtn = screen.getByText("settings.themeLight").closest("button")!;
     // Default theme is "light", so light card has ring-2
-    expect(lightBtn.className).toContain("ring-2");
+    expect(lightBtn.dataset.active).toBe("true");
   });
 
   it("switches to dark theme on click and persists to localStorage", () => {
@@ -187,10 +210,10 @@ describe("SettingsModal", () => {
     expect(localStorageMock.getItem("tdchat-theme")).toBe("dark");
     // Active ring now on dark button
     const darkBtn = screen.getByText("settings.themeDark").closest("button")!;
-    expect(darkBtn.className).toContain("ring-2");
+    expect(darkBtn.dataset.active).toBe("true");
     // Light button should no longer be active
     const lightBtn = screen.getByText("settings.themeLight").closest("button")!;
-    expect(lightBtn.className).not.toContain("ring-2");
+    expect(lightBtn.dataset.active).toBe("false");
   });
 
   it("switches to system theme on click and persists to localStorage", () => {

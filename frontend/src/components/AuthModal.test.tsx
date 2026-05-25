@@ -65,6 +65,33 @@ describe("AuthModal", () => {
     expect(dialog.getAttribute("aria-labelledby")).toBe("auth-modal-title");
   });
 
+  it("exposes stable visual selectors for browser acceptance", () => {
+    const { container } = renderOpenAuthModal();
+
+    expect(container.querySelector("[data-visual='auth-modal-root']")).toBeTruthy();
+    expect(container.querySelector("[data-visual='auth-modal-backdrop']")).toBeTruthy();
+    expect(container.querySelector("[data-visual='auth-modal']")).toBeTruthy();
+    expect(container.querySelector("[data-visual='auth-modal-tabs']")).toBeTruthy();
+    expect(container.querySelectorAll("[data-visual='auth-modal-tab']").length).toBe(3);
+    expect(container.querySelector("[data-visual='auth-modal-content']")).toBeTruthy();
+  });
+
+  it("keeps primary auth controls sized for touch targets", () => {
+    const { container } = renderOpenAuthModal();
+
+    expect(container.querySelector("[data-visual='auth-modal-close']")?.className).toContain("h-11");
+    expect(container.querySelector("[data-visual='auth-modal-close']")?.className).toContain("w-11");
+    for (const tab of container.querySelectorAll("[data-visual='auth-modal-tab']")) {
+      expect(tab.className).toContain("min-h-11");
+    }
+    expect(container.querySelector("[data-visual='auth-modal-primary']")?.className).toContain("min-h-[46px]");
+
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+    expect(container.querySelector("[data-visual='auth-modal-password-toggle']")?.className).toContain("h-11");
+    expect(container.querySelector("[data-visual='auth-modal-password-toggle']")?.className).toContain("w-11");
+    expect(container.querySelector("[data-visual='auth-modal-inline-switch']")?.className).toContain("min-h-11");
+  });
+
   it("labels the guest username input for assistive technology", () => {
     renderOpenAuthModal();
 

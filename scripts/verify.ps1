@@ -27,11 +27,18 @@ function Step($label, $script) {
   }
 }
 
+function Assert-NativeExitCode($label) {
+  if ($LASTEXITCODE -ne 0) {
+    throw "$label failed with exit code $LASTEXITCODE"
+  }
+}
+
 # ── Backend ──
 
 Step "backend tests" {
   Set-Location "$ProjectRoot\backend"
   go test ./... 2>&1 | Select-Object -Last 1
+  Assert-NativeExitCode "go test ./..."
 }
 
 # ── Frontend ──
@@ -39,22 +46,26 @@ Step "backend tests" {
 Step "frontend tests" {
   Set-Location "$ProjectRoot\frontend"
   npm test 2>&1 | Select-Object -Last 1
+  Assert-NativeExitCode "npm test"
 }
 
 Step "TypeScript type check" {
   Set-Location "$ProjectRoot\frontend"
   npx tsc --noEmit 2>&1 | Out-Null
+  Assert-NativeExitCode "npx tsc --noEmit"
   Write-Host "  tsc --noEmit: no errors"
 }
 
 Step "frontend build" {
   Set-Location "$ProjectRoot\frontend"
   npm run build 2>&1 | Select-Object -Last 1
+  Assert-NativeExitCode "npm run build"
 }
 
 Step "backend build" {
   Set-Location "$ProjectRoot\backend"
   go build -o backend.exe . 2>&1 | Out-Null
+  Assert-NativeExitCode "go build"
   Write-Host "  go build: ok"
 }
 
@@ -63,6 +74,7 @@ Step "backend build" {
 Step "git diff --check" {
   Set-Location $ProjectRoot
   git diff --check 2>&1 | Out-Null
+  Assert-NativeExitCode "git diff --check"
   Write-Host "  no whitespace errors"
 }
 
@@ -72,34 +84,94 @@ if (-not $SkipDocker) {
   Step "Dockerfile build check" {
     Set-Location $ProjectRoot
     docker build --check -f Dockerfile . 2>&1 | Select-Object -Last 1
+    Assert-NativeExitCode "docker build --check -f Dockerfile ."
   }
 
   Step "Dockerfile.runtime build check" {
     Set-Location $ProjectRoot
     docker build --check -f Dockerfile.runtime . 2>&1 | Select-Object -Last 1
+    Assert-NativeExitCode "docker build --check -f Dockerfile.runtime ."
+  }
+
+  Step "docker compose config" {
+    Set-Location $ProjectRoot
+    $oldSessionSecret = $env:CHAT_SESSION_SECRET
+    if (-not $env:CHAT_SESSION_SECRET) {
+      $env:CHAT_SESSION_SECRET = "verify-compose-session-secret"
+    }
+    try {
+      docker compose config 2>&1 | Select-Object -Last 1
+      Assert-NativeExitCode "docker compose config"
+    } finally {
+      $env:CHAT_SESSION_SECRET = $oldSessionSecret
+    }
   }
 }
 
 # ── Visual Acceptance ──
 
 if (-not $SkipVisual) {
-  $visualBase = if ($env:VISUAL_BASE_URL) { $env:VISUAL_BASE_URL } else { "http://127.0.0.1:8080" }
-
-  # Check if backend is reachable before running visual acceptance
-  $backendUp = $false
-  try {
-    $null = Invoke-WebRequest -Uri "$visualBase/api/health" -UseBasicParsing -TimeoutSec 3
-    $backendUp = $true
-  } catch {
-    Write-Host "`n  SKIP visual acceptance: backend not reachable at $visualBase" -ForegroundColor Yellow
-    Write-Host "  Start the backend first, then run: npm run visual:acceptance" -ForegroundColor Yellow
-  }
-
-  if ($backendUp) {
+  if ($env:VISUAL_BASE_URL) {
     Step "visual acceptance" {
       Set-Location "$ProjectRoot\frontend"
-      $env:VISUAL_BASE_URL = $visualBase
       npm run visual:acceptance 2>&1 | Select-Object -Last 8
+      Assert-NativeExitCode "npm run visual:acceptance"
+    }
+  } else {
+    $visualPort = 8198
+    $visualDB = Join-Path ([System.IO.Path]::GetTempPath()) "tdchat-visual-verify"
+    Remove-Item -Recurse -Force $visualDB -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $visualDB | Out-Null
+
+    $oldDBPath = $env:CHAT_DB_PATH
+    $oldFrontendDir = $env:CHAT_FRONTEND_DIR
+    $oldAddr = $env:CHAT_ADDR
+    $oldOIDCEnabled = $env:CHAT_OIDC_ENABLED
+    $oldSessionSecret = $env:CHAT_SESSION_SECRET
+    $oldVisualBase = $env:VISUAL_BASE_URL
+
+    Write-Host "`n  Starting backend for visual acceptance on port $visualPort..." -ForegroundColor Cyan
+    $env:CHAT_DB_PATH = Join-Path $visualDB "chat.db"
+    $env:CHAT_FRONTEND_DIR = Join-Path $ProjectRoot "frontend\dist"
+    $env:CHAT_ADDR = ":$visualPort"
+    $env:CHAT_OIDC_ENABLED = "false"
+    $env:CHAT_SESSION_SECRET = "verify-visual-session-secret"
+    $env:VISUAL_BASE_URL = "http://127.0.0.1:$visualPort"
+
+    $visualBackend = Start-Process -FilePath "$ProjectRoot\backend\backend.exe" -PassThru -WindowStyle Hidden
+    try {
+      $ready = $false
+      for ($i = 0; $i -lt 30; $i++) {
+        try {
+          $null = Invoke-WebRequest -Uri "$env:VISUAL_BASE_URL/api/health" -UseBasicParsing -TimeoutSec 1
+          $ready = $true
+          break
+        } catch {
+          Start-Sleep -Milliseconds 500
+        }
+      }
+      if (-not $ready) {
+        throw "visual acceptance backend did not become ready"
+      }
+      Write-Host "  Backend ready" -ForegroundColor Green
+
+      Step "visual acceptance" {
+        Set-Location "$ProjectRoot\frontend"
+        npm run visual:acceptance 2>&1 | Select-Object -Last 8
+        Assert-NativeExitCode "npm run visual:acceptance"
+      }
+    } finally {
+      if ($visualBackend -and -not $visualBackend.HasExited) {
+        Stop-Process -Id $visualBackend.Id -Force -ErrorAction SilentlyContinue
+      }
+      Remove-Item -Recurse -Force $visualDB -ErrorAction SilentlyContinue
+      $env:CHAT_DB_PATH = $oldDBPath
+      $env:CHAT_FRONTEND_DIR = $oldFrontendDir
+      $env:CHAT_ADDR = $oldAddr
+      $env:CHAT_OIDC_ENABLED = $oldOIDCEnabled
+      $env:CHAT_SESSION_SECRET = $oldSessionSecret
+      $env:VISUAL_BASE_URL = $oldVisualBase
+      Write-Host "  Visual acceptance backend stopped" -ForegroundColor Cyan
     }
   }
 }
@@ -113,8 +185,11 @@ if ($WithE2E) {
   New-Item -ItemType Directory -Force -Path $e2eDB | Out-Null
 
   Write-Host "`n  Starting backend for E2E on port $e2ePort..." -ForegroundColor Cyan
-  $env:CHAT_DATA_DIR = $e2eDB
+  $env:CHAT_DB_PATH = Join-Path $e2eDB "chat.db"
+  $env:CHAT_FRONTEND_DIR = Join-Path $ProjectRoot "frontend\dist"
   $env:CHAT_ADDR = ":$e2ePort"
+  $env:CHAT_OIDC_ENABLED = "false"
+  $env:CHAT_SESSION_SECRET = "verify-local-session-secret"
 
   $e2eBackend = Start-Process -FilePath "$ProjectRoot\backend\backend.exe" -PassThru -NoNewWindow
   Start-Sleep -Seconds 3
@@ -127,6 +202,7 @@ if ($WithE2E) {
       Set-Location "$ProjectRoot\frontend"
       $env:E2E_BASE_URL = "http://127.0.0.1:$e2ePort"
       npx playwright test --project=chromium --reporter=line 2>&1 | Select-Object -Last 15
+      Assert-NativeExitCode "npx playwright test --project=chromium --reporter=line"
     }
   } catch {
     Write-Host "  Backend failed to start for E2E" -ForegroundColor Red

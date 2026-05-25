@@ -227,11 +227,13 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
 
   if (!groupName || !group) return null;
 
-  const buildWebhookURL = (url: string, secret?: string) => {
-    const path = `/api/webhook/${url}${secret ? `?secret=${secret}` : ""}`;
+  const buildWebhookURL = (url: string) => {
+    const path = `/api/webhook/${url}`;
     if (typeof window === "undefined") return path;
     return `${window.location.origin}${path}`;
   };
+
+  const buildWebhookAuthorization = (secret: string) => `Authorization: Bearer ${secret}`;
 
   const formatWebhookTime = (timestamp?: number) =>
     timestamp ? formatFullTime(timestamp) : "-";
@@ -384,17 +386,29 @@ export function GroupInfoPanel({ groupName, onClose }: GroupInfoPanelProps) {
                 <div className="space-y-1.5">
                   <button
                     type="button"
-                    onClick={() => handleCopy(buildWebhookURL(createdWebhook.url, createdWebhook.secret))}
+                    onClick={() => handleCopy(buildWebhookURL(createdWebhook.url))}
                     className="flex min-h-11 w-full items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-left hover:bg-muted/60"
-                    title={buildWebhookURL(createdWebhook.url, createdWebhook.secret)}
+                    title={buildWebhookURL(createdWebhook.url)}
                   >
                     <Copy className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1 truncate text-xs font-mono text-foreground">
-                      {buildWebhookURL(createdWebhook.url, createdWebhook.secret)}
+                      {buildWebhookURL(createdWebhook.url)}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(buildWebhookAuthorization(createdWebhook.secret))}
+                    className="flex min-h-11 w-full items-center gap-2 rounded-md border border-border bg-background px-2.5 py-2 text-left hover:bg-muted/60"
+                    title={buildWebhookAuthorization(createdWebhook.secret)}
+                  >
+                    <KeyRound className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-xs font-mono text-foreground">
+                      {buildWebhookAuthorization(createdWebhook.secret)}
                     </span>
                   </button>
                   <p className="text-[11px] leading-4 text-muted-foreground">
-                    {copiedValue === buildWebhookURL(createdWebhook.url, createdWebhook.secret)
+                    {copiedValue === buildWebhookAuthorization(createdWebhook.secret) ||
+                    copiedValue === buildWebhookURL(createdWebhook.url)
                       ? t("group.webhookCopied")
                       : t("group.webhookSecretHint")}
                   </p>

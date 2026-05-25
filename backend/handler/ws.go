@@ -2,11 +2,7 @@ package handler
 
 import (
 	"log"
-	"os"
-	"net"
 	"net/http"
-	"net/url"
-	"strings"
 
 	"tokendancechat/backend/hub"
 
@@ -17,37 +13,10 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			return true // same-origin requests don't send Origin
-		}
-		originURL, err := url.Parse(origin)
-		if err != nil {
-			return false
-		}
-		originHost := originURL.Hostname()
-		host := r.Host
-		// Strip port from Host header for comparison.
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			host = h
-		}
-		// Allow same-origin.
-		if strings.EqualFold(originHost, host) || strings.EqualFold(originHost, strings.TrimPrefix(host, "www.")) {
+		if _, ok := allowedOrigin(r); ok {
 			return true
 		}
-		// Allow origins from CHAT_ALLOWED_ORIGINS env var (comma-separated).
-		if allowed := os.Getenv("CHAT_ALLOWED_ORIGINS"); allowed != "" {
-			if allowed == "*" {
-				return true
-			}
-			for _, o := range strings.Split(allowed, ",") {
-				o = strings.TrimSpace(o)
-				if strings.EqualFold(originHost, o) || (strings.HasPrefix(o, ".") && strings.HasSuffix(originHost, o)) {
-					return true
-				}
-			}
-		}
-		log.Printf("ws: rejected origin %q for host %q", origin, host)
+		log.Printf("ws: rejected origin %q for host %q", r.Header.Get("Origin"), r.Host)
 		return false
 	},
 }
@@ -55,10 +24,7 @@ var upgrader = websocket.Upgrader{
 // HandleWebSocket handles GET /ws for WebSocket upgrade.
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Rate limit per-IP WebSocket upgrades (5 per 10s).
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		ip = r.RemoteAddr
-	}
+	ip := requestIP(r)
 	if !WSAllow(ip) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)

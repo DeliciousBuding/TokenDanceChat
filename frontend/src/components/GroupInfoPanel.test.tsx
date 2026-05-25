@@ -98,9 +98,13 @@ describe("GroupInfoPanel webhooks", () => {
     expect(chatAPI.sendWebhookList).toHaveBeenCalledWith("Team");
     expect(chatAPI.sendWebhookAuditList).toHaveBeenCalledWith("Team");
     expect(screen.getByText("传入 Webhook")).toBeTruthy();
-    expect(screen.getByText("请立即复制，密钥只显示一次")).toBeTruthy();
+    expect(screen.getByText("请立即复制 URL 和 Authorization header，密钥只显示一次")).toBeTruthy();
     expect(screen.getByText(/secret-once/)).toBeTruthy();
     expect(screen.getByText(/webhook-path/)).toBeTruthy();
+
+    const createdURL = screen.getByTitle(/new-webhook/).textContent ?? "";
+    expect(createdURL).not.toContain("secret");
+    expect(screen.getByTitle("Authorization: Bearer secret-once")).toBeTruthy();
 
     const listURL = screen.getByTitle(/webhook-path/).textContent ?? "";
     expect(listURL).not.toContain("secret");

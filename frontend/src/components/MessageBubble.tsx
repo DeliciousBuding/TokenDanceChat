@@ -877,6 +877,8 @@ export const MessageBubble = memo(function MessageBubble({
           onReply(message);
         }
       }}
+      data-visual="message-bubble"
+      data-message-own={isOwn ? "true" : "false"}
       className={cn(
         "group flex gap-2 px-3 scroll-mt-16 sm:gap-3 sm:px-4",
         isNew ? "animate-message-in" : "animate-spring-up",
@@ -959,7 +961,11 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             )}
             {isOwn && !isGrouped && (
-              <span className="text-[11px] text-[var(--text-tertiary)]" title={formatFullTime(message.timestamp)}>
+              <span
+                data-visual="message-bubble-meta"
+                className="text-[11px] text-[var(--text-tertiary)]"
+                title={formatFullTime(message.timestamp)}
+              >
                 {formatTime(message.timestamp, t)}
                 {message.edited && (
                   <span className="text-[10px] text-muted-foreground/40 ml-1">
@@ -974,7 +980,11 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             )}
             {!isOwn && !isGrouped && (
-              <span className="text-[11px] text-[var(--text-tertiary)]" title={formatFullTime(message.timestamp)}>
+              <span
+                data-visual="message-bubble-meta"
+                className="text-[11px] text-[var(--text-tertiary)]"
+                title={formatFullTime(message.timestamp)}
+              >
                 {formatTime(message.timestamp, t)}
                 {(message as ChatMessage).mention_all && (
                   <span className="text-[10px] text-amber-500/70 ml-1 font-medium">
@@ -990,6 +1000,7 @@ export const MessageBubble = memo(function MessageBubble({
         {/* Reply preview (quoted message) — clickable to jump to original */}
         {!selectMode && (message.reply_to_id || message.reply_to_content) && (
           <div
+            data-visual="message-bubble-reply-preview"
             className="mb-1 ml-0 border-l-2 border-border/80 pl-2 py-0.5 rounded-sm bg-card cursor-pointer hover:border-border transition-colors"
             role="button"
             tabIndex={0}
@@ -1022,12 +1033,13 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         <div
+          data-visual="message-bubble-surface"
           className={cn(
-            "relative text-[15px] leading-relaxed",
+            "relative border text-[15px] leading-relaxed shadow-[0_1px_2px_rgba(15,23,42,0.05)] backdrop-blur-sm",
             isVoiceMessage ? "px-2 py-2" : "px-4 py-2.5",
             isOwn
-              ? "bg-[var(--accent)]/12 rounded-2xl rounded-br-md"
-              : "bg-[var(--bg-2)] rounded-2xl rounded-bl-md",
+              ? "rounded-[20px] rounded-br-md border-[var(--accent)]/16 bg-[var(--message-user-bg)] shadow-[0_10px_24px_rgba(0,122,255,0.08)] dark:border-[var(--accent)]/18"
+              : "rounded-[20px] rounded-bl-md border-[var(--border-glass)] bg-[var(--surface-glass-strong)] shadow-[0_10px_24px_rgba(15,23,42,0.06)]",
             isDeleted && "opacity-40",
           )}
         >
@@ -1096,11 +1108,12 @@ export const MessageBubble = memo(function MessageBubble({
               <button
                 type="button"
                 onClick={openContextMenuFromButton}
-                className="flex w-8 h-8 items-center justify-center rounded-full bg-[var(--bg-1)]/90 backdrop-blur-sm text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                data-visual="message-bubble-menu"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--border-glass)] bg-[var(--surface-glass-strong)]/95 text-[var(--text-secondary)] opacity-0 shadow-sm backdrop-blur-xl transition-all group-hover:opacity-100 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 [&_svg]:h-[18px] [&_svg]:w-[18px]"
                 aria-label={t("message.contextMenu")}
                 title={t("message.contextMenu")}
               >
-                <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.5} />
+                <MoreHorizontal strokeWidth={1.7} />
               </button>
             </div>
           )}
@@ -1126,6 +1139,7 @@ export const MessageBubble = memo(function MessageBubble({
           >
             {replyCount > 0 && (
               <button
+                data-visual="message-bubble-thread"
                 onClick={selectMode ? undefined : () => {
                   if (onOpenThread) {
                     onOpenThread(message);
@@ -1152,6 +1166,7 @@ export const MessageBubble = memo(function MessageBubble({
                   users.length > 0 && (
                     <button
                       key={emoji}
+                      data-visual="message-bubble-reaction"
                       onClick={selectMode ? undefined : () =>
                         handleAddReaction(emoji)
                       }
@@ -1185,7 +1200,7 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         {isOwn && (
-          <div className="mt-1 flex justify-end items-center gap-1">
+          <div data-visual="message-bubble-meta" className="mt-1 flex justify-end items-center gap-1">
             {/* Delivery status icons — Telegram-style checkmarks */}
             {readBy && readBy.length > 0 ? (
               <>

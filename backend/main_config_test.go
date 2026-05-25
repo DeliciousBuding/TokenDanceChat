@@ -297,20 +297,17 @@ func TestCORSMiddlewareStarOrigin(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
-	if rec.Header().Get("Access-Control-Allow-Origin") != "https://any-origin.example.com" {
-		t.Errorf("star origin: expected ACAO=%q, got %q",
-			"https://any-origin.example.com",
+	if rec.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Errorf("star origin should not allow cross-origin requests once bearer sessions exist, got %q",
 			rec.Header().Get("Access-Control-Allow-Origin"))
 	}
-	if rec.Header().Get("Vary") != "Origin" {
-		t.Errorf("star origin: expected Vary=Origin, got %q", rec.Header().Get("Vary"))
+	if rec.Header().Get("Vary") != "" {
+		t.Errorf("star origin should not set Vary when origin is rejected, got %q", rec.Header().Get("Vary"))
 	}
 }
 
 func TestCORSMiddlewareExactOrigin(t *testing.T) {
-	// The middleware compares hostnames (url.Parse(origin).Hostname()) against
-	// the configured values, so CHAT_ALLOWED_ORIGINS should contain bare hostnames.
-	t.Setenv("CHAT_ALLOWED_ORIGINS", "myapp.example.com")
+	t.Setenv("CHAT_ALLOWED_ORIGINS", "https://myapp.example.com")
 	h := newCORSHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
@@ -337,7 +334,7 @@ func TestCORSMiddlewareExactOrigin(t *testing.T) {
 }
 
 func TestCORSMiddlewareSubdomainOrigin(t *testing.T) {
-	t.Setenv("CHAT_ALLOWED_ORIGINS", ".example.com")
+	t.Setenv("CHAT_ALLOWED_ORIGINS", "https://*.example.com")
 	h := newCORSHandler()
 
 	tests := []struct {
@@ -347,6 +344,7 @@ func TestCORSMiddlewareSubdomainOrigin(t *testing.T) {
 		{"https://app.example.com", true},
 		{"https://admin.example.com", true},
 		{"https://deep.sub.example.com", true},
+		{"https://app.example.com:8443", false},
 		{"https://example.com", false},
 		{"https://evil.com", false},
 		{"https://example.com.evil.com", false},
@@ -354,7 +352,7 @@ func TestCORSMiddlewareSubdomainOrigin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.origin, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+			req := httptest.NewRequest(http.MethodGet, "http://chat.local/api/health", nil)
 			req.Header.Set("Origin", tt.origin)
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
@@ -371,7 +369,7 @@ func TestCORSMiddlewareSubdomainOrigin(t *testing.T) {
 }
 
 func TestCORSMiddlewareMultipleOrigins(t *testing.T) {
-	t.Setenv("CHAT_ALLOWED_ORIGINS", "app.example.com, admin.example.com, .cdn.example.com")
+	t.Setenv("CHAT_ALLOWED_ORIGINS", "https://app.example.com, https://admin.example.com, https://*.cdn.example.com")
 	h := newCORSHandler()
 
 	tests := []struct {
@@ -404,7 +402,7 @@ func TestCORSMiddlewareMultipleOrigins(t *testing.T) {
 }
 
 func TestCORSMiddlewareCaseInsensitive(t *testing.T) {
-	t.Setenv("CHAT_ALLOWED_ORIGINS", "MyApp.Example.COM")
+	t.Setenv("CHAT_ALLOWED_ORIGINS", "https://MyApp.Example.COM")
 	h := newCORSHandler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
@@ -420,7 +418,7 @@ func TestCORSMiddlewareCaseInsensitive(t *testing.T) {
 }
 
 func TestCORSMiddlewarePreflightOptions(t *testing.T) {
-	t.Setenv("CHAT_ALLOWED_ORIGINS", "myapp.example.com")
+	t.Setenv("CHAT_ALLOWED_ORIGINS", "https://myapp.example.com")
 	h := newCORSHandler()
 
 	req := httptest.NewRequest(http.MethodOptions, "/api/health", nil)

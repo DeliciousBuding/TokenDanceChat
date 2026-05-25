@@ -28,9 +28,19 @@ import { normalizeGroupInfoMembers } from "@/lib/groupInfo";
 const BASE_TITLE = "TokenDanceChat";
 let unreadTitleCount = 0;
 let isTabActive = typeof document !== "undefined" ? !document.hidden : true;
+let sharedWebSocketSubscriptionCount = 0;
+let sharedWebSocketSubscriptionCleanup: (() => void) | null = null;
 
 function updatePageTitle(): void {
   document.title = getPageTitle(unreadTitleCount, isTabActive);
+}
+
+function releaseSharedWebSocketSubscription() {
+  sharedWebSocketSubscriptionCount = Math.max(0, sharedWebSocketSubscriptionCount - 1);
+  if (sharedWebSocketSubscriptionCount === 0) {
+    sharedWebSocketSubscriptionCleanup?.();
+    sharedWebSocketSubscriptionCleanup = null;
+  }
 }
 
 /** Pure computation — exported for testing. */
@@ -281,6 +291,11 @@ export function useWebSocket() {
   }, [setPendingImage]);
 
   useEffect(() => {
+    sharedWebSocketSubscriptionCount += 1;
+    if (sharedWebSocketSubscriptionCount > 1 && sharedWebSocketSubscriptionCleanup) {
+      return releaseSharedWebSocketSubscription;
+    }
+
     // Tab visibility tracking.
     const handleVisibility = () => {
       isTabActive = !document.hidden;
@@ -1471,13 +1486,14 @@ export function useWebSocket() {
       }
     }, 60_000);
 
-    return () => {
+    sharedWebSocketSubscriptionCleanup = () => {
       clearInterval(streamCleanupTimer);
       document.removeEventListener("visibilitychange", handleVisibility);
       unsubs.forEach((unsub) => unsub());
       typingTimers.current.forEach((timer) => clearTimeout(timer));
       typingTimers.current.clear();
     };
+    return releaseSharedWebSocketSubscription;
   }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setGroupWebhooks, setGroupWebhookAuditLogs, addGroupWebhook, rotateGroupWebhookSecret, removeGroupWebhook, setIncomingCall, setActiveCall, setNotificationPrefs, setTranslation, updatePoll, setGroupInfoPanel, disconnect]);
 
   return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };

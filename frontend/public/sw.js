@@ -1,4 +1,4 @@
-const CACHE_NAME = "tdchat-v4";
+const CACHE_NAME = "tdchat-v5";
 const STATIC_ASSETS = [
   "/offline.html",
   "/manifest.json",
@@ -30,7 +30,7 @@ self.addEventListener("activate", (event) => {
 
 // Helper: is an API request?
 function isApiRequest(url) {
-  return url.pathname.startsWith("/ws") || url.pathname.startsWith("/api/");
+  return url.pathname.startsWith("/api/");
 }
 
 // Helper: is a static asset?
@@ -49,7 +49,7 @@ function isNavigationRequest(request, url) {
   );
 }
 
-// Fetch: network-first for nav/API, stale-while-revalidate for static
+// Fetch: network-first for nav, network-only for API, stale-while-revalidate for static
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
@@ -65,9 +65,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API requests: network-first
+  // API requests may contain authenticated chat data. Never persist them in Cache Storage.
   if (isApiRequest(url)) {
-    event.respondWith(networkFirst(event.request));
+    event.respondWith(fetch(event.request));
     return;
   }
 

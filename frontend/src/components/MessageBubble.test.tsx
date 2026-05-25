@@ -162,6 +162,50 @@ describe("MessageBubble", () => {
     });
   });
 
+  describe("visual contract", () => {
+    it("marks received message bubble surfaces and actions for visual acceptance", () => {
+      const { container } = renderBubble({
+        replyCount: 2,
+        message: {
+          id: "msg-visual",
+          username: "alice",
+          content: "Visual contract",
+          timestamp: 1700000000000,
+          reactions: {
+            "👍": ["testuser"],
+          },
+        },
+      });
+
+      const bubble = container.querySelector("[data-visual='message-bubble']");
+      expect(bubble).toBeTruthy();
+      expect(bubble?.getAttribute("data-message-own")).toBe("false");
+      expect(container.querySelector("[data-visual='message-bubble-surface']")).toBeTruthy();
+      expect(container.querySelector("[data-visual='message-bubble-menu']")).toBeTruthy();
+      expect(container.querySelector("[data-visual='message-bubble-thread']")).toBeTruthy();
+      expect(container.querySelector("[data-visual='message-bubble-reaction']")).toBeTruthy();
+      expect(container.querySelectorAll("[data-visual='message-bubble-meta']").length).toBeGreaterThan(0);
+    });
+
+    it("marks own message bubbles for direction coverage", () => {
+      const { container } = renderBubble({
+        isOwn: true,
+        message: {
+          id: "msg-own-visual",
+          username: "testuser",
+          content: "Own visual contract",
+          timestamp: 1700000000000,
+        },
+      });
+
+      const bubble = container.querySelector("[data-visual='message-bubble']");
+      expect(bubble).toBeTruthy();
+      expect(bubble?.getAttribute("data-message-own")).toBe("true");
+      expect(container.querySelector("[data-visual='message-bubble-surface']")).toBeTruthy();
+      expect(container.querySelector("[data-visual='message-bubble-menu']")).toBeTruthy();
+    });
+  });
+
   describe("grouped messages", () => {
     it("renders grouped message with less padding", () => {
       renderBubble({

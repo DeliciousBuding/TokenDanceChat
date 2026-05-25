@@ -40,8 +40,11 @@ TokenDanceChat 是 AgentHub 的技术验证项目与可玩 Demo。视觉工作�
 - 首个有意义聊天内容的 y 坐标；
 - 水平滚动条是否存在；
 - 输入框上方可见消息数；
+- Composer 卡片高度、底部工具条可见性、常驻工具数量、可见工具数量和 composer 内低于 44x44 的控件数；
 - 桌面端侧边栏模型预览卡片数及在线用户区域 y 坐标；
 - 群组信息面板宽度、高度、右对齐、标题截断情况、Webhook 区域可见性、成员行数、面板内低于 44x44 的控件数、桌面标题行稳定性以及首次进入群组空状态可见性；
+- 设置弹窗桌面/移动尺寸、视口内 fit、tab 数量、tab label 裁剪情况、内容区域可见性和弹窗内低于 44x44 的控件数；
+- 认证弹窗桌面/移动尺寸、视口内 fit、tab 数量、tab label 裁剪情况、内容区域可见性、错误态可见性和弹窗内低于 44x44 的控件数；
 - 控制台错误。
 
 `npm run visual:acceptance` 当前硬性门槛包括：
@@ -52,8 +55,11 @@ TokenDanceChat 是 AgentHub 的技术验证项目与可玩 Demo。视觉工作�
 - 移动端标题至少 120px 宽且公开聊天标题不得被截断；
 - 移动端可见消息文字必须保持在 15px 或以下；
 - 折叠态移动端与平板种子聊天视图中至少 4 条可见消息；
+- 聊天场景必须展示 composer 底部工具条，常驻工具入口至少 7 个、可见工具入口至少 5 个，且 composer 内无低于 44x44 的可视按钮/链接/select；
 - 桌面端侧边栏模型预览至多 4 张卡片，在线用户区域距顶部不低过 680px；
-- 群组信息场景必须展示 320-390px 宽、全高右对齐面板，标题未被截断，owner/admin Webhook 控件可见，至少一行成员，无可视面板控件低于 44x44，桌面标题为单行，以及可见的首次群组空状态。
+- 群组信息场景必须展示 320-390px 宽、全高右对齐面板，标题未被截断，owner/admin Webhook 控件可见，至少一行成员，无可视面板控件低于 44x44，桌面标题为单行，以及可见的首次群组空状态；
+- 设置弹窗场景必须展示桌面 560-760px 宽、移动端视口内 fit、3 个 tab、未裁剪 tab label、可见内容区域，且弹窗内无低于 44x44 的可视控件。
+- 认证弹窗场景必须展示桌面 340-420px 宽、移动端视口内 fit、3 个 tab、未裁剪 tab label、可见内容区域；错误态场景必须展示 alert，且弹窗内无低于 44x44 的可视控件。
 
 针对本地生产构建运行可复用的 Playwright 验收脚本：
 
@@ -104,21 +110,30 @@ npm run visual:acceptance
 
 最新通过的截图验收：
 
-- 输出目录：`C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-24T19-07-39-625Z`
-- 基线：由 Go 后端在 `http://127.0.0.1:18082` 托管生产构建，使用干净临时 SQLite 数据库。
-- 场景：七张截图，含 `desktop-light-group-info`、`mobile-light-format`。
-- 桌面 light 1440x900：textarea 1102x24px，输入框 96px，7 条可见消息，侧边栏模型预览 4 张，在线用户区域顶部 392px，无水平溢出，无控制台错误。
-- 桌面 light 群组信息 1440x900：右侧面板 384x900px 且右对齐，Webhook 行、rotate 按钮、audit log 均为 1，成员 1 行，一次性 secret 可见，群组空状态可见，侧边栏在线用户区域顶部 400px，无小控件门槛问题，无控制台错误。
-- 桌面 dark 1440x900：textarea 1102x24px，输入框 96px，7 条可见消息，侧边栏模型预览 4 张，在线用户区域顶部 392px，无水平溢出，无控制台错误。
-- 平板 light 768x1024：textarea 742x24px，输入框 104px，移动端标题宽度 580px，7 条可见消息，无水平溢出，无控制台错误。
-- 移动端 light/dark/format 390x844：textarea 364x24px，输入框 104px，标题宽度 202px 且 `公共聊天` 未截断，5 条可见消息，无水平溢出，无控制台错误。
-- 截图审阅确认：公共预览不再有全屏格式化遮罩挡住「加入聊天」，群组管理面板的 Webhook 和审计控件可读，移动端输入框和标题保持可用。
+- 输出目录：`C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-05-25T00-15-30-088Z`
+- 基线：由 Go 后端在 `http://127.0.0.1:8198` 托管最新生产构建，使用干净临时 SQLite 数据库，验收后停止临时后端。
+- 场景：十二张截图，含 `desktop-light-group-info`、`desktop-light-settings`、`desktop-light-auth-login`、`mobile-light-sidebar-open`、`mobile-light-settings`、`mobile-light-auth-register-error`、`mobile-light-format`。
+- 桌面 light 1440x900：textarea 1102x24px，输入框 106px，9 条可见消息，`composerTools=7/7`，`composerSmallControls=0`，侧边栏模型预览 4 张，在线用户区域顶部 416px，无水平溢出，无控制台错误。
+- 桌面 light 群组信息 1440x900：右侧面板 384x900px 且右对齐，Webhook 行、rotate 按钮、audit log 均为 1，一次性 secret 可见，群组空状态可见，`groupSmallControls=0`，`composerSmallControls=0`，无控制台错误。
+- 桌面 light 设置弹窗 1440x900：`settingsModal=720x560`，3 个 tab 与内容区域可见，`settingsSmallControls=0`，`composerTools=7/7`，tab label 未裁剪，无控制台错误。
+- 桌面 light 认证登录弹窗 1440x900：`authModal=380x346`，3 个 tab 与内容区域可见，`authSmallControls=0`，登录态无 alert，tab label 未裁剪，无控制台错误。
+- 桌面 dark 1440x900：textarea 1102x24px，输入框 106px，8 条可见消息，`composerTools=7/7`，`composerSmallControls=0`，侧边栏模型预览 4 张，在线用户区域顶部 416px，无水平溢出，无控制台错误。
+- 平板 light 768x1024：textarea 742x24px，输入框 106px，移动端标题宽度 580px，8 条可见消息，`composerTools=7/7`，`composerSmallControls=0`，无水平溢出，无控制台错误。
+- 移动端 light/dark/format 390x844：textarea 364x24px，输入框 106px，标题宽度 202px 且 `公共聊天` 未截断，6 条可见消息，`composerTools=7/7`，`composerSmallControls=0`，无水平溢出，无控制台错误。
+- 移动端侧栏 390x844：侧栏模型预览 2 张，`sidebarSmallControls=0`，无水平溢出，无控制台错误。
+- 移动端设置弹窗 390x844：`settingsModal=366x720`，三枚顶部 tab 完整可见且 label 未裁剪，`settingsSmallControls=0`，无水平溢出，无控制台错误。
+- 移动端认证注册错误态 390x844：`authModal=358x502`，三枚顶部 tab 完整可见且 label 未裁剪，错误 alert 可见，`authSmallControls=0`，无水平溢出，无控制台错误。
+- 截图审阅确认：公共聊天、群组管理、移动侧栏、设置弹窗、认证弹窗和 composer 常驻工具条在桌面/移动端均保持可读；设置弹窗不再被桌面侧栏 transform 限制，移动设置/认证 tab 没有半露或裁剪，composer 工具一排呈现且无 44px 以下可视按钮。
 
 截图验收捕获并修复了实际实现问题：
 
 - 未登录公共预览聚焦输入框时会打开全屏透明格式化遮罩，阻断 header 的「加入聊天」；现在 composer popover 只在已登录且输入框可用时打开。
 - 前端 `index.html` 引入 Google Fonts，但 Go 后端 runtime CSP 不允许该来源；现在前端和后端 CSP 对齐为系统字体，不再产生字体相关控制台错误。
 - 桌面侧边栏在线用户区域低于视觉门槛；将在线用户区移到 AI 助手区之前后，最新验收中桌面顶部稳定在 392px，group-info 场景为 400px。
+- 桌面设置弹窗从带 `transform` 的 Sidebar 内渲染时，`position: fixed` 被侧栏 containing block 捕获，实际宽度只有 264px；现在通过 React portal 挂到 `document.body`，恢复全视口居中。
+- 移动端设置 tab 最初需要横向滚动才完整露出第三项；现在改为三等分顶部 tab，并由视觉脚本硬门槛检查 tab label 不裁剪。
+- 认证视觉脚本最初用宽泛按钮名点击 `注册`，与实际 tab 文案 `注册账号` 不匹配；后续又因页面侧栏存在同名 `邀请码管理` 按钮而误命中。现在 Auth 场景所有 tab 与表单操作都限定在 `[data-visual='auth-modal']` 内。
+- ChatInput 底部工具过去分散在 `+` 附件弹层和默认自动弹出的 Markdown 浮层里；现在常用工具收敛为 composer 内一排常驻图标，桌面/移动端都保持 44px 命中区。focused test 还捕获了默认聚焦后旧 Markdown 浮层与新工具条重复的问题，已改为选中文本或点击 Markdown 按钮时才打开浮层。
 
 ## 当前参考 Prompt
 
