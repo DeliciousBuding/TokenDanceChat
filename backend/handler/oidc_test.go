@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -26,6 +27,186 @@ func generateTestRSAKey(t *testing.T) *rsa.PrivateKey {
 		t.Fatalf("failed to generate RSA key: %v", err)
 	}
 	return key
+}
+
+func TestOIDCHTTPClientHasBoundedTimeout(t *testing.T) {
+	if oidcHTTPClient == nil {
+		t.Fatal("oidcHTTPClient is nil")
+	}
+	if oidcHTTPClient.Timeout != oidcHTTPTimeout {
+		t.Fatalf("oidcHTTPClient timeout = %s, want %s", oidcHTTPClient.Timeout, oidcHTTPTimeout)
+	}
+	if oidcHTTPClient.Timeout <= 0 || oidcHTTPClient.Timeout > 5*time.Second {
+		t.Fatalf("oidcHTTPClient timeout is not bounded tightly enough: %s", oidcHTTPClient.Timeout)
+	}
+}
+
+func TestReadOIDCResponseBodyRejectsOversizedResponse(t *testing.T) {
+	body, err := readOIDCResponseBody(bytes.NewReader([]byte("ok")), 2)
+	if err != nil {
+		t.Fatalf("expected small response to be accepted: %v", err)
+	}
+	if string(body) != "ok" {
+		t.Fatalf("body = %q, want ok", string(body))
+	}
+
+	_, err = readOIDCResponseBody(bytes.NewReader(bytes.Repeat([]byte("x"), 4)), 3)
+	if err == nil {
+		t.Fatal("expected oversized response to be rejected")
+	}
+}
+
+func TestOIDCStateStoreCloseStopsCleanupLoop(t *testing.T) {
+	store := newOIDCStateStore()
+	done := make(chan struct{})
+
+	go func() {
+		store.close()
+		store.close()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("state store close did not stop cleanup loop")
+	}
+}
+
+func TestOIDCTokenStoreCloseStopsCleanupLoop(t *testing.T) {
+	store := newOIDCTokenStore()
+	done := make(chan struct{})
+
+	go func() {
+		store.close()
+		store.close()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("token store close did not stop cleanup loop")
+	}
+}
+
+func TestOIDCStateStoreRejectsNewEntriesAtCapacity(t *testing.T) {
+	store := newOIDCStateStore()
+	t.Cleanup(store.close)
+	now := time.Now()
+	for i := 0; i < oidcStateStoreMaxEntries; i++ {
+		if ok := store.put(fmt.Sprintf("state-%03d", i), &oidcStateEntry{
+			CodeVerifier: fmt.Sprintf("verifier-%03d", i),
+			CreatedAt:    now.Add(time.Duration(i) * time.Second),
+		}); !ok {
+			t.Fatalf("state insert %d was rejected before capacity", i)
+		}
+	}
+
+	if ok := store.put("state-overflow", &oidcStateEntry{
+		CodeVerifier: "verifier-overflow",
+		CreatedAt:    now.Add(time.Hour),
+	}); ok {
+		t.Fatal("expected state store to reject new entry at capacity")
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if got := len(store.store); got != oidcStateStoreMaxEntries {
+		t.Fatalf("state store len = %d, want %d", got, oidcStateStoreMaxEntries)
+	}
+	if _, ok := store.store["state-000"]; !ok {
+		t.Fatal("expected oldest state entry to be retained")
+	}
+	if _, ok := store.store["state-overflow"]; ok {
+		t.Fatal("expected overflow state entry to be absent")
+	}
+}
+
+func TestOIDCTokenStoreRejectsNewEntriesAtCapacity(t *testing.T) {
+	store := newOIDCTokenStore()
+	t.Cleanup(store.close)
+	now := time.Now()
+	for i := 0; i < oidcTokenStoreMaxEntries; i++ {
+		if ok := store.put(fmt.Sprintf("redeem-%03d", i), &oidcTokenEntry{
+			AccessToken:  fmt.Sprintf("access-%03d", i),
+			RefreshToken: fmt.Sprintf("refresh-%03d", i),
+			ChatUsername: fmt.Sprintf("user-%03d", i),
+			CreatedAt:    now.Add(time.Duration(i) * time.Second),
+		}); !ok {
+			t.Fatalf("token insert %d was rejected before capacity", i)
+		}
+	}
+
+	if ok := store.put("redeem-overflow", &oidcTokenEntry{
+		AccessToken:  "access-overflow",
+		RefreshToken: "refresh-overflow",
+		ChatUsername: "user-overflow",
+		CreatedAt:    now.Add(time.Hour),
+	}); ok {
+		t.Fatal("expected token store to reject new entry at capacity")
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if got := len(store.store); got != oidcTokenStoreMaxEntries {
+		t.Fatalf("token store len = %d, want %d", got, oidcTokenStoreMaxEntries)
+	}
+	if _, ok := store.store["redeem-000"]; !ok {
+		t.Fatal("expected oldest redeem token entry to be retained")
+	}
+	if _, ok := store.store["redeem-overflow"]; ok {
+		t.Fatal("expected overflow redeem token entry to be absent")
+	}
+}
+
+func TestSetupOIDCFailureDoesNotInstallTransientStores(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	h := &Handler{store: &mockStore{}}
+	err := h.SetupOIDC(true, "test-client", srv.URL, "http://localhost:8080/api/oidc/callback")
+	if err == nil {
+		t.Fatal("expected SetupOIDC to fail")
+	}
+	if h.oidcStates != nil || h.oidcTokens != nil {
+		t.Fatal("expected failed SetupOIDC to leave transient stores uninstalled")
+	}
+}
+
+func TestSetupOIDCReconfigureClosesPreviousTransientStores(t *testing.T) {
+	key := generateTestRSAKey(t)
+	first := startMockOIDCProvider(t, key, "test-kid-reconfigure-1")
+	defer first.Close()
+	second := startMockOIDCProvider(t, key, "test-kid-reconfigure-2")
+	defer second.Close()
+
+	h := &Handler{store: &mockStore{}}
+	if err := h.SetupOIDC(true, "test-client", first.URL, "http://localhost:8080/api/oidc/callback"); err != nil {
+		t.Fatalf("first SetupOIDC failed: %v", err)
+	}
+	oldStates := h.oidcStates
+	oldTokens := h.oidcTokens
+	if err := h.SetupOIDC(true, "test-client", second.URL, "http://localhost:8080/api/oidc/callback"); err != nil {
+		t.Fatalf("second SetupOIDC failed: %v", err)
+	}
+	t.Cleanup(h.closeOIDCStores)
+
+	select {
+	case <-oldStates.stopped:
+	default:
+		t.Fatal("expected previous state store cleanup loop to be stopped after reconfigure")
+	}
+	select {
+	case <-oldTokens.stopped:
+	default:
+		t.Fatal("expected previous token store cleanup loop to be stopped after reconfigure")
+	}
+	if h.oidcStates == oldStates || h.oidcTokens == oldTokens {
+		t.Fatal("expected reconfigure to install fresh transient stores")
+	}
 }
 
 // signTestIDToken creates a valid RS256-signed JWT with the given claims.
@@ -257,6 +438,14 @@ func TestResolveOIDCUsername(t *testing.T) {
 
 // ─── OIDC Handler Integration ─────────────────────────────────────
 
+func setupOIDCForTest(t *testing.T, h *Handler, issuer string) {
+	t.Helper()
+	if err := h.SetupOIDC(true, "test-client", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
+		t.Fatalf("SetupOIDC failed: %v", err)
+	}
+	t.Cleanup(h.closeOIDCStores)
+}
+
 func TestOIDCConfigHandler(t *testing.T) {
 	key := generateTestRSAKey(t)
 	kid := "test-kid-001"
@@ -270,9 +459,7 @@ func TestOIDCConfigHandler(t *testing.T) {
 	h := &Handler{
 		store: &mockStore{},
 	}
-	if err := h.SetupOIDC(true, "test-client", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
-		t.Fatalf("SetupOIDC failed: %v", err)
-	}
+	setupOIDCForTest(t, h, issuer)
 
 	req := httptest.NewRequest("GET", "/api/oidc/config", nil)
 	rec := httptest.NewRecorder()
@@ -321,9 +508,7 @@ func TestOIDCLoginRedirect(t *testing.T) {
 	h := &Handler{
 		store: &mockStore{},
 	}
-	if err := h.SetupOIDC(true, "test-client", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
-		t.Fatalf("SetupOIDC failed: %v", err)
-	}
+	setupOIDCForTest(t, h, issuer)
 
 	req := httptest.NewRequest("GET", "/api/oidc/login", nil)
 	rec := httptest.NewRecorder()
@@ -370,6 +555,39 @@ func TestOIDCLoginRedirect(t *testing.T) {
 	}
 }
 
+func TestOIDCLoginRateLimitedByIP(t *testing.T) {
+	ResetRateLimiter()
+	key := generateTestRSAKey(t)
+	kid := "test-kid-rate-limit"
+	srv := startMockOIDCProvider(t, key, kid)
+	defer srv.Close()
+
+	addr := srv.Listener.Addr().String()
+	issuer := "http://" + addr
+
+	h := &Handler{store: &mockStore{}}
+	setupOIDCForTest(t, h, issuer)
+
+	ip := "192.0.2.222:1234"
+	for i := 0; i < oidcMaxPerWindow; i++ {
+		req := httptest.NewRequest("GET", "/api/oidc/login", nil)
+		req.RemoteAddr = ip
+		rec := httptest.NewRecorder()
+		h.OIDCLogin(rec, req)
+		if rec.Code != http.StatusFound {
+			t.Fatalf("request %d: expected 302 before limit, got %d: %s", i+1, rec.Code, rec.Body.String())
+		}
+	}
+
+	req := httptest.NewRequest("GET", "/api/oidc/login", nil)
+	req.RemoteAddr = ip
+	rec := httptest.NewRecorder()
+	h.OIDCLogin(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected OIDC login to be rate limited, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestOIDCCallbackSuccess(t *testing.T) {
 	key := generateTestRSAKey(t)
 	kid := "test-kid-003"
@@ -384,9 +602,7 @@ func TestOIDCCallbackSuccess(t *testing.T) {
 	h := &Handler{
 		store: st,
 	}
-	if err := h.SetupOIDC(true, "test-client", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
-		t.Fatalf("SetupOIDC failed: %v", err)
-	}
+	setupOIDCForTest(t, h, issuer)
 
 	// First, simulate a login to create a valid state entry.
 	reqLogin := httptest.NewRequest("GET", "/api/oidc/login", nil)
@@ -446,9 +662,7 @@ func TestOIDCCallbackInvalidState(t *testing.T) {
 	h := &Handler{
 		store: &mockStore{},
 	}
-	if err := h.SetupOIDC(true, "test-client", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
-		t.Fatalf("SetupOIDC failed: %v", err)
-	}
+	setupOIDCForTest(t, h, issuer)
 
 	req := httptest.NewRequest("GET", "/api/oidc/callback?state=bad-state&code=fake-code", nil)
 	rec := httptest.NewRecorder()
@@ -476,9 +690,7 @@ func TestOIDCRefresh(t *testing.T) {
 	h := &Handler{
 		store: &mockStore{},
 	}
-	if err := h.SetupOIDC(true, "test-client", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
-		t.Fatalf("SetupOIDC failed: %v", err)
-	}
+	setupOIDCForTest(t, h, issuer)
 
 	body := stringsNewReader(`{"refresh_token":"test-refresh-token"}`)
 	req := httptest.NewRequest("POST", "/api/oidc/refresh", body)
@@ -498,6 +710,40 @@ func TestOIDCRefresh(t *testing.T) {
 	}
 }
 
+func TestOIDCRefreshWrongMethodDoesNotConsumeOIDCRateLimit(t *testing.T) {
+	ResetRateLimiter()
+	key := generateTestRSAKey(t)
+	kid := "test-kid-refresh-method-limit"
+	srv := startMockOIDCProvider(t, key, kid)
+	defer srv.Close()
+
+	addr := srv.Listener.Addr().String()
+	issuer := "http://" + addr
+
+	h := &Handler{store: &mockStore{}}
+	setupOIDCForTest(t, h, issuer)
+
+	ip := "192.0.2.223:1234"
+	for i := 0; i < oidcMaxPerWindow; i++ {
+		req := httptest.NewRequest("GET", "/api/oidc/refresh", nil)
+		req.RemoteAddr = ip
+		rec := httptest.NewRecorder()
+		h.OIDCRefresh(rec, req)
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("wrong-method request %d: expected 405, got %d", i+1, rec.Code)
+		}
+	}
+
+	req := httptest.NewRequest("POST", "/api/oidc/refresh", stringsNewReader(`{"refresh_token":"test-refresh-token"}`))
+	req.RemoteAddr = ip
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.OIDCRefresh(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected valid refresh to remain allowed after wrong-method requests, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestOIDCExchange(t *testing.T) {
 	key := generateTestRSAKey(t)
 	kid := "test-kid-006"
@@ -512,9 +758,7 @@ func TestOIDCExchange(t *testing.T) {
 	h := &Handler{
 		store: st,
 	}
-	if err := h.SetupOIDC(true, "test-client", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
-		t.Fatalf("SetupOIDC failed: %v", err)
-	}
+	setupOIDCForTest(t, h, issuer)
 
 	body := stringsNewReader(`{"code":"test-code","code_verifier":"test-verifier"}`)
 	req := httptest.NewRequest("POST", "/api/oidc/exchange", body)
@@ -549,9 +793,7 @@ func TestVerifyOIDCJoinToken(t *testing.T) {
 	st.UpsertOIDCUser("test-oidc-sub-123", "TestOIDCUser", "testuser@example.com", "TestOIDCUser")
 
 	h := &Handler{store: st}
-	if err := h.SetupOIDC(true, "test-client", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
-		t.Fatalf("SetupOIDC failed: %v", err)
-	}
+	setupOIDCForTest(t, h, issuer)
 
 	if err := h.VerifyOIDCJoinToken("TestOIDCUser", "test-access-token-value"); err != nil {
 		t.Fatalf("expected valid token to pass, got %v", err)

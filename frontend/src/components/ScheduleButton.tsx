@@ -114,8 +114,9 @@ export function ScheduleButton({ onSchedule, disabled, scheduled }: ScheduleButt
         onClick={handleOpen}
         disabled={disabled}
         aria-label={t("schedule.scheduleMessage")}
+        data-visual="composer-tool"
         className={cn(
-          "flex w-8 h-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-lg transition-all duration-200",
+          "flex h-11 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl transition-all duration-200 [&_svg]:h-[18px] [&_svg]:w-[18px]",
           scheduled
             ? "text-[var(--accent)] bg-[var(--accent)]/10 animate-pulse-once"
             : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]",

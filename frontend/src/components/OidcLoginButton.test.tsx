@@ -60,6 +60,8 @@ describe("OidcLoginButton", () => {
 
     const link = screen.getByRole("link");
     expect(link.getAttribute("href")).toBe("/api/oidc/login");
+    expect(link.getAttribute("data-visual")).toBe("auth-modal-oidc");
+    expect(link.className).toContain("min-h-11");
   });
 
   it("does not render when config response is not ok", async () => {

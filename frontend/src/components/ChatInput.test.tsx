@@ -242,6 +242,25 @@ describe("ChatInput", () => {
       expect(document.querySelector(".fixed.inset-0.z-40")).toBeNull();
     });
 
+    it("底部工具条常驻显示主要工具入口并保持 44px 合约", () => {
+      const { container } = renderChatInput();
+
+      const toolbar = container.querySelector("[data-visual='composer-toolbar']");
+      expect(toolbar).toBeTruthy();
+      expect(screen.queryByLabelText("添加附件")).toBeNull();
+
+      for (const label of ["Markdown 格式", "上传图片", "上传文件", "GIF", "录制语音", "定时发送消息"]) {
+        expect(screen.getByLabelText(label)).toBeTruthy();
+      }
+
+      const tools = Array.from(container.querySelectorAll("[data-visual='composer-tool']"));
+      expect(tools).toHaveLength(7);
+      for (const tool of tools) {
+        expect(tool.className).toContain("h-11");
+        expect(tool.className).toContain("w-11");
+      }
+    });
+
     it("字符计数器显示", () => {
       renderChatInput();
       const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");

@@ -17,12 +17,18 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 在 `D:\Code\TokenDance` workspace 内做跨系统治理时，先读根级 `..\AGENTS.md` 和 `..\docs\`：
 - 身份/OIDC/鉴权：`..\docs\identity-auth.md`
+- 跨产品授权模型：`..\docs\authorization-model.md`
 - 统一第三方登录：`..\docs\unified-login.md`
+- 安全风险治理：`..\docs\security-risk-governance.md`
 - 产品矩阵/包装：`..\docs\product-matrix.md`
 - 生态产品需求队列：`..\docs\ecosystem-product-backlog.md`
+- 生态执行队列：`..\docs\ecosystem-execution-queue.md`
+- 本仓库治理执行台账：`docs\governance-execution.md`
 - Agent/SEO/i18n：`..\docs\agent-seo-i18n-packaging.md`
+- i18n parity：`..\docs\i18n-parity-matrix.md`
 - 设计系统：`..\docs\design-system.md`
 - 设计落地手册：`..\docs\design-implementation-playbook.md`
+- 视觉 QA 矩阵：`..\docs\visual-qa-matrix.md`
 - 文档治理：`..\docs\document-governance.md`
 - 治理评分和模板：`..\docs\governance-scorecard.md`、`..\docs\issue-templates.md`
 
@@ -30,17 +36,35 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 TokenDanceChat 只作为 TokenDance ID relying party。不要在本仓库新增 GitHub、Google、飞书等直连第三方登录；provider 选择、TokenDance ID 账号自动创建和 OAuth 绑定都由 TokenDance ID 处理。Chat 侧只维护自己的 TokenDance ID OAuth client、回调、token 验证、聊天本地会话/重连语义。
 
+如果后续接入 TokenDance Relay 调用模型 API，Chat 后端应使用 Relay API key 或服务端托管的 Relay 凭据；不要把 TokenDance ID access token 当作 `api.vectorcontrol.tech/v1` 的模型 API key，也不要把 Relay API key 暴露给浏览器。
+Relay 产品化、公开 quickstart、状态语义和公开/私有边界见 `..\docs\relay-productization.md`。Chat 文档只把 Relay 描述为模型 API 中转站，不复述 server 私有运行细节。
+
+### 授权边界
+
+Chat 侧权限以本仓库自己的用户、房间/群组 membership、admin 标记、webhook ownership 和 media/webhook secret 规则为准。TokenDance ID 只提供登录身份；不要用 `email`、第三方 provider id 或浏览器 localStorage 状态直接授权持久化写操作。
+
+涉及 group admin、webhook secret、媒体上传、PicoClaw/TokenBot 触发、后端 session token 或 WebSocket join token 的行为变更时，同时更新 `..\docs\authorization-model.md` 或本仓库文档中的本地授权说明。
+
+### 安全风险治理边界
+
+TokenDanceChat 的 `docs/security-risk-register.md` 是本仓库风险事实源；跨系统 severity/status/release gate 使用 `..\docs\security-risk-governance.md`。
+
+- 涉及公开 REST/WebSocket、OIDC session、webhook secret、invite/admin、uploads/media retention、SSRF/CORS、PWA/service worker cache、Relay key 或 bot action 的风险变更，必须同步风险表。
+- Critical/High 风险未修复、未验证或未显式 accepted 前，不得把公开 demo、PWA、OIDC 或 webhook 变更标记为 release-ready。
+- 生产 endpoint、日志、host、备份、secret 或 live 事故证据只放 server/private docs；本仓库公开文档只写脱敏结论和验证需求。
+- 发布前从 workspace 根运行 `..\scripts\verify-security-risks.ps1 -StrictReleaseGate`；默认治理 pass 里的 security warning 是未关闭 release blocker，不是可以忽略的文档噪声。
+
 ### 产品包装与 Agent 友好度
 
-TokenDanceChat 对外定位是 AgentHub 的 IM/Agent 交互验证场，不是独立长期产品线。公开 README、PWA metadata、`frontend/public/robots.txt`、`frontend/public/sitemap.xml`、`frontend/public/llms.txt` 必须保持这个定位。新增公开路由、离线页、语言入口或主要功能说明时，同步 `..\docs\agent-seo-i18n-packaging.md` 的检查项。
+TokenDanceChat 对外定位是 AgentHub 的 IM/Agent 交互验证场，不是独立长期产品线。公开 README、PWA metadata、`frontend/public/robots.txt`、`frontend/public/sitemap.xml`、`frontend/public/llms.txt` 必须保持这个定位。新增公开路由、离线页、语言入口或主要功能说明时，同步 `..\docs\agent-seo-i18n-packaging.md` 的检查项；修改 `TranslationDict`、OIDC、PWA/offline/error、Webhook/admin 或 Relay 文案时，同时按 `..\docs\i18n-parity-matrix.md` 做 zh-CN/en-US 语义对齐。
 
 OIDC、PWA/i18n、设计 token、公开包装或 AgentHub 验证类工作拆 issue 时，使用 `.github/ISSUE_TEMPLATE/tokendance-chat-governance.md`。
-需要把需求提升到生态级时，先对照 `..\docs\ecosystem-product-backlog.md`，尤其是 TokenDanceChat 的 OIDC session、PWA/offline/error i18n 和 AgentHub proving-ground 定位。
+需要把需求提升到生态级时，先对照 `..\docs\ecosystem-product-backlog.md`、`..\docs\ecosystem-execution-queue.md` 和 `docs\governance-execution.md`，尤其是 TokenDanceChat 的 OIDC session、PWA/offline/error i18n 和 AgentHub proving-ground 定位；repo issue/roadmap 应引用对应 `TD-P0-*` / `TD-P1-*` 队列 ID。
 
 ### 设计系统边界
 
 UI 可以保留聊天产品的个性，但应逐步映射到 `..\docs\design-system.md` 的 TokenDance token intent：canvas、surface、ink、plum、moss、line、focus、radius。新增组件避免引入新的孤立颜色体系；密集聊天界面优先清晰、紧凑、可读，参考飞书/Lark 的工作感和 Telegram 的流畅消息体验。
-页面/组件重做、视觉 QA、截图验收或 token 变更必须同时读 `..\docs\design-implementation-playbook.md`。TokenDanceChat 的截图验收至少覆盖桌面和移动端的消息列表、composer、长消息、assistant/bot 状态或错误/空状态中与改动相关的场景。
+页面/组件重做、视觉 QA、截图验收或 token 变更必须同时读 `..\docs\design-implementation-playbook.md` 和 `..\docs\visual-qa-matrix.md`。TokenDanceChat 的截图验收至少覆盖桌面和移动端的消息列表、composer、长消息、assistant/bot 状态或错误/空状态中与改动相关的场景。
 
 ## 持久化状态
 
@@ -68,6 +92,7 @@ OIDC 集成 (TokenDance ID) + 应用会话鉴权 + 性能优化 + UI 打磨 + �
 此增量包含：
 - **OIDC 集成 (TokenDance ID)**：Authorization Code + PKCE 流程，`/api/oidc/*` 5 个端点，oidc_users 表，WebSocket join token 验证，OidcLoginButton 前端组件，`App.tsx` OIDC 回调 redeem 与 `AuthModal` 登录入口。由 `CHAT_OIDC_ENABLED` 环境变量控制（默认 false，完全向后兼容）。
 - **应用会话鉴权**：login/register/OIDC redeem/exchange 返回 `session_token`；受保护 REST 端点使用 `Authorization: Bearer <session_token>`；本地注册用户 WebSocket join 发送应用 session token，OIDC 用户仍发送 OIDC access token，游客不发送 token。
+- **OIDC 运行时边界**：provider 调用有 5s timeout + 响应体上限；state/redeem token store 有容量上限且满载拒绝新建，cleanup loop 可关闭，`SetupOIDC` 失败不安装 transient store，重配置会关闭旧 store；OIDC endpoints 独立 per-IP rate limit。部署在 nginx/反代后必须配置 `CHAT_TRUSTED_PROXY_CIDRS`，否则 auth/OIDC/WS/API 限流只会看到反代 `RemoteAddr`。
 - 测试扩展至 1078 前端 / 52 文件，后端 OIDC handler 8 个测试全 PASS。
 - 原有增量（v0.2.12 积累）全部保留。
 
@@ -99,7 +124,7 @@ OIDC 集成 (TokenDance ID) + 应用会话鉴权 + 性能优化 + UI 打磨 + �
 - kick 重连循环修复：kicked 事件后清空 reconnectUsername，阻止 ping-pong 重连。
 - 生产容器重启修复 WebSocket 连接堆积。
 
-## 近期增量（v0.2.7）
+## v0.2.7 增量
 
 Kick-off 机制 + 登录限流 + 挤下线 —— 已完成部署，18/18 E2E 全绿。
 
@@ -109,11 +134,11 @@ Kick-off 机制 + 登录限流 + 挤下线 —— 已完成部署，18/18 E2E �
 - LoginScreen / RegisterScreen `autocomplete` 属性适配密码管理器。
 - hub 注册通道原子化处理重复用户名（移除 `handleJoin` 中的 `IsUsernameTaken` 预检查）。
 
-## 近期增量（v0.2.6）
+## v0.2.6 增量
 
 密码哈希升级 + CORS 加固 + PicoClaw 修复 + 全面测试覆盖。
 - 密码从 SHA-256 升级为 bcrypt cost 12，登录时自动迁移旧哈希。
-- CORS 从通配符 `*` 改为 origin-aware（`CHAT_ALLOWED_ORIGINS` 环境变量驱动）。
+- CORS/WS origin 从通配符/裸域配置收紧为 explicit origin allowlist（`CHAT_ALLOWED_ORIGINS=https://chat.example.com,https://*.example.com`；`*` 不放行跨源请求）。
 - 6 个未接入的 WS handler 已修复；PicoClaw 60s context timeout；PDF sandbox 加固。
 - 237 前端单元测试 + 后端全量 + 18/18 E2E 线上实测。
 
@@ -156,6 +181,10 @@ go test ./handler -run TestWebhookHandlerVerifiesHashedSecret
 
 # Backend focused media 回归
 go test ./handler -run "Test(UploadEmojiStoresViaMediaStore|ServeEmojiReadsViaMediaStore|S3MediaStoreSaveAndOpen|MediaStoreRejectsTraversalKeys)"
+
+# Backend focused OIDC / rate-limit 回归
+go test ./handler -run "Test(OIDCStateStoreCloseStopsCleanupLoop|OIDCTokenStoreCloseStopsCleanupLoop|SetupOIDCFailureDoesNotInstallTransientStores|SetupOIDCReconfigureClosesPreviousTransientStores|OIDCStateStoreRejectsNewEntriesAtCapacity|OIDCTokenStoreRejectsNewEntriesAtCapacity|RequestIPUsesForwardedForFromTrustedProxy|RequestIPIgnoresSpoofedForwardedForPrefix|RequestIPIgnoresForwardedForFromUntrustedRemote|OIDCAllowBudgetsFourCompleteRedirectFlows|RateLimiterPrunesExpiredIPEntries|OIDCLoginRateLimitedByIP|OIDCRefreshWrongMethodDoesNotConsumeOIDCRateLimit)$" -count=1
+go test ./handler -run "Test(OIDC|RateLimit|AuthAllow|WSAllow)" -count=5 -shuffle=on
 
 # Backend 全量
 go test ./...
@@ -215,6 +244,7 @@ git grep -n -E 'password.*[0-9]{4,}|sk-[a-zA-Z0-9]{20,}' -- ':!.git' ':!node_mod
 - 用户可见字符串**必须**通过 `t()` 解析，禁止内联双语三元 `lang === "zh-CN" ? "..." : "..."`。
 - 工具函数（formatTime/formatDate/formatLastSeen）接受 `t` 函数参数而非 `lang` 字符串。
 - 新增 i18n key 必须在 `TranslationDict` interface、zh-CN、en-US 三处同步添加。
+- 跨产品身份、Relay、Feishu/Lark、错误/配额和公开产品定位文案必须对照 `..\docs\i18n-parity-matrix.md`，不能只补一种语言。
 - 交叉审查时运行 i18n-scan skill 检测硬编码字符串和缺失 key。
 
 ### WebSocket connect 规则（2026-05-24 更新）
@@ -224,12 +254,13 @@ git grep -n -E 'password.*[0-9]{4,}|sk-[a-zA-Z0-9]{20,}' -- ':!.git' ':!node_mod
 - `disconnect()` 递增 generation 使旧 onclose 被忽略。
 - `kicked` 事件后清空 `reconnectUsername` 防止 ping-pong 重连循环。
 
-### Service Worker 规则（2026-05-24 更新）
+### Service Worker 规则（2026-05-25 更新）
 
 - Static assets 使用 **stale-while-revalidate** 策略（非 cache-first），确保部署后浏览器自动拉取新资源。
-- `CACHE_NAME` 每次 SW 行为变更时递增（tdchat-v2 → tdchat-v3）。
+- `/api/*` 与 `/ws` 绝不进入 Cache Storage；API GET 必须 network-only，WebSocket upgrade 不由 SW 处理。
+- `CACHE_NAME` 每次 SW 行为变更时递增；当前 API network-only 基线为 `tdchat-v5`。
 - `self.clients.claim()` 必须在 `event.waitUntil()` 内调用。
-- 部署后验证：`curl -s https://<host>/ | grep -o 'index-[^"]*\\.js'` 确认 hash 匹配。
+- 部署后验证：`curl -s https://<host>/ | grep -o 'index-[^"]*\\.js'` 确认 hash 匹配，并在浏览器 DevTools Cache Storage 中确认不存在 `/api/*` 条目。
 
 ### 移动端规则（2026-05-24 更新）
 

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -209,6 +210,73 @@ func TestShouldRateLimitAPI(t *testing.T) {
 		if got := shouldRateLimitAPI(tt.path); got != tt.want {
 			t.Errorf("shouldRateLimitAPI(%q) = %v, want %v", tt.path, got, tt.want)
 		}
+	}
+}
+
+func TestRequestIPUsesForwardedForFromTrustedProxy(t *testing.T) {
+	t.Setenv("CHAT_TRUSTED_PROXY_CIDRS", "127.0.0.1/32,10.0.0.0/8")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/oidc/login", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.10, 10.0.0.5")
+
+	if got := requestIP(req); got != "203.0.113.10" {
+		t.Fatalf("requestIP() = %q, want forwarded client IP", got)
+	}
+}
+
+func TestRequestIPIgnoresSpoofedForwardedForPrefix(t *testing.T) {
+	t.Setenv("CHAT_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/oidc/login", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	req.Header.Set("X-Forwarded-For", "198.51.100.250, 203.0.113.10")
+
+	if got := requestIP(req); got != "203.0.113.10" {
+		t.Fatalf("requestIP() = %q, want rightmost untrusted forwarded client IP", got)
+	}
+}
+
+func TestRequestIPIgnoresForwardedForFromUntrustedRemote(t *testing.T) {
+	t.Setenv("CHAT_TRUSTED_PROXY_CIDRS", "")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/oidc/login", nil)
+	req.RemoteAddr = "198.51.100.20:54321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.10")
+
+	if got := requestIP(req); got != "198.51.100.20" {
+		t.Fatalf("requestIP() = %q, want remote IP", got)
+	}
+}
+
+func TestOIDCAllowBudgetsFourCompleteRedirectFlows(t *testing.T) {
+	ResetRateLimiter()
+	ip := "203.0.113.62"
+	requestsForFourFlows := 4 * 3 // login + callback + redeem
+	for i := 0; i < requestsForFourFlows; i++ {
+		if !OIDCAllow(ip) {
+			t.Fatalf("OIDCAllow denied request %d; four complete redirect flows must fit in the window", i+1)
+		}
+	}
+}
+
+func TestRateLimiterPrunesExpiredIPEntries(t *testing.T) {
+	rl := &rateLimiter{}
+	shortWindow := 20 * time.Millisecond
+	for i := 0; i < 5; i++ {
+		rl.allow(&rl.oidcEntries, fmt.Sprintf("198.51.100.%d", i), 1, shortWindow)
+	}
+
+	time.Sleep(shortWindow + 10*time.Millisecond)
+	rl.pruneExpired(&rl.oidcEntries, shortWindow, time.Now())
+
+	count := 0
+	rl.oidcEntries.Range(func(_, _ interface{}) bool {
+		count++
+		return true
+	})
+	if count != 0 {
+		t.Fatalf("expected expired OIDC rate-limit entries to be pruned, got %d", count)
 	}
 }
 

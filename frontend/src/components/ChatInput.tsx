@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense, type KeyboardEvent, type ClipboardEvent } from "react";
-import { Send, Loader2, X, ImagePlus, Paperclip, Mic, Square, Bold, Italic, Strikethrough, Code, Quote, Link, Eye, EyeOff, Film, ArrowUp, SmilePlus, Plus } from "lucide-react";
+import { Send, Loader2, X, ImagePlus, Paperclip, Mic, Square, Bold, Italic, Strikethrough, Code, Quote, Link, Eye, EyeOff, Film, ArrowUp, SmilePlus } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn, hashString } from "@/lib/utils";
@@ -111,10 +111,8 @@ export function ChatInput({
   // Gif picker state
   const [showGifPicker, setShowGifPicker] = useState(false);
 
-  // Format bubble & attach popover state
+  // Format bubble state
   const [showFormatBubble, setShowFormatBubble] = useState(false);
-  const [showAttachPopover, setShowAttachPopover] = useState(false);
-  const attachPopoverRef = useRef<HTMLDivElement>(null);
 
   const handleCancelPointerDown = useCallback((e: React.PointerEvent) => {
     slideCancelStartX.current = e.clientX;
@@ -1087,7 +1085,6 @@ export function ChatInput({
   useEffect(() => {
     if (!canOpenComposerPopovers) {
       setShowFormatBubble(false);
-      setShowAttachPopover(false);
     }
   }, [canOpenComposerPopovers]);
 
@@ -1106,8 +1103,9 @@ export function ChatInput({
 
   // Shared button class for toolbar and bottom-row icon buttons
   const iconBtnClass = cn(
-    "flex h-11 w-11 items-center justify-center rounded-lg flex-shrink-0 transition-colors duration-150 lg:h-8 lg:w-8",
+    "flex h-11 w-11 items-center justify-center rounded-xl flex-shrink-0 transition-colors duration-150",
     "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]",
+    "[&_svg]:h-[18px] [&_svg]:w-[18px]",
     "disabled:cursor-not-allowed disabled:opacity-30",
   );
 
@@ -1118,6 +1116,7 @@ export function ChatInput({
     <div
       className="relative flex-shrink-0 rounded-2xl border border-[var(--border-glass)] bg-[var(--surface-glass-strong)] shadow-md pb-safe"
       data-testid="chat-input"
+      data-visual="composer-card"
       onDragEnter={(e) => {
         e.preventDefault();
         dragCounter.current += 1;
@@ -1502,6 +1501,7 @@ export function ChatInput({
 
             <textarea
               ref={textareaRef}
+              data-visual="composer-textarea"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -1511,11 +1511,6 @@ export function ChatInput({
               onSelect={(e) => {
                 const target = e.currentTarget;
                 if (canOpenComposerPopovers && target.selectionStart !== target.selectionEnd) {
-                  setShowFormatBubble(true);
-                }
-              }}
-              onFocus={() => {
-                if (canOpenComposerPopovers) {
                   setShowFormatBubble(true);
                 }
               }}
@@ -1565,35 +1560,91 @@ export function ChatInput({
             )}
           </div>
 
-          {/* ── Bottom row: + button + B toggle + send ── */}
-          <div className="flex items-center justify-between mt-2.5 relative">
-            {/* Left side: + button & B format toggle */}
-            <div className="flex items-center gap-1">
-              {/* + (Attach) button */}
-              <button
-                type="button"
-                onClick={() => setShowAttachPopover((p) => !p)}
-                disabled={!canOpenComposerPopovers}
-                aria-label={t("a11y.addAttachment")}
-                className={toolbarBtnClass(showAttachPopover)}
-              >
-                <Plus size={16} strokeWidth={1.5} />
-              </button>
-
-              {/* B (Format) toggle button */}
+          {/* ── Bottom row: single-line tools + send ── */}
+          <div className="relative mt-2.5 flex items-center gap-2" data-visual="composer-bottom-row">
+            <div
+              className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              data-visual="composer-toolbar"
+            >
               <button
                 type="button"
                 onClick={() => setShowFormatBubble((p) => !p)}
                 disabled={!canOpenComposerPopovers}
                 aria-label={t("editor.formatting")}
                 title={t("editor.formatting")}
+                data-visual="composer-tool"
                 className={toolbarBtnClass(showFormatBubble)}
               >
                 <Bold size={15} strokeWidth={1.5} />
               </button>
+
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={!canOpenComposerPopovers}
+                aria-label={t("a11y.uploadImage")}
+                title={t("a11y.uploadImage")}
+                data-visual="composer-tool"
+                className={toolbarBtnClass()}
+              >
+                <ImagePlus size={15} strokeWidth={1.5} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!canOpenComposerPopovers}
+                aria-label={t("a11y.uploadFile")}
+                title={t("a11y.uploadFile")}
+                data-visual="composer-tool"
+                className={toolbarBtnClass()}
+              >
+                <Paperclip size={15} strokeWidth={1.5} />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleEmojiButton}
+                disabled={!canOpenComposerPopovers}
+                aria-label={t("a11y.emoji")}
+                title={t("a11y.emoji")}
+                data-visual="composer-tool"
+                className={toolbarBtnClass()}
+              >
+                <SmilePlus size={15} strokeWidth={1.5} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowGifPicker((p) => !p)}
+                disabled={!canOpenComposerPopovers}
+                aria-label={t("a11y.gif")}
+                title={t("a11y.gifStickers")}
+                data-visual="composer-tool"
+                className={toolbarBtnClass(showGifPicker)}
+              >
+                <Film size={15} strokeWidth={1.5} />
+              </button>
+
+              <ScheduleButton
+                onSchedule={handleSchedule}
+                disabled={!canOpenComposerPopovers || !hasContent}
+                scheduled={hasScheduled}
+              />
+
+              <button
+                type="button"
+                onClick={startRecording}
+                disabled={!canOpenComposerPopovers}
+                aria-label={t("a11y.recordVoice")}
+                title={t("a11y.recordVoice")}
+                data-visual="composer-tool"
+                className={toolbarBtnClass()}
+              >
+                <Mic size={15} strokeWidth={1.5} />
+              </button>
             </div>
 
-            {/* Right side: Send button */}
             <button
               ref={sendBtnRef}
               onClick={handleSend}
@@ -1601,8 +1652,9 @@ export function ChatInput({
               aria-label={
                 disabled ? t("join.buttonConnecting") : hasScheduled ? t("schedule.schedule") : t("input.placeholder")
               }
+              data-visual="composer-send"
               className={cn(
-                "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-all duration-200 ease-out lg:h-9 lg:w-9",
+                "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-all duration-200 ease-out [&_svg]:h-[18px] [&_svg]:w-[18px]",
                 hasContent
                   ? "bg-[var(--accent)] text-white hover:brightness-110 shadow-md shadow-[var(--accent)]/20"
                   : "text-[var(--text-tertiary)]",
@@ -1616,75 +1668,6 @@ export function ChatInput({
                 <ArrowUp size={16} strokeWidth={2.5} />
               )}
             </button>
-
-            {/* ── Attach popover ── */}
-            {showAttachPopover && canOpenComposerPopovers && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowAttachPopover(false)} />
-                <div
-                  ref={attachPopoverRef}
-                  className="absolute bottom-full left-0 mb-2 z-50 flex items-center gap-1 rounded-xl border border-[var(--border-glass)] bg-[var(--surface-glass-strong)] backdrop-blur-xl shadow-lg px-1.5 py-1.5 animate-scale-in"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* Image upload */}
-                  <button
-                    onClick={() => { imageInputRef.current?.click(); setShowAttachPopover(false); }}
-                    disabled={disabled}
-                    aria-label={t("a11y.uploadImage")}
-                    className={toolbarBtnClass()}
-                  >
-                    <ImagePlus size={15} strokeWidth={1.5} />
-                  </button>
-
-                  {/* File upload */}
-                  <button
-                    onClick={() => { fileInputRef.current?.click(); setShowAttachPopover(false); }}
-                    disabled={disabled}
-                    aria-label={t("a11y.uploadFile")}
-                    className={toolbarBtnClass()}
-                  >
-                    <Paperclip size={15} strokeWidth={1.5} />
-                  </button>
-
-                  {/* Emoji */}
-                  <button
-                    onClick={() => { handleEmojiButton(); setShowAttachPopover(false); }}
-                    disabled={disabled}
-                    aria-label={t("a11y.emoji")}
-                    className={toolbarBtnClass()}
-                  >
-                    <SmilePlus size={15} strokeWidth={1.5} />
-                  </button>
-
-                  {/* Gif */}
-                  <button
-                    onClick={() => { setShowGifPicker((p) => !p); setShowAttachPopover(false); }}
-                    disabled={disabled}
-                    aria-label={t("a11y.gif")}
-                    className={toolbarBtnClass()}
-                  >
-                    <Film size={15} strokeWidth={1.5} />
-                  </button>
-
-                  {/* Schedule */}
-                  <ScheduleButton
-                    onSchedule={(sendAt: number) => { handleSchedule(sendAt); setShowAttachPopover(false); }}
-                    disabled={disabled || !hasContent}
-                    scheduled={hasScheduled}
-                  />
-
-                  {/* Mic */}
-                  <button
-                    onClick={() => { startRecording(); setShowAttachPopover(false); }}
-                    disabled={disabled}
-                    aria-label={t("a11y.recordVoice")}
-                    className={toolbarBtnClass()}
-                  >
-                    <Mic size={15} strokeWidth={1.5} />
-                  </button>
-                </div>
-              </>
-            )}
           </div>
 
           {/* Markdown preview */}

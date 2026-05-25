@@ -22,6 +22,28 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const oidcHTTPTimeout = 5 * time.Second
+const oidcMaxDiscoveryBodyBytes = 64 * 1024
+const oidcMaxJWKSBodyBytes = 256 * 1024
+const oidcMaxTokenBodyBytes = 64 * 1024
+const oidcStateTTL = 10 * time.Minute
+const oidcTokenTTL = 5 * time.Minute
+const oidcStateStoreMaxEntries = 1024
+const oidcTokenStoreMaxEntries = 256
+
+var oidcHTTPClient = &http.Client{Timeout: oidcHTTPTimeout}
+
+func readOIDCResponseBody(r io.Reader, maxBytes int64) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxBytes {
+		return nil, fmt.Errorf("OIDC provider response exceeds %d bytes", maxBytes)
+	}
+	return body, nil
+}
+
 // OIDCConfig holds the parsed OIDC discovery document.
 type OIDCConfig struct {
 	Issuer           string `json:"issuer"`
@@ -39,27 +61,74 @@ type oidcStateEntry struct {
 
 // OIDCStateStore is an in-memory store for PKCE state → code_verifier mapping.
 type OIDCStateStore struct {
-	mu    sync.Mutex
-	store map[string]*oidcStateEntry
+	mu        sync.Mutex
+	store     map[string]*oidcStateEntry
+	stop      chan struct{}
+	stopped   chan struct{}
+	closeOnce sync.Once
 }
 
 func newOIDCStateStore() *OIDCStateStore {
-	s := &OIDCStateStore{store: make(map[string]*oidcStateEntry)}
+	s := &OIDCStateStore{
+		store:   make(map[string]*oidcStateEntry),
+		stop:    make(chan struct{}),
+		stopped: make(chan struct{}),
+	}
 	go s.cleanupLoop()
 	return s
+}
+
+func (s *OIDCStateStore) put(state string, entry *oidcStateEntry) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pruneExpiredLocked(time.Now())
+	if _, exists := s.store[state]; !exists && len(s.store) >= oidcStateStoreMaxEntries {
+		return false
+	}
+	s.store[state] = entry
+	return true
 }
 
 func (s *OIDCStateStore) cleanupLoop() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
-		s.mu.Lock()
-		for k, v := range s.store {
-			if time.Since(v.CreatedAt) > 10*time.Minute {
-				delete(s.store, k)
-			}
+	defer close(s.stopped)
+	for {
+		select {
+		case <-ticker.C:
+		case <-s.stop:
+			return
 		}
+		s.mu.Lock()
+		s.pruneExpiredLocked(time.Now())
 		s.mu.Unlock()
+	}
+}
+
+func (s *OIDCStateStore) close() {
+	s.closeOnce.Do(func() {
+		close(s.stop)
+	})
+	<-s.stopped
+}
+
+func (s *OIDCStateStore) take(state string) (*oidcStateEntry, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.store[state]
+	delete(s.store, state)
+	if !ok || time.Since(entry.CreatedAt) > oidcStateTTL {
+		return nil, false
+	}
+	return entry, true
+}
+
+func (s *OIDCStateStore) pruneExpiredLocked(now time.Time) {
+	cutoff := now.Add(-oidcStateTTL)
+	for k, v := range s.store {
+		if v.CreatedAt.Before(cutoff) {
+			delete(s.store, k)
+		}
 	}
 }
 
@@ -73,27 +142,74 @@ type oidcTokenEntry struct {
 
 // OIDCTokenStore holds callback tokens keyed by a random redeem ID.
 type OIDCTokenStore struct {
-	mu    sync.Mutex
-	store map[string]*oidcTokenEntry
+	mu        sync.Mutex
+	store     map[string]*oidcTokenEntry
+	stop      chan struct{}
+	stopped   chan struct{}
+	closeOnce sync.Once
 }
 
 func newOIDCTokenStore() *OIDCTokenStore {
-	s := &OIDCTokenStore{store: make(map[string]*oidcTokenEntry)}
+	s := &OIDCTokenStore{
+		store:   make(map[string]*oidcTokenEntry),
+		stop:    make(chan struct{}),
+		stopped: make(chan struct{}),
+	}
 	go s.cleanupLoop()
 	return s
+}
+
+func (s *OIDCTokenStore) put(redeemID string, entry *oidcTokenEntry) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pruneExpiredLocked(time.Now())
+	if _, exists := s.store[redeemID]; !exists && len(s.store) >= oidcTokenStoreMaxEntries {
+		return false
+	}
+	s.store[redeemID] = entry
+	return true
 }
 
 func (s *OIDCTokenStore) cleanupLoop() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
-		s.mu.Lock()
-		for k, v := range s.store {
-			if time.Since(v.CreatedAt) > 5*time.Minute {
-				delete(s.store, k)
-			}
+	defer close(s.stopped)
+	for {
+		select {
+		case <-ticker.C:
+		case <-s.stop:
+			return
 		}
+		s.mu.Lock()
+		s.pruneExpiredLocked(time.Now())
 		s.mu.Unlock()
+	}
+}
+
+func (s *OIDCTokenStore) close() {
+	s.closeOnce.Do(func() {
+		close(s.stop)
+	})
+	<-s.stopped
+}
+
+func (s *OIDCTokenStore) take(redeemID string) (*oidcTokenEntry, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.store[redeemID]
+	delete(s.store, redeemID)
+	if !ok || time.Since(entry.CreatedAt) > oidcTokenTTL {
+		return nil, false
+	}
+	return entry, true
+}
+
+func (s *OIDCTokenStore) pruneExpiredLocked(now time.Time) {
+	cutoff := now.Add(-oidcTokenTTL)
+	for k, v := range s.store {
+		if v.CreatedAt.Before(cutoff) {
+			delete(s.store, k)
+		}
 	}
 }
 
@@ -149,13 +265,13 @@ func (c *oidcJWKSCache) keyFunc(jwksURI string) jwt.Keyfunc {
 }
 
 func (c *oidcJWKSCache) fetchJWKS(jwksURI string) error {
-	resp, err := http.Get(jwksURI)
+	resp, err := oidcHTTPClient.Get(jwksURI)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readOIDCResponseBody(resp.Body, oidcMaxJWKSBodyBytes)
 	if err != nil {
 		return err
 	}
@@ -205,6 +321,17 @@ func (c *oidcJWKSCache) fetchJWKS(jwksURI string) error {
 	return nil
 }
 
+func (h *Handler) closeOIDCStores() {
+	if h.oidcStates != nil {
+		h.oidcStates.close()
+		h.oidcStates = nil
+	}
+	if h.oidcTokens != nil {
+		h.oidcTokens.close()
+		h.oidcTokens = nil
+	}
+}
+
 // oidcClaims extends the standard JWT claims with OIDC-specific fields.
 type oidcClaims struct {
 	jwt.RegisteredClaims
@@ -234,22 +361,19 @@ type oidcConfigResponse struct {
 
 // SetupOIDC initializes the OIDC subsystem by fetching the discovery document.
 func (h *Handler) SetupOIDC(enabled bool, clientID, issuer, redirectURI string) error {
-	h.oidcEnabled = enabled
 	if !enabled {
+		h.closeOIDCStores()
+		h.oidcEnabled = false
+		h.oidcConfig = nil
 		return nil
 	}
 	if clientID == "" || issuer == "" || redirectURI == "" {
 		return fmt.Errorf("CHAT_OIDC_CLIENT_ID, CHAT_OIDC_ISSUER, and CHAT_OIDC_REDIRECT_URI are required when OIDC is enabled")
 	}
-	h.oidcClientID = clientID
-	h.oidcIssuer = strings.TrimRight(issuer, "/")
-	h.oidcRedirectURI = redirectURI
-	h.oidcStates = newOIDCStateStore()
-	h.oidcTokens = newOIDCTokenStore()
-	h.oidcJWKS = newOIDCJWKSCache()
 
-	wellKnown := h.oidcIssuer + "/.well-known/openid-configuration"
-	resp, err := http.Get(wellKnown)
+	normalizedIssuer := strings.TrimRight(issuer, "/")
+	wellKnown := normalizedIssuer + "/.well-known/openid-configuration"
+	resp, err := oidcHTTPClient.Get(wellKnown)
 	if err != nil {
 		return fmt.Errorf("oidc discovery failed: %w", err)
 	}
@@ -257,7 +381,7 @@ func (h *Handler) SetupOIDC(enabled bool, clientID, issuer, redirectURI string) 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("oidc discovery returned status %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := readOIDCResponseBody(resp.Body, oidcMaxDiscoveryBodyBytes)
 	if err != nil {
 		return fmt.Errorf("oidc discovery read failed: %w", err)
 	}
@@ -265,6 +389,16 @@ func (h *Handler) SetupOIDC(enabled bool, clientID, issuer, redirectURI string) 
 	if err := json.Unmarshal(body, &cfg); err != nil {
 		return fmt.Errorf("oidc discovery parse failed: %w", err)
 	}
+	newStates := newOIDCStateStore()
+	newTokens := newOIDCTokenStore()
+	h.closeOIDCStores()
+	h.oidcEnabled = true
+	h.oidcClientID = clientID
+	h.oidcIssuer = normalizedIssuer
+	h.oidcRedirectURI = redirectURI
+	h.oidcStates = newStates
+	h.oidcTokens = newTokens
+	h.oidcJWKS = newOIDCJWKSCache()
 	h.oidcConfig = &cfg
 	if h.hub != nil {
 		h.hub.SetOIDCTokenVerifier(h)
@@ -299,6 +433,10 @@ func (h *Handler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	if !OIDCAllow(requestIP(r)) {
+		writeJSONError(w, http.StatusTooManyRequests, "too many OIDC attempts, try again later", "RATE_LIMITED", requestIDFromContext(r.Context()))
+		return
+	}
 
 	stateBytes := make([]byte, 16)
 	if _, err := rand.Read(stateBytes); err != nil {
@@ -314,12 +452,14 @@ func (h *Handler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	challenge := computeCodeChallenge(verifier)
 
-	h.oidcStates.mu.Lock()
-	h.oidcStates.store[state] = &oidcStateEntry{
+	if ok := h.oidcStates.put(state, &oidcStateEntry{
 		CodeVerifier: verifier,
 		CreatedAt:    time.Now(),
+	}); !ok {
+		log.Printf("oidc: state store at capacity")
+		writeJSONError(w, http.StatusServiceUnavailable, "OIDC login capacity exceeded, try again later", "OIDC_BUSY", requestIDFromContext(r.Context()))
+		return
 	}
-	h.oidcStates.mu.Unlock()
 
 	authURL := fmt.Sprintf("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s&code_challenge=%s&code_challenge_method=S256",
 		h.oidcConfig.AuthEndpoint,
@@ -339,6 +479,10 @@ func (h *Handler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	if !OIDCAllow(requestIP(r)) {
+		http.Redirect(w, r, "/?oidc_error=rate_limited", http.StatusFound)
+		return
+	}
 
 	state := r.URL.Query().Get("state")
 	code := r.URL.Query().Get("code")
@@ -355,10 +499,7 @@ func (h *Handler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.oidcStates.mu.Lock()
-	entry, ok := h.oidcStates.store[state]
-	delete(h.oidcStates.store, state)
-	h.oidcStates.mu.Unlock()
+	entry, ok := h.oidcStates.take(state)
 
 	if !ok {
 		log.Printf("oidc: unknown or expired state: %s", state)
@@ -397,14 +538,16 @@ func (h *Handler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redeemID := base64.RawURLEncoding.EncodeToString(redeemIDBytes)
-	h.oidcTokens.mu.Lock()
-	h.oidcTokens.store[redeemID] = &oidcTokenEntry{
+	if ok := h.oidcTokens.put(redeemID, &oidcTokenEntry{
 		AccessToken:  tokenResp.AccessToken,
 		RefreshToken: tokenResp.RefreshToken,
 		ChatUsername: chatUsername,
 		CreatedAt:    time.Now(),
+	}); !ok {
+		log.Printf("oidc: token store at capacity")
+		http.Redirect(w, r, "/?oidc_error=server_busy", http.StatusFound)
+		return
 	}
-	h.oidcTokens.mu.Unlock()
 
 	redirectURL := fmt.Sprintf("/?oidc_success=1&oidc_username=%s&oidc_rid=%s",
 		url.QueryEscape(chatUsername),
@@ -425,6 +568,10 @@ func (h *Handler) OIDCRedeem(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
 		return
 	}
+	if !OIDCAllow(requestIP(r)) {
+		writeJSONError(w, http.StatusTooManyRequests, "too many OIDC attempts, try again later", "RATE_LIMITED", requestID)
+		return
+	}
 
 	var body struct {
 		RedeemID string `json:"redeem_id"`
@@ -434,10 +581,7 @@ func (h *Handler) OIDCRedeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.oidcTokens.mu.Lock()
-	entry, ok := h.oidcTokens.store[body.RedeemID]
-	delete(h.oidcTokens.store, body.RedeemID)
-	h.oidcTokens.mu.Unlock()
+	entry, ok := h.oidcTokens.take(body.RedeemID)
 
 	if !ok {
 		writeJSONError(w, http.StatusNotFound, "invalid or expired redeem_id", "INVALID_REDEEM", requestID)
@@ -469,6 +613,10 @@ func (h *Handler) OIDCExchange(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+	if !OIDCAllow(requestIP(r)) {
+		writeJSONError(w, http.StatusTooManyRequests, "too many OIDC attempts, try again later", "RATE_LIMITED", requestID)
 		return
 	}
 
@@ -534,6 +682,10 @@ func (h *Handler) OIDCRefresh(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
 		return
 	}
+	if !OIDCAllow(requestIP(r)) {
+		writeJSONError(w, http.StatusTooManyRequests, "too many OIDC attempts, try again later", "RATE_LIMITED", requestID)
+		return
+	}
 
 	var body struct {
 		RefreshToken string `json:"refresh_token"`
@@ -552,7 +704,7 @@ func (h *Handler) OIDCRefresh(w http.ResponseWriter, r *http.Request) {
 		"refresh_token": {body.RefreshToken},
 		"client_id":     {h.oidcClientID},
 	}
-	resp, err := http.PostForm(h.oidcConfig.TokenEndpoint, data)
+	resp, err := oidcHTTPClient.PostForm(h.oidcConfig.TokenEndpoint, data)
 	if err != nil {
 		log.Printf("oidc refresh: request failed: %v", err)
 		writeJSONError(w, http.StatusBadGateway, "token refresh failed", "REFRESH_FAILED", requestID)
@@ -560,7 +712,7 @@ func (h *Handler) OIDCRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := readOIDCResponseBody(resp.Body, oidcMaxTokenBodyBytes)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "read refresh response failed", "INTERNAL_ERROR", requestID)
 		return
@@ -585,13 +737,13 @@ func (h *Handler) exchangeCodeForTokens(code, codeVerifier string) (*oidcTokenRe
 		"client_id":     {h.oidcClientID},
 		"code_verifier": {codeVerifier},
 	}
-	resp, err := http.PostForm(h.oidcConfig.TokenEndpoint, data)
+	resp, err := oidcHTTPClient.PostForm(h.oidcConfig.TokenEndpoint, data)
 	if err != nil {
 		return nil, fmt.Errorf("token request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readOIDCResponseBody(resp.Body, oidcMaxTokenBodyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read token response: %w", err)
 	}

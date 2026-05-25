@@ -86,7 +86,7 @@ const UserListItem = memo(function UserListItem({
   return (
     <button
       className={cn(
-        "h-10 rounded-lg flex items-center gap-2 px-2.5 cursor-pointer transition-colors w-full text-left",
+        "h-11 rounded-lg flex items-center gap-2 px-2.5 cursor-pointer transition-colors w-full text-left",
         isSelf
           ? "bg-active text-[var(--text-primary)] font-medium"
           : "text-[var(--text-secondary)] hover:bg-hover",
@@ -171,7 +171,7 @@ const UserListItem = memo(function UserListItem({
 function ThreeDotTrigger({ onClick }: { onClick: (e: React.MouseEvent) => void }) {
   return (
     <button
-      className="opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-0.5 h-6 w-6 rounded hover:bg-3 transition-all shrink-0"
+      className="opacity-0 group-hover:opacity-100 flex h-11 w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg hover:bg-3 transition-all"
       onClick={onClick}
       aria-label="More actions"
     >
@@ -482,7 +482,7 @@ export function Sidebar({
   const convItemClasses = useCallback(
     (active: boolean) =>
       cn(
-        "h-10 rounded-lg flex items-center gap-2 px-2.5 cursor-pointer transition-colors",
+        "h-11 rounded-lg flex items-center gap-2 px-2.5 cursor-pointer transition-colors",
         active
           ? "bg-active text-[var(--text-primary)] font-medium"
           : "text-[var(--text-secondary)] hover:bg-hover",
@@ -527,7 +527,7 @@ export function Sidebar({
           <button
             onClick={onClose}
             aria-label={t("a11y.closeSidebar")}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-3 hover:text-[var(--text-primary)] lg:hidden transition-colors"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-3 hover:text-[var(--text-primary)] lg:hidden transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
@@ -544,12 +544,12 @@ export function Sidebar({
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("sidebar.searchConversations")}
             aria-label={t("sidebar.searchConversations")}
-            className="w-full rounded-full bg-3 border-0 h-9 pl-9 pr-8 text-[14px] text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none transition-colors"
+            className="h-11 w-full rounded-full bg-3 border-0 pl-9 pr-10 text-[14px] text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none transition-colors"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               aria-label={t("a11y.clearSearch")}
             >
               <X className="h-3 w-3" />
@@ -763,7 +763,7 @@ export function Sidebar({
                 <button
                   onClick={onCreateGroup}
                   aria-label={t("sidebar.createGroup")}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-3 transition-colors"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-3 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -1018,7 +1018,7 @@ export function Sidebar({
         <button
           onClick={() => setAiAssistantsExpanded(!aiAssistantsExpanded)}
           aria-expanded={aiAssistantsExpanded}
-          className="flex h-9 w-full items-center gap-1 px-3 py-2 text-[13px] text-[var(--text-secondary)] font-bold hover:text-[var(--text-primary)] transition-colors"
+          className="flex h-11 w-full items-center gap-1 px-3 py-2 text-[13px] text-[var(--text-secondary)] font-bold hover:text-[var(--text-primary)] transition-colors"
         >
           {aiAssistantsExpanded ? (
             <ChevronDown className="h-3 w-3" />
@@ -1042,7 +1042,7 @@ export function Sidebar({
                     onMentionAssistant?.(assistant.name);
                     onClose?.();
                   }}
-                  className="mt-1 h-10 rounded-lg flex w-full cursor-pointer items-center gap-2 px-2.5 text-left transition-colors text-[var(--text-secondary)] hover:bg-hover hover:text-[var(--text-primary)]"
+                  className="mt-1 h-11 rounded-lg flex w-full cursor-pointer items-center gap-2 px-2.5 text-left transition-colors text-[var(--text-secondary)] hover:bg-hover hover:text-[var(--text-primary)]"
                 >
                   <AssistantIcon assistant={assistant} size="sm" />
                   <span className="min-w-0 flex-1">
@@ -1091,7 +1091,7 @@ export function Sidebar({
           <button
             onClick={() => setArchivedExpanded(!archivedExpanded)}
             aria-expanded={archivedExpanded}
-            className="flex h-9 w-full items-center gap-1 px-3 py-2 text-[13px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            className="flex h-11 w-full items-center gap-1 px-3 py-2 text-[13px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
           >
             {archivedExpanded ? (
               <ChevronDown className="h-3 w-3" />
@@ -1120,7 +1120,7 @@ export function Sidebar({
                     <button
                       onClick={() => navigateToConversation(key)}
                       className={cn(
-                        "h-10 rounded-lg flex flex-1 items-center gap-2 px-2.5 cursor-pointer transition-colors min-w-0 text-left",
+                        "h-11 rounded-lg flex flex-1 items-center gap-2 px-2.5 cursor-pointer transition-colors min-w-0 text-left",
                         "text-[var(--text-secondary)]/60 hover:text-[var(--text-secondary)] hover:bg-hover",
                       )}
                     >
@@ -1157,17 +1157,17 @@ export function Sidebar({
           <span className="flex h-1.5 w-1.5 rounded-full bg-success/70 shrink-0" />
         </div>
         {/* Tool icons — low opacity, light up on hover */}
-        <div className="flex items-center justify-center gap-1">
-          <button onClick={toggleSound} className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-secondary)]/40 hover:text-[var(--text-primary)] hover:bg-[var(--bg-2)]/60 transition-all" aria-label={soundOn ? t("settings.soundOn") : t("settings.soundOff")} title={soundOn ? t("settings.soundOn") : t("settings.soundOff")}>
+        <div className="flex items-center justify-center gap-1.5">
+          <button onClick={toggleSound} className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-secondary)]/55 hover:text-[var(--text-primary)] hover:bg-[var(--bg-2)]/60 transition-all" aria-label={soundOn ? t("settings.soundOn") : t("settings.soundOff")} title={soundOn ? t("settings.soundOn") : t("settings.soundOff")}>
             {soundOn ? <Volume2 className="h-[18px] w-[18px]" /> : <VolumeX className="h-[18px] w-[18px]" />}
           </button>
-          <button onClick={() => setSettingsOpen(true)} className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-secondary)]/40 hover:text-[var(--text-primary)] hover:bg-[var(--bg-2)]/60 transition-all" aria-label={t("settings.openSettings")} title={t("settings.openSettings")}>
+          <button onClick={() => setSettingsOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-secondary)]/55 hover:text-[var(--text-primary)] hover:bg-[var(--bg-2)]/60 transition-all" aria-label={t("settings.openSettings")} title={t("settings.openSettings")}>
             <Settings className="h-[18px] w-[18px]" />
           </button>
-          <button onClick={() => setInviteOpen(true)} className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-secondary)]/40 hover:text-[var(--text-primary)] hover:bg-[var(--bg-2)]/60 transition-all" aria-label={t("invite.inviteCodes")} title={t("invite.inviteCodes")}>
+          <button onClick={() => setInviteOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-secondary)]/55 hover:text-[var(--text-primary)] hover:bg-[var(--bg-2)]/60 transition-all" aria-label={t("invite.inviteCodes")} title={t("invite.inviteCodes")}>
             <Key className="h-[18px] w-[18px]" />
           </button>
-          <button onClick={() => setAdminOpen(true)} className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-secondary)]/40 hover:text-[var(--text-primary)] hover:bg-[var(--bg-2)]/60 transition-all" aria-label={t("sidebar.adminDashboard")} title={t("sidebar.adminDashboard")}>
+          <button onClick={() => setAdminOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-secondary)]/55 hover:text-[var(--text-primary)] hover:bg-[var(--bg-2)]/60 transition-all" aria-label={t("sidebar.adminDashboard")} title={t("sidebar.adminDashboard")}>
             <Activity className="h-[18px] w-[18px]" />
           </button>
         </div>

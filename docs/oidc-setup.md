@@ -133,7 +133,7 @@ For production deployment to `https://chat.vectorcontrol.tech`:
 
 3. Ensure HTTPS is properly configured for the production deployment.
 
-4. Set `CHAT_ALLOWED_ORIGINS=.vectorcontrol.tech` to allow CORS from subdomains.
+4. Set `CHAT_ALLOWED_ORIGINS=https://chat.vectorcontrol.tech` for the deployed app origin. If a deployment intentionally serves trusted subdomains, use an explicit scheme wildcard such as `https://*.example.com`; bare domains, `.example.com`, and `*` are not valid cross-origin allowlist entries.
 
 5. Consider setting a `CHAT_OIDC_CLIENT_SECRET` environment variable and updating the backend to include it in token requests if required by the provider.
 

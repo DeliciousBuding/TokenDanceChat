@@ -542,8 +542,10 @@ func (c *Client) handleChatMessage(msg Message) {
 		return
 	}
 
+	currentRoom := c.getCurrentRoomID()
+
 	// Save to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", c.currentRoomID, "", "", msg.ThreadID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", currentRoom, "", "", msg.ThreadID)
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
 		errMsg, _ := json.Marshal(Message{
@@ -558,7 +560,8 @@ func (c *Client) handleChatMessage(msg Message) {
 		return
 	}
 
-	// Broadcast to all clients.
+	// Broadcast only to clients in the current room. Public room messages may
+	// contain private context after a room switch, so global fanout is unsafe.
 	broadcastMsg, _ := json.Marshal(Message{
 		Type:           "message",
 		ID:             storedMsg.ID,
@@ -569,25 +572,23 @@ func (c *Client) handleChatMessage(msg Message) {
 		ReplyToContent: msg.ReplyToContent,
 		ReplyToUser:    msg.ReplyToUser,
 		ThreadID:       storedMsg.ThreadID,
-		RoomID:         c.currentRoomID,
+		RoomID:         currentRoom,
 		MentionAll:     containsAllMention(content),
 	})
-	select {
-	case c.hub.broadcast <- broadcastMsg:
-	default:
-	}
+	c.hub.BroadcastToRoom(broadcastMsg, currentRoom)
 
 	// Notify @mentioned users (skip self, assistants, and reserved @all/@everyone).
 	if containsAllMention(content) {
-		c.hub.BroadcastJSON(Message{
+		allNotify, _ := json.Marshal(Message{
 			Type:       "mention_all",
 			From:       c.username,
 			Content:    content,
 			MessageID:  storedMsg.ID,
-			RoomID:     c.currentRoomID,
+			RoomID:     currentRoom,
 			Timestamp:  storedMsg.Timestamp,
 			MentionAll: true,
 		})
+		c.hub.BroadcastToRoom(allNotify, currentRoom)
 	} else {
 		for _, mention := range parseMentions(content) {
 			if mention == c.username || mention == c.hub.BotName() || mention == c.hub.AgentName() {
@@ -598,10 +599,10 @@ func (c *Client) handleChatMessage(msg Message) {
 				From:      c.username,
 				Content:   content,
 				MessageID: storedMsg.ID,
-				RoomID:    c.currentRoomID,
+				RoomID:    currentRoom,
 				Timestamp: storedMsg.Timestamp,
 			})
-			c.hub.SendToUser(mention, notifyMsg)
+			c.hub.SendToUserInRoom(mention, currentRoom, notifyMsg)
 		}
 	}
 
@@ -612,7 +613,6 @@ func (c *Client) handleChatMessage(msg Message) {
 
 	// Check for @mentions and route TokenBot and PicoClaw independently.
 	targets := assistantMentionTarget(content, c.hub.BotName(), c.hub.AgentName())
-	currentRoom := c.getCurrentRoomID()
 	if targets.TokenBot && c.username != c.hub.BotName() && c.hub.LLMClient() != nil {
 		if !c.hub.CheckBotCooldown("bot:" + c.username) {
 			// Within 30s per-user cooldown, silently skip.
@@ -626,12 +626,13 @@ func (c *Client) handleChatMessage(msg Message) {
 		}
 	} else if targets.TokenBot && c.username != c.hub.BotName() && c.hub.LLMClient() == nil {
 		// Bot mentioned but not configured — send error feedback
-		c.hub.BroadcastJSON(Message{
+		systemMsg, _ := json.Marshal(Message{
 			Type:     "system",
 			Username: "system",
 			Content:  "TokenBot is not configured on this server.",
 			RoomID:   currentRoom,
 		})
+		c.hub.BroadcastToRoom(systemMsg, currentRoom)
 	}
 	if targets.Agent && c.username != c.hub.AgentName() {
 		if pc := c.hub.PicoclawClient(); pc != nil {
@@ -647,12 +648,13 @@ func (c *Client) handleChatMessage(msg Message) {
 			}
 		} else {
 			// Agent mentioned but not configured — send error feedback
-			c.hub.BroadcastJSON(Message{
+			systemMsg, _ := json.Marshal(Message{
 				Type:     "system",
 				Username: "system",
 				Content:  "PicoClaw is not configured on this server.",
 				RoomID:   currentRoom,
 			})
+			c.hub.BroadcastToRoom(systemMsg, currentRoom)
 		}
 	}
 }

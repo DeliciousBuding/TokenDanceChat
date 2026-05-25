@@ -3107,14 +3107,13 @@ func TestBroadcastJSON(t *testing.T) {
 func TestBroadcastToRoom(t *testing.T) {
 	ms := &mockStore{}
 	h := New(ms, nil, nil, "")
-	go h.Run()
-	defer h.Stop()
 
 	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
 	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-2"}
-	h.register <- alice
-	h.register <- bob
-	time.Sleep(10 * time.Millisecond)
+	h.mu.Lock()
+	h.clients[alice] = true
+	h.clients[bob] = true
+	h.mu.Unlock()
 
 	data, _ := json.Marshal(Message{Type: "room_broadcast", Content: "secret"})
 	h.BroadcastToRoom(data, "room-1")
@@ -3150,9 +3149,59 @@ func TestBroadcastToRoom(t *testing.T) {
 		t.Fatal("expected bob to receive broadcast when roomID is empty")
 	}
 
-	h.unregister <- alice
-	h.unregister <- bob
-	time.Sleep(10 * time.Millisecond)
+}
+
+func TestHandleChatMessageScopesRoomFanout(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, nil, "")
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	charlie := &Client{hub: h, username: "charlie", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-2"}
+
+	h.mu.Lock()
+	h.clients[alice] = true
+	h.clients[charlie] = true
+	h.clients[bob] = true
+	h.mu.Unlock()
+
+	alice.handleChatMessage(Message{Content: "room secret @all"})
+
+	for name, ch := range map[string]chan []byte{
+		"alice":   alice.send,
+		"charlie": charlie.send,
+	} {
+		var got Message
+		select {
+		case payload := <-ch:
+			if err := json.Unmarshal(payload, &got); err != nil {
+				t.Fatalf("%s: decode message error: %v", name, err)
+			}
+			if got.Type != "message" || got.RoomID != "room-1" || got.Content != "room secret @all" {
+				t.Fatalf("%s: expected room-1 message, got %+v", name, got)
+			}
+		default:
+			t.Fatalf("%s should receive room-scoped message", name)
+		}
+
+		select {
+		case payload := <-ch:
+			if err := json.Unmarshal(payload, &got); err != nil {
+				t.Fatalf("%s: decode mention_all error: %v", name, err)
+			}
+			if got.Type != "mention_all" || got.RoomID != "room-1" || !got.MentionAll {
+				t.Fatalf("%s: expected room-1 mention_all, got %+v", name, got)
+			}
+		default:
+			t.Fatalf("%s should receive room-scoped mention_all", name)
+		}
+	}
+
+	select {
+	case payload := <-bob.send:
+		t.Fatalf("bob is in room-2 and should not receive room-1 payload: %s", string(payload))
+	default:
+	}
 }
 
 func TestBroadcastTyping(t *testing.T) {

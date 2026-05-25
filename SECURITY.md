@@ -1,6 +1,6 @@
 # 安全审计报告 — TokenDanceChat
 
-**日期**: 2026-05-23
+**日期**: 2026-05-25
 **范围**: 全部代码（Go 后端、React/TypeScript 前端、Docker 部署）
 **审计方**: 自动化安全审查 + 持续迭代跟踪
 
@@ -10,16 +10,16 @@
 
 | 严重程度 | 数量 | 说明 |
 |----------|-------|-------------|
-| **HIGH** | 0 | 所有 HIGH 问题已修复 |
-| **MEDIUM** | 1 | WebSocket URL 仍为环境自适应（`ws:`/`wss:` 协议推导），生产已可用 |
-| **LOW** | 2 | localStorage 存储用户名（Demo 可接受）、错误日志冗长 |
+| **HIGH** | 见 active register | `docs/security-risk-register.md` 是当前权威队列；session/search/group export、public preview 历史分页与 webhook ingress 已在仓库内缓解，剩余项按部署验证和产品策略继续收敛。 |
+| **MEDIUM** | 见 active register | OIDC 边界、call room bearer、service worker API cache deploy verification、admin stats role policy、webhook sender/rate limit 等在 active register 持续跟踪。 |
+| **LOW** | 见 active register | PWA stale asset、文档脱敏和 demo 阶段可接受项按 release checklist 复核。 |
 
 **2026-05-23 安全更新**:
 
 - **密码哈希升级为 bcrypt**: `store.go` 中的 `hashPassword`/`checkPassword` 从 SHA-256 迁移至 bcrypt（cost 12）。`VerifyUser` 在旧 SHA-256 哈希用户成功登录时自动升级为 bcrypt，实现无缝迁移。
 - **Auth rate limiter**: `/api/login` 和 `/api/register` 新增独立 rate limiter（5 次/分钟/IP），防暴力破解。`ratelimit.go` 新增 `authEntries` 桶。
-- **CORS 从通配符改为 origin-aware**: `handler.go` 的 CORS 中间件不再返回 `Access-Control-Allow-Origin: *`。同源请求允许（无 Origin 头），跨域回显 `CHAT_ALLOWED_ORIGINS` 环境变量中的具体 origin，不允许的 origin 不返回 CORS 头。
-- **WebSocket Origin 验证加强**: `ws.go` 的 `CheckOrigin` 现在验证同源请求、`CHAT_ALLOWED_ORIGINS` 环境变量配置的额外域名、以及 `vectorcontrol.tech` 子域名历史兼容白名单。
+- **CORS 从通配符改为 origin-aware**: `handler.go` 的 CORS 中间件不再返回 `Access-Control-Allow-Origin: *`。同源请求允许（无 Origin 头），跨域只回显 `CHAT_ALLOWED_ORIGINS` 中配置的完整 origin。
+- **WebSocket Origin 验证加强**: `ws.go` 的 `CheckOrigin` 现在验证同源请求，并通过 `CHAT_ALLOWED_ORIGINS` 配置额外允许的完整 origin。
 - **CSP 头双重覆盖**: 前端 `index.html` 的 `<meta http-equiv="Content-Security-Policy">` 标签 + 后端 `SecurityHeadersMiddleware` 双保险。经浏览器 DevTools 和生产构建验证，CSP 头正确传递。
 - **PDF iframe sandbox 加固**: `FileMessage.tsx` 中 PDF 预览 iframe 的 sandbox 属性从 `"allow-scripts allow-same-origin"` 收紧为 `"allow-scripts"`，防止 sandbox 逃逸。
 - **PicoClaw 超时保护**: LLM 调用路径新增 60s `context.WithTimeout`，防止 goroutine 泄漏。
@@ -31,6 +31,21 @@
 - **3 项 Opus 安全审查修复**: (1) 邀请码枚举泄露 — 注册/登录错误消息统一化，不再区分"用户不存在"与"密码错误"；(2) WritePump 挂起 — 发送 channel 满时增加超时 write，防止 goroutine 永久阻塞；(3) 密码 bcrypt 输入上限 — 前端限制密码长度，防止 bcrypt 72 字节截断攻击。
 - **安全边界自检规则**: AGENTS.md 新增敏感信息 grep 自检 checklist 和违规响应协议，每次交接前强制扫描。
 - **公开文档脱敏**: 从 ROADMAP、README、docs 中移除内部 server 别名、端口号和部署拓扑细节。
+
+**2026-05-25 安全更新**:
+
+- **应用 session token 覆盖本地登录/注册**: 受保护 REST 端点要求 `Authorization: Bearer <session_token>`；本地注册用户 WebSocket join 绑定服务端签发的 app session token，OIDC 用户继续走 OIDC token 校验，游客仅允许 guest-only 路径。
+- **Search/export 权限加固**: `/api/search` 按认证用户过滤公开、DM、群组成员和 deleted 状态；`/api/export?conversation=group:<name>` 现在在导出前验证群组成员身份，非成员返回 `NOT_IN_GROUP`。
+- **Webhook ingress 加固**: HTTP 入口不再接受 query string secret，改为 `Authorization: Bearer <secret>`；请求体限制 8 KiB，`content` 限制 2000 字符，消息发送者固定为服务端 `webhook`。
+- **OIDC provider/runtime 边界加固**: discovery、JWKS、token exchange、refresh 请求使用 5s HTTP client timeout，并对 provider 响应体设置大小上限；临时 state/redeem token store 有容量上限，满载时拒绝新建而不静默淘汰既有登录流程，cleanup loop 可关闭，`SetupOIDC` 失败不安装 transient store，重配置会关闭旧 store；OIDC endpoints 有独立 per-IP rate limit。
+- **反代后限流客户端 IP 加固**: `CHAT_TRUSTED_PROXY_CIDRS` 显式控制哪些反代来源的 `X-Forwarded-For` / `X-Real-IP` 可驱动 REST、auth、OIDC 和 WebSocket 限流；rate limiter 会清理过期 IP entry，避免长生命周期进程无界保留来源桶。
+- **部署与 CI smoke 加固**: `docker-compose.yml` 缺少 `CHAT_SESSION_SECRET` 时拒绝渲染配置，并透传 `CHAT_MEDIA_S3_*` / `CHAT_MEDIA_WEBDAV_*`；GitHub Actions 增加 public preview production build Playwright smoke、视觉验收和 artifact 上传。
+- **本地 verify 防假绿**: `scripts/verify.ps1` 检查每个 native 命令的 `$LASTEXITCODE`，默认视觉验收路径会自行启动临时生产后端，不再因未预先启动 backend 而静默跳过。
+- **Service Worker API cache 加固**: `/api/*` 请求改为 network-only，`CACHE_NAME` 提升到 `tdchat-v5`，旧 API-bearing cache 会在激活阶段清理；发布后仍需用真实浏览器确认 Cache Storage 中没有 `/api/*` 条目。
+- **WebSocket 房间广播加固**: `handleChatMessage` 以当前房间快照为准，普通消息、`@all`、mention 通知和助手未配置反馈均只发送给同房间客户端，避免跨房间正文泄露。
+- **Public preview 历史分页收窄**: `/api/messages` 保留游客最新消息预览，但匿名请求最多返回 20 条且不能使用 `before` 翻页；历史分页必须携带有效应用 session token。
+- **CORS/WS origin 精确化**: CORS 与 WebSocket 共用同一套 origin allowlist；`CHAT_ALLOWED_ORIGINS` 必须使用完整 origin（如 `https://chat.example.com` 或 `https://*.example.com`），`*`、裸域和端口不匹配的子域 origin 不再放行。
+- **Link preview SSRF 加固**: `/api/link-preview` 的 HTTP transport 使用受保护的 `DialContext`，在最终 TCP connect 前验证解析 IP，拒绝 loopback、link-local、private、unspecified 和空解析结果，降低 DNS rebinding/TOCTOU SSRF 风险。
 
 ---
 
@@ -98,7 +113,7 @@
 ### M-01: WebSocket Origin 检查已加强 [已修复]
 
 **位置**: `backend\handler\ws.go:16-18`
-**说明**: `CheckOrigin` 现已验证同源请求，支持通过 `CHAT_ALLOWED_ORIGINS` 环境变量配置额外允许的域名（逗号分隔），并保留对 `vectorcontrol.tech` 子域名的历史兼容白名单。不再对任意来源放行，降低了跨站 WebSocket 劫持 (CSWSH) 风险。
+**说明**: `CheckOrigin` 现已验证同源请求，并与 CORS 共用 `CHAT_ALLOWED_ORIGINS` 解析。跨源放行必须配置完整 origin（含 scheme，端口按 origin 语义匹配）；`https://*.example.com` 只匹配 HTTPS 子域，不匹配裸域或额外端口；`*` 不放行跨源请求。降低了跨站 WebSocket 劫持 (CSWSH) 风险。
 **状态**: 已修复。
 
 ---
@@ -106,7 +121,7 @@
 ### M-02: CORS 已从通配符改为 Origin-Aware [已修复]
 
 **位置**: `backend\handler\handler.go:45`
-**说明**: CORS 中间件不再返回 `Access-Control-Allow-Origin: *`。同源请求正常允许（无 Origin 头），`CHAT_ALLOWED_ORIGINS` 中的跨域来源回显具体 origin，其他来源不返回 `Access-Control-Allow-Origin` 头。
+**说明**: CORS 中间件不再返回 `Access-Control-Allow-Origin: *`。同源请求正常允许（无 Origin 头），跨源请求只在 `CHAT_ALLOWED_ORIGINS` 配置完整 origin 或显式 scheme wildcard（如 `https://*.example.com`）时回显该请求 origin，其他来源不返回 `Access-Control-Allow-Origin` 头。
 **状态**: 已修复。
 
 ---
@@ -208,21 +223,21 @@
 | **Docker Healthcheck** | `Dockerfile` 和 `Dockerfile.runtime` 探测同容器 `/api/health` 并跟随 `CHAT_ADDR`，覆盖默认和非默认监听端口。 |
 | **WebSocket 重连安全** | `api.ts` 重连前显式 `ws.close()` + `handlers.clear()`，防止事件处理器重复绑定和旧连接泄漏。`mountedRef` 守卫防止卸载后 timeout 回调。发送失败时 UI 显式反馈（红色闪烁 + toast），不静默丢弃。 |
 | **CSP 验证** | 前端 meta 标签 + 后端 SecurityHeadersMiddleware 双覆盖；经浏览器 DevTools 验证生产构建 CSP 头正确发送。 |
-| **测试覆盖** | 前端 636 tests（40 文件，~40% 行覆盖率）；后端 `go test ./...` 全绿；E2E 54 条（含 webhook ingress 闭环、重连测试）。 |
+| **测试覆盖** | 前端 focused 基线 1078 tests / 52 文件；后端 `go test ./... -count=1` 全绿；public preview smoke、本地视觉验收和安全 focused tests 记录在 `ROADMAP.md` 验证台账。 |
 | **持续安全实践** | 项目采用多轮交叉审查（cross-review）流程：每轮由独立视角审查 HIGH/MEDIUM/LOW 安全问题，修复后回归验证。`.agents/skills/cross-review.md` 记录审查维度与 checklist。AGENTS.md 安全边界 grep 自检规则每次交接前强制扫描。 |
 
 ---
 
 ## 4. 整体安全评估
 
-**评估**: 应用架构良好，作为 Demo 具备扎实的基础：参数化查询、消息大小限制、每连接频率限制、WebSocket ping/pong 保活、自动重连（指数退避 + mountedRef 守卫）、精简 Docker 镜像、规范的 Git 卫生。核心 WebSocket 协议处理和数据库层是安全的。前端 636 tests / 后端全量测试 / E2E 54 条为回归安全提供持续保障。项目采用多轮交叉审查（cross-review）作为持续安全实践，`.agents/skills/cross-review.md` 记录审查维度与 checklist。
+**评估**: 应用架构良好，作为 Demo 具备扎实的基础：参数化查询、消息大小限制、每连接频率限制、WebSocket ping/pong 保活、自动重连（指数退避 + mountedRef 守卫）、精简 Docker 镜像、规范的 Git 卫生。核心 WebSocket 协议处理和数据库层已有持续回归保护；当前测试与 smoke 证据以 `ROADMAP.md` 验证台账为准。项目采用多轮交叉审查（cross-review）作为持续安全实践，`.agents/skills/cross-review.md` 记录审查维度与 checklist。
 
-**Demo 阶段风险画像**: 低。剩余的 MEDIUM 问题（开放 CORS）是公开 Demo 无认证的有意设计选择。仅在超出 Demo 范围的场景下才可能被利用（例如引入敏感数据或认证但未相应限制来源）。WebSocket origin 检查已通过同源验证 + `CHAT_ALLOWED_ORIGINS` 环境变量收紧。
+**Demo 阶段风险画像**: 中低。游客 public preview 是明确产品能力，当前已收窄为最新少量样本且禁止匿名翻页；admin stats、call room bearer、webhook rate limit 等风险继续在 `docs/security-risk-register.md` 跟踪并按优先级收敛。WebSocket/CORS origin 检查已通过同源 Host 精确匹配 + explicit `CHAT_ALLOWED_ORIGINS` 收紧。
 
 **生产环境风险画像**: 中等。大部分安全问题已修复。在面向真实用户部署前仍需关注：
 
-1. **WebSocket 来源已加强** (`handler\ws.go:16-18`) -- 同源验证 + `CHAT_ALLOWED_ORIGINS` 环境变量
-2. **CORS 已改为 origin-aware** (`handler\handler.go:45`) -- 不再使用通配符
+1. **WebSocket 来源已加强** (`handler\ws.go`) -- 同源 Host 精确匹配 + explicit `CHAT_ALLOWED_ORIGINS`
+2. **CORS 已改为 origin-aware** (`handler\handler.go`) -- 不再使用通配符或裸域 allowlist
 3. **密码已使用 bcrypt** (`store\store.go`) -- SHA-256 → bcrypt (cost 12)，登录时自动升级旧哈希
 4. **Auth rate limiter 已上线** (`handler\ratelimit.go`) -- login/register 5次/分钟/IP
 5. **使 WebSocket URL 可配置** (`frontend\src\lib\api.ts`) -- 使用 `ws:`/`wss:` 协议推导
@@ -238,8 +253,8 @@
 
 | 类别 | Demo 可接受 | 生产必修复 |
 |----------|---------------------|------------------------|
-| WS origin 检查 | 已修复 -- 同源 + CHAT_ALLOWED_ORIGINS | 已修复 |
-| CORS | 已修复 -- origin-aware | 已修复 |
+| WS origin 检查 | 已修复 -- 同源 Host 精确匹配 + explicit origin allowlist | 已修复 |
+| CORS | 已修复 -- explicit origin allowlist，`*` 不放行跨源 | 已修复 |
 | 无认证 | 是（bcrypt + invite code 为 Demo 可接受） | 是 -- 增加 JWT/session |
 | 缺失安全头 | 已修复 | 已修复 |
 | 路径穿越风险 | 已修复 | 已修复 |

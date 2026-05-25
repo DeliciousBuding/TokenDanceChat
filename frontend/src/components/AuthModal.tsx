@@ -150,41 +150,52 @@ export function AuthModal() {
 
   const title = tab === "guest" ? t("join.buttonGuest") : tab === "login" ? t("auth.login") : t("auth.register");
   const inputClass = "w-full h-11 rounded-xl border border-[var(--border-base)] bg-[var(--surface-glass)] px-3.5 text-[15px] text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none disabled:opacity-50 transition-colors";
-  const primaryButtonClass = "w-full h-[46px] rounded-xl bg-[var(--accent)] text-white font-semibold text-[15px] hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50 flex items-center justify-center gap-2";
+  const primaryButtonClass = "w-full min-h-[46px] rounded-xl bg-[var(--accent)] text-white font-semibold text-[15px] hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]";
+  const inlineAuthSwitchClass = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 align-middle text-brand hover:underline font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={close}>
+    <div
+      data-visual="auth-modal-root"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={close}
+    >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/25 backdrop-blur-md" />
+      <div data-visual="auth-modal-backdrop" className="absolute inset-0 bg-black/25 backdrop-blur-md" />
 
       {/* Card */}
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="auth-modal-title"
-        className="glass-strong relative z-10 w-full max-w-[360px] overflow-hidden rounded-[20px] shadow-[0_20px_70px_rgba(0,0,0,0.22)] animate-slide-up"
+        data-visual="auth-modal"
+        className="glass-strong relative z-10 w-full max-w-[380px] overflow-hidden rounded-[22px] shadow-[0_22px_72px_rgba(0,0,0,0.22)] animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="auth-modal-title" className="sr-only">{title}</h2>
 
         {/* Close button */}
         <button
+          type="button"
           onClick={close}
           disabled={loading}
-          className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-50"
+          data-visual="auth-modal-close"
+          className="absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] sm:right-3 sm:top-3"
           aria-label={t("a11y.close")}
         >
           <X className="h-4 w-4" />
         </button>
 
         {/* Tabs */}
-        <div className="flex border-b border-base">
+        <div data-visual="auth-modal-tabs" className="flex border-b border-base pr-12">
           {(["guest", "login", "register"] as TabView[]).map((tv) => (
             <button
+              type="button"
               key={tv}
+              data-visual="auth-modal-tab"
+              data-active={tab === tv ? "true" : "false"}
               onClick={() => { setTab(tv); setError(""); }}
               disabled={loading}
-              className={`flex-1 py-3 text-[15px] font-medium transition-colors disabled:opacity-50 ${
+              className={`flex min-h-11 flex-1 items-center justify-center px-2 text-[15px] font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] ${
                 tab === tv
                   ? "text-brand border-b-2 border-brand"
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -196,7 +207,7 @@ export function AuthModal() {
         </div>
 
         {/* Tab content */}
-        <div className="p-5">
+        <div data-visual="auth-modal-content" className="p-5">
           {/* ── Guest Tab ── */}
           {tab === "guest" && (
             <form onSubmit={handleGuestJoin} className="space-y-4">
@@ -215,6 +226,7 @@ export function AuthModal() {
               <button
                 type="submit"
                 disabled={loading || !guestName.trim()}
+                data-visual="auth-modal-primary"
                 className={primaryButtonClass}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -251,7 +263,8 @@ export function AuthModal() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+                  data-visual="auth-modal-password-toggle"
+                  className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
                   aria-label={showPassword ? t("a11y.hidePassword") : t("a11y.showPassword")}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -260,6 +273,7 @@ export function AuthModal() {
               <button
                 type="submit"
                 disabled={loading || !loginUsername.trim() || !loginPassword}
+                data-visual="auth-modal-primary"
                 className={primaryButtonClass}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -267,7 +281,7 @@ export function AuthModal() {
               </button>
               <p className="text-center text-[13px] text-[var(--text-secondary)]">
                 {t("auth.noAccount")}{" "}
-                <button type="button" onClick={() => { setTab("register"); setError(""); }} className="text-brand hover:underline font-medium">
+                <button type="button" data-visual="auth-modal-inline-switch" onClick={() => { setTab("register"); setError(""); }} className={inlineAuthSwitchClass}>
                   {t("auth.register")}
                 </button>
               </p>
@@ -320,6 +334,7 @@ export function AuthModal() {
               <button
                 type="submit"
                 disabled={loading || !regUsername.trim() || !regPassword || !regConfirmPassword || !regInviteCode.trim()}
+                data-visual="auth-modal-primary"
                 className={primaryButtonClass}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -327,7 +342,7 @@ export function AuthModal() {
               </button>
               <p className="text-center text-[13px] text-[var(--text-secondary)]">
                 {t("auth.haveAccount")}{" "}
-                <button type="button" onClick={() => { setTab("login"); setError(""); }} className="text-brand hover:underline font-medium">
+                <button type="button" data-visual="auth-modal-inline-switch" onClick={() => { setTab("login"); setError(""); }} className={inlineAuthSwitchClass}>
                   {t("auth.login")}
                 </button>
               </p>

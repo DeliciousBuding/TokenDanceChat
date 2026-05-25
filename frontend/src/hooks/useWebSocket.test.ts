@@ -273,6 +273,21 @@ describe("useWebSocket", () => {
     setTabActive(true);
   });
 
+  it("registers shared WebSocket event handlers only once across hook consumers", () => {
+    const first = renderHook(() => useWebSocket());
+    const second = renderHook(() => useWebSocket());
+
+    expect(apiHandlers.get("group_message")).toHaveLength(1);
+    expect(apiHandlers.get("message")).toHaveLength(1);
+
+    first.unmount();
+    expect(apiHandlers.get("group_message")).toHaveLength(1);
+
+    second.unmount();
+    expect(apiHandlers.get("group_message")).toHaveLength(0);
+    expect(apiHandlers.get("message")).toHaveLength(0);
+  });
+
   // ─── Connection lifecycle ─────────────────────────────────────
 
   describe("connection lifecycle", () => {

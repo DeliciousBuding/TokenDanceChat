@@ -958,6 +958,23 @@ func (h *Hub) SendToUser(username string, data []byte) bool {
 	return false
 }
 
+// SendToUserInRoom sends a marshaled message to one online session for the user
+// only when that session is currently viewing the target room.
+func (h *Hub) SendToUserInRoom(username, roomID string, data []byte) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.clients {
+		if c.username == username && c.getCurrentRoomID() == roomID {
+			select {
+			case c.send <- data:
+			default:
+			}
+			return true
+		}
+	}
+	return false
+}
+
 // SendToGroup sends a marshaled message to all group members who are online.
 func (h *Hub) SendToGroup(groupName string, data []byte) {
 	h.groupsMu.RLock()

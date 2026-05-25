@@ -2,8 +2,12 @@ import { expect, test } from "@playwright/test";
 
 const joinChat = async (page: import("@playwright/test").Page, username: string) => {
   await page.goto("/");
-  await page.getByPlaceholder("你的用户名...").fill(username);
-  await page.getByRole("button", { name: "游客加入" }).click();
+  await page.getByRole("button", { name: "加入聊天" }).first().click();
+  const guestInput = page.getByPlaceholder("你的用户名...");
+  await expect(guestInput).toBeVisible();
+  await guestInput.fill(username);
+  const guestForm = page.locator("form").filter({ has: guestInput });
+  await guestForm.getByRole("button", { name: "加入聊天" }).click();
   await page.locator("textarea").first().waitFor({ state: "visible", timeout: 15000 });
 };
 
@@ -44,15 +48,24 @@ test.describe("Webhook ingress", () => {
     await expect(webhookSection).toBeVisible();
 
     await webhookSection.getByRole("button", { name: /新建/ }).click();
-    await expect(page.getByText("请立即复制，密钥只显示一次")).toBeVisible();
+    await expect(page.getByText("请立即复制 URL 和 Authorization header，密钥只显示一次")).toBeVisible();
 
     const webhookButton = webhookSection.locator("button[title*='/api/webhook/']").first();
     await expect(webhookButton).toBeVisible();
     const webhookURL = await webhookButton.getAttribute("title");
     expect(webhookURL).toContain("/api/webhook/");
-    expect(webhookURL).toContain("secret=");
+    expect(webhookURL).not.toContain("secret=");
+
+    const authButton = webhookSection.locator("button[title^='Authorization: Bearer ']").first();
+    await expect(authButton).toBeVisible();
+    const webhookAuthorization = await authButton.getAttribute("title");
+    expect(webhookAuthorization).toMatch(/^Authorization: Bearer \S+/);
+    const authorizationValue = webhookAuthorization!.replace(/^Authorization: /, "");
 
     const response = await page.request.post(new URL(webhookURL!, baseURL).toString(), {
+      headers: {
+        Authorization: authorizationValue,
+      },
       data: {
         content: ingressMessage,
         username: "ci-webhook",
@@ -61,7 +74,9 @@ test.describe("Webhook ingress", () => {
 
     expect(response.status()).toBe(200);
     await expect(response).toBeOK();
-    await expect(page.getByText(ingressMessage)).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText("ci-webhook")).toBeVisible();
+    const messageLog = page.getByRole("log").first();
+    await expect(messageLog.getByText(ingressMessage, { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(messageLog.getByText(ingressMessage, { exact: true })).toHaveCount(1);
+    await expect(messageLog.getByText("webhook", { exact: true })).toBeVisible();
   });
 });

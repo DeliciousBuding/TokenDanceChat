@@ -28,16 +28,16 @@ func TestCheckOrigin(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "same origin with port in Host",
+			name:   "origin without port does not match Host with port",
 			origin: "https://chat.example.com",
 			host:   "http://chat.example.com:8080",
-			want:   true,
+			want:   false,
 		},
 		{
-			name:   "bare origin matches www host",
+			name:   "bare origin does not match www host",
 			origin: "https://example.com",
 			host:   "http://www.example.com",
-			want:   true,
+			want:   false,
 		},
 		{
 			name:   "disallowed origin",
@@ -81,20 +81,20 @@ func TestCheckOriginWithEnvAllowed(t *testing.T) {
 	// Tests that require specific CHAT_ALLOWED_ORIGINS values.
 	// Not parallel to avoid env var conflicts.
 
-	t.Run("wildcard allows any origin", func(t *testing.T) {
+	t.Run("wildcard rejects cross-origin", func(t *testing.T) {
 		os.Setenv("CHAT_ALLOWED_ORIGINS", "*")
 		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
 
 		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
 		req.Header.Set("Origin", "https://any-random-domain.io")
 		got := upgrader.CheckOrigin(req)
-		if !got {
-			t.Error("expected wildcard to allow any origin")
+		if got {
+			t.Error("expected wildcard to be ignored for cross-origin WebSocket request")
 		}
 	})
 
 	t.Run("specific allowed origin", func(t *testing.T) {
-		os.Setenv("CHAT_ALLOWED_ORIGINS", "allowed.com, other.org")
+		os.Setenv("CHAT_ALLOWED_ORIGINS", "https://allowed.com, https://other.org")
 		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
 
 		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
@@ -106,7 +106,7 @@ func TestCheckOriginWithEnvAllowed(t *testing.T) {
 	})
 
 	t.Run("specific origin not in list is disallowed", func(t *testing.T) {
-		os.Setenv("CHAT_ALLOWED_ORIGINS", "allowed.com")
+		os.Setenv("CHAT_ALLOWED_ORIGINS", "https://allowed.com")
 		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
 
 		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
@@ -118,7 +118,7 @@ func TestCheckOriginWithEnvAllowed(t *testing.T) {
 	})
 
 	t.Run("subdomain wildcard allows matching subdomain", func(t *testing.T) {
-		os.Setenv("CHAT_ALLOWED_ORIGINS", ".example.com")
+		os.Setenv("CHAT_ALLOWED_ORIGINS", "https://*.example.com")
 		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
 
 		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
@@ -130,7 +130,7 @@ func TestCheckOriginWithEnvAllowed(t *testing.T) {
 	})
 
 	t.Run("subdomain wildcard rejects bare domain", func(t *testing.T) {
-		os.Setenv("CHAT_ALLOWED_ORIGINS", ".example.com")
+		os.Setenv("CHAT_ALLOWED_ORIGINS", "https://*.example.com")
 		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
 
 		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
@@ -142,7 +142,7 @@ func TestCheckOriginWithEnvAllowed(t *testing.T) {
 	})
 
 	t.Run("subdomain wildcard allows nested subdomain", func(t *testing.T) {
-		os.Setenv("CHAT_ALLOWED_ORIGINS", ".example.com")
+		os.Setenv("CHAT_ALLOWED_ORIGINS", "https://*.example.com")
 		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
 
 		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
@@ -153,8 +153,20 @@ func TestCheckOriginWithEnvAllowed(t *testing.T) {
 		}
 	})
 
+	t.Run("subdomain wildcard rejects unexpected port", func(t *testing.T) {
+		os.Setenv("CHAT_ALLOWED_ORIGINS", "https://*.example.com")
+		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
+
+		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
+		req.Header.Set("Origin", "https://app.example.com:8443")
+		got := upgrader.CheckOrigin(req)
+		if got {
+			t.Error("expected subdomain wildcard to reject origin with an unexpected port")
+		}
+	})
+
 	t.Run("case-insensitive origin matching", func(t *testing.T) {
-		os.Setenv("CHAT_ALLOWED_ORIGINS", "EXAMPLE.COM")
+		os.Setenv("CHAT_ALLOWED_ORIGINS", "https://EXAMPLE.COM")
 		defer os.Unsetenv("CHAT_ALLOWED_ORIGINS")
 
 		req := httptest.NewRequest(http.MethodGet, "http://chat.example.com/ws", nil)
