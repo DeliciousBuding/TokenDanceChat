@@ -3,8 +3,8 @@
   "short_name": "TDChat",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#1a1b1e",
-  "theme_color": "#0d0e10",
+  "background_color": "#f5f5f7",
+  "theme_color": "#0071BC",
   "description": "Lightweight real-time public chat — TokenDanceChat",
   "icons": [
     {

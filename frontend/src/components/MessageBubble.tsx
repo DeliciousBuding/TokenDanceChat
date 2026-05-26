@@ -1038,7 +1038,7 @@ export const MessageBubble = memo(function MessageBubble({
             "relative border text-[15px] leading-relaxed shadow-[0_1px_2px_rgba(15,23,42,0.05)] backdrop-blur-sm",
             isVoiceMessage ? "px-2 py-2" : "px-4 py-2.5",
             isOwn
-              ? "rounded-[20px] rounded-br-md border-[var(--accent)]/16 bg-[var(--message-user-bg)] shadow-[0_10px_24px_rgba(0,122,255,0.08)] dark:border-[var(--accent)]/18"
+              ? "rounded-[20px] rounded-br-md border-[var(--accent)]/16 bg-[var(--message-user-bg)] shadow-[0_10px_24px_rgba(0,113,188,0.08)] dark:border-[var(--accent)]/18"
               : "rounded-[20px] rounded-bl-md border-[var(--border-glass)] bg-[var(--surface-glass-strong)] shadow-[0_10px_24px_rgba(15,23,42,0.06)]",
             isDeleted && "opacity-40",
           )}

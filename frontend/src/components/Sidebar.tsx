@@ -511,8 +511,13 @@ export function Sidebar({
     >
       {/* Header */}
       <div className="flex items-center gap-3 bg-2 flex-shrink-0 px-4 py-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-3">
-          <MessageCircle className="h-5 w-5 text-brand" />
+        <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-sm">
+          <img
+            src="/token-dance-icon-rounded.svg"
+            alt="TokenDance"
+            className="h-9 w-9"
+            draggable={false}
+          />
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-[14px] font-semibold text-[var(--text-primary)] truncate">

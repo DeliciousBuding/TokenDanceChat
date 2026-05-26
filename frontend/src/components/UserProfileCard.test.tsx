@@ -20,7 +20,7 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/lib/utils", () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(" "),
   usernameHue: () => 180,
-  avatarGradient: () => "linear-gradient(135deg, #6366f1, #8b5cf6)",
+  avatarGradient: () => "linear-gradient(135deg, #0071BC, #29ABE2)",
   formatLastSeen: (ts: number) => `last seen at ${ts}`,
 }));
 
