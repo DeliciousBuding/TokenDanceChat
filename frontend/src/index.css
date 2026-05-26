@@ -25,11 +25,11 @@
   --text-tertiary: #aeaeb2;
   --text-disabled: #c7c7cc;
 
-  /* Brand / Accent — macOS blue */
-  --accent: #007aff;
-  --accent-hover: #0060cc;
+  /* Brand / Accent — TokenDance Blue */
+  --accent: #0071bc;
+  --accent-hover: #005a9c;
   --brand: var(--accent);
-  --brand-light: #e8f2ff;
+  --brand-light: #eaf7ff;
   --brand-hover: var(--accent-hover);
 
   /* Semantic — Apple system colors */
@@ -55,15 +55,15 @@
   --shadow-xl: 0 32px 64px rgba(0, 0, 0, 0.2), 0 12px 24px rgba(0, 0, 0, 0.1);
 
   /* Message fills */
-  --message-user-bg: #e8f2ff;
-  --message-tips-bg: #f0f6ff;
+  --message-user-bg: #eaf7ff;
+  --message-tips-bg: #f3fbff;
   --dialog-fill-0: var(--bg-1);
 
-  /* aionui accent ramp (mapped to macOS blue) */
-  --aou-1: #e8f2ff;
-  --aou-2: #d0e4ff;
-  --aou-4: #7db8ff;
-  --aou-6: #007aff;
+  /* aionui accent ramp (mapped to TokenDance Blue) */
+  --aou-1: #eaf7ff;
+  --aou-2: #c8edff;
+  --aou-4: #65c6ec;
+  --aou-6: #0071bc;
 
   /* Radius */
   --radius: 0.625rem;
@@ -101,7 +101,7 @@
   --border: var(--border-base);
   --input: var(--border-base);
   --ring: var(--accent);
-  --ring-focus: rgba(0, 122, 255, 0.25);
+  --ring-focus: rgba(0, 113, 188, 0.25);
   --warning-color: var(--warning);
   --warning-foreground: var(--text-primary);
   --mention: oklch(0.55 0.18 30);
@@ -131,9 +131,9 @@
   --text-tertiary: rgba(255, 255, 255, 0.28);
   --text-disabled: rgba(255, 255, 255, 0.15);
 
-  /* Brand / Accent — macOS blue in dark */
-  --accent: #2f81f7;
-  --accent-hover: #4d9ff9;
+  /* Brand / Accent — TokenDance Blue in dark */
+  --accent: #29abe2;
+  --accent-hover: #65c6ec;
   --brand: var(--accent);
   --brand-light: rgba(47, 129, 247, 0.1);
   --brand-hover: var(--accent-hover);
@@ -161,15 +161,15 @@
   --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.7);
 
   /* Message fills */
-  --message-user-bg: rgba(47, 129, 247, 0.14);
-  --message-tips-bg: rgba(47, 129, 247, 0.08);
+  --message-user-bg: rgba(41, 171, 226, 0.14);
+  --message-tips-bg: rgba(41, 171, 226, 0.08);
   --dialog-fill-0: var(--bg-1);
 
   /* aionui accent ramp */
-  --aou-1: rgba(47, 129, 247, 0.1);
-  --aou-2: rgba(47, 129, 247, 0.2);
-  --aou-4: rgba(47, 129, 247, 0.5);
-  --aou-6: #2f81f7;
+  --aou-1: rgba(41, 171, 226, 0.1);
+  --aou-2: rgba(41, 171, 226, 0.2);
+  --aou-4: rgba(41, 171, 226, 0.5);
+  --aou-6: #29abe2;
 
   /* ─── shadcn/ui dark compat ─── */
   --background: var(--bg-base);
@@ -414,7 +414,7 @@
 .mac-input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(0, 113, 188, 0.2);
 }
 
 .mac-button {
@@ -435,7 +435,7 @@
 
 .mac-button:hover {
   background: var(--accent-hover);
-  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 113, 188, 0.3);
 }
 
 .mac-button:active {

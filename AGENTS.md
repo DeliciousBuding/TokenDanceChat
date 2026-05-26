@@ -36,8 +36,8 @@ TokenDanceChat 是 AgentHub 的技术验证项目和可玩 Demo。
 
 TokenDanceChat 只作为 TokenDance ID relying party。不要在本仓库新增 GitHub、Google、飞书等直连第三方登录；provider 选择、TokenDance ID 账号自动创建和 OAuth 绑定都由 TokenDance ID 处理。Chat 侧只维护自己的 TokenDance ID OAuth client、回调、token 验证、聊天本地会话/重连语义。
 
-如果后续接入 TokenDance Relay 调用模型 API，Chat 后端应使用 Relay API key 或服务端托管的 Relay 凭据；不要把 TokenDance ID access token 当作 `api.vectorcontrol.tech/v1` 的模型 API key，也不要把 Relay API key 暴露给浏览器。
-Relay 产品化、公开 quickstart、状态语义和公开/私有边界见 `..\docs\relay-productization.md`。Chat 文档只把 Relay 描述为模型 API 中转站，不复述 server 私有运行细节。
+如果后续接入 TokenDance Gateway 调用模型 API，Chat 后端应使用 TokenDance API key 或服务端托管的 TokenDance API 凭据；不要把 TokenDance ID access token 当作 `api.vectorcontrol.tech/v1` 的模型 API key，也不要把 TokenDance API key 暴露给浏览器。
+Gateway 产品化、公开 quickstart、状态语义和公开/私有边界见 `..\docs\relay-productization.md`。Chat 文档只把 Gateway 描述为模型 API 网关，不复述 server 私有运行细节。
 
 ### 授权边界
 
@@ -49,21 +49,21 @@ Chat 侧权限以本仓库自己的用户、房间/群组 membership、admin 标
 
 TokenDanceChat 的 `docs/security-risk-register.md` 是本仓库风险事实源；跨系统 severity/status/release gate 使用 `..\docs\security-risk-governance.md`。
 
-- 涉及公开 REST/WebSocket、OIDC session、webhook secret、invite/admin、uploads/media retention、SSRF/CORS、PWA/service worker cache、Relay key 或 bot action 的风险变更，必须同步风险表。
+- 涉及公开 REST/WebSocket、OIDC session、webhook secret、invite/admin、uploads/media retention、SSRF/CORS、PWA/service worker cache、TokenDance API key 或 bot action 的风险变更，必须同步风险表。
 - Critical/High 风险未修复、未验证或未显式 accepted 前，不得把公开 demo、PWA、OIDC 或 webhook 变更标记为 release-ready。
 - 生产 endpoint、日志、host、备份、secret 或 live 事故证据只放 server/private docs；本仓库公开文档只写脱敏结论和验证需求。
 - 发布前从 workspace 根运行 `..\scripts\verify-security-risks.ps1 -StrictReleaseGate`；默认治理 pass 里的 security warning 是未关闭 release blocker，不是可以忽略的文档噪声。
 
 ### 产品包装与 Agent 友好度
 
-TokenDanceChat 对外定位是 AgentHub 的 IM/Agent 交互验证场，不是独立长期产品线。公开 README、PWA metadata、`frontend/public/robots.txt`、`frontend/public/sitemap.xml`、`frontend/public/llms.txt` 必须保持这个定位。新增公开路由、离线页、语言入口或主要功能说明时，同步 `..\docs\agent-seo-i18n-packaging.md` 的检查项；修改 `TranslationDict`、OIDC、PWA/offline/error、Webhook/admin 或 Relay 文案时，同时按 `..\docs\i18n-parity-matrix.md` 做 zh-CN/en-US 语义对齐。
+TokenDanceChat 对外定位是 AgentHub 的 IM/Agent 交互验证场，不是独立长期产品线。公开 README、PWA metadata、`frontend/public/robots.txt`、`frontend/public/sitemap.xml`、`frontend/public/llms.txt` 必须保持这个定位。新增公开路由、离线页、语言入口或主要功能说明时，同步 `..\docs\agent-seo-i18n-packaging.md` 的检查项；修改 `TranslationDict`、OIDC、PWA/offline/error、Webhook/admin 或 Gateway 文案时，同时按 `..\docs\i18n-parity-matrix.md` 做 zh-CN/en-US 语义对齐。
 
 OIDC、PWA/i18n、设计 token、公开包装或 AgentHub 验证类工作拆 issue 时，使用 `.github/ISSUE_TEMPLATE/tokendance-chat-governance.md`。
 需要把需求提升到生态级时，先对照 `..\docs\ecosystem-product-backlog.md`、`..\docs\ecosystem-execution-queue.md` 和 `docs\governance-execution.md`，尤其是 TokenDanceChat 的 OIDC session、PWA/offline/error i18n 和 AgentHub proving-ground 定位；repo issue/roadmap 应引用对应 `TD-P0-*` / `TD-P1-*` 队列 ID。
 
 ### 设计系统边界
 
-UI 可以保留聊天产品的个性，但应逐步映射到 `..\docs\design-system.md` 的 TokenDance token intent：canvas、surface、ink、plum、moss、line、focus、radius。新增组件避免引入新的孤立颜色体系；密集聊天界面优先清晰、紧凑、可读，参考飞书/Lark 的工作感和 Telegram 的流畅消息体验。
+UI 可以保留聊天产品的个性，但应逐步映射到 `..\docs\design-system.md` 的 TokenDance token intent：canvas、surface、ink、TokenDance Blue、moss、line、focus、radius；`--plum` 仅作为兼容变量名，当前必须映射到 TokenDance Blue。新增组件避免引入新的孤立颜色体系；密集聊天界面优先清晰、紧凑、可读，参考飞书/Lark 的工作感和 Telegram 的流畅消息体验。
 页面/组件重做、视觉 QA、截图验收或 token 变更必须同时读 `..\docs\design-implementation-playbook.md` 和 `..\docs\visual-qa-matrix.md`。TokenDanceChat 的截图验收至少覆盖桌面和移动端的消息列表、composer、长消息、assistant/bot 状态或错误/空状态中与改动相关的场景。
 
 ## 持久化状态
@@ -244,7 +244,7 @@ git grep -n -E 'password.*[0-9]{4,}|sk-[a-zA-Z0-9]{20,}' -- ':!.git' ':!node_mod
 - 用户可见字符串**必须**通过 `t()` 解析，禁止内联双语三元 `lang === "zh-CN" ? "..." : "..."`。
 - 工具函数（formatTime/formatDate/formatLastSeen）接受 `t` 函数参数而非 `lang` 字符串。
 - 新增 i18n key 必须在 `TranslationDict` interface、zh-CN、en-US 三处同步添加。
-- 跨产品身份、Relay、Feishu/Lark、错误/配额和公开产品定位文案必须对照 `..\docs\i18n-parity-matrix.md`，不能只补一种语言。
+- 跨产品身份、Gateway、Feishu/Lark、错误/配额和公开产品定位文案必须对照 `..\docs\i18n-parity-matrix.md`，不能只补一种语言。
 - 交叉审查时运行 i18n-scan skill 检测硬编码字符串和缺失 key。
 
 ### WebSocket connect 规则（2026-05-24 更新）

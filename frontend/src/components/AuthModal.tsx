@@ -208,6 +208,16 @@ export function AuthModal() {
 
         {/* Tab content */}
         <div data-visual="auth-modal-content" className="p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl shadow-sm">
+              <img src="/token-dance-icon-rounded.svg" alt="TokenDance" className="h-10 w-10" draggable={false} />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[var(--text-primary)]">TokenDance Chat</p>
+              <p className="truncate text-xs text-[var(--text-secondary)]">{t("join.subtitle")}</p>
+            </div>
+          </div>
+
           {/* ── Guest Tab ── */}
           {tab === "guest" && (
             <form onSubmit={handleGuestJoin} className="space-y-4">

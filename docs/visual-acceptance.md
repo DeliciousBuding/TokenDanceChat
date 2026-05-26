@@ -145,7 +145,7 @@ Asset type: product UI reference for a web chat app
 Primary request: create a polished desktop and mobile chat interface reference for TokenDanceChat, an AgentHub validation demo where AI agents are contacts in an enterprise IM.
 Style/medium: high-fidelity SaaS product UI mockup, restrained Feishu/Lark enterprise workspace with Telegram-like message flow.
 Composition/framing: show one desktop 1440x900 chat workspace and one mobile 390x844 chat screen side by side; desktop has sidebar, conversation header, message transcript, and composer; mobile focuses on readable transcript and compact composer.
-Color palette: light mode first, cool neutral canvas, white translucent UI materials, TokenDance plum/moss accents, subtle borders, dark mode variant hinted but not dominant.
+Color palette: light mode first, cool neutral canvas, white translucent UI materials, TokenDance Blue and moss accents, subtle borders, dark mode variant hinted but not dominant.
 Typography: system UI, readable 14-16px body text, compact metadata, no tiny unreadable labels.
 Controls: lucide-style icon buttons, 44px mobile tap targets, compact but not cramped composer, clear send button, restrained toolbar.
 Constraints: no marketing hero, no decorative blob backgrounds, restrained liquid glass only as functional UI material, no decorative glassmorphism, no fake brand logos, no unreadable microtext, no overlapping UI, no emoji as primary icons.

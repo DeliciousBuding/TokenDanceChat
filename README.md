@@ -17,6 +17,8 @@
 
 TokenDanceChat is packaged as both a playable chat demo and the AgentHub IM proving ground. Public entry files live in `frontend/public/robots.txt`, `frontend/public/sitemap.xml`, and `frontend/public/llms.txt`; update them with README/site metadata when routes, product wording, PWA behavior, or TokenDance ID login semantics change.
 
+Brand assets are shared with the TokenDance workspace logo package. The PWA favicon, install icons, sidebar mark, and auth modal use `frontend/public/token-dance-*` assets copied from `../logo/final/`; `frontend/scripts/generate-icons.mjs` keeps legacy `icon-192.png` and `icon-512.png` in sync for the manifest and service worker.
+
 The frontend already exposes PWA and zh/en i18n surfaces. New shared UI work should use the `--td-*` compatibility aliases in `frontend/src/index.css` where possible, while preserving the chat-specific macOS blue accent until visual QA says otherwise.
 
 ---
