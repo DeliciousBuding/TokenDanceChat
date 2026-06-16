@@ -57,8 +57,10 @@ type Client struct {
 	// current room
 	currentRoomID string
 	roomMu        sync.RWMutex
-	// bot concurrency guard
-	botResponding atomic.Bool
+	// Assistant concurrency guards are independent so a single public message
+	// can mention TokenBot and PicoClaw without one suppressing the other.
+	tokenBotResponding atomic.Bool
+	picoClawResponding atomic.Bool
 }
 
 // getCurrentRoomID returns the client's current room ID with read locking.
@@ -563,17 +565,18 @@ func (c *Client) handleChatMessage(msg Message) {
 	// Broadcast only to clients in the current room. Public room messages may
 	// contain private context after a room switch, so global fanout is unsafe.
 	broadcastMsg, _ := json.Marshal(Message{
-		Type:           "message",
-		ID:             storedMsg.ID,
-		Username:       storedMsg.Username,
-		Content:        storedMsg.Content,
-		Timestamp:      storedMsg.Timestamp,
-		ReplyToID:      storedMsg.ReplyToID,
-		ReplyToContent: msg.ReplyToContent,
-		ReplyToUser:    msg.ReplyToUser,
-		ThreadID:       storedMsg.ThreadID,
-		RoomID:         currentRoom,
-		MentionAll:     containsAllMention(content),
+		Type:            "message",
+		ID:              storedMsg.ID,
+		ClientMessageID: msg.ClientMessageID,
+		Username:        storedMsg.Username,
+		Content:         storedMsg.Content,
+		Timestamp:       storedMsg.Timestamp,
+		ReplyToID:       storedMsg.ReplyToID,
+		ReplyToContent:  msg.ReplyToContent,
+		ReplyToUser:     msg.ReplyToUser,
+		ThreadID:        storedMsg.ThreadID,
+		RoomID:          currentRoom,
+		MentionAll:      containsAllMention(content),
 	})
 	c.hub.BroadcastToRoom(broadcastMsg, currentRoom)
 
@@ -616,11 +619,11 @@ func (c *Client) handleChatMessage(msg Message) {
 	if targets.TokenBot && c.username != c.hub.BotName() && c.hub.LLMClient() != nil {
 		if !c.hub.CheckBotCooldown("bot:" + c.username) {
 			// Within 30s per-user cooldown, silently skip.
-		} else if c.botResponding.CompareAndSwap(false, true) {
+		} else if c.tokenBotResponding.CompareAndSwap(false, true) {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			go func() {
 				defer cancel()
-				defer c.botResponding.Store(false)
+				defer c.tokenBotResponding.Store(false)
 				c.handleBotResponse(ctx, content, currentRoom)
 			}()
 		}
@@ -635,23 +638,23 @@ func (c *Client) handleChatMessage(msg Message) {
 		c.hub.BroadcastToRoom(systemMsg, currentRoom)
 	}
 	if targets.Agent && c.username != c.hub.AgentName() {
-		if pc := c.hub.PicoclawClient(); pc != nil {
+		if c.hub.LLMClient() != nil {
 			if !c.hub.CheckBotCooldown("agent:" + c.username) {
-				// Within 30s per-user cooldown, silently skip.
-			} else if c.botResponding.CompareAndSwap(false, true) {
+				// Within cooldown, silently skip.
+			} else if c.picoClawResponding.CompareAndSwap(false, true) {
 				go func() {
-					defer c.botResponding.Store(false)
+					defer c.picoClawResponding.Store(false)
 					ctxPC, cancelPC := context.WithTimeout(context.Background(), 60*time.Second)
 					defer cancelPC()
 					c.handleAgentResponsePicoClaw(ctxPC, content, currentRoom)
 				}()
 			}
 		} else {
-			// Agent mentioned but not configured — send error feedback
+			// Agent mentioned but LLM not configured — send error feedback
 			systemMsg, _ := json.Marshal(Message{
 				Type:     "system",
 				Username: "system",
-				Content:  "PicoClaw is not configured on this server.",
+				Content:  c.hub.AgentName() + " is not configured on this server.",
 				RoomID:   currentRoom,
 			})
 			c.hub.BroadcastToRoom(systemMsg, currentRoom)
@@ -844,7 +847,7 @@ type assistantMentionTargets struct {
 func assistantMentionTarget(content, botName, agentName string) assistantMentionTargets {
 	targets := assistantMentionTargets{}
 	for _, mention := range parseMentions(content) {
-		if isAssistantAlias(mention, botName, "bot", "tokenbot") {
+		if isAssistantAlias(mention, botName, "bot", "tokenbot", "webuichat", "webuibot", "webui") {
 			targets.TokenBot = true
 		}
 		if isAssistantAlias(mention, agentName, "claw", "picoclaw") {
@@ -1149,16 +1152,17 @@ func (c *Client) handleGroupMessage(msg Message) {
 
 	// Send to all group members.
 	gm, _ := json.Marshal(Message{
-		Type:           "group_message",
-		ID:             storedMsg.ID,
-		Group:          groupName,
-		Username:       c.username,
-		Content:        content,
-		Timestamp:      storedMsg.Timestamp,
-		ReplyToID:      msg.ReplyToID,
-		ReplyToContent: msg.ReplyToContent,
-		ReplyToUser:    msg.ReplyToUser,
-		MentionAll:     containsAllMention(content),
+		Type:            "group_message",
+		ID:              storedMsg.ID,
+		ClientMessageID: msg.ClientMessageID,
+		Group:           groupName,
+		Username:        c.username,
+		Content:         content,
+		Timestamp:       storedMsg.Timestamp,
+		ReplyToID:       msg.ReplyToID,
+		ReplyToContent:  msg.ReplyToContent,
+		ReplyToUser:     msg.ReplyToUser,
+		MentionAll:      containsAllMention(content),
 	})
 	c.hub.SendToGroup(groupName, gm)
 
@@ -1286,16 +1290,17 @@ func (c *Client) handleDMMessage(msg Message) {
 
 	// Send to recipient.
 	dmMsgTo, _ := json.Marshal(Message{
-		Type:           "dm_message",
-		ID:             storedMsg.ID,
-		Username:       c.username,
-		Content:        content,
-		Timestamp:      storedMsg.Timestamp,
-		To:             to,
-		From:           c.username,
-		ReplyToID:      msg.ReplyToID,
-		ReplyToContent: msg.ReplyToContent,
-		ReplyToUser:    msg.ReplyToUser,
+		Type:            "dm_message",
+		ID:              storedMsg.ID,
+		ClientMessageID: msg.ClientMessageID,
+		Username:        c.username,
+		Content:         content,
+		Timestamp:       storedMsg.Timestamp,
+		To:              to,
+		From:            c.username,
+		ReplyToID:       msg.ReplyToID,
+		ReplyToContent:  msg.ReplyToContent,
+		ReplyToUser:     msg.ReplyToUser,
 	})
 	delivered := c.hub.SendToUser(to, dmMsgTo)
 
@@ -1306,16 +1311,17 @@ func (c *Client) handleDMMessage(msg Message) {
 
 	// Send echo back to sender.
 	dmMsgFrom, _ := json.Marshal(Message{
-		Type:           "dm_message",
-		ID:             storedMsg.ID,
-		Username:       c.username,
-		Content:        content,
-		Timestamp:      storedMsg.Timestamp,
-		To:             to,
-		From:           c.username,
-		ReplyToID:      msg.ReplyToID,
-		ReplyToContent: msg.ReplyToContent,
-		ReplyToUser:    msg.ReplyToUser,
+		Type:            "dm_message",
+		ID:              storedMsg.ID,
+		ClientMessageID: msg.ClientMessageID,
+		Username:        c.username,
+		Content:         content,
+		Timestamp:       storedMsg.Timestamp,
+		To:              to,
+		From:            c.username,
+		ReplyToID:       msg.ReplyToID,
+		ReplyToContent:  msg.ReplyToContent,
+		ReplyToUser:     msg.ReplyToUser,
 	})
 	select {
 	case c.send <- dmMsgFrom:
@@ -2060,11 +2066,11 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent, roomID stri
 	}
 }
 
-// handleAgentResponsePicoClaw handles the PicoClaw agent response via gateway,
-// with automatic fallback to direct LLM API if the WebSocket gateway doesn't respond.
+// handleAgentResponsePicoClaw handles the PicoClaw agent response directly via LLM API.
+func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, roomID string) {
+	agentName := c.hub.AgentName()
+	username := c.username
 
-// fallbackPicoClawToLLM calls the LLM API directly when PicoClaw WebSocket fails.
-func (c *Client) fallbackPicoClawToLLM(ctx context.Context, userContent, agentName, roomID, username string) {
 	c.hub.BroadcastTyping(agentName, "typing_start", "", "")
 	var messages []llm.Message
 	if mem := c.hub.Memory(); mem != nil {
@@ -2083,7 +2089,7 @@ func (c *Client) fallbackPicoClawToLLM(ctx context.Context, userContent, agentNa
 		return nil
 	})
 	if err != nil {
-		log.Printf("PicoClaw LLM fallback error: %v", err)
+		log.Printf("PicoClaw LLM error: %v", err)
 	}
 
 	response := fullResponse.String()
@@ -2099,12 +2105,6 @@ func (c *Client) fallbackPicoClawToLLM(ctx context.Context, userContent, agentNa
 		mem.Add(llm.Message{Role: "user", Content: userContent, Username: username})
 		mem.Add(llm.Message{Role: "assistant", Content: response, Username: agentName})
 	}
-}
-
-func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, roomID string) {
-	// PicoClaw now responds directly via LLM API for reliability.
-	// The PicoClaw WebSocket gateway is retained for proactive notifications only.
-	c.fallbackPicoClawToLLM(ctx, userContent, c.hub.AgentName(), roomID, c.username)
 }
 
 // sanitizeContent trims whitespace, strips null bytes, and enforces max length.

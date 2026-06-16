@@ -145,7 +145,7 @@ func (m *mockStore) ListNotificationPrefs(username string) []store.NotificationP
 
 func newTestHandler() *Handler {
 	ms := &mockStore{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
 }
@@ -334,7 +334,7 @@ func (m *mockStoreScheduled) CancelScheduledMessage(id, username string) error {
 
 func newTestHandlerScheduled() *Handler {
 	ms := &mockStoreScheduled{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
 }
@@ -391,7 +391,7 @@ func (m *mockStoreThreaded) GetRoomMessages(roomID string, limit int, before int
 
 func newTestHandlerThreaded() *Handler {
 	ms := &mockStoreThreaded{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
 }
@@ -411,7 +411,7 @@ func TestWebhookHandlerVerifiesHashedSecret(t *testing.T) {
 		t.Fatalf("CreateWebhook returned error: %v", err)
 	}
 
-	h := hub.New(s, nil, nil, "")
+	h := hub.New(s, nil, "")
 	handler := New(h, s, t.TempDir())
 
 	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(`{"content":"deploy finished","username":"ci"}`))
@@ -450,7 +450,7 @@ func TestWebhookHandlerRejectsQuerySecret(t *testing.T) {
 		t.Fatalf("CreateWebhook returned error: %v", err)
 	}
 
-	h := hub.New(s, nil, nil, "")
+	h := hub.New(s, nil, "")
 	handler := New(h, s, t.TempDir())
 
 	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL+"?secret="+secret, strings.NewReader(`{"content":"deploy finished"}`))
@@ -478,7 +478,7 @@ func TestWebhookHandlerRejectsOversizedBody(t *testing.T) {
 		t.Fatalf("CreateWebhook returned error: %v", err)
 	}
 
-	h := hub.New(s, nil, nil, "")
+	h := hub.New(s, nil, "")
 	handler := New(h, s, t.TempDir())
 
 	body := `{"content":"` + strings.Repeat("x", 9000) + `"}`
@@ -508,7 +508,7 @@ func TestWebhookHandlerRejectsOversizedContent(t *testing.T) {
 		t.Fatalf("CreateWebhook returned error: %v", err)
 	}
 
-	h := hub.New(s, nil, nil, "")
+	h := hub.New(s, nil, "")
 	handler := New(h, s, t.TempDir())
 
 	body := `{"content":"` + strings.Repeat("x", 2001) + `"}`
@@ -541,7 +541,7 @@ func TestWebhookHandlerUsesServerDerivedSender(t *testing.T) {
 		t.Fatalf("CreateWebhook returned error: %v", err)
 	}
 
-	hubInstance := hub.New(s, nil, nil, "")
+	hubInstance := hub.New(s, nil, "")
 	hubInstance.LoadPersistedState()
 	go hubInstance.Run()
 	handler := New(hubInstance, s, t.TempDir())
@@ -1291,7 +1291,7 @@ func (m *mockStoreDBError) Ping() error {
 
 func newTestHandlerWithDBError() *Handler {
 	ms := &mockStoreDBError{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
 }
@@ -2005,7 +2005,7 @@ func (m *mockStoreSearchCapture) SearchMessagesForUser(query, roomID, username s
 
 func newTestHandlerWithSearchCapture() (*Handler, *mockStoreSearchCapture) {
 	ms := &mockStoreSearchCapture{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads"), ms
 }
@@ -2654,7 +2654,7 @@ func (m *mockStoreUsernameTaken) RegisterUser(username, passwordHash, inviteCode
 
 func newTestHandlerWithUsernameTaken() *Handler {
 	ms := &mockStoreUsernameTaken{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
 }
@@ -3068,7 +3068,7 @@ func (m *mockStoreInviteCapture) GenerateInviteCode(creator string, maxUses int)
 
 func newTestHandlerWithInviteCapture() (*Handler, *mockStoreInviteCapture) {
 	ms := &mockStoreInviteCapture{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads"), ms
 }
@@ -3343,7 +3343,7 @@ func (m *mockStoreExportCapture) GetGroupMemberRole(groupName, username string) 
 
 func newTestHandlerWithExportCapture() (*Handler, *mockStoreExportCapture) {
 	ms := &mockStoreExportCapture{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads"), ms
 }
@@ -3575,7 +3575,7 @@ func (m *mockStoreInvalidInvite) RegisterUser(username, passwordHash, inviteCode
 
 func newTestHandlerWithInvalidInvite() *Handler {
 	ms := &mockStoreInvalidInvite{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
 }
@@ -3754,7 +3754,7 @@ func (m *mockStoreLoginFail) VerifyUser(username, password string) (bool, error)
 
 func newTestHandlerLoginFail() *Handler {
 	ms := &mockStoreLoginFail{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
 }
@@ -4027,7 +4027,7 @@ func (m *mockStoreBlocking) GetBlockedUsers(username string) []string {
 
 func newTestHandlerBlocking() *Handler {
 	ms := &mockStoreBlocking{}
-	h := hub.New(ms, nil, nil, "")
+	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
 }

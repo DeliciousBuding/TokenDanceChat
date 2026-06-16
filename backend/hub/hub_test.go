@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 
 // mockStore is a test implementation of the Store interface.
 type mockStore struct {
+	mu           sync.Mutex
 	messages     []StoredMessage
 	rooms        []StoredRoom
 	groupRoles   map[string]string
@@ -41,6 +43,9 @@ type mockStore struct {
 }
 
 func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	msg := StoredMessage{
 		ID:        "mock-id-" + username + "-" + content[:min(8, len(content))],
 		Username:  username,
@@ -61,26 +66,38 @@ func (m *mockStore) InsertMessage(username, content, replyToID, roomID, toUser, 
 }
 
 func (m *mockStore) GetMessages(limit int, before int64) []StoredMessage {
-	return m.messages
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]StoredMessage(nil), m.messages...)
 }
 
 func (m *mockStore) GetRoomMessages(roomID string, limit int, before int64) []StoredMessage {
-	return m.messages
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]StoredMessage(nil), m.messages...)
 }
 
 func (m *mockStore) MarkDeleted(msgID string) error { return nil }
 func (m *mockStore) TotalUsers() int64              { return 0 }
 func (m *mockStore) TotalMessages() int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return int64(len(m.messages))
 }
 
 func (m *mockStore) CreateRoom(name string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	id := "room-" + name
 	m.rooms = append(m.rooms, StoredRoom{ID: id, Name: name})
 	return id, nil
 }
 
 func (m *mockStore) GetRoomID(name string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	for _, r := range m.rooms {
 		if r.Name == name {
 			return r.ID, nil
@@ -90,13 +107,18 @@ func (m *mockStore) GetRoomID(name string) (string, error) {
 }
 
 func (m *mockStore) ListRooms() []StoredRoom {
-	return m.rooms
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]StoredRoom(nil), m.rooms...)
 }
 
 func (m *mockStore) DeleteRoom(roomID string) error {
 	return nil
 }
 func (m *mockStore) ToggleReaction(messageID, emoji, username string) (map[string][]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.reactions == nil {
 		m.reactions = make(map[string]map[string][]string)
 	}
@@ -120,21 +142,27 @@ func (m *mockStore) ToggleReaction(messageID, emoji, username string) (map[strin
 	if len(users) == 0 {
 		delete(m.reactions[messageID], emoji)
 	}
-	return m.reactions[messageID], nil
+	return cloneReactionMap(m.reactions[messageID]), nil
 }
 func (m *mockStore) GetReactionsForMessages(messageIDs []string) map[string]map[string][]string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	result := make(map[string]map[string][]string)
 	if m.reactions == nil {
 		return result
 	}
 	for _, id := range messageIDs {
 		if r, ok := m.reactions[id]; ok && len(r) > 0 {
-			result[id] = r
+			result[id] = cloneReactionMap(r)
 		}
 	}
 	return result
 }
 func (m *mockStore) UpdateMessage(messageID, content string) (StoredMessage, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.messagesByID == nil {
 		return StoredMessage{}, nil
 	}
@@ -148,6 +176,9 @@ func (m *mockStore) UpdateMessage(messageID, content string) (StoredMessage, err
 	return msg, nil
 }
 func (m *mockStore) GetMessageByID(messageID string) (StoredMessage, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.messagesByID != nil {
 		if msg, ok := m.messagesByID[messageID]; ok {
 			return msg, nil
@@ -159,6 +190,14 @@ func (m *mockStore) GetMessageByID(messageID string) (StoredMessage, error) {
 		}
 	}
 	return StoredMessage{}, errNotFound
+}
+
+func cloneReactionMap(src map[string][]string) map[string][]string {
+	out := make(map[string][]string, len(src))
+	for emoji, users := range src {
+		out[emoji] = append([]string(nil), users...)
+	}
+	return out
 }
 
 // errNotFound is a sentinel error for missing resources in mockStore.
@@ -475,7 +514,7 @@ func TestHandleJoinRequiresTokenForOIDCUser(t *testing.T) {
 			"alice": {Sub: "oidc-sub-alice", ChatUsername: "alice"},
 		},
 	}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	client := &Client{hub: h, send: make(chan []byte, 4), currentRoomID: h.DefaultRoomID()}
 
 	client.handleJoin(Message{Type: "join", Username: "alice"})
@@ -506,7 +545,7 @@ func TestHandleJoinRequiresTokenForOIDCUser(t *testing.T) {
 
 func TestHandleJoinRequiresSessionTokenForRegisteredUser(t *testing.T) {
 	ms := &mockStore{users: map[string]bool{"alice": true}}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	client := &Client{hub: h, send: make(chan []byte, 4), currentRoomID: h.DefaultRoomID()}
 
 	client.handleJoin(Message{Type: "join", Username: "alice"})
@@ -537,7 +576,7 @@ func TestHandleJoinRequiresSessionTokenForRegisteredUser(t *testing.T) {
 
 func TestHandleJoinRejectsWrongSessionTokenForRegisteredUser(t *testing.T) {
 	ms := &mockStore{users: map[string]bool{"alice": true, "bob": true}}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	h.SetSessionTokenVerifier(mockSessionVerifier{validTokens: map[string]string{"bob-token": "bob"}})
 	client := &Client{hub: h, send: make(chan []byte, 4), currentRoomID: h.DefaultRoomID()}
 
@@ -563,7 +602,7 @@ func TestHandleJoinRejectsWrongSessionTokenForRegisteredUser(t *testing.T) {
 
 func TestHandleJoinAcceptsSessionTokenForRegisteredUser(t *testing.T) {
 	ms := &mockStore{users: map[string]bool{"alice": true}}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	h.SetSessionTokenVerifier(mockSessionVerifier{validTokens: map[string]string{"alice-token": "alice"}})
 	client := &Client{hub: h, send: make(chan []byte, 8), currentRoomID: h.DefaultRoomID()}
 
@@ -585,7 +624,7 @@ func TestHandleJoinAcceptsSessionTokenForRegisteredUser(t *testing.T) {
 
 func TestHandleJoinAllowsGuestWithoutToken(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	client := &Client{hub: h, send: make(chan []byte, 8), currentRoomID: h.DefaultRoomID()}
 
 	client.handleJoin(Message{Type: "join", Username: "guestuser"})
@@ -606,7 +645,7 @@ func TestHandleJoinAllowsGuestWithoutToken(t *testing.T) {
 
 func TestNew(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	if h == nil {
 		t.Fatal("New() returned nil")
@@ -633,7 +672,7 @@ func TestNew(t *testing.T) {
 
 func TestWebhookCreateReturnsSecretToCreator(t *testing.T) {
 	ms := &mockStore{groupRoles: map[string]string{"alice": "admin"}}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	client := &Client{
 		hub:      h,
 		send:     make(chan []byte, 1),
@@ -685,7 +724,7 @@ func TestWebhookListDoesNotExposeSecrets(t *testing.T) {
 			},
 		},
 	}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	client := &Client{
 		hub:      h,
 		send:     make(chan []byte, 1),
@@ -732,7 +771,7 @@ func TestWebhookListRequiresGroupAdmin(t *testing.T) {
 			},
 		},
 	}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	client := &Client{
 		hub:      h,
 		send:     make(chan []byte, 1),
@@ -762,7 +801,7 @@ func TestWebhookRotateReturnsSecretAndMetadataToAdmin(t *testing.T) {
 			},
 		},
 	}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	client := &Client{
 		hub:      h,
 		send:     make(chan []byte, 1),
@@ -804,7 +843,7 @@ func TestWebhookRotateRequiresGroupAdmin(t *testing.T) {
 			{ID: "wh-1", GroupName: "team", URL: "wh-1-url", Secret: "old-secret"},
 		},
 	}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	client := &Client{
 		hub:      h,
 		send:     make(chan []byte, 1),
@@ -834,7 +873,7 @@ func TestWebhookAuditListRedactsMetadataAndRequiresGroupAdmin(t *testing.T) {
 			},
 		},
 	}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	admin := &Client{
 		hub:      h,
 		send:     make(chan []byte, 1),
@@ -958,7 +997,7 @@ func TestAssistantMentionTarget(t *testing.T) {
 
 func TestIsUsernameTaken(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -990,7 +1029,7 @@ func TestIsUsernameTaken(t *testing.T) {
 
 func TestOnlineUsers(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -1043,7 +1082,7 @@ func TestOnlineUsers(t *testing.T) {
 
 func TestHubRunStartStop(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	// Start the hub.
 	go h.Run()
 	defer h.Stop()
@@ -1069,7 +1108,7 @@ func TestHubRunStartStop(t *testing.T) {
 
 func TestDroppedMessages(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Initially, dropped messages should be 0.
 	if d := h.DroppedMessages(); d != 0 {
@@ -1088,7 +1127,7 @@ func TestDroppedMessages(t *testing.T) {
 
 func TestShutdown(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -1131,7 +1170,7 @@ func TestRateLimit(t *testing.T) {
 
 func TestBotCooldown(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -1264,7 +1303,7 @@ func TestValidateUsernameExtended(t *testing.T) {
 
 func TestHandleMarkRead(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -1311,7 +1350,7 @@ func TestHandleMarkRead(t *testing.T) {
 
 func TestHandleTypingGuards(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// typing_start with empty username: should return early.
 	c := &Client{hub: h, send: make(chan []byte, 1)}
@@ -1351,7 +1390,7 @@ func TestHandleTypingGuards(t *testing.T) {
 
 func TestHandleFriendRequest(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
 
@@ -1394,7 +1433,7 @@ func TestHandleFriendRequest(t *testing.T) {
 
 func TestHandleFriendAccept(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
 
@@ -1429,7 +1468,7 @@ func TestHandleFriendAccept(t *testing.T) {
 
 func TestHandleFriendReject(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Empty username guard.
 	c := &Client{hub: h, send: make(chan []byte, 1)}
@@ -1460,7 +1499,7 @@ func TestHandleFriendReject(t *testing.T) {
 
 func TestHandleBlock(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Block: should receive confirmation.
 	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
@@ -1512,7 +1551,7 @@ func TestHandleBlock(t *testing.T) {
 
 func TestHandleRoomCreateAndList(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
 
@@ -1581,7 +1620,7 @@ func TestHandleRoomCreateAndList(t *testing.T) {
 
 func TestHandlePinMessage(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -1647,7 +1686,7 @@ func TestHandlePinMessage(t *testing.T) {
 
 func TestHandleUnpinMessage(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -1695,7 +1734,7 @@ func TestHandleUnpinMessage(t *testing.T) {
 
 func TestHandleMuteAndUnmuteConversation(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -1757,7 +1796,7 @@ func TestHandleMuteAndUnmuteConversation(t *testing.T) {
 
 func TestHandleArchiveAndUnarchiveConversation(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -1819,7 +1858,7 @@ func TestHandleArchiveAndUnarchiveConversation(t *testing.T) {
 
 func TestHandleCustomEmojiAddAndList(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Add an emoji — handler sends custom_emoji_list back to the client.
 	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
@@ -1973,7 +2012,7 @@ func TestIsReservedUsername(t *testing.T) {
 
 func TestExecuteHubCommand(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "", "TestAgent")
+	h := New(ms, nil, "", "TestAgent")
 
 	t.Run("online_users", func(t *testing.T) {
 		resp := h.ExecuteHubCommand(HubCommand{Type: "online_users"})
@@ -2384,7 +2423,7 @@ func TestIsAssistantAlias(t *testing.T) {
 
 func TestConnectionCount(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -2417,7 +2456,7 @@ func TestConnectionCount(t *testing.T) {
 
 func TestIsFull(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -2441,7 +2480,7 @@ func TestIsFull(t *testing.T) {
 
 func TestUptime(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Brand new hub should have a non-negative uptime.
 	uptime := h.Uptime()
@@ -2462,7 +2501,7 @@ func TestUptime(t *testing.T) {
 
 func TestIsUsernameTaken_CaseSensitivity(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -2486,7 +2525,7 @@ func TestIsUsernameTaken_CaseSensitivity(t *testing.T) {
 
 func TestIsFriend(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Non-existent user.
 	if h.IsFriend("alice", "bob") {
@@ -2510,7 +2549,7 @@ func TestIsFriend(t *testing.T) {
 
 func TestAddFriend_Bidirectional(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	h.AddFriend("alice", "bob")
 
@@ -2534,7 +2573,7 @@ func TestAddFriend_Bidirectional(t *testing.T) {
 
 func TestRemoveFriend_Bidirectional(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	h.AddFriend("alice", "bob")
 	h.AddFriend("alice", "charlie")
@@ -2557,7 +2596,7 @@ func TestRemoveFriend_Bidirectional(t *testing.T) {
 
 func TestGetFriends(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// No friends initially.
 	if f := h.GetFriends("alice"); len(f) != 0 {
@@ -2584,7 +2623,7 @@ func TestGetFriends(t *testing.T) {
 
 func TestJoinRoom(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// JoinRoom creates a new room set.
 	result := h.JoinRoom("room-1", "alice")
@@ -2610,7 +2649,7 @@ func TestJoinRoom(t *testing.T) {
 
 func TestLeaveRoom(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	h.JoinRoom("room-1", "alice")
 	h.JoinRoom("room-1", "bob")
@@ -2630,7 +2669,7 @@ func TestLeaveRoom(t *testing.T) {
 
 func TestGetRoomMembers(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Empty room.
 	members := h.GetRoomMembers("empty-room")
@@ -2650,7 +2689,7 @@ func TestGetRoomMembers(t *testing.T) {
 
 func TestInRoom(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Non-existent room.
 	if h.InRoom("nonexistent", "alice") {
@@ -2674,7 +2713,7 @@ func TestInRoom(t *testing.T) {
 
 func TestCreateGroup(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Create group succeeds.
 	if !h.CreateGroup("dev-team", "alice") {
@@ -2703,7 +2742,7 @@ func TestCreateGroup(t *testing.T) {
 
 func TestInGroup(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Non-existent group.
 	if h.InGroup("alice", "nonexistent") {
@@ -2722,7 +2761,7 @@ func TestInGroup(t *testing.T) {
 
 func TestGroupMembers(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Non-existent group.
 	if members := h.GroupMembers("nonexistent"); members != nil {
@@ -2750,7 +2789,7 @@ func TestGroupMembers(t *testing.T) {
 
 func TestRemoveGroupMember(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	h.CreateGroup("team", "alice")
 	h.AddGroupMember("team", "bob")
@@ -2772,7 +2811,7 @@ func TestRemoveGroupMember(t *testing.T) {
 
 func TestPendingInvites(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Consume on non-existent user returns false.
 	if h.ConsumePendingInvite("alice", "team") {
@@ -2808,7 +2847,7 @@ func TestPendingInvites(t *testing.T) {
 
 func TestCallSessions(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Get non-existent session returns nil.
 	if cs := h.GetCallSession("nonexistent"); cs != nil {
@@ -2861,7 +2900,7 @@ func TestCallSessions(t *testing.T) {
 
 func TestCallSessionCreateDefaultStatus(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	cs := h.CreateCallSession("call-voice", "alice", "bob", "voice")
 	if cs.Status != "ringing" {
@@ -2873,7 +2912,7 @@ func TestCallSessionCreateDefaultStatus(t *testing.T) {
 
 func TestSendToUser(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -2919,7 +2958,7 @@ func TestLoadPersistedState(t *testing.T) {
 			"dev-team": {"alice", "bob"},
 		},
 	}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Initially empty.
 	if h.IsFriend("alice", "bob") {
@@ -2954,7 +2993,7 @@ func TestLoadPersistedState(t *testing.T) {
 }
 
 func TestLoadPersistedStateNilStore(t *testing.T) {
-	h := New(nil, nil, nil, "")
+	h := New(nil, nil, "")
 
 	// Should not panic with nil store.
 	h.LoadPersistedState()
@@ -2964,7 +3003,7 @@ func TestLoadPersistedStateNilStore(t *testing.T) {
 
 func TestAllUserStatusSortsOnlineFirst(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -3022,7 +3061,7 @@ func TestAllUserStatusMergesProfileData(t *testing.T) {
 			{Username: "bob", DisplayName: "Bob Li", AvatarURL: "https://example.com/bob.png", Status: "Available"},
 		},
 	}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	h.SetLastSeen("alice", 1000)
 	h.SetLastSeen("bob", 2000)
@@ -3060,7 +3099,7 @@ func TestAllUserStatusMergesProfileData(t *testing.T) {
 
 func TestAllUserStatusEmpty(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// No users tracked — should return empty slice.
 	users := h.AllUserStatus()
@@ -3073,7 +3112,7 @@ func TestAllUserStatusEmpty(t *testing.T) {
 
 func TestBroadcastJSON(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -3106,7 +3145,7 @@ func TestBroadcastJSON(t *testing.T) {
 
 func TestBroadcastToRoom(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
 	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-2"}
@@ -3153,7 +3192,7 @@ func TestBroadcastToRoom(t *testing.T) {
 
 func TestHandleChatMessageScopesRoomFanout(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
 	charlie := &Client{hub: h, username: "charlie", send: make(chan []byte, 10), currentRoomID: "room-1"}
@@ -3206,7 +3245,7 @@ func TestHandleChatMessageScopesRoomFanout(t *testing.T) {
 
 func TestBroadcastTyping(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -3269,7 +3308,7 @@ func TestBroadcastTyping(t *testing.T) {
 
 func TestShutdownWithClients(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -3352,7 +3391,7 @@ func TestShutdownWithClients(t *testing.T) {
 
 func TestSendBotMessage(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "TestBot")
+	h := New(ms, nil, "TestBot")
 	go h.Run()
 	defer h.Stop()
 
@@ -3406,7 +3445,7 @@ func TestSendBotMessage(t *testing.T) {
 
 func TestSendAssistantMessageEmptyUsername(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "FallbackBot")
+	h := New(ms, nil, "FallbackBot")
 
 	// Empty username should fall back to botName.
 	h.SendAssistantMessage("", "assistant content", "room-1")
@@ -3423,7 +3462,7 @@ func TestSendAssistantMessageEmptyUsername(t *testing.T) {
 
 	// Non-empty username should be used directly.
 	ms2 := &mockStore{}
-	h2 := New(ms2, nil, nil, "FallbackBot")
+	h2 := New(ms2, nil, "FallbackBot")
 	h2.SendAssistantMessage("CustomAgent", "custom message", "room-2")
 
 	if len(ms2.messages) == 0 {
@@ -3439,7 +3478,7 @@ func TestSendAssistantMessageEmptyUsername(t *testing.T) {
 func TestSetMemoryPath(t *testing.T) {
 	ms := &mockStore{}
 	llmCfg := &llm.Config{MemorySize: 10}
-	h := New(ms, llmCfg, nil, "TestBot")
+	h := New(ms, llmCfg, "TestBot")
 
 	tmpDir := t.TempDir()
 	memPath := tmpDir + "/MEMORY.md"
@@ -3461,7 +3500,7 @@ func TestSetMemoryPath(t *testing.T) {
 
 func TestGetMemoryContentNoMemory(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// No LLM config, so memory is nil.
 	content := h.GetMemoryContent()
@@ -3479,7 +3518,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 	ms := &mockStore{}
 
 	t.Run("with botName configured", func(t *testing.T) {
-		h := New(ms, nil, nil, "MyBot")
+		h := New(ms, nil, "MyBot")
 		prompt := h.BuildSystemPrompt()
 
 		if !strings.Contains(prompt, "MyBot") {
@@ -3500,7 +3539,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 
 	t.Run("without memory content", func(t *testing.T) {
 		llmCfg := &llm.Config{MemorySize: 10}
-		h := New(ms, llmCfg, nil, "BotWithMem")
+		h := New(ms, llmCfg, "BotWithMem")
 		prompt := h.BuildSystemPrompt()
 
 		if !strings.Contains(prompt, "BotWithMem") {
@@ -3514,7 +3553,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 
 	t.Run("with memory content", func(t *testing.T) {
 		llmCfg := &llm.Config{MemorySize: 10}
-		h := New(ms, llmCfg, nil, "BotWithMem")
+		h := New(ms, llmCfg, "BotWithMem")
 
 		tmpDir := t.TempDir()
 		memPath := tmpDir + "/MEMORY.md"
@@ -3538,7 +3577,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 
 func TestBroadcastJSONIncrementsDroppedWhenChannelFull(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Fill the broadcast channel without running the hub.
 	for i := 0; i < 256; i++ {
@@ -3564,7 +3603,7 @@ func TestBroadcastJSONIncrementsDroppedWhenChannelFull(t *testing.T) {
 
 func TestSendToGroup(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -3619,7 +3658,7 @@ func TestSendToGroup(t *testing.T) {
 
 func TestSendToGroupEmptyGroup(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -3647,7 +3686,7 @@ func TestSendToGroupEmptyGroup(t *testing.T) {
 
 func TestSendToAllSessions(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Register two clients with the same username (bypass Run to avoid kick-on-duplicate).
 	alice1 := &Client{username: "alice", send: make(chan []byte, 1)}
@@ -3702,7 +3741,7 @@ func TestSendToAllSessions(t *testing.T) {
 
 func TestShouldBroadcastTyping(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// First call should be allowed.
 	if !h.ShouldBroadcastTyping("alice") {
@@ -3734,7 +3773,7 @@ func TestShouldBroadcastTyping(t *testing.T) {
 
 func TestCheckBotCooldownDurations(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// bot: prefix = 3 second cooldown.
 	t.Run("bot_3s", func(t *testing.T) {
@@ -3792,7 +3831,7 @@ func TestCheckBotCooldownDurations(t *testing.T) {
 
 func TestRequestOnlineUsers(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -3857,7 +3896,7 @@ func TestRequestOnlineUsers(t *testing.T) {
 
 func TestRequestOnlineUsersEmptyHub(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	resp := h.RequestOnlineUsers()
 	if !resp.Success {
@@ -3882,7 +3921,7 @@ func TestRequestOnlineUsersEmptyHub(t *testing.T) {
 
 func TestRequestHistory(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// Pre-populate test messages.
 	ms.messages = []StoredMessage{
@@ -3948,7 +3987,7 @@ func TestRequestHistory(t *testing.T) {
 
 	t.Run("empty store returns empty messages slice not nil", func(t *testing.T) {
 		emptyStore := &mockStore{}
-		emptyHub := New(emptyStore, nil, nil, "")
+		emptyHub := New(emptyStore, nil, "")
 		resp := emptyHub.RequestHistory("", 10, 0)
 		if !resp.Success {
 			t.Error("expected success")
@@ -4356,7 +4395,7 @@ func TestDefaultRoomID(t *testing.T) {
 	t.Run("returns existing room", func(t *testing.T) {
 		ms := &mockStore{}
 		ms.CreateRoom("公共聊天")
-		h := New(ms, nil, nil, "")
+		h := New(ms, nil, "")
 		id := h.DefaultRoomID()
 		if id != "room-公共聊天" {
 			t.Errorf("expected room-公共聊天 for existing room, got %q", id)
@@ -4365,7 +4404,7 @@ func TestDefaultRoomID(t *testing.T) {
 
 	t.Run("creates room when not found", func(t *testing.T) {
 		ms := &errorOnGetRoomIDStore{mockStore: &mockStore{}}
-		h := New(ms, nil, nil, "")
+		h := New(ms, nil, "")
 		id := h.DefaultRoomID()
 		if id != "room-公共聊天" {
 			t.Errorf("expected room-公共聊天 from creation fallback, got %q", id)
@@ -4377,7 +4416,7 @@ func TestDefaultRoomID(t *testing.T) {
 
 func TestSendToUser_OfflineReturnsFalse(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -4406,7 +4445,7 @@ func TestSendToUser_OfflineReturnsFalse(t *testing.T) {
 
 func TestBroadcastStreamChunkToRoom(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
 	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: "room-2"}
@@ -4475,7 +4514,7 @@ func TestBroadcastStreamChunkToRoom(t *testing.T) {
 
 func TestIsOnline(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -4507,7 +4546,7 @@ func TestIsOnline(t *testing.T) {
 
 func TestBroadcastToGroup(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -4675,7 +4714,7 @@ func TestIsReservedUsernameEdgeCases(t *testing.T) {
 // is safe and does not panic or hang.
 func TestHubStopIdempotent(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 
 	// First stop should close the done channel.
@@ -4706,7 +4745,7 @@ func TestHubStopIdempotent(t *testing.T) {
 // decreases correctly when clients disconnect (unregister).
 func TestConnectionCountAfterDisconnect(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -4752,7 +4791,7 @@ func TestConnectionCountAfterDisconnect(t *testing.T) {
 // results in ConnectionCount returning 0.
 func TestConnectionCountAfterAllDisconnect(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -4786,7 +4825,7 @@ func TestConnectionCountAfterAllDisconnect(t *testing.T) {
 
 func TestTypingBroadcast(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -4845,7 +4884,7 @@ func TestTypingBroadcast(t *testing.T) {
 
 func TestTypingStop(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -4885,7 +4924,7 @@ func TestTypingStop(t *testing.T) {
 
 func TestTypingRateLimit(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 
 	// First call allowed.
 	if !h.ShouldBroadcastTyping("alice") {
@@ -4922,7 +4961,7 @@ func TestTypingRateLimit(t *testing.T) {
 
 func TestAddReaction(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -4970,7 +5009,7 @@ func TestAddReaction(t *testing.T) {
 
 func TestRemoveReaction(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5014,7 +5053,7 @@ func TestRemoveReaction(t *testing.T) {
 
 func TestReactionBroadcast(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5060,7 +5099,7 @@ func TestReactionBroadcast(t *testing.T) {
 
 func TestReactionEmptyUsername(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5084,7 +5123,7 @@ func TestReactionEmptyUsername(t *testing.T) {
 
 func TestEditMessage(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5135,7 +5174,7 @@ func TestEditMessage(t *testing.T) {
 
 func TestEditMessageNotFound(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5159,7 +5198,7 @@ func TestEditMessageNotFound(t *testing.T) {
 
 func TestEditMessageNotOwner(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5195,7 +5234,7 @@ func TestEditMessageNotOwner(t *testing.T) {
 
 func TestCreatePoll(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5253,7 +5292,7 @@ func TestCreatePoll(t *testing.T) {
 
 func TestVotePoll(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5313,7 +5352,7 @@ func TestVotePoll(t *testing.T) {
 
 func TestClosePoll(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5376,7 +5415,7 @@ func TestClosePoll(t *testing.T) {
 
 func TestClosePollNotOwner(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5417,7 +5456,7 @@ func TestClosePollNotOwner(t *testing.T) {
 
 func TestPollVoteUpdate(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5480,7 +5519,7 @@ func TestPollVoteUpdate(t *testing.T) {
 
 func TestDMDelivery(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5535,7 +5574,7 @@ func TestDMDelivery(t *testing.T) {
 
 func TestDMOfflineRecipient(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
@@ -5581,7 +5620,7 @@ func TestDMOfflineRecipient(t *testing.T) {
 
 func TestBroadcastMultipleClients(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
 	go h.Run()
 	defer h.Stop()
 
