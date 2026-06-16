@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"tokendancechat/backend/llm"
-	"tokendancechat/backend/picoclaw"
 	"tokendancechat/backend/store"
 )
 
@@ -239,16 +238,17 @@ type UserStatus struct {
 
 // Message represents a WebSocket protocol message.
 type Message struct {
-	Type      string          `json:"type,omitempty"`
-	ID        string          `json:"id,omitempty"`
-	Username  string          `json:"username,omitempty"`
-	Content   string          `json:"content,omitempty"`
-	Timestamp int64           `json:"timestamp,omitempty"`
-	Online    []string        `json:"online,omitempty"`
-	Messages  []StoredMessage `json:"messages,omitempty"`
-	ErrorCode string          `json:"code,omitempty"`
-	RequestID string          `json:"request_id,omitempty"`
-	Done      bool            `json:"done,omitempty"`
+	Type            string          `json:"type,omitempty"`
+	ID              string          `json:"id,omitempty"`
+	ClientMessageID string          `json:"client_message_id,omitempty"`
+	Username        string          `json:"username,omitempty"`
+	Content         string          `json:"content,omitempty"`
+	Timestamp       int64           `json:"timestamp,omitempty"`
+	Online          []string        `json:"online,omitempty"`
+	Messages        []StoredMessage `json:"messages,omitempty"`
+	ErrorCode       string          `json:"code,omitempty"`
+	RequestID       string          `json:"request_id,omitempty"`
+	Done            bool            `json:"done,omitempty"`
 
 	// Friend system
 	To      string   `json:"to,omitempty"`
@@ -402,12 +402,11 @@ type Hub struct {
 	// StartTime is the time the hub was created.
 	StartTime time.Time
 
-	// LLM bot support (deprecated: llmClient is legacy; picoclawClient is preferred).
-	llmClient      *llm.Client
-	picoclawClient *picoclaw.Client
-	memory         *llm.Memory
-	botName        string
-	agentName      string
+	// LLM bot support.
+	llmClient *llm.Client
+	memory    *llm.Memory
+	botName   string
+	agentName string
 
 	// typingRateLimit tracks the last time a typing broadcast was sent per username.
 	typingRateLimit map[string]time.Time
@@ -454,20 +453,14 @@ type Hub struct {
 	mu sync.RWMutex
 }
 
-// New creates a new Hub with the given store. llmCfg, picoclawCfg, botName and
-// agentName are optional. TokenBot uses the legacy LLM adapter; PicoClaw uses
-// the PicoClaw gateway.
-func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName string, agentNames ...string) *Hub {
+// New creates a new Hub with the given store. llmCfg, botName and agentName are
+// optional. Both TokenBot and the agent use the LLM adapter.
+func New(store Store, llmCfg *llm.Config, botName string, agentNames ...string) *Hub {
 	var llmClient *llm.Client
-	var pcClient *picoclaw.Client
 	var mem *llm.Memory
 	agentName := "PicoClaw"
 	if len(agentNames) > 0 && agentNames[0] != "" {
 		agentName = agentNames[0]
-	}
-
-	if picoclawCfg != nil {
-		pcClient = picoclaw.New(*picoclawCfg)
 	}
 
 	if llmCfg != nil {
@@ -487,7 +480,6 @@ func New(store Store, llmCfg *llm.Config, picoclawCfg *picoclaw.Config, botName 
 		store:           store,
 		StartTime:       time.Now(),
 		llmClient:       llmClient,
-		picoclawClient:  pcClient,
 		memory:          mem,
 		botName:         botName,
 		agentName:       agentName,
@@ -824,10 +816,6 @@ func (h *Hub) LLMClient() *llm.Client {
 	return h.llmClient
 }
 
-// PicoclawClient returns the PicoClaw client, or nil if not configured.
-func (h *Hub) PicoclawClient() *picoclaw.Client {
-	return h.picoclawClient
-}
 
 // Memory returns the LLM context memory, or nil if not configured.
 func (h *Hub) Memory() *llm.Memory {
@@ -1486,9 +1474,9 @@ func (h *Hub) ShouldBroadcastTyping(username string) bool {
 }
 
 // CheckBotCooldown returns true if a bot response is allowed for the given key.
-// Keys use "bot:<username>" for TokenBot and "agent:<username>" for PicoClaw,
+// Keys use "bot:<username>" for TokenBot and "agent:<username>" for the agent assistant,
 // giving each assistant independent per-user cooldowns.
-// TokenBot cooldown: 3s (fast Q&A). PicoClaw cooldown: 8s (Agent workflows).
+// TokenBot cooldown: 3s (fast Q&A). Agent cooldown: 8s (workflows).
 // Records the current timestamp on success.
 func (h *Hub) CheckBotCooldown(key string) bool {
 	h.botCooldownMu.Lock()
@@ -1612,9 +1600,9 @@ func (h *Hub) InRoom(roomID, username string) bool {
 	return h.rooms[roomID][username]
 }
 
-// -------- PicoClaw 双向查询接口 --------
+// -------- Hub 查询接口 --------
 
-// RequestOnlineUsers 返回在线用户列表，供 PicoClaw 通过命令通道查询。
+// RequestOnlineUsers 返回在线用户列表。
 func (h *Hub) RequestOnlineUsers() HubCommandResponse {
 	users := h.OnlineUsers()
 	data := map[string]any{
@@ -1629,7 +1617,7 @@ func (h *Hub) RequestOnlineUsers() HubCommandResponse {
 	}
 }
 
-// RequestHistory 返回指定房间的消息历史，供 PicoClaw 查询。
+// RequestHistory 返回指定房间的消息历史。
 // roomID 为空时返回全局消息。
 func (h *Hub) RequestHistory(roomID string, limit int, before int64) HubCommandResponse {
 	if limit <= 0 {
@@ -1662,7 +1650,7 @@ func (h *Hub) RequestHistory(roomID string, limit int, before int64) HubCommandR
 	}
 }
 
-// SendDM 以指定身份发送私信给目标用户，供 PicoClaw 调用。
+// SendDM 以指定身份发送私信给目标用户。
 // fromUsername: 发送者标识（通常为 PicoClaw 代理名）。
 // toUsername: 接收者用户名。
 // content: 私信内容。
@@ -1723,7 +1711,7 @@ func (h *Hub) SendDM(fromUsername, toUsername, content string) HubCommandRespons
 	}
 }
 
-// ExecuteHubCommand 执行 PicoClaw 发来的 Hub 命令。
+// ExecuteHubCommand 执行 Hub 命令。
 // 根据 cmd.Type 分派到对应的处理方法。
 func (h *Hub) ExecuteHubCommand(cmd HubCommand) HubCommandResponse {
 	switch cmd.Type {
@@ -1732,7 +1720,7 @@ func (h *Hub) ExecuteHubCommand(cmd HubCommand) HubCommandResponse {
 	case "history":
 		return h.RequestHistory(cmd.RoomID, cmd.Limit, cmd.Before)
 	case "send_dm":
-		fromUsername := h.AgentName() // 默认使用 PicoClaw 代理名
+		fromUsername := h.AgentName() // 默认使用 Agent 代理名
 		if cmd.Params != nil {
 			if from, ok := cmd.Params["from"].(string); ok && from != "" {
 				fromUsername = from

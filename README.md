@@ -1,7 +1,7 @@
 # TokenDanceChat
 
-> AgentHub 技术栈验证项目 + 可玩 Demo
-> A playable IM demo for validating AgentHub's Hub, realtime, persistence, Agent interaction, and React client stack
+> AgentHub 技术栈验证项目 + 轻量公共聊天室 Demo
+> A lightweight public-room demo for validating AgentHub's Hub, realtime, persistence, Agent interaction, and React client stack
 
 [![Status](https://img.shields.io/badge/status-active-brightgreen)](#)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
@@ -15,9 +15,9 @@
 
 ## Public Packaging
 
-TokenDanceChat is packaged as both a playable chat demo and the AgentHub IM proving ground. Public entry files live in `frontend/public/robots.txt`, `frontend/public/sitemap.xml`, and `frontend/public/llms.txt`; update them with README/site metadata when routes, product wording, PWA behavior, or TokenDance ID login semantics change.
+TokenDanceChat is packaged as both a playable chat demo and the AgentHub IM proving ground. The current public product contract is intentionally narrow: one public room plus TokenBot and PicoClaw assistant workspaces. Public entry files live in `frontend/public/robots.txt`, `frontend/public/sitemap.xml`, and `frontend/public/llms.txt`; update them with README/site metadata when routes, product wording, PWA behavior, or TokenDance ID login semantics change.
 
-Brand assets are shared with the TokenDance workspace logo package. The PWA favicon, install icons, sidebar mark, and auth modal use `frontend/public/token-dance-*` assets copied from `../logo/final/`; `frontend/scripts/generate-icons.mjs` keeps legacy `icon-192.png` and `icon-512.png` in sync for the manifest and service worker.
+Brand assets use the TokenDance organization logo package from `../logo/products/tokendance/`. PWA, favicon, auth modal, and crawler surfaces should reference `frontend/public/tokendance-*` assets. `frontend/scripts/generate-icons.mjs` only keeps legacy `icon-192.png` and `icon-512.png` in sync for old browser/PWA caches; new code should not reference those names.
 
 The frontend already exposes PWA and zh/en i18n surfaces. New shared UI work should use the `--td-*` compatibility aliases in `frontend/src/index.css` where possible, while preserving the chat-specific macOS blue accent until visual QA says otherwise.
 
@@ -27,14 +27,14 @@ The frontend already exposes PWA and zh/en i18n surfaces. New shared UI work sho
 
 TokenDanceChat 是 [AgentHub](https://github.com/TokenDanceLab/AgentHub) 的技术验证项目，不是独立于 AgentHub 的长期产品线。
 
-AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/微信里拉群一样组织 Claude Code、Codex、OpenCode、Reviewer、Orchestrator 等 Agent 协作。TokenDanceChat 先把其中的 Hub/IM 侧做成一个真实可玩的聊天 Demo，用来验证：
+AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/微信里拉群一样组织 Claude Code、Codex、OpenCode、Reviewer、Orchestrator 等 Agent 协作。TokenDanceChat 现在收敛为轻量公共聊天室，用一个真实可玩的聊天 Demo 验证：
 
-- Go Hub Server + WebSocket typed events 是否能承载丰富 IM 协议；
+- Go Hub Server + WebSocket typed events 是否能承载公共消息、presence、reactions、编辑、线程与 AI 流式回复；
 - SQLite + FTS5 是否足够支撑早期 Hub 持久化和搜索；
-- React 19 + Zustand + Vite 的客户端状态模型能否跑通复杂聊天工作台；
-- Agent 是否能以联系人、群成员、@mention、DM 和流式回复的形态自然嵌入 IM；
+- React 19 + Zustand + Vite 的客户端状态模型能否跑通轻量但完整的聊天工作台；
+- Agent 是否能以 TokenBot / PicoClaw 工作区、@mention 和流式回复的形态自然嵌入 IM；
 - TokenDance ID OIDC 登录能否作为统一身份入口自然接入 IM Demo；
-- 哪些能力是 AgentHub 可复用的平台原语，哪些只是为了 Demo 更好玩。
+- 哪些能力是 AgentHub 可复用的平台原语，哪些旧复杂 IM 能力应留在底层兼容或历史记录中。
 
 更完整的验证边界见 [docs/agenthub-validation.md](./docs/agenthub-validation.md)。
 
@@ -43,20 +43,19 @@ AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/�
 ## 功能 Features
 
 ### 核心聊天 Core Chat
-- 公共聊天室 · 私信 (DM) · 群组聊天 · 多房间
+- 公共聊天室
 - Markdown 消息渲染（代码高亮、表格、GFM）
 - 图片粘贴/拖拽上传（本地/WebDAV/S3-compatible 存储）
-- 语音消息录制
 - 文件分享（文档、压缩包）
-- 消息编辑 · 删除 · 转发 · 引用回复
+- 消息编辑 · 删除 · 引用回复
 - 表情反应 (Emoji Reactions)
 - 消息搜索（全文检索，FTS5）
-- 无线滚动历史加载
+- 无限滚动历史加载
 - 输入状态指示（类似 Telegram typing preview）
 
 ### AI Bots & Agent
 - **TokenBot** — @mention 触发 LLM 对话（流式 SSE）
-- **PicoClaw** — Agent 工作流引擎（`@PicoClaw` 触发）
+- **PicoClaw** — Agent 工作区（`@PicoClaw` 触发，LLM 直接响应）
 - 多模型支持：DeepSeek V4 Pro/Flash · GLM 5.1 · Qwen 3.6 Plus · Kimi K2.6 · MiniMax M2.7
 - Anthropic Messages API + OpenAI Chat Completions 双协议
 - Bot 对话记忆持久化
@@ -79,7 +78,7 @@ AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/�
 - CSP 头双层覆盖（前端 meta 标签 + 后端中间件）
 - 会话挤下线：新登录自动踢出旧连接
 - 路径穿越防护 · 消息大小限制
-- 用户屏蔽 · 好友系统
+- 用户屏蔽
 
 ---
 
@@ -118,6 +117,8 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 
 ## WebSocket 协议 Protocol
 
+当前前端只依赖公共聊天室主合同：
+
 ```
 → {"type":"join","username":"alice"}
 ← {"type":"history","messages":[...]}
@@ -126,16 +127,12 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 → {"type":"message","content":"hello"}
 ← {"type":"message","id":"...","username":"alice","content":"hello","timestamp":...}
 
-→ {"type":"dm","to":"bob","content":"hi"}
-→ {"type":"group_message","group":"general","content":"hello"}
-→ {"type":"forward","message_id":"...","to_username":"charlie"}
 → {"type":"reaction","message_id":"...","emoji":"👍"}
 → {"type":"edit","message_id":"...","content":"edited text"}
-→ {"type":"friend_request","to":"bob"}
 → {"type":"block","username":"spammer"}
 ```
 
-完整协议见 [docs/webhook-integration.md](./docs/webhook-integration.md)。
+底层后端仍保留部分历史协议兼容，便于迁移旧数据和安全回归；不要把 DM、群组、好友、转发、通话、定时消息或 webhook 管理重新接回当前前端主界面，除非先更新 ROADMAP 中的轻量聊天合同。
 
 ---
 
@@ -152,8 +149,6 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 | `CHAT_LLM_PROVIDER` | `openai` | LLM 协议 (openai / anthropic) |
 | `CHAT_BOT_NAME` | `TokenBot` | Bot 名称 |
 | `CHAT_AGENT_NAME` | `PicoClaw` | Agent 名称 |
-| `CHAT_PICOCLAW_URL` | — | PicoClaw WebSocket 地址 |
-| `CHAT_PICOCLAW_TOKEN` | — | PicoClaw 认证 Token |
 | `CHAT_ALLOWED_ORIGINS` | — | 允许的跨源 CORS/WebSocket browser origins，必须包含 scheme；示例：`https://chat.example.com,https://*.example.com`，`*` 不会放行跨源请求 |
 | `CHAT_TRUSTED_PROXY_CIDRS` | — | 可信反代 IP/CIDR；只有这些来源的 `X-Forwarded-For` / `X-Real-IP` 会用于 REST、OIDC、auth、WS 限流 |
 | `CHAT_SESSION_SECRET` | — | 应用 `session_token` HMAC 签名 secret；生产/共享环境必须稳定配置；`docker compose` 部署会强制要求该值 |
@@ -175,7 +170,7 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 
 ## OIDC Relying-Party Checklist
 
-TokenDanceChat 是服务端型 OIDC consumer；详细步骤见 [docs/oidc-setup.md](./docs/oidc-setup.md)，跨系统规则见 [../docs/identity-auth.md](../docs/identity-auth.md)。
+TokenDanceChat 是服务端型 OIDC consumer；详细步骤见 [docs/oidc-setup.md](./docs/oidc-setup.md)，跨系统规则见 [../docs/identity/identity-auth.md](../docs/identity/identity-auth.md)。
 
 | 项 | 当前实现 |
 |----|----------|
@@ -198,7 +193,6 @@ TokenDanceChat/
 │   ├── hub/           # 聊天核心（client、room、broadcast）
 │   ├── store/         # SQLite + FTS5
 │   ├── llm/           # LLM adapter（Anthropic + OpenAI）
-│   ├── picoclaw/      # PicoClaw Agent 客户端
 │   └── main.go
 ├── frontend/          # React SPA
 │   ├── src/
@@ -229,7 +223,7 @@ TokenDanceChat/
 
 ## TokenDance 系统上下文
 
-在 `D:\Code\TokenDance` workspace 内做跨系统治理时，先看根级 `../AGENTS.md` 和 `../docs/`。TokenDanceChat 是 AgentHub 的 IM/Hub 技术验证项目；身份方向以 `../docs/identity-auth.md` 和 `../tokendance-id/docs/api.md` 为准，视觉方向以 `../docs/design-system.md` 为准。
+在 `D:\Code\TokenDance` workspace 内做跨系统治理时，先看根级 `../AGENTS.md` 和 `../docs/`。TokenDanceChat 是 AgentHub 的 IM/Hub 技术验证项目；身份方向以 `../docs/identity/identity-auth.md` 和 `../tokendance-id/docs/api.md` 为准，视觉方向以 `../docs/design/design-system.md` 为准。
 
 ---
 
@@ -240,7 +234,7 @@ TokenDanceChat/
 | `../docs/` | TokenDance 系统级架构、身份鉴权、设计系统、文档治理 |
 | [docs/agenthub-validation.md](./docs/agenthub-validation.md) | AgentHub 验证项目定位、技术栈映射、Demo 边界 |
 | [docs/engineering-goal.md](./docs/engineering-goal.md) | 长期工程目标、设计原则、验证要求 |
-| [docs/webhook-integration.md](./docs/webhook-integration.md) | 群组传入 Webhook 协议、安全契约、验证命令 |
+| [docs/webhook-integration.md](./docs/webhook-integration.md) | 历史群组传入 Webhook 协议与安全契约；当前前端主界面不暴露 |
 | [docs/visual-acceptance.md](./docs/visual-acceptance.md) | 前端截图、多模态审美和视觉验收标准 |
 | [ROADMAP.md](./ROADMAP.md) | 持续目标账本、当前增量、验证记录 |
 | [AGENTS.md](./AGENTS.md) | 项目级 Agent 接手规则、架构地图、验证命令 |

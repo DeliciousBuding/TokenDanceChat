@@ -155,8 +155,6 @@ server {
 | `CHAT_LLM_BASE_URL` | — | LLM API 地址 |
 | `CHAT_LLM_MODEL` | — | LLM 模型名 |
 | `CHAT_LLM_API_KEY` | — | LLM API 密钥 |
-| `CHAT_PICOCLAW_URL` | — | PicoClaw WS 地址 |
-| `CHAT_PICOCLAW_TOKEN` | — | PicoClaw Token |
 | `CHAT_MEDIA_S3_ENDPOINT` | — | S3-compatible 媒体存储端点，配置后优先 |
 | `CHAT_MEDIA_S3_REGION` | — | S3 签名 region |
 | `CHAT_MEDIA_S3_BUCKET` | — | 媒体 bucket |

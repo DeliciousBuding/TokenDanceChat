@@ -16,7 +16,6 @@ import (
 	"tokendancechat/backend/handler"
 	"tokendancechat/backend/hub"
 	"tokendancechat/backend/llm"
-	"tokendancechat/backend/picoclaw"
 	"tokendancechat/backend/store"
 )
 
@@ -63,17 +62,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 		}
 	}
 
-	// PicoClaw configuration (preferred over legacy LLM).
-	pcURL := os.Getenv("CHAT_PICOCLAW_URL")
-	var picoclawCfg *picoclaw.Config
-	if pcURL != "" {
-		picoclawCfg = &picoclaw.Config{
-			WSURL: pcURL,
-			Token: os.Getenv("CHAT_PICOCLAW_TOKEN"),
-		}
-	}
-
-	h := hub.New(st, llmCfg, picoclawCfg, botName, agentName)
+	h := hub.New(st, llmCfg, botName, agentName)
 	h.LoadPersistedState()
 
 	// Set up bot memory persistence if LLM is configured and path is set.
@@ -87,95 +76,6 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 					log.Printf("bot memory loaded from %s", memPath)
 				}
 			}
-		}
-	}
-
-	// Connect to PicoClaw gateway if configured.
-	if picoclawCfg != nil && h.PicoclawClient() != nil {
-		pc := h.PicoclawClient()
-
-		// 设置主动消息回调：PicoClaw 可向房间发送未经请求的消息
-		// （摘要、告警、定时更新等）。
-		pc.ProactiveCallback = func(msg picoclaw.Message) {
-			// Enforce max content length on all PicoClaw inbound messages
-			// to prevent storage/bandwidth abuse from oversized payloads.
-			const maxPicoClawContent = 10000
-			if len([]rune(msg.Content)) > maxPicoClawContent {
-				msg.Content = string([]rune(msg.Content)[:maxPicoClawContent])
-			}
-
-			// 根据消息类型决定广播范围。
-			roomID := msg.RoomID
-			switch msg.Type {
-			case picoclaw.MsgTypeProactive:
-				// 主动消息广播到指定房间（如有 RoomID）或全局。
-				if roomID != "" {
-					h.SendAssistantMessageToRoom(agentName, msg.Content, roomID)
-				} else {
-					h.SendAssistantMessage(agentName, msg.Content, "")
-				}
-			case picoclaw.MsgTypeSystem:
-				// 系统通知广播到指定房间或全局。
-				if roomID != "" {
-					h.SendAssistantMessageToRoom(agentName, msg.Content, roomID)
-				} else {
-					h.BroadcastJSON(hub.Message{
-						Type:     "system",
-						Username: agentName,
-						Content:  msg.Content,
-						RoomID:   roomID,
-					})
-				}
-			case picoclaw.MsgTypeCommand:
-				// 命令不广播到前端，仅处理 Hub 查询。
-				if msg.Payload != nil {
-					cmdType, _ := msg.Payload["command"].(string)
-					if cmdType != "" {
-						var cmd hub.HubCommand
-						cmd.Type = cmdType
-						if rid, ok := msg.Payload["room_id"].(string); ok {
-							cmd.RoomID = rid
-						}
-						if lim, ok := msg.Payload["limit"].(float64); ok {
-							cmd.Limit = int(lim)
-						}
-						if before, ok := msg.Payload["before"].(float64); ok {
-							cmd.Before = int64(before)
-						}
-						if to, ok := msg.Payload["to_user"].(string); ok {
-							cmd.ToUser = to
-						}
-						if content, ok := msg.Payload["content"].(string); ok {
-							cmd.Content = content
-						}
-						if params, ok := msg.Payload["params"].(map[string]any); ok {
-							cmd.Params = params
-						}
-						h.ExecuteHubCommand(cmd)
-					}
-				}
-			default:
-				// 未识别类型，按普通消息广播。
-				h.SendAssistantMessage(agentName, msg.Content, "")
-			}
-		}
-
-		// 设置重连回调：重连成功时向房间广播系统通知。
-		pc.SetReconnectCallback(func() {
-			h.BroadcastJSON(hub.Message{
-				Type:     "system",
-				Username: "system",
-				Content:  fmt.Sprintf("%s 已重新连接", agentName),
-			})
-			log.Printf("picoclaw: reconnect callback fired, room notified")
-		})
-
-		if err := pc.Connect(context.Background()); err != nil {
-			log.Printf("warn: failed to connect PicoClaw: %v", err)
-			// 连接失败也启动重连循环。
-			go pc.ReconnectLoop(context.Background())
-		} else {
-			log.Printf("PicoClaw connected to %s", picoclawCfg.WSURL)
 		}
 	}
 
@@ -350,7 +250,7 @@ func writeAgentsMD(dataDir, botName, agentName string) error {
 ## System Prompt
 TokenDanceChat has two assistant identities:
 - %s: normal chat bot backed by the LLM adapter.
-- %s: Agent workflow bot backed by PicoClaw.
+- %s: Agent workflow bot backed by the LLM adapter.
 
 Speak Chinese by default. Be concise and friendly.
 
@@ -408,12 +308,6 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("shutting down server...")
-
-	// Disconnect PicoClaw client.
-	if pc := h.PicoclawClient(); pc != nil {
-		pc.Close()
-		log.Println("PicoClaw disconnected")
-	}
 
 	// Shut down HTTP server first to stop accepting new connections
 	// and drain in-flight requests, then close hub connections.

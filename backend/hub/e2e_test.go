@@ -2,12 +2,15 @@ package hub
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"tokendancechat/backend/llm"
 
 	"github.com/gorilla/websocket"
 )
@@ -25,7 +28,24 @@ type e2eEnv struct {
 
 func newE2EEnv() *e2eEnv {
 	ms := &mockStore{}
-	h := New(ms, nil, nil, "")
+	h := New(ms, nil, "")
+	go h.Run()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := e2eUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		client := NewClient(h, conn)
+		go client.WritePump()
+		go client.ReadPump()
+	}))
+	return &e2eEnv{Hub: h, Server: srv, Addr: strings.Replace(srv.URL, "http://", "ws://", 1) + "/ws"}
+}
+
+func newE2EEnvWithLLM(llmCfg *llm.Config) *e2eEnv {
+	ms := &mockStore{}
+	h := New(ms, llmCfg, "TokenBot")
 	go h.Run()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +62,7 @@ func newE2EEnv() *e2eEnv {
 
 func (e *e2eEnv) Close() {
 	e.Server.Close()
+	e.Hub.Stop()
 }
 
 func (e *e2eEnv) Dial(t *testing.T) *wsConn {
@@ -139,6 +160,52 @@ func TestE2EJoinAndMessage(t *testing.T) {
 	if msg.Username != "alice" || msg.Content != "Hello world" {
 		t.Errorf("got username=%s content=%s", msg.Username, msg.Content)
 	}
+}
+
+func TestE2EPicoClawFallsBackToLLMWhenGatewayMissing(t *testing.T) {
+	llmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected LLM path %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"PicoClaw fallback ok\"}}]}\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer llmServer.Close()
+
+	env := newE2EEnvWithLLM(&llm.Config{
+		Provider: "openai",
+		APIKey:   "test-key",
+		Model:    "test-model",
+		BaseURL:  llmServer.URL,
+	})
+	defer env.Close()
+
+	alice := env.Dial(t)
+	defer alice.Close()
+	alice.JoinAs("alice")
+
+	alice.Send(Message{Type: "message", Content: "@PicoClaw check fallback"})
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		alice.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_, raw, err := alice.ReadMessage()
+		if err != nil {
+			continue
+		}
+		var msg Message
+		if err := json.Unmarshal(raw, &msg); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if msg.Type == "system" && strings.Contains(msg.Content, "PicoClaw is not configured") {
+			t.Fatalf("PicoClaw should fall back to LLM instead of not-configured system message")
+		}
+		if msg.Type == "message" && msg.Username == "PicoClaw" && strings.Contains(msg.Content, "PicoClaw fallback ok") {
+			return
+		}
+	}
+	t.Fatal("expected PicoClaw LLM fallback message")
 }
 
 func TestE2EDirectMessage(t *testing.T) {
