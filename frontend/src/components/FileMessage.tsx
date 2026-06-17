@@ -56,7 +56,7 @@ function FileIconComponent({ category }: { category: ReturnType<typeof getFileCa
     case "pdf":
       return <FileText className={cls + " text-red-500 dark:text-red-400"} />;
     case "image":
-      return <Image className={cls + " text-blue-500 dark:text-blue-400"} />;
+      return <Image className={cls + " text-[var(--accent)]"} />;
     case "video":
       return <Video className={cls + " text-purple-500 dark:text-purple-400"} />;
     case "audio":
@@ -87,7 +87,7 @@ export const FileMessage = memo(function FileMessage({
           href={fileUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="block mb-2 rounded-lg overflow-hidden border border-border hover:border-primary/30 transition-colors"
+          className="td-chat-card block mb-2 overflow-hidden transition-colors hover:border-[var(--accent)]/35"
           onClick={(e) => e.stopPropagation()}
         >
           <img
@@ -101,7 +101,7 @@ export const FileMessage = memo(function FileMessage({
 
       {/* Audio player */}
       {category === "audio" && (
-        <div className="mb-2 rounded-lg bg-muted/30 border border-border p-3">
+        <div className="td-chat-card-muted mb-2 p-3">
           <audio controls className="w-full h-10" preload="metadata">
             <source src={fileUrl} type={mimeType || "audio/mpeg"} />
             <track kind="captions" />
@@ -111,7 +111,7 @@ export const FileMessage = memo(function FileMessage({
 
       {/* Video inline player */}
       {category === "video" && (
-        <div className="mb-2 rounded-lg overflow-hidden border border-border bg-black">
+        <div className="td-chat-card mb-2 overflow-hidden bg-black">
           <video
             controls
             className="w-full max-h-64 object-contain"
@@ -134,13 +134,13 @@ export const FileMessage = memo(function FileMessage({
         download={fileName}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-3 rounded-lg bg-muted/30 hover:bg-muted/50 border border-border hover:border-primary/30 px-3 py-2.5 transition-all duration-200 group/file"
+        className="td-chat-card group/file flex items-center gap-3 px-3 py-2.5 transition-all duration-200 hover:border-[var(--accent)]/35"
         onClick={(e) => e.stopPropagation()}
         title={t("file.downloadFile") || "Download file"}
       >
         <FileIconComponent category={category} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground/80 truncate group-hover/file:text-primary/80 transition-colors">
+          <p className="text-sm font-medium text-foreground/80 truncate group-hover/file:text-[var(--accent)] transition-colors">
             {displayName}
           </p>
           <p className="text-xs text-muted-foreground/50 mt-0.5">
@@ -166,14 +166,14 @@ function PdfPreview({ fileUrl, fileName }: { fileUrl: string; fileName: string }
       {!showPreview ? (
         <button
           onClick={() => setShowPreview(true)}
-          className="flex items-center gap-2 rounded-lg bg-muted/30 hover:bg-muted/50 border border-border px-3 py-2 transition-colors"
+          className="td-chat-list-row flex items-center gap-2 px-3 py-2 transition-colors"
         >
           <Eye className="h-4 w-4 text-red-500" />
           <span className="text-sm text-muted-foreground">Preview PDF</span>
         </button>
       ) : (
-        <div className="rounded-lg overflow-hidden border border-border">
-          <div className="flex items-center justify-between bg-muted/50 px-3 py-1.5 border-b border-border">
+        <div className="td-chat-card overflow-hidden">
+          <div className="td-chat-section flex items-center justify-between border-b px-3 py-1.5">
             <span className="text-xs text-muted-foreground truncate">{fileName}</span>
             <button
               onClick={() => setShowPreview(false)}

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { joinGuestFromPreview } from "./helpers";
 
 /**
  * TokenDanceChat Scroll Behavior & UX E2E Tests.
@@ -37,8 +38,7 @@ async function joinChat(
     name ?? `e2e_scroll_${Math.random().toString(36).slice(2, 8)}`;
 
   await page.goto("/");
-  await page.getByPlaceholder("你的用户名...").fill(guestName);
-  await page.getByRole("button", { name: "游客加入" }).click();
+  await joinGuestFromPreview(page, guestName);
 
   await expect(page.locator("textarea").first()).toBeVisible({
     timeout: 15000,

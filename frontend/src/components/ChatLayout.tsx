@@ -1,34 +1,47 @@
-import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from "react";
-import { Menu, LogOut, Globe, ArrowLeft, AtSign, X, Pin, Settings, Download, Info, Phone, Video, Search, MoreHorizontal, Moon, Sun, Monitor } from "lucide-react";
-import { Sidebar } from "./Sidebar";
-import { MessageTranscript } from "./MessageTranscript";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AtSign,
+  Download,
+  Globe,
+  LogOut,
+  Menu,
+  Monitor,
+  Moon,
+  MoreHorizontal,
+  Pin,
+  Search,
+  Settings,
+  Sun,
+  X,
+} from "lucide-react";
 import { ChatInput } from "./ChatInput";
-import { GroupCreateModal } from "./GroupCreateModal";
-import { ForwardModal } from "./ForwardModal";
-import { ThemeToggle, getStoredTheme, applyTheme, STORAGE_KEY as THEME_STORAGE_KEY, cycleOrder } from "./ThemeToggle";
-import { ErrorBoundary } from "./ErrorBoundary";
-import { SearchBar } from "./SearchBar";
 import { ConversationSearch } from "./ConversationSearch";
-import { ScheduledMessagesPanel } from "./ScheduledMessagesPanel";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { LightChatSidebar, type ChatSpace } from "./LightChatSidebar";
+import { MessageTranscript } from "./MessageTranscript";
+import { SearchBar } from "./SearchBar";
 import { SettingsPanel } from "./SettingsPanel";
-import { useChatStore } from "@/stores/chatStore";
+import { ThemeToggle, applyTheme, cycleOrder, getStoredTheme, STORAGE_KEY as THEME_STORAGE_KEY } from "./ThemeToggle";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useTranslation } from "@/i18n/context";
-import { cn } from "@/lib/utils";
+import type { Language } from "@/i18n/translations";
 import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
-import type { Language } from "@/i18n/translations";
+import { assistants, modelCatalog } from "@/lib/assistantRegistry";
+import { cn } from "@/lib/utils";
+import { useChatStore, type LegacyChatInput } from "@/stores/chatStore";
 
 const ImageLightbox = lazy(() => import("@/components/ImageLightbox").then((m) => ({ default: m.ImageLightbox })));
 const ThreadPanel = lazy(() => import("@/components/ThreadPanel").then((m) => ({ default: m.ThreadPanel })));
-const GroupInfoPanel = lazy(() => import("@/components/GroupInfoPanel").then((m) => ({ default: m.GroupInfoPanel })));
-const VideoCall = lazy(() => import("@/components/VideoCall").then((m) => ({ default: m.VideoCall })));
+
+const defaultAssistant = assistants[0];
 
 export function ChatLayout() {
   const { t, lang, setLang } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [groupModalOpen, setGroupModalOpen] = useState(false);
-  const [forwardTarget, setForwardTarget] = useState<import("@/lib/api").ChatMessage | null>(null);
+  const [activeSpace, setActiveSpace] = useState<ChatSpace>("public");
+  const [assistantId, setAssistantId] = useState(defaultAssistant.id);
+  const [modelId, setModelId] = useState(defaultAssistant.model.id);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [threadParent, setThreadParent] = useState<ChatMessage | null>(null);
@@ -40,15 +53,15 @@ export function ChatLayout() {
   const [searchHighlight, setSearchHighlight] = useState("");
   const [reconnectAttempt, setReconnectAttempt] = useState<number | null>(null);
   const [reconnectFailed, setReconnectFailed] = useState(false);
+  const [convFade, setConvFade] = useState(false);
+  const mainRef = useRef<HTMLDivElement>(null);
+  const transcriptContainerRef = useRef<HTMLDivElement | null>(null);
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
+
   const {
     reset,
-    currentChat,
     setCurrentChat,
     setReplyTo,
-    pendingFriendRequests,
-    pendingGroupInvites,
-    addSystemMessage,
-    currentRoomID,
     clearConversationUnread,
     latestMention,
     setLatestMention,
@@ -57,66 +70,45 @@ export function ChatLayout() {
     setConnected,
     lightboxImage,
     username,
-    groups,
-    groupInfoPanel,
-    setGroupInfoPanel,
-    incomingCall,
-    activeCall,
-    setActiveCall,
-    setIncomingCall,
     setShowAuthModal,
   } = useChatStore();
-
+  const currentChat = useChatStore((s) => s.currentChat as LegacyChatInput);
   const unauthenticated = !username;
-  const { disconnect, sendMessage, sendDMMessage, sendGroupMessage, forwardMessage, markRead } =
-    useWebSocket();
+  const { disconnect, sendMessage, markRead } = useWebSocket();
 
-  // Mobile keyboard handling
-  const mainRef = useRef<HTMLDivElement>(null);
-  const transcriptContainerRef = useRef<HTMLDivElement | null>(null);
-  const [keyboardPadding, setKeyboardPadding] = useState(0);
+  const activeAssistant = useMemo(
+    () => assistants.find((assistant) => assistant.id === assistantId) ?? defaultAssistant,
+    [assistantId],
+  );
+  const activeModel = useMemo(
+    () => modelCatalog.find((model) => model.id === modelId) ?? activeAssistant.model,
+    [activeAssistant.model, modelId],
+  );
+  const assistantMode = activeSpace !== "public";
 
-  // Conversation crossfade on switch
-  const conversationKey = useMemo(() =>
-    currentChat.type === "dm" ? `dm:${currentChat.username}` :
-    currentChat.type === "group" ? `group:${currentChat.name}` :
-    "public",
-  [currentChat]);
-  const [convFade, setConvFade] = useState(false);
-  const groupCallParticipants = useMemo(() => {
-    if (currentChat.type !== "group") return [];
-    return (groups[currentChat.name]?.members ?? []).filter((member) => member !== username);
-  }, [currentChat, groups, username]);
+  useEffect(() => {
+    if (currentChat.type !== "public") {
+      setCurrentChat({ type: "public" });
+    }
+  }, [currentChat.type, setCurrentChat]);
 
   useEffect(() => {
     setConvFade(true);
-    const t = setTimeout(() => setConvFade(false), 200);
-    return () => clearTimeout(t);
-  }, [conversationKey]);
+    const timer = setTimeout(() => setConvFade(false), 160);
+    return () => clearTimeout(timer);
+  }, [activeSpace, assistantId]);
 
-  // Clear unread badge and send read receipt when switching conversations.
   useEffect(() => {
-    const key =
-      currentChat.type === "dm" ? `dm:${currentChat.username}` :
-      currentChat.type === "group" ? `group:${currentChat.name}` :
-      "public";
-    clearConversationUnread(key);
+    clearConversationUnread("public");
     markRead();
-  }, [currentChat, clearConversationUnread, markRead]);
+  }, [activeSpace, clearConversationUnread, markRead]);
 
   useEffect(() => {
     const handleResize = () => {
       if (!window.visualViewport || !mainRef.current) return;
-      const viewportHeight = window.visualViewport.height;
-      const windowHeight = window.innerHeight;
-      const diff = windowHeight - viewportHeight;
-      if (window.innerWidth < 768 && diff > 100) {
-        setKeyboardPadding(diff);
-      } else {
-        setKeyboardPadding(0);
-      }
+      const diff = window.innerHeight - window.visualViewport.height;
+      setKeyboardPadding(window.innerWidth < 768 && diff > 100 ? diff : 0);
     };
-
     window.visualViewport?.addEventListener("resize", handleResize);
     window.visualViewport?.addEventListener("scroll", handleResize);
     return () => {
@@ -125,7 +117,6 @@ export function ChatLayout() {
     };
   }, []);
 
-  // Close mobile sidebar when conversation changes
   useEffect(() => {
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
@@ -133,70 +124,46 @@ export function ChatLayout() {
     setMobileActionsOpen(false);
     setConversationSearchOpen(false);
     setSearchHighlight("");
-  }, [currentChat]);
+  }, [activeSpace, assistantId]);
 
-  // Auto-dismiss upload error toast
   useEffect(() => {
-    if (uploadError) {
-      const timer = setTimeout(() => setUploadError(null), 3000);
-      return () => clearTimeout(timer);
-    }
+    if (!uploadError) return;
+    const timer = setTimeout(() => setUploadError(null), 3000);
+    return () => clearTimeout(timer);
   }, [uploadError]);
 
-  // Auto-dismiss export toast
   useEffect(() => {
-    if (exportToast) {
-      const timer = setTimeout(() => setExportToast(null), 3000);
-      return () => clearTimeout(timer);
-    }
+    if (!exportToast) return;
+    const timer = setTimeout(() => setExportToast(null), 3000);
+    return () => clearTimeout(timer);
   }, [exportToast]);
 
-  const handleDisconnect = useCallback(() => {
-    disconnect();
-    reset();
-  }, [disconnect, reset]);
-
-  // Global keyboard shortcuts
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key === "k") {
-        e.preventDefault();
-        const toggleBtn = document.querySelector<HTMLButtonElement>('[aria-label="toggle search"]');
-        if (toggleBtn) toggleBtn.click();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey;
+      if (mod && event.key === "k") {
+        event.preventDefault();
+        document.querySelector<HTMLButtonElement>('[aria-label="toggle search"]')?.click();
         setTimeout(() => {
-          const searchField = document.querySelector<HTMLInputElement>('[aria-label*="search"] input');
-          searchField?.focus();
+          document.querySelector<HTMLInputElement>('[aria-label*="search"] input')?.focus();
         }, 100);
       }
-      if (mod && e.key === "f") {
-        const tag = (e.target as HTMLElement).tagName;
+      if (mod && event.key === "f") {
+        const tag = (event.target as HTMLElement).tagName;
         if (tag !== "INPUT" && tag !== "TEXTAREA") {
-          e.preventDefault();
-          setConversationSearchOpen((prev) => {
-            if (!prev) return true;
-            // Already open — focus the input field.
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent("tdchat:focus-conversation-search"));
-            }, 50);
-            return prev;
-          });
+          event.preventDefault();
+          setConversationSearchOpen((prev) => !prev);
         }
       }
-      if (e.key === "Escape") {
-        // Cancel reply if active
+      if (event.key === "Escape") {
         if (useChatStore.getState().replyTo) {
-          e.preventDefault();
+          event.preventDefault();
           setReplyTo(null);
         }
-        // Close thread panel if open
-        setThreadParent((prev) => { if (prev) { e.preventDefault(); } return null; });
+        setThreadParent(null);
         setThreadMessages([]);
-        // Exit multi-select mode (via event — no-op if not active)
         window.dispatchEvent(new CustomEvent("tdchat:exit-select-mode"));
-        // Close all open emoji pickers
         window.dispatchEvent(new CustomEvent("tdchat:close-emoji-picker"));
-        // Close mobile sidebar
         setSidebarOpen(false);
         setMobileActionsOpen(false);
         setShowMoreMenu(false);
@@ -204,14 +171,12 @@ export function ChatLayout() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [setReplyTo]);
 
-  // Close more menu on click outside
   useEffect(() => {
     if (!showMoreMenu) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest("[data-more-menu]")) {
+    const handler = (event: MouseEvent) => {
+      if (!(event.target as HTMLElement).closest("[data-more-menu]")) {
         setShowMoreMenu(false);
       }
     };
@@ -219,7 +184,6 @@ export function ChatLayout() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showMoreMenu]);
 
-  // Reconnect status events from chatAPI.
   useEffect(() => {
     const unsubReconnecting = chatAPI.on("reconnecting", (msg) => {
       setReconnectAttempt((msg as unknown as { attempt: number }).attempt);
@@ -239,6 +203,15 @@ export function ChatLayout() {
       unsubReconnected();
       unsubReconnectFailed();
     };
+  }, [setConnected]);
+
+  useEffect(() => {
+    const unsub = chatAPI.on("thread_messages", (msg: { type: string; parent_message_id?: string; messages?: ChatMessage[] }) => {
+      if (msg.messages) {
+        setThreadMessages(msg.messages);
+      }
+    });
+    return () => unsub();
   }, []);
 
   const toggleLang = useCallback(() => {
@@ -246,14 +219,84 @@ export function ChatLayout() {
     setLang(next);
   }, [lang, setLang]);
 
-  // Thread messages WebSocket listener
-  useEffect(() => {
-    const unsub = chatAPI.on("thread_messages", (msg: { type: string; parent_message_id?: string; messages?: ChatMessage[] }) => {
-      if (msg.messages) {
-        setThreadMessages(msg.messages as ChatMessage[]);
+  const handleDisconnect = useCallback(() => {
+    disconnect();
+    reset();
+  }, [disconnect, reset]);
+
+  const handleSpaceSelect = useCallback(
+    (space: ChatSpace) => {
+      setActiveSpace(space);
+      setCurrentChat({ type: "public" });
+      if (space !== "public") {
+        setAssistantId(space);
+        const nextAssistant = assistants.find((assistant) => assistant.id === space);
+        if (nextAssistant) setModelId(nextAssistant.model.id);
       }
-    });
-    return () => { unsub(); };
+      setSidebarOpen(false);
+    },
+    [setCurrentChat],
+  );
+
+  const buildOutgoingContent = useCallback(
+    (content: string) => {
+      if (!assistantMode) return content;
+      const trimmed = content.trim();
+      if (trimmed.startsWith(activeAssistant.mention)) return trimmed;
+      return `${activeAssistant.mention} ${trimmed}`;
+    },
+    [activeAssistant.mention, assistantMode],
+  );
+
+  const sendHandler = useCallback(
+    (content: string) => {
+      sendMessage(buildOutgoingContent(content));
+    },
+    [buildOutgoingContent, sendMessage],
+  );
+
+  const handleUpload = useCallback(
+    async (file: File) => {
+      const url = await chatAPI.uploadImage(file);
+      if (!url) {
+        setUploadError(t("input.uploadFailed"));
+        useChatStore.getState().setPendingImage(null);
+        return;
+      }
+      const state = useChatStore.getState();
+      const isImage = file.type.startsWith("image/");
+      const fileMarkdown = isImage ? `![image](${url})` : `[${file.name}](${url})`;
+      chatAPI.sendMessage(buildOutgoingContent(fileMarkdown), state.replyTo || undefined);
+      state.setReplyTo(null);
+      state.setPendingImage(null);
+    },
+    [buildOutgoingContent, t],
+  );
+
+  const handleExport = useCallback(
+    async (format: "json" | "text") => {
+      try {
+        const blob = await chatAPI.exportChat("public", format);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const ext = format === "json" ? "json" : "txt";
+        const now = new Date().toISOString().slice(0, 10);
+        a.download = `chat_export_public_${now}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setExportToast(t("export.exportSuccess"));
+      } catch {
+        setExportToast(t("export.exportError"));
+      }
+    },
+    [t],
+  );
+
+  const handleDelete = useCallback((messageId: string) => {
+    chatAPI.deleteMessage(messageId);
   }, []);
 
   const handleOpenThread = useCallback((message: ChatMessage) => {
@@ -267,365 +310,189 @@ export function ChatLayout() {
     setThreadMessages([]);
   }, []);
 
-  const handleSendThreadReply = useCallback((content: string) => {
-    if (!threadParent) return;
-    chatAPI.sendThreadReply(threadParent.id, content);
-  }, [threadParent]);
-
-  const handleReply = useCallback(
-    (message: ChatMessage) => {
-      setReplyTo(message);
+  const handleSendThreadReply = useCallback(
+    (content: string) => {
+      if (!threadParent) return;
+      chatAPI.sendThreadReply(threadParent.id, content);
     },
-    [setReplyTo],
+    [threadParent],
   );
 
-  const handleUpload = useCallback(async (file: File) => {
-    const url = await chatAPI.uploadImage(file);
-    if (!url) {
-      setUploadError(t("input.uploadFailed"));
-      useChatStore.getState().setPendingImage(null);
-      return;
-    }
-    const state = useChatStore.getState();
-    const isImage = file.type.startsWith("image/");
-    const fileMarkdown = isImage ? `![image](${url})` : `[${file.name}](${url})`;
-    if (state.currentChat.type === "dm") {
-      chatAPI.sendDMMessage(state.currentChat.username, fileMarkdown, state.replyTo || undefined);
-    } else if (state.currentChat.type === "group") {
-      chatAPI.sendGroupMessage(state.currentChat.name, fileMarkdown, state.replyTo || undefined);
-    } else {
-      chatAPI.sendMessage(fileMarkdown, state.replyTo || undefined);
-    }
-    state.setReplyTo(null);
-    state.setPendingImage(null);
-  }, []);
+  const handleReply = useCallback((message: ChatMessage) => {
+    setReplyTo(message);
+  }, [setReplyTo]);
 
-  const handleExport = useCallback(async (format: 'json' | 'text') => {
-    try {
-      const conversationKey =
-        currentChat.type === "dm" ? `dm:${currentChat.username}` :
-        currentChat.type === "group" ? `group:${currentChat.name}` :
-        "public";
-      const blob = await chatAPI.exportChat(
-        conversationKey,
-        format,
-        currentChat.type === "dm" ? username : undefined,
-      );
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const ext = format === "json" ? "json" : "txt";
-      const now = new Date().toISOString().slice(0, 10);
-      const name = conversationKey.replace(/^dm:|^group:/, "").replace(/[^a-zA-Z0-9一-鿿_-]/g, "_");
-      a.download = `chat_export_${name}_${now}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      setExportToast(t("export.exportSuccess"));
-    } catch {
-      setExportToast(t("export.exportError"));
-    }
-  }, [currentChat, t, username]);
+  const headerTitle = assistantMode ? activeAssistant.name : t("chat.roomName");
+  const headerSubtitle = assistantMode
+    ? `${activeAssistant.label} · ${activeModel.name} · ${activeModel.context}`
+    : t("chat.subtitle");
 
-  const handleDelete = useCallback((messageId: string) => {
-    chatAPI.deleteMessage(messageId);
-  }, []);
+  const reconnectLabel = reconnectFailed
+    ? t("system.reconnectFailed")
+    : t("system.reconnecting", { attempt: String((reconnectAttempt ?? 0) + 1) });
 
-  const handleForward = useCallback((message: import("@/lib/api").ChatMessage) => {
-    setForwardTarget(message);
-  }, []);
-
-  const handleForwardSend = useCallback((messageID: string, toUsername: string) => {
-    forwardMessage(messageID, toUsername);
-    setForwardTarget(null);
-  }, [forwardMessage]);
-
-  const handleStartDM = useCallback(
-    (targetUsername: string) => {
-      setCurrentChat({ type: "dm", username: targetUsername });
-      setSidebarOpen(false);
-    },
-    [setCurrentChat],
-  );
-
-  const handleAddFriend = useCallback((targetUsername: string) => {
-    chatAPI.sendFriendRequest(targetUsername);
-    setSidebarOpen(false);
-  }, []);
-
-  const handleMentionAssistant = useCallback((name: string) => {
-    setCurrentChat({ type: "public" });
-    window.dispatchEvent(
-      new CustomEvent("tdchat:insert-mention", { detail: { name } }),
+  const renderReconnectDot = () => {
+    if (connected) return null;
+    return (
+      <span className="relative flex h-2 w-2 flex-shrink-0" title={reconnectLabel}>
+        <span
+          className={cn(
+            "absolute inline-flex h-full w-full rounded-full",
+            reconnectFailed ? "bg-danger" : "bg-warning",
+            reconnectAttempt !== null && !reconnectFailed && "animate-ping opacity-40",
+          )}
+        />
+        <span className={cn("relative inline-flex h-2 w-2 rounded-full", reconnectFailed ? "bg-danger" : "bg-warning")} />
+      </span>
     );
-    setSidebarOpen(false);
-  }, [setCurrentChat]);
+  };
 
-  const handleStartCall = useCallback(
-    (callType: "video" | "voice") => {
-      if (currentChat.type === "dm") {
-        setActiveCall({
-          callId: "",
-          peer: currentChat.username,
-          callType,
-          startTime: Date.now(),
-        });
-        return;
-      }
-      if (currentChat.type === "group" && groupCallParticipants.length > 0) {
-        setActiveCall({
-          callId: "",
-          peer: currentChat.name,
-          callType,
-          startTime: Date.now(),
-          isGroupCall: true,
-          groupName: currentChat.name,
-          participants: groupCallParticipants,
-        });
-      }
-    },
-    [currentChat, groupCallParticipants, setActiveCall],
-  );
-
-  const handleCloseCall = useCallback(() => {
-    setIncomingCall(null);
-    setActiveCall(null);
-  }, [setIncomingCall, setActiveCall]);
-
-  const handleCreateGroup = useCallback(
-    (name: string, members: string[]) => {
-      chatAPI.sendGroupCreate(name, members);
-      // Invite selected members (backend group_create with members stubs - we use separate invites)
-      members.forEach((m) => {
-        chatAPI.sendGroupInvite(name, m);
-      });
-      setCurrentChat({ type: "group", name });
-    },
-    [setCurrentChat],
-  );
-
-  // Handle friend request accept/reject
-  const handleFriendAccept = useCallback(
-    (from: string) => {
-      chatAPI.sendFriendAccept(from);
-      addSystemMessage(
-        JSON.stringify({
-          key: "system.friendAccepted",
-          params: { username: from },
-        }),
-        Date.now(),
-      );
-    },
-    [addSystemMessage],
-  );
-
-  const handleFriendReject = useCallback((from: string) => {
-    chatAPI.sendFriendReject(from);
-  }, []);
-
-  // Compute the send handler based on current chat context.
-  const sendHandler = useMemo(() => {
-    if (currentChat.type === "dm") {
-      return (content: string) => sendDMMessage(currentChat.username, content);
-    }
-    if (currentChat.type === "group") {
-      return (content: string) =>
-        sendGroupMessage(currentChat.name, content);
-    }
-    return sendMessage;
-  }, [currentChat, sendDMMessage, sendGroupMessage, sendMessage]);
-
-  // Compute header title
-  const headerTitle = useMemo(() => {
-    if (currentChat.type === "dm") {
-      return t("chat.dmWith", { username: currentChat.username });
-    }
-    if (currentChat.type === "group") {
-      return t("chat.groupChat", { name: currentChat.name });
-    }
-    return t("chat.roomName");
-  }, [currentChat, t]);
-
-  // Compute header subtitle
-  const headerSubtitle = useMemo(() => {
-    if (currentChat.type === "dm") {
-      return t("chat.dmIndicator");
-    }
-    if (currentChat.type === "group") {
-      return t("chat.groupIndicator");
-    }
-    return t("chat.subtitle");
-  }, [currentChat, t]);
-
-  const pendingUsers = useMemo(
-    () => pendingFriendRequests.map((r) => r.from),
-    [pendingFriendRequests],
+  const actionMenu = (
+    <>
+      <button
+        onClick={() => {
+          toggleLang();
+          setMobileActionsOpen(false);
+          setShowMoreMenu(false);
+        }}
+        className="td-chat-list-row flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+      >
+        <Globe className="h-4 w-4" />
+        {t("lang.switchTo")}
+      </button>
+      {(() => {
+        const theme = getStoredTheme();
+        const ThemeIcon = theme === "dark" ? Moon : theme === "system" ? Monitor : Sun;
+        const labels: Record<string, string> = {
+          light: t("settings.themeLight"),
+          dark: t("settings.themeDark"),
+          system: t("settings.themeSystem"),
+        };
+        return (
+          <button
+            onClick={() => {
+              const idx = cycleOrder.indexOf(theme);
+              const next = cycleOrder[(idx + 1) % cycleOrder.length];
+              applyTheme(next);
+              localStorage.setItem(THEME_STORAGE_KEY, next);
+              window.dispatchEvent(new CustomEvent("tdchat:theme-changed", { detail: { theme: next } }));
+              setMobileActionsOpen(false);
+              setShowMoreMenu(false);
+            }}
+            className="td-chat-list-row flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+          >
+            <ThemeIcon className="h-4 w-4" />
+            {labels[theme]}
+          </button>
+        );
+      })()}
+      <button
+        onClick={() => {
+          handleExport("json");
+          setMobileActionsOpen(false);
+          setShowMoreMenu(false);
+        }}
+        className="td-chat-list-row flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+      >
+        <Download className="h-4 w-4" />
+        {t("export.exportJson")}
+      </button>
+      <button
+        onClick={() => {
+          handleExport("text");
+          setMobileActionsOpen(false);
+          setShowMoreMenu(false);
+        }}
+        className="td-chat-list-row flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+      >
+        <Download className="h-4 w-4" />
+        {t("export.exportText")}
+      </button>
+      <button
+        onClick={() => {
+          setSettingsOpen(true);
+          setMobileActionsOpen(false);
+          setShowMoreMenu(false);
+        }}
+        className="td-chat-list-row flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+      >
+        <Settings className="h-4 w-4" />
+        {t("settings.openSettings")}
+      </button>
+    </>
   );
 
   return (
-    <div ref={mainRef} className="flex h-screen-mobile overflow-hidden bg-background">
-      {/* Mobile sidebar backdrop */}
+    <div ref={mainRef} className="td-chat-shell flex h-screen-mobile overflow-hidden">
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden animate-fade-in"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden animate-fade-in"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* Sidebar - slide-in on mobile/tablet */}
       <div
         className={cn(
           "fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out lg:relative lg:flex lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
-        <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground/50">Sidebar unavailable</div>}>
-          <Sidebar
-            collapsed={false}
+        <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground/50">Navigation unavailable</div>}>
+          <LightChatSidebar
+            activeSpace={activeSpace}
+            activeAssistantId={assistantId}
+            onSelectSpace={handleSpaceSelect}
             onClose={() => setSidebarOpen(false)}
-            onStartDM={handleStartDM}
-            onAddFriend={handleAddFriend}
-            onCreateGroup={() => setGroupModalOpen(true)}
-            onMentionAssistant={handleMentionAssistant}
-            pendingFriendUsers={pendingUsers}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onDisconnect={handleDisconnect}
           />
         </ErrorBoundary>
       </div>
 
-      {/* Main chat area */}
-      <div className="flex flex-1 flex-col min-w-0 overflow-hidden" style={{ paddingBottom: keyboardPadding }}>
-        {/* Mobile top bar */}
-        <div className="flex items-center gap-2 glass-header border-b border-[var(--border-base)] px-3 py-2 lg:hidden pt-safe">
+      <div className="td-chat-main flex min-w-0 flex-1 flex-col overflow-hidden" style={{ paddingBottom: keyboardPadding }}>
+        <div
+          className="td-chat-header flex items-center gap-2 glass-header border-b border-[var(--border-base)] px-3 pb-2 lg:hidden"
+          style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
+        >
           <button
             onClick={() => setSidebarOpen(true)}
             aria-label={t("a11y.openSidebar")}
-            className="touch-target rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="td-chat-header-action touch-target rounded-[var(--radius-control)] p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <Menu className="h-5 w-5" />
           </button>
           <div className="min-w-0 flex-1 px-1">
-            <h1
-              className="truncate text-[15px] font-semibold leading-5 text-foreground flex items-center gap-1.5"
-              data-visual="mobile-chat-title"
-            >
-              {!connected && (
-                <span className="relative flex h-2 w-2 flex-shrink-0" title={reconnectFailed ? t("system.reconnectFailed") : t("system.reconnecting", { attempt: String((reconnectAttempt ?? 0) + 1) })}>
-                  <span className={cn(
-                    "absolute inline-flex h-full w-full rounded-full",
-                    reconnectFailed ? "bg-danger" : "bg-warning",
-                    reconnectAttempt !== null && !reconnectFailed && "animate-ping opacity-40",
-                  )} />
-                  <span className={cn("relative inline-flex h-2 w-2 rounded-full", reconnectFailed ? "bg-danger" : "bg-warning")} />
-                </span>
-              )}
+            <h1 className="td-chat-header-title flex items-center gap-1.5 truncate text-[15px] font-semibold leading-5 text-foreground" data-visual="mobile-chat-title">
+              {renderReconnectDot()}
               {headerTitle}
             </h1>
-            {unauthenticated && (
+            {unauthenticated ? (
               <button
                 onClick={() => setShowAuthModal(true)}
-                className="rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors mt-0.5"
+                className="mt-0.5 inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-[var(--accent)]/10 px-3 text-[10px] font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20"
               >
                 {t("join.buttonJoin")}
               </button>
+            ) : (
+              <p className="truncate text-[11px] text-muted-foreground">{headerSubtitle}</p>
             )}
           </div>
-          {/* Call buttons (mobile, DM only) */}
-          {currentChat.type === "dm" && (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => handleStartCall("voice")}
-                className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
-                aria-label={t("call.voiceCall")}
-              >
-                <Phone className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleStartCall("video")}
-                className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
-                aria-label={t("call.videoCall")}
-              >
-                <Video className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-          {/* Group info button (mobile) */}
-          {currentChat.type === "group" && (
-            <>
-              {groupCallParticipants.length > 0 && (
-                <button
-                  onClick={() => handleStartCall("video")}
-                  className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
-                  aria-label={t("call.groupCall")}
-                >
-                  <Video className="h-4 w-4" />
-                </button>
-              )}
-              <button
-                onClick={() => setGroupInfoPanel(currentChat.name)}
-                className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
-                aria-label={t("group.groupInfo")}
-              >
-                <Info className="h-4 w-4" />
-              </button>
-            </>
-          )}
           <ThemeToggle />
-          {/* Secondary actions (mobile) */}
           <div className="relative flex-shrink-0">
             <button
               onClick={() => setMobileActionsOpen((open) => !open)}
               aria-label={t("a11y.moreActions")}
-              className="touch-target rounded-lg p-2 text-muted-foreground/60 hover:bg-muted hover:text-foreground transition-colors"
+              className="td-chat-header-action touch-target rounded-[var(--radius-control)] p-2 text-muted-foreground/70 hover:bg-muted hover:text-foreground"
             >
               <MoreHorizontal className="h-5 w-5" />
             </button>
             {mobileActionsOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-16px border border-[var(--border-base)] bg-[var(--dialog-fill-0)] py-1 shadow-xl animate-scale-in origin-top-right">
-                <button
-                  onClick={() => {
-                    toggleLang();
-                    setMobileActionsOpen(false);
-                  }}
-                  className="flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm text-foreground/80 hover:bg-muted transition-colors"
-                >
-                  <Globe className="h-4 w-4 text-muted-foreground" />
-                  {t("lang.switchTo")}
-                </button>
-                <button
-                  onClick={() => {
-                    handleExport("json");
-                    setMobileActionsOpen(false);
-                  }}
-                  className="flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm text-foreground/80 hover:bg-muted transition-colors"
-                >
-                  <Download className="h-4 w-4 text-muted-foreground" />
-                  {t("export.exportJson")}
-                </button>
-                <button
-                  onClick={() => {
-                    handleExport("text");
-                    setMobileActionsOpen(false);
-                  }}
-                  className="flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm text-foreground/80 hover:bg-muted transition-colors"
-                >
-                  <Download className="h-4 w-4 text-muted-foreground" />
-                  {t("export.exportText")}
-                </button>
-                <button
-                  onClick={() => {
-                    setSettingsOpen(true);
-                    setMobileActionsOpen(false);
-                  }}
-                  className="flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm text-foreground/80 hover:bg-muted transition-colors"
-                >
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                  {t("settings.notificationPrefs")}
-                </button>
+              <div className="td-chat-menu absolute right-0 top-full z-50 mt-1 w-52 rounded-[var(--radius-panel)] py-1 animate-scale-in origin-top-right">
+                {actionMenu}
                 <button
                   onClick={handleDisconnect}
-                  className="flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm text-destructive/80 hover:bg-destructive/10 transition-colors"
+                  className="td-chat-list-row flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive/80 hover:text-destructive"
                 >
                   <LogOut className="h-4 w-4" />
                   {t("chat.disconnect")}
@@ -635,180 +502,54 @@ export function ChatLayout() {
           </div>
         </div>
 
-        {/* Desktop header */}
-        <div className="hidden lg:flex items-center justify-between gap-4 glass-header border-b border-[var(--border-base)] px-6 py-3.5 transition-colors duration-300">
-          <div className="flex min-w-[13rem] max-w-[42%] flex-shrink-0 items-center gap-3">
-            {/* Back to public chat button (when in DM or group) */}
-            {currentChat.type !== "public" && (
-              <button
-                onClick={() => setCurrentChat({ type: "public" })}
-                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                aria-label={t("chat.publicChat")}
-              >
-                <ArrowLeft className="h-[18px] w-[18px]" />
-              </button>
+        <div className="td-chat-header hidden items-center justify-between gap-4 glass-header border-b border-[var(--border-base)] px-6 py-3.5 lg:flex">
+          <div className="min-w-0 flex-1">
+            <h1 className="td-chat-header-title flex items-center gap-2 truncate text-base font-semibold text-foreground" title={headerTitle} data-visual="desktop-chat-title">
+              {renderReconnectDot()}
+              {headerTitle}
+            </h1>
+            {unauthenticated ? (
+              <p className="td-chat-header-subtitle flex items-center gap-2 truncate text-xs text-muted-foreground">
+                <span className="opacity-70">{t("chat.guestWarning")}</span>
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] bg-[var(--accent)]/10 px-3 text-[11px] font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20"
+                >
+                  {t("join.buttonJoin")}
+                </button>
+              </p>
+            ) : (
+              <p className="td-chat-header-subtitle truncate text-xs text-muted-foreground">{headerSubtitle}</p>
             )}
-            {/* Group info button (when in group chat) */}
-            {currentChat.type === "group" && (
-              <button
-                onClick={() => setGroupInfoPanel(currentChat.name)}
-                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                aria-label={t("group.groupInfo")}
-              >
-                <Info className="h-[18px] w-[18px]" />
-              </button>
-            )}
-            <div className="min-w-0 flex-1">
-              <h1
-                data-visual="desktop-chat-title"
-                className="truncate text-base font-semibold text-foreground flex items-center gap-2"
-                title={headerTitle}
-              >
-                {!connected && (
-                  <span className="relative flex h-2 w-2 flex-shrink-0" title={reconnectFailed ? t("system.reconnectFailed") : t("system.reconnecting", { attempt: String((reconnectAttempt ?? 0) + 1) })}>
-                    <span className={cn(
-                      "absolute inline-flex h-full w-full rounded-full",
-                      reconnectFailed ? "bg-danger" : "bg-warning",
-                      reconnectAttempt !== null && !reconnectFailed && "animate-ping opacity-40",
-                    )} />
-                    <span className={cn(
-                      "relative inline-flex h-2 w-2 rounded-full",
-                      reconnectFailed ? "bg-danger" : "bg-warning",
-                    )} />
-                  </span>
-                )}
-                {headerTitle}
-              </h1>
-              {unauthenticated ? (
-                <p className="truncate text-xs text-muted-foreground flex items-center gap-2">
-                  <span className="opacity-60">{t("chat.guestWarning")}</span>
-                  <button
-                    onClick={() => setShowAuthModal(true)}
-                    className="rounded-full bg-[var(--accent)]/10 px-2.5 py-0.5 text-[11px] font-medium text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors"
-                  >
-                    {t("join.buttonJoin")}
-                  </button>
-                </p>
-              ) : (
-                <p className="truncate text-xs text-muted-foreground">{headerSubtitle}</p>
-              )}
-            </div>
           </div>
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-x-auto scrollbar-thin">
-            {/* Call buttons (desktop, DM only) */}
-            {currentChat.type === "dm" && (
-              <div className="flex items-center gap-1 mr-1">
-                <button
-                  onClick={() => handleStartCall("voice")}
-                  className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
-                  aria-label={t("call.voiceCall")}
-                >
-                  <Phone className="h-4 w-4" />
-                  {t("call.voiceCall")}
-                </button>
-                <button
-                  onClick={() => handleStartCall("video")}
-                  className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
-                  aria-label={t("call.videoCall")}
-                >
-                  <Video className="h-4 w-4" />
-                  {t("call.videoCall")}
-                </button>
-              </div>
-            )}
-            {currentChat.type === "group" && groupCallParticipants.length > 0 && (
-              <button
-                onClick={() => handleStartCall("video")}
-                className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
-                aria-label={t("call.groupCall")}
-              >
-                <Video className="h-4 w-4" />
-                {t("call.groupCall")}
-              </button>
-            )}
-            {/* More dropdown (desktop) */}
+          <div className="flex min-w-0 items-center justify-end gap-2">
+            <button
+              onClick={() => setConversationSearchOpen((prev) => !prev)}
+              aria-label={t("search.inConversation")}
+              className="td-chat-header-action flex min-h-11 items-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Search className="h-4 w-4" />
+              {t("search.pressCtrlF")}
+            </button>
             <div className="relative" data-more-menu>
               <button
                 onClick={() => setShowMoreMenu(!showMoreMenu)}
                 aria-label={t("more.label")}
-                className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+                className="td-chat-header-action flex min-h-11 items-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 <MoreHorizontal className="h-4 w-4" />
                 {t("more.label")}
               </button>
               {showMoreMenu && (
-                <div className="absolute right-0 top-full mt-1 z-50 rounded-16px border border-[var(--border-base)] bg-[var(--dialog-fill-0)] shadow-md min-w-[180px] py-1">
-                  <button
-                    onClick={() => { toggleLang(); setShowMoreMenu(false); }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
-                  >
-                    <Globe className="h-4 w-4" />
-                    {t("lang.switchTo")}
-                  </button>
-                  {(() => {
-                    const theme = getStoredTheme();
-                    const ThemeIcon = theme === "dark" ? Moon : theme === "system" ? Monitor : Sun;
-                    const labels: Record<string, string> = {
-                      light: t("settings.themeLight"),
-                      dark: t("settings.themeDark"),
-                      system: t("settings.themeSystem"),
-                    };
-                    return (
-                      <button
-                        onClick={() => {
-                          const cur = getStoredTheme();
-                          const idx = cycleOrder.indexOf(cur);
-                          const next = cycleOrder[(idx + 1) % cycleOrder.length];
-                          applyTheme(next);
-                          localStorage.setItem(THEME_STORAGE_KEY, next);
-                          window.dispatchEvent(new CustomEvent("tdchat:theme-changed", { detail: { theme: next } }));
-                          setShowMoreMenu(false);
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
-                      >
-                        <ThemeIcon className="h-4 w-4" />
-                        {labels[theme]}
-                      </button>
-                    );
-                  })()}
-                  <button
-                    onClick={() => { handleExport("json"); setShowMoreMenu(false); }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
-                  >
-                    <Download className="h-4 w-4" />
-                    {t("export.exportJson")}
-                  </button>
-                  <button
-                    onClick={() => { handleExport("text"); setShowMoreMenu(false); }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
-                  >
-                    <Download className="h-4 w-4" />
-                    {t("export.exportText")}
-                  </button>
-                  <button
-                    onClick={() => { setSettingsOpen(true); setShowMoreMenu(false); }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent w-full text-left"
-                  >
-                    <Settings className="h-4 w-4" />
-                    {t("settings.openSettings")}
-                  </button>
+                <div className="td-chat-menu absolute right-0 top-full z-50 mt-1 min-w-[180px] rounded-[var(--radius-panel)] py-1">
+                  {actionMenu}
                 </div>
               )}
             </div>
-            {/* Search button (desktop) */}
-            <button
-              onClick={() => setConversationSearchOpen((prev) => !prev)}
-              aria-label={t("search.inConversation")}
-              className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
-            >
-              <Search className="h-4 w-4" />
-              {t("search.pressCtrlF")}
-            </button>
-            <ScheduledMessagesPanel roomId={currentRoomID} />
             <button
               onClick={handleDisconnect}
               aria-label={t("chat.disconnect")}
-              className="flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive/80 transition-colors"
+              className="td-chat-header-action flex min-h-11 items-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] px-3 py-2 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive/80"
             >
               <LogOut className="h-4 w-4" />
               {t("chat.leave")}
@@ -816,135 +557,56 @@ export function ChatLayout() {
           </div>
         </div>
 
-        {/* Friend request notifications */}
-        {pendingFriendRequests.length > 0 && currentChat.type === "public" && (
-          <div className="border-b border-[var(--hairline)] bg-[var(--tint)] px-6 py-2 space-y-1">
-            {pendingFriendRequests.map((req) => (
-              <div
-                key={req.from}
-                className="flex items-center gap-3 text-xs animate-fade-in"
-              >
-                <span className="text-muted-foreground/70 flex-1">
-                  {t("system.friendRequest", { username: req.from })}
-                </span>
-                <div className="flex gap-1.5 flex-shrink-0">
-                  <button
-                    onClick={() => handleFriendAccept(req.from)}
-                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-white bg-primary"
-                  >
-                    {t("friend.accept")}
-                  </button>
-                  <button
-                    onClick={() => handleFriendReject(req.from)}
-                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-muted-foreground bg-muted hover:bg-secondary"
-                  >
-                    {t("friend.reject")}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Group invite notifications */}
-        {pendingGroupInvites.length > 0 && (
-          <div className="border-b border-border bg-accent/30 px-6 py-2 space-y-1">
-            {pendingGroupInvites.map((inv) => (
-              <div
-                key={inv.group}
-                className="flex items-center gap-3 text-xs animate-fade-in"
-              >
-                <span className="text-muted-foreground/70 flex-1">
-                  {t("system.groupInvited", { group: inv.group, username: inv.from })}
-                </span>
-                <div className="flex gap-1.5 flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      chatAPI.sendGroupInviteAccept(inv.group, inv.from);
-                      useChatStore.getState().removeGroupInvite(inv.group);
-                    }}
-                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-white bg-primary"
-                  >
-                    {t("friend.accept")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      chatAPI.sendGroupInviteDecline(inv.group);
-                      useChatStore.getState().removeGroupInvite(inv.group);
-                    }}
-                    className="rounded-md px-2 py-0.5 text-[10px] font-medium text-muted-foreground bg-muted hover:bg-secondary"
-                  >
-                    {t("friend.decline")}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Mention notification toast */}
         {latestMention && (
-          <div className="border-b border-mention/50 bg-mention/10 px-6 py-2 flex items-center gap-3 text-xs animate-slide-up">
-            <AtSign className="h-3.5 w-3.5 text-mention flex-shrink-0" />
-            <span className="text-foreground/80 flex-1 truncate">
-              <span className="font-medium">{latestMention.from}</span> {t("friend.mentionedYou")}{latestMention.group ? ` in ${latestMention.group}` : ""}:{" "}
-              <span className="text-muted-foreground/60">{latestMention.content}</span>
+          <div className="td-chat-statusbar flex items-center gap-3 border-b border-mention/50 bg-mention/10 px-6 py-2 text-xs animate-slide-up">
+            <AtSign className="h-3.5 w-3.5 flex-shrink-0 text-mention" />
+            <span className="min-w-0 flex-1 truncate text-foreground/80">
+              <span className="font-medium">{latestMention.from}</span> {t("mention.mentionedYou")}:{" "}
+              <span className="text-muted-foreground/70">{latestMention.content}</span>
             </span>
             <button
               onClick={() => {
-                if (latestMention.group) {
-                  setCurrentChat({ type: "group", name: latestMention.group });
-                } else {
-                  setCurrentChat({ type: "public" });
-                }
                 setLatestMention(null);
-                // Jump to the message.
                 if (latestMention.messageId) {
-                  window.dispatchEvent(
-                    new CustomEvent("tdchat:scroll-to-message", {
-                      detail: { id: latestMention.messageId },
-                    }),
-                  );
+                  window.dispatchEvent(new CustomEvent("tdchat:scroll-to-message", { detail: { id: latestMention.messageId } }));
                 }
               }}
-              className="rounded-md px-2 py-0.5 text-[10px] font-medium text-mention hover:bg-mention/15 flex-shrink-0"
+              className="rounded-[var(--radius-control)] px-2 py-1 text-[10px] font-medium text-mention hover:bg-mention/15"
             >
-              {t("friend.view")}
+              {t("mention.view")}
             </button>
             <button
               onClick={() => setLatestMention(null)}
-              className="rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground flex-shrink-0"
-              aria-label={t("friend.dismiss")}
+              className="rounded-[var(--radius-control)] p-1 text-muted-foreground/50 hover:text-muted-foreground"
+              aria-label={t("mention.dismiss")}
             >
               <X className="h-3 w-3" />
             </button>
           </div>
         )}
 
-        {/* Pinned messages banner */}
-        {pinnedMessages.length > 0 && currentChat.type === "public" && (
-          <div className="border-b border-border bg-accent/20 px-6 py-1.5 flex items-center gap-2 overflow-x-auto scrollbar-thin">
-            <Pin className="h-3 w-3 text-muted-foreground/50 flex-shrink-0" />
-            {pinnedMessages.map((pm) => (
+        {pinnedMessages.length > 0 && (
+          <div className="td-chat-statusbar flex items-center gap-2 overflow-x-auto border-b px-6 py-1.5 scrollbar-thin">
+            <Pin className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
+            {pinnedMessages.map((message) => (
               <button
-                key={pm.id}
+                key={message.id}
                 onClick={() => {
-                  const el = document.getElementById(`msg-${pm.id}`);
-                  if (el) {
-                    el.scrollIntoView({ behavior: "smooth", block: "center" });
-                    el.classList.add("highlight-flash");
-                    setTimeout(() => el.classList.remove("highlight-flash"), 2000);
-                  }
+                  const el = document.getElementById(`msg-${message.id}`);
+                  if (!el) return;
+                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el.classList.add("highlight-flash");
+                  setTimeout(() => el.classList.remove("highlight-flash"), 2000);
                 }}
-                className="flex-shrink-0 rounded-md px-2 py-0.5 text-[10px] bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors truncate max-w-[200px]"
+                className="td-chat-pill max-w-[200px] flex-shrink-0 truncate rounded-[var(--radius-control)] px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground"
               >
-                {pm.username}: {(pm.content || "").slice(0, 40)}{(pm.content || "").length > 40 ? "..." : ""}
+                {message.username}: {(message.content || "").slice(0, 40)}
+                {(message.content || "").length > 40 ? "..." : ""}
               </button>
             ))}
           </div>
         )}
 
-        {/* In-conversation search (Ctrl+F) */}
         <ConversationSearch
           open={conversationSearchOpen}
           onClose={() => {
@@ -954,90 +616,59 @@ export function ChatLayout() {
           onHighlightChange={setSearchHighlight}
         />
 
-        {/* Message transcript */}
-        <div className="relative flex-1 overflow-hidden flex flex-col">
-          <div className={cn("flex-1 min-h-0 flex flex-col overflow-hidden transition-opacity duration-150", convFade ? "opacity-40" : "opacity-100")}>
-            <ErrorBoundary fallback={<div className="flex items-center justify-center h-full text-sm text-muted-foreground/50">Chat transcript unavailable</div>}>
-              <MessageTranscript onReply={handleReply} onDelete={handleDelete} onForward={handleForward} onOpenThread={handleOpenThread} highlight={searchHighlight} scrollContainerRef={transcriptContainerRef} />
+        <div className="td-chat-transcript relative flex flex-1 flex-col overflow-hidden">
+          <div className={cn("flex min-h-0 flex-1 flex-col overflow-hidden transition-opacity duration-150", convFade ? "opacity-45" : "opacity-100")}>
+            <ErrorBoundary fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground/50">Chat transcript unavailable</div>}>
+              <MessageTranscript
+                onReply={handleReply}
+                onDelete={handleDelete}
+                onOpenThread={handleOpenThread}
+                highlight={searchHighlight}
+                scrollContainerRef={transcriptContainerRef}
+              />
             </ErrorBoundary>
           </div>
 
-          {/* Chat input - fixed at bottom */}
           <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground/50">Chat input unavailable</div>}>
-            <ChatInput onSend={sendHandler} onUpload={handleUpload} disabled={false} />
+            <ChatInput
+              onSend={sendHandler}
+              onUpload={handleUpload}
+              disabled={unauthenticated || !connected}
+              assistantContext={assistantMode ? { assistant: activeAssistant, model: activeModel } : null}
+            />
           </ErrorBoundary>
         </div>
       </div>
 
-      {/* Thread panel */}
       <Suspense fallback={null}>
-        {threadParent && <ThreadPanel
-        parentMessage={threadParent}
-        threadMessages={threadMessages}
-        onClose={handleCloseThread}
-        onSendReply={handleSendThreadReply}
-      />}
+        {threadParent && (
+          <ThreadPanel
+            parentMessage={threadParent}
+            threadMessages={threadMessages}
+            onClose={handleCloseThread}
+            onSendReply={handleSendThreadReply}
+          />
+        )}
       </Suspense>
 
-      {/* Group info panel */}
-      <Suspense fallback={null}>
-        {groupInfoPanel && <GroupInfoPanel
-        groupName={groupInfoPanel}
-        onClose={() => setGroupInfoPanel(null)}
-      />}
-      </Suspense>
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      <SearchBar />
 
-      {/* Group create modal */}
-      <GroupCreateModal
-        open={groupModalOpen}
-        onClose={() => setGroupModalOpen(false)}
-        onCreate={handleCreateGroup}
-      />
-
-      {forwardTarget && (
-        <ForwardModal
-          message={forwardTarget}
-          onClose={() => setForwardTarget(null)}
-          onForward={handleForwardSend}
-        />
-      )}
-
-      {/* Settings panel */}
-      {settingsOpen && (
-        <SettingsPanel onClose={() => setSettingsOpen(false)} />
-      )}
-
-      {/* Search dialog (Ctrl+K) */}
-      <SearchBar currentRoomID={currentRoomID} />
-
-      {/* Upload error toast */}
       {uploadError && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-destructive text-destructive-foreground text-sm font-medium shadow-lg animate-slide-up whitespace-nowrap">
+        <div className="fixed bottom-6 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full bg-destructive px-4 py-2 text-center text-sm font-medium text-destructive-foreground shadow-[var(--e-3)] animate-slide-up whitespace-normal">
           {uploadError}
         </div>
       )}
 
-      {/* Export toast */}
       {exportToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium shadow-lg animate-slide-up whitespace-nowrap">
+        <div className="fixed bottom-6 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground shadow-[var(--e-3)] animate-slide-up whitespace-normal">
           {exportToast}
         </div>
       )}
 
-      {/* Image lightbox */}
       {lightboxImage && (
         <Suspense fallback={null}>
-          <ImageLightbox
-            imageUrl={lightboxImage}
-            onClose={() => useChatStore.getState().setLightboxImage(null)}
-          />
-        </Suspense>
-      )}
-
-      {/* Video/voice call overlay */}
-      {(incomingCall || activeCall) && (
-        <Suspense fallback={null}>
-          <VideoCall onClose={handleCloseCall} />
+          <ImageLightbox imageUrl={lightboxImage} onClose={() => useChatStore.getState().setLightboxImage(null)} />
         </Suspense>
       )}
     </div>

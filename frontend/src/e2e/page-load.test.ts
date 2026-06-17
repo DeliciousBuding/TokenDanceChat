@@ -1,201 +1,78 @@
-import { test, expect } from '@playwright/test';
+import { expect, test, type Page } from "@playwright/test";
+import { waitForLightChatReady } from "./helpers";
 
-/**
- * TokenDanceChat 前端 E2E 测试。
- *
- * 运行方式：
- *   1. 编译并启动后端：cd backend && go run .
- *   2. 编译前端：cd frontend && npm run build
- *   3. 运行测试：npx playwright test
- */
-
-const setupPage = async (page: import("@playwright/test").Page) => {
+const setupPage = async (page: Page) => {
   await page.addInitScript(() => {
     localStorage.setItem("tokendance:lang", "zh-CN");
     localStorage.setItem("tdchat-theme", "light");
+    localStorage.removeItem("tokendance:auth");
     localStorage.removeItem("tokendance:username");
   });
 };
 
-test.describe('页面加载', () => {
+test.describe("页面加载", () => {
   test.beforeEach(async ({ page }) => {
     await setupPage(page);
   });
 
-  test('首页正确加载', async ({ page }) => {
-    await page.goto('/');
+  test("首页自动进入轻量公共聊天室", async ({ page }) => {
+    await page.goto("/");
 
-    await expect(page).toHaveTitle('TokenDance Chat');
+    await expect(page).toHaveTitle("TokenDanceChat");
+    await expect(page.getByRole("heading", { name: "公共聊天" }).first()).toBeVisible();
+    await expect(page.getByText("TokenDanceChat").first()).toBeVisible();
+    await expect(page.getByText("TokenBot").first()).toBeVisible();
+    await expect(page.getByText("PicoClaw").first()).toBeVisible();
+    await waitForLightChatReady(page);
 
-    // Heading visible
-    await expect(page.getByRole('heading', { name: 'TokenDance Chat' })).toBeVisible();
-
-    // Username input with i18n placeholder
-    const input = page.getByPlaceholder('你的用户名...');
-    await expect(input).toBeVisible();
-    await expect(input).toBeEnabled();
-
-    // Guest join button (replaced old "加入聊天")
-    await expect(page.getByRole('button', { name: '游客加入' })).toBeVisible();
-
-    // Login and Register buttons
-    await expect(page.getByRole('button', { name: '登录' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '注册' })).toBeVisible();
+    await expect(page.getByText(/好友|Friends/)).toHaveCount(0);
+    await expect(page.getByText(/群组|Groups/)).toHaveCount(0);
+    await expect(page.getByText(/私信|Direct Message|DM/)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /语音通话|Voice Call/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /视频通话|Video Call/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /定时发送消息|Schedule Message/ })).toHaveCount(0);
   });
 
-  test('英文切换后页面正常', async ({ page }) => {
-    await page.goto('/');
+  test("英文切换后仍保持当前轻量聊天入口", async ({ page }) => {
+    await page.goto("/");
 
-    // Click language toggle (shows opposite language)
-    const langButton = page.getByLabel('切换语言');
-    await langButton.click();
+    await page.getByRole("button", { name: "更多" }).click();
+    await page.getByText("English", { exact: true }).click();
 
-    await expect(page.getByRole('heading', { name: 'TokenDance Chat' })).toBeVisible();
-    await expect(page.getByPlaceholder('Your username...')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Join as Guest' })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Public Chat/ }).first()).toBeVisible();
+    await expect(page.getByText("TokenBot").first()).toBeVisible();
+    await expect(page.getByText("PicoClaw").first()).toBeVisible();
+    await waitForLightChatReady(page);
+    await expect(page.getByRole("button", { name: /Join Chat|Join as Guest/ })).toHaveCount(0);
   });
 });
 
-test.describe('加入流程', () => {
+test.describe("自动 guest 聊天（需要后端）", () => {
   test.beforeEach(async ({ page }) => {
     await setupPage(page);
   });
 
-  test('空用户名显示错误提示', async ({ page }) => {
-    await page.goto('/');
-
-    // Button is disabled when empty, so use Enter to trigger form submit
-    const input = page.getByPlaceholder('你的用户名...');
-    await input.fill('');
-    await input.press('Enter');
-
-    const error = page.getByRole('alert');
-    await expect(error).toBeVisible();
-    await expect(error).toContainText('请输入用户名');
-  });
-
-  test('用户名过短显示错误提示', async ({ page }) => {
-    await page.goto('/');
-
-    const input = page.getByPlaceholder('你的用户名...');
-    await input.fill('a');
-    await page.getByRole('button', { name: '游客加入' }).click();
-
-    const error = page.getByRole('alert');
-    await expect(error).toBeVisible();
-    await expect(error).toContainText('至少需要2个字符');
-  });
-
-  test('用户名过长显示错误提示', async ({ page }) => {
-    await page.goto('/');
-
-    const input = page.getByPlaceholder('你的用户名...');
-    // maxLength=20 truncates fill(), use native setter to bypass
-    await input.evaluate((el: HTMLInputElement, val: string) => {
-      const nativeSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype, 'value'
-      )!.set!;
-      nativeSetter.call(el, val);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    }, 'a'.repeat(21));
-    await page.getByRole('button', { name: '游客加入' }).click();
-
-    const error = page.getByRole('alert');
-    await expect(error).toBeVisible();
-    await expect(error).toContainText('超过');
-  });
-
-  test('非法字符显示错误提示', async ({ page }) => {
-    await page.goto('/');
-
-    const input = page.getByPlaceholder('你的用户名...');
-    await input.fill('hello world');
-    await page.getByRole('button', { name: '游客加入' }).click();
-
-    const error = page.getByRole('alert');
-    await expect(error).toBeVisible();
-    await expect(error).toContainText('中文、英文、数字和下划线');
-  });
-
-  test('Enter 键提交加入', async ({ page }) => {
-    await page.goto('/');
-
-    const input = page.getByPlaceholder('你的用户名...');
-    await input.fill('');
-    await input.press('Enter');
-
-    const error = page.getByRole('alert');
-    await expect(error).toBeVisible();
-    await expect(error).toContainText('请输入用户名');
-  });
-
-  test('导航到登录界面', async ({ page }) => {
-    await page.goto('/');
-
-    await page.getByRole('button', { name: '登录' }).click();
-
-    // LoginScreen should be visible
-    await expect(page.getByPlaceholder('用户名')).toBeVisible();
-    await expect(page.getByLabel('密码')).toBeVisible();
-
-    // Back button returns to guest join
-    await page.getByLabel('返回').click();
-    await expect(page.getByPlaceholder('你的用户名...')).toBeVisible();
-  });
-});
-
-test.describe('游客加入聊天（需要后端）', () => {
-  test.beforeEach(async ({ page }) => {
-    await setupPage(page);
-  });
-
-  test('成功以游客身份加入聊天室', async ({ page }) => {
-    await page.goto('/');
-
-    const input = page.getByPlaceholder('你的用户名...');
-    await input.fill('e2e_test_user');
-    await page.getByRole('button', { name: '游客加入' }).click();
-
-    // Should navigate to chat view
-    await expect(page.getByRole('button', { name: '游客加入' })).not.toBeVisible({ timeout: 10000 });
-
-    // Textarea should appear
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 10000 });
-  });
-
-  test('重复用户名踢出旧连接', async ({ page }) => {
-    const dupName = `e2e_dup_${Math.random().toString(36).slice(2, 6)}`;
-
-    const page1 = await page.context().newPage();
-    await setupPage(page1);
-    await page1.goto('/');
-    await page1.getByPlaceholder('你的用户名...').fill(dupName);
-    await page1.getByRole('button', { name: '游客加入' }).click();
-    await expect(page1.locator('textarea').first()).toBeVisible({ timeout: 10000 });
-
-    // Second join with same name should succeed — old connection gets kicked.
-    await page.goto('/');
-    await page.getByPlaceholder('你的用户名...').fill(dupName);
-    await page.getByRole('button', { name: '游客加入' }).click();
-
-    // New connection should show the chat textarea (joined successfully).
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 10000 });
-
-    await page1.close();
-  });
-
-  test('消息发送后出现在聊天区域', async ({ page }) => {
-    await page.goto('/');
-
-    await page.getByPlaceholder('你的用户名...').fill('e2e_msg_test');
-    await page.getByRole('button', { name: '游客加入' }).click();
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 10000 });
+  test("消息发送后立即出现在聊天区域并在刷新后保留", async ({ page }) => {
+    await page.goto("/");
+    const composer = await waitForLightChatReady(page);
 
     const uniqueMsg = `E2E_${Math.random().toString(36).slice(2, 8)}`;
-    const msgInput = page.getByPlaceholder('输入消息... (Shift+Enter 换行)');
-    await msgInput.fill(uniqueMsg);
-    await page.keyboard.press('Enter');
+    await composer.fill(uniqueMsg);
+    await page.locator("[data-visual='composer-send']").click();
 
     await expect(page.getByText(uniqueMsg).first()).toBeVisible({ timeout: 10000 });
+    await page.reload();
+    await expect(page.getByText(uniqueMsg).first()).toBeVisible({ timeout: 10000 });
+  });
+
+  test("TokenBot 助手入口展示 composer 上下文并复用公共 composer", async ({ page }) => {
+    await page.goto("/");
+    await waitForLightChatReady(page);
+
+    await page.locator("[data-visual='light-chat-sidebar']").getByRole("button", { name: /TokenBot/ }).click();
+
+    await expect(page.locator("[data-visual='ai-chat-workbench']")).toHaveCount(0);
+    await expect(page.locator("[data-visual='composer-ai-context']")).toContainText("@TokenBot");
+    await expect(page.locator("[data-visual='composer-textarea']")).toBeEnabled();
   });
 });

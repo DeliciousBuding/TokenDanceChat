@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { cn, avatarGradient } from "@/lib/utils";
+import { cn, avatarGradient, avatarIdentityStyle } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 
 interface AvatarProps {
@@ -39,6 +39,7 @@ export const Avatar = memo(function Avatar({
 }: AvatarProps) {
   const { t } = useTranslation();
   const gradient = useMemo(() => avatarGradient(name), [name]);
+  const identityStyle = useMemo(() => avatarIdentityStyle(name), [name]);
   const initial = useMemo(() => {
     const displayName = name || "?";
     const ch = displayName.charAt(0);
@@ -82,7 +83,7 @@ export const Avatar = memo(function Avatar({
           sizeClasses[size],
           src ? "hidden" : "flex",
         )}
-        style={{ background: gradient }}
+        style={{ ...identityStyle, background: gradient }}
       >
         {initial.toUpperCase()}
       </div>
@@ -93,7 +94,7 @@ export const Avatar = memo(function Avatar({
             "hidden items-center justify-center rounded-full font-semibold text-white",
             sizeClasses[size],
           )}
-          style={{ background: gradient }}
+          style={{ ...identityStyle, background: gradient }}
           aria-hidden="true"
         >
           {initial.toUpperCase()}

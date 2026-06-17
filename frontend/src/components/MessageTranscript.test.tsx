@@ -9,11 +9,6 @@ vi.mock("@/i18n/context", () => ({
     mockI18n({
       "transcript.emptyTitle": "暂无消息，发送第一条消息开始聊天吧",
       "transcript.emptyDescription": "成为第一个发言的人吧",
-      "transcript.emptyDmTitle": "暂无私信",
-      "transcript.emptyDmDescription": "向 {{username}} 发送一条私信开始对话",
-      "transcript.emptyGroupTitle": "暂无群聊消息",
-      "transcript.emptyGroupDescription": "{{name}} 中还没有消息",
-      "transcript.emptyGroupMembers": "{{count}} 位成员",
       "transcript.loading": "加载中...",
       "transcript.newMessagesDivider": "新消息",
     }),
@@ -23,7 +18,6 @@ vi.mock("@/lib/api", () => ({
   chatAPI: {
     sendLoadHistory: vi.fn(),
     deleteMessage: vi.fn(),
-    sendForward: vi.fn(),
   },
 }));
 
@@ -125,7 +119,6 @@ describe("MessageTranscript", () => {
       typingUsers: [],
       currentChat: { type: "public" },
       onlineUsers: [],
-      groups: {},
     });
   });
 
@@ -136,21 +129,20 @@ describe("MessageTranscript", () => {
       expect(screen.getByText("成为第一个发言的人吧")).toBeTruthy();
     });
 
-    it("renders DM-specific empty state for direct messages", () => {
+    it("keeps the public empty state for stale direct-message state", () => {
       useChatStore.setState({
-        currentChat: { type: "dm", username: "alice" },
+        currentChat: { type: "dm", username: "alice" } as any,
       });
       renderTranscript();
-      expect(screen.getByText("暂无私信")).toBeTruthy();
+      expect(screen.getByText("暂无消息，发送第一条消息开始聊天吧")).toBeTruthy();
     });
 
-    it("renders group-specific empty state for group chats", () => {
+    it("keeps the public empty state for stale group state", () => {
       useChatStore.setState({
-        currentChat: { type: "group", name: "general" },
-        groups: { general: { name: "general", members: ["testuser", "alice"], roles: {}, owner: "testuser", created_at: 1000 } },
+        currentChat: { type: "group", name: "general" } as any,
       });
       renderTranscript();
-      expect(screen.getByText("暂无群聊消息")).toBeTruthy();
+      expect(screen.getByText("暂无消息，发送第一条消息开始聊天吧")).toBeTruthy();
     });
   });
 
@@ -269,11 +261,11 @@ describe("MessageTranscript", () => {
     });
   });
 
-  describe("DM filtering", () => {
-    it("filters messages to show only the DM conversation between current user and partner", () => {
+  describe("stale conversation state", () => {
+    it("does not filter the public transcript when stale DM state is present", () => {
       useChatStore.setState({
         username: "testuser",
-        currentChat: { type: "dm", username: "alice" },
+        currentChat: { type: "dm", username: "alice" } as any,
         messages: [
           makeMsg({ id: "dm1", username: "testuser", from: "testuser", to: "alice", content: "To Alice", timestamp: 1000 }),
           makeMsg({ id: "dm2", username: "alice", from: "alice", to: "testuser", content: "From Alice", timestamp: 2000 }),
@@ -282,9 +274,10 @@ describe("MessageTranscript", () => {
       });
       renderTranscript();
       const bubbles = screen.getAllByTestId("message-bubble");
-      expect(bubbles).toHaveLength(2);
+      expect(bubbles).toHaveLength(3);
       expect(bubbles[0].dataset.msgId).toBe("dm1");
       expect(bubbles[1].dataset.msgId).toBe("dm2");
+      expect(bubbles[2].dataset.msgId).toBe("dm3");
     });
   });
 

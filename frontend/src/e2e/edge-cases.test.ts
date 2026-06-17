@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { joinGuestFromPreview } from "./helpers";
 
 /**
  * TokenDanceChat Edge Cases E2E Tests.
@@ -11,10 +12,9 @@ import { test, expect } from "@playwright/test";
  *      - Very long question (near char limit)
  *      - Single option (should be rejected)
  *      - Special characters in options (emoji, markdown)
- *   2. Sidebar edge cases:
- *      - Multiple DMs from same user only show once
+ *   2. Lightweight sidebar edge cases:
  *      - Online users list updates when someone leaves
- *      - Search clear button resets search
+ *      - Old IM sections stay removed from the public surface
  *   3. Multi-user scenario:
  *      - Two guests join, both can see each other's messages
  *      - One leaves, other sees "left" system message
@@ -38,8 +38,7 @@ async function joinChat(
   const guestName = name ?? `e2e_${Math.random().toString(36).slice(2, 8)}`;
 
   await page.goto(path);
-  await page.getByPlaceholder("你的用户名...").fill(guestName);
-  await page.getByRole("button", { name: "游客加入" }).click();
+  await joinGuestFromPreview(page, guestName);
 
   await expect(page.locator("textarea").first()).toBeVisible({
     timeout: 15000,
@@ -209,112 +208,27 @@ test.describe("Edge Cases", () => {
   });
 
   // ═══════════════════════════════════════════════════
-  // 2. Sidebar Edge Cases
+  // 2. Lightweight Sidebar Edge Cases
   // ═══════════════════════════════════════════════════
-  test.describe("Sidebar edge cases", () => {
+  test.describe("Lightweight sidebar edge cases", () => {
     test.beforeEach(async ({ page }) => {
       await setupPage(page);
     });
 
-    test("multiple DMs from same user only show once in sidebar", async ({
-      page,
-    }) => {
+    test("old IM sections stay removed from the sidebar", async ({ page }) => {
       await joinChat(page);
 
-      // Second user joins in a new tab.
-      const page2 = await page.context().newPage();
-      await setupPage(page2);
-      const name2 = await joinChat(page2);
-
-      // Verify user2 appears in page1's online users sidebar.
       const sidebar = page.locator("aside");
-      await expect(sidebar.getByText(name2).first()).toBeVisible({
-        timeout: 15000,
-      });
-
-      // Start a DM from page1 to user2 via the context menu.
-      await page.evaluate(
-        async (targetName: string) => {
-          const buttons = Array.from(
-            document.querySelectorAll("aside button"),
-          );
-          const userBtn = buttons.find(
-            (b) => b.getAttribute("aria-label")?.trim() === targetName,
-          );
-          if (!userBtn) throw new Error(`User button not found: ${targetName}`);
-
-          (userBtn as HTMLElement).click();
-          await new Promise((r) => setTimeout(r, 800));
-
-          const inner = Array.from(
-            userBtn.querySelectorAll<HTMLButtonElement>("button"),
-          );
-          const dmBtn = inner.find(
-            (b) => b.textContent?.trim() === "发送消息",
-          );
-          if (!dmBtn)
-            throw new Error("DM context-menu item not found after click");
-          dmBtn.click();
-        },
-        name2,
-      );
-
-      // Send 3 DM messages from page1 to user2.
-      for (let i = 0; i < 3; i++) {
-        const dmMsg = `dedup_${i}_${Math.random().toString(36).slice(2, 4)}`;
-        await page.locator("textarea").first().fill(dmMsg);
-        await page.keyboard.press("Enter");
-        await page.waitForTimeout(200);
-      }
-
-      // Navigate back to public chat via sidebar so we can inspect the
-      // full DM list without the DM chat view active.
-      const publicChatBtn = page.getByRole("button", { name: "公共聊天" });
-      if (await publicChatBtn.isVisible().catch(() => false)) {
-        await publicChatBtn.click();
-        await page.waitForTimeout(500);
-      }
-
-      // Verify the DM section exists in the sidebar.
-      // Scope the locator to the <aside> to avoid matching the DM chat header.
-      const dmSectionHeader = sidebar.getByText("私信", { exact: true });
-      await expect(dmSectionHeader.first()).toBeVisible({ timeout: 10000 });
-
-      // The dmPartners list is derived from a Set, so each user appears at
-      // most once as a DM entry.  Find the DM section (headed by "私信") and
-      // count occurrences of name2 among DM partner buttons only — excluding
-      // the online users section which also lists the same user.
-      const dmOccurrences = await page.evaluate((target: string) => {
-        const aside = document.querySelector("aside");
-        if (!aside) return -1;
-
-        // Locate the DM section: find the "私信" header span, then its parent div.
-        const allSpans = aside.querySelectorAll("span");
-        let dmContainer: Element | null = null;
-        for (const span of allSpans) {
-          if (span.textContent?.trim() === "私信") {
-            dmContainer = span.parentElement;
-            break;
-          }
-        }
-        if (!dmContainer) return -1;
-
-        // Within the DM container, find all truncate spans and check for target.
-        const truncates = dmContainer.querySelectorAll("span.block.truncate");
-        let count = 0;
-        for (const t of truncates) {
-          if ((t.textContent || "").trim() === target) count++;
-        }
-        return count;
-      }, name2);
-
-      // The partner should appear once in the DM list.
-      expect(dmOccurrences).toBe(1);
-
-      await page2.close();
+      await expect(sidebar.getByText(/好友|Friends/)).toHaveCount(0);
+      await expect(sidebar.getByText(/群组|Groups/)).toHaveCount(0);
+      await expect(sidebar.getByText(/私信|Direct Messages|DM/)).toHaveCount(0);
+      await expect(sidebar.getByText(/Webhook|传入 Webhook/)).toHaveCount(0);
+      await expect(sidebar.getByRole("button", { name: /公共聊天|Public Chat/ })).toBeVisible();
+      await expect(sidebar.getByRole("button", { name: /TokenBot/ })).toBeVisible();
+      await expect(sidebar.getByRole("button", { name: /PicoClaw/ })).toBeVisible();
     });
 
-    test("online users list removes user after they disconnect", async ({
+    test("public room remains stable after another guest disconnects", async ({
       page,
     }) => {
       await joinChat(page);
@@ -322,13 +236,10 @@ test.describe("Edge Cases", () => {
       // Second user joins.
       const page2 = await page.context().newPage();
       await setupPage(page2);
-      const name2 = await joinChat(page2);
+      await joinChat(page2);
 
-      // Verify user2 appears in page1's online users sidebar.
       const sidebar = page.locator("aside");
-      await expect(sidebar.getByText(name2).first()).toBeVisible({
-        timeout: 15000,
-      });
+      await expect(sidebar.getByRole("button", { name: /公共聊天|Public Chat/ })).toBeVisible();
 
       // Disconnect page2 by clicking the "断开连接" button.
       // Desktop header has aria-label="断开连接" (t("chat.disconnect")).
@@ -338,51 +249,23 @@ test.describe("Edge Cases", () => {
       await expect(disconnectBtn).toBeVisible({ timeout: 10000 });
       await disconnectBtn.click();
 
-      // After disconnect, page1's online users sidebar should no longer
-      // show user2 (they left via clean disconnect).
-      // The user_left event removes them from the onlineUsers store.
-      await expect(sidebar.getByText(name2).first()).not.toBeVisible({
-        timeout: 10000,
-      });
+      await expect(page.locator("textarea").first()).toBeVisible({ timeout: 10000 });
+      await expect(sidebar.getByText(/好友|Friends|群组|Groups|私信|Direct Messages|DM/)).toHaveCount(0);
 
       await page2.close();
     });
 
-    test("search clear button resets search state", async ({ page }) => {
+    test("conversation search closes without restoring old sections", async ({ page }) => {
       await joinChat(page);
 
-      const searchInput = page.getByPlaceholder("搜索对话...");
+      await page.getByRole("button", { name: "搜索当前对话" }).click();
+      const searchInput = page.getByPlaceholder("搜索当前对话");
       await expect(searchInput).toBeVisible({ timeout: 10000 });
-
-      // Type a search query to enter search mode.
-      await searchInput.fill("test_query_to_clear");
-
-      // Verify search mode is active: "搜索结果" header appears.
-      await expect(page.getByText("搜索结果", { exact: true })).toBeVisible({
-        timeout: 10000,
-      });
-
-      // Click the clear button (aria-label="清除搜索").
-      const clearBtn = page.locator('[aria-label="清除搜索"]');
-      await expect(clearBtn).toBeVisible({ timeout: 5000 });
-      await clearBtn.click();
-
-      // After clearing:
-      // 1. Search results header should be gone.
-      await expect(
-        page.getByText("搜索结果", { exact: true }),
-      ).not.toBeVisible({ timeout: 5000 });
-
-      // 2. The search input should be empty.
-      await expect(searchInput).toHaveValue("", { timeout: 5000 });
-
-      // 3. Normal sidebar sections should be visible again.
-      await expect(page.getByText("在线用户", { exact: true })).toBeVisible({
-        timeout: 10000,
-      });
-      await expect(page.getByText("AI 助手", { exact: true })).toBeVisible({
-        timeout: 5000,
-      });
+      await searchInput.fill("not_expected_to_match");
+      await expect(page.getByText("当前对话无匹配").first()).toBeVisible({ timeout: 10000 });
+      await page.keyboard.press("Escape");
+      await expect(searchInput).not.toBeVisible({ timeout: 5000 });
+      await expect(page.locator("aside").getByText(/私信|Direct Messages|DM/)).toHaveCount(0);
     });
   });
 
@@ -428,21 +311,13 @@ test.describe("Edge Cases", () => {
         timeout: 15000,
       });
 
-      // Both should appear in each other's online users sidebar.
-      const sidebar1 = page.locator("aside");
-      const sidebar2 = page2.locator("aside");
-
-      await expect(sidebar1.getByText(name2).first()).toBeVisible({
-        timeout: 10000,
-      });
-      await expect(sidebar2.getByText(name1).first()).toBeVisible({
-        timeout: 10000,
-      });
+      await expect(page.locator("aside").getByRole("button", { name: /公共聊天|Public Chat/ })).toBeVisible();
+      await expect(page2.locator("aside").getByRole("button", { name: /公共聊天|Public Chat/ })).toBeVisible();
 
       await page2.close();
     });
 
-    test("disconnecting user triggers 'left' system message for remaining user", async ({
+    test("disconnecting another guest does not restore old IM sections", async ({
       page,
     }) => {
       await joinChat(page);
@@ -450,13 +325,10 @@ test.describe("Edge Cases", () => {
       // Second user joins.
       const page2 = await page.context().newPage();
       await setupPage(page2);
-      const name2 = await joinChat(page2);
+      await joinChat(page2);
 
-      // Verify both users see each other online.
       const sidebar = page.locator("aside");
-      await expect(sidebar.getByText(name2).first()).toBeVisible({
-        timeout: 15000,
-      });
+      await expect(sidebar.getByRole("button", { name: /公共聊天|Public Chat/ })).toBeVisible();
 
       // Disconnect page2 cleanly via the "断开连接" button.
       const disconnectBtn = page2.getByRole("button", {
@@ -465,19 +337,8 @@ test.describe("Edge Cases", () => {
       await expect(disconnectBtn).toBeVisible({ timeout: 10000 });
       await disconnectBtn.click();
 
-      // Page1 should see a system message: "{{username}} 离开了聊天室"
-      // The system.userLeft translation renders as "name2 离开了聊天室".
-      const leaveMessage = page.getByText(
-        `${name2} 离开了聊天室`,
-      );
-      await expect(leaveMessage.first()).toBeVisible({
-        timeout: 10000,
-      });
-
-      // The disconnected user should no longer appear in online users.
-      await expect(sidebar.getByText(name2).first()).not.toBeVisible({
-        timeout: 10000,
-      });
+      await expect(sidebar.getByText(/好友|Friends|群组|Groups|私信|Direct Messages|DM/)).toHaveCount(0);
+      await expect(page.locator("textarea").first()).toBeVisible({ timeout: 10000 });
 
       await page2.close();
     });

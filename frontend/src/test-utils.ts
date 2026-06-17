@@ -56,17 +56,13 @@ export function mockI18n(overrides?: Record<string, string>) {
     "lang.label": "切换语言",
     "lang.switchTo": "English",
     // Sidebar
-    "sidebar.adminDashboard": "Admin Dashboard",
+    "sidebar.publicChat": "公共聊天室",
+    "sidebar.publicChatSub": "全部消息",
+    "sidebar.aiAssistants": "AI 助手",
+    "sidebar.online": "在线",
+    "sidebar.connecting": "连接中",
     "sidebar.closeSidebar": "Close sidebar",
     "sidebar.clearSearch": "Clear search",
-    // Admin
-    "admin.totalMessages": "Total Messages",
-    "admin.activeConnections": "Active Connections",
-    "admin.registeredUsers": "Registered Users",
-    "admin.rooms": "Rooms",
-    "admin.groups": "Groups",
-    "admin.friends": "Friends",
-    "admin.serverStats": "TokenDanceChat Server Stats",
     // A11y
     "a11y.close": "关闭",
     "a11y.back": "返回",
@@ -75,27 +71,21 @@ export function mockI18n(overrides?: Record<string, string>) {
     "a11y.openSidebar": "打开侧边栏",
     "a11y.moreActions": "更多操作",
     "a11y.removeImage": "移除图片",
-    "a11y.gif": "GIF",
     "a11y.ok": "确定",
-    "a11y.cancelRecording": "取消录制",
-    "a11y.stopRecording": "停止录制",
     "a11y.uploadImage": "上传图片",
     "a11y.uploadFile": "上传文件",
-    "a11y.recordVoice": "录制语音",
     "a11y.prevResult": "上一个结果",
     "a11y.nextResult": "下一个结果",
     "a11y.closeSearch": "关闭搜索",
     "a11y.zoomOut": "缩小",
     "a11y.zoomIn": "放大",
     "a11y.copyCode": "复制代码",
-    "a11y.audioSeek": "音频进度条",
     "a11y.exitSelect": "退出选择模式",
     "a11y.prevMonth": "上个月",
     "a11y.nextMonth": "下个月",
     "a11y.hour": "小时",
     "a11y.minute": "分钟",
     "a11y.scrollToBottom": "回到底部",
-    "a11y.gifStickers": "GIF 和贴纸",
     "a11y.online": "在线",
   };
   const map = { ...base, ...overrides };
@@ -125,6 +115,6 @@ export function mockI18n(overrides?: Record<string, string>) {
  * Or with custom translations:
  *
  *   vi.mock("@/i18n/context", () => ({
- *     useTranslation: () => mockI18n({ "forward.title": "转发" }),
+ *     useTranslation: () => mockI18n({ "chat.publicChat": "公共聊天" }),
  *   }));
  */

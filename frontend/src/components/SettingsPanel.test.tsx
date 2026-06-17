@@ -83,8 +83,7 @@ describe("SettingsPanel", () => {
 
   it("calls onClose when backdrop is clicked", () => {
     render(<SettingsPanel onClose={onClose} />);
-    // The backdrop has bg-black/60
-    const backdrop = document.querySelector(".bg-black\\/60");
+    const backdrop = document.querySelector(".td-chat-backdrop");
     expect(backdrop).toBeTruthy();
     fireEvent.click(backdrop!);
     expect(onClose).toHaveBeenCalledTimes(1);

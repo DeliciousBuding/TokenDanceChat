@@ -206,15 +206,10 @@ go test ./store -run "Test(CreateWebhookDoesNotPersistPlaintextSecret|WebhookPla
 go test ./handler -run "TestWebhookHandler(VerifiesHashedSecret|RejectsQuerySecret|RejectsOversizedBody|RejectsOversizedContent|UsesServerDerivedSender)$"
 ```
 
-聚焦前端测试：
-
-```powershell
-cd frontend
-npm test -- --run src/lib/groupInfo.test.ts src/stores/chatStore.test.ts src/components/GroupInfoPanel.test.tsx
-npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium
-```
-
-Playwright 入口测试须针对托管构建前端的本地 Go 后端运行。它覆盖完整浏览器路径：以群主身份加入，通过 UI 创建群组，打开群组管理面板，创建一次性 webhook，用生成的 HTTP URL 加 `Authorization: Bearer` header 发送 POST 请求，并验证群组消息列表中显示 webhook 消息。
+当前前端轻量主合同不暴露群组或 webhook 管理面板，因此不再维护
+`GroupInfoPanel` / `webhook-ingress` 浏览器测试。前端回归以公共房间、
+TokenBot、PicoClaw、消息渲染和 composer 为准；webhook 只保留后端安全
+兼容测试。
 
 更广泛的门禁：
 

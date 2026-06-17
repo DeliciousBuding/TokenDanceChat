@@ -49,6 +49,12 @@ dist/
 
 backend/backend.exe
 
+build/
+
 frontend/test-results/
 frontend/playwright-report/
 frontend/coverage/
+frontend/artifacts/
+
+# temp
+.tmp/

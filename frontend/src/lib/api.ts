@@ -3,16 +3,6 @@ export interface WSMessage {
   [key: string]: unknown;
 }
 
-export interface ChatFolder {
-  id: string;
-  username: string;
-  name: string;
-  sort_order: number;
-  created_at: number;
-  item_count: number;
-  items: string[];
-}
-
 export interface PollData {
   id: string;
   room_id: string;
@@ -29,6 +19,7 @@ export interface PollData {
 
 export interface ChatMessage {
   id: string;
+  client_message_id?: string;
   username: string;
   content: string;
   timestamp: number;
@@ -52,6 +43,7 @@ export interface ChatMessage {
 export interface WSChatMessage extends WSMessage {
   type: "message";
   id: string;
+  client_message_id?: string;
   username: string;
   content: string;
   timestamp: number;
@@ -87,8 +79,7 @@ export interface WSTypingEvent extends WSMessage {
 }
 
 export interface TypingContext {
-  channel: "public" | "dm" | "group";
-  target?: string;
+  channel: "public";
   preview?: string;
 }
 
@@ -120,55 +111,11 @@ export interface WSJoinRequest {
 
 export interface WSSendMessage {
   type: "message";
+  client_message_id?: string;
   content: string;
   reply_to_id?: string;
   reply_to_content?: string;
   reply_to_user?: string;
-}
-
-export interface WSDMMessage {
-  type: "dm_message";
-  content: string;
-  to: string;
-  reply_to_id?: string;
-  reply_to_content?: string;
-  reply_to_user?: string;
-}
-
-export interface WSGroupMessage {
-  type: "group_message";
-  content: string;
-  group: string;
-  reply_to_id?: string;
-  reply_to_content?: string;
-  reply_to_user?: string;
-}
-
-export interface WSFriendRequest {
-  type: "friend_request";
-  to: string;
-}
-
-export interface WSFriendAccept {
-  type: "friend_accept";
-  from: string;
-}
-
-export interface WSFriendReject {
-  type: "friend_reject";
-  from: string;
-}
-
-export interface WSGroupCreate {
-  type: "group_create";
-  group: string;
-  members?: string[];
-}
-
-export interface WSGroupInvite {
-  type: "group_invite";
-  group: string;
-  username: string;
 }
 
 export interface WSMessageDelete {
@@ -178,22 +125,6 @@ export interface WSMessageDelete {
 
 export interface WSMarkRead {
   type: "mark_read";
-}
-
-// Room types
-export interface RoomInfo {
-  id: string;
-  name: string;
-}
-
-export interface WSRoomList extends WSMessage {
-  type: "room_list";
-  rooms: RoomInfo[];
-}
-
-export interface WSRoomJoin extends WSMessage {
-  type: "room_join";
-  room_id: string;
 }
 
 // Link preview types
@@ -215,30 +146,6 @@ export interface SearchResult {
   rank: number;
 }
 
-// Forward types
-export interface WSForwardEvent extends WSMessage {
-  type: "forward";
-  from: string;
-  content: string;
-  id: string;
-  timestamp: number;
-}
-
-// Scheduled message types
-export interface ScheduledMessage {
-  id: string;
-  username: string;
-  content: string;
-  room_id: string;
-  to_user: string;
-  group_name: string;
-  reply_to_id: string;
-  thread_id: string;
-  send_at: number;
-  created_at: number;
-  sent: number;
-}
-
 export interface CustomEmoji {
   id: string;
   name: string;
@@ -246,95 +153,6 @@ export interface CustomEmoji {
   uploader: string;
   room_id: string;
   created_at: number;
-}
-
-export interface WSScheduledMessageConfirm extends WSMessage {
-  type: "scheduled_message_confirm";
-  id: string;
-  content: string;
-  username: string;
-  timestamp: number;
-  room_id?: string;
-  to?: string;
-  group?: string;
-}
-
-export interface WSScheduledMessagesList extends WSMessage {
-  type: "scheduled_messages_list";
-  messages: ScheduledMessage[];
-}
-
-export interface WSScheduledMessageSent extends WSMessage {
-  type: "scheduled_message_sent";
-  id: string;
-  content: string;
-  username: string;
-  timestamp: number;
-}
-
-export interface WSScheduledMessageCancelled extends WSMessage {
-  type: "scheduled_message_cancelled";
-  id: string;
-}
-
-// Call signaling types
-export interface CallRecord {
-  id: string;
-  caller: string;
-  callee: string;
-  call_type: string;
-  status: string;
-  started_at: number;
-  ended_at: number;
-  created_at: number;
-}
-
-export interface WSCallIncoming extends WSMessage {
-  type: "call_incoming";
-  call_id: string;
-  from: string;
-  to: string;
-  call_type: string;
-  sdp: string;
-}
-
-export interface WSCallAccepted extends WSMessage {
-  type: "call_accepted";
-  call_id: string;
-  from: string;
-  to: string;
-  call_type: string;
-  sdp: string;
-}
-
-export interface WSCallRejected extends WSMessage {
-  type: "call_rejected";
-  call_id: string;
-  from: string;
-  to: string;
-  call_type: string;
-  content: string;
-}
-
-export interface WSCallEnded extends WSMessage {
-  type: "call_ended";
-  call_id: string;
-  from: string;
-  to: string;
-  call_type: string;
-}
-
-export interface WSCallIceCandidate extends WSMessage {
-  type: "call_ice_candidate";
-  call_id: string;
-  from: string;
-  to: string;
-  candidate: string;
-}
-
-export interface WSCallList extends WSMessage {
-  type: "call_list";
-  calls: CallRecord[];
 }
 
 // Reaction types
@@ -415,6 +233,7 @@ class ChatAPI {
   private reconnectToken: string | null = null;
   private wasReconnecting = false;
   private connectGeneration = 0;
+  private outboundQueue: Array<Record<string, unknown>> = [];
   private pendingJoin:
     | {
         resolve: () => void;
@@ -429,6 +248,7 @@ class ChatAPI {
   connect(username: string, token?: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.ws?.close();
+      this.outboundQueue = [];
       const gen = ++this.connectGeneration;
       this.reconnectUsername = username;
       this.reconnectToken = token ?? null;
@@ -491,6 +311,7 @@ class ChatAPI {
             clearTimeout(timeout);
             this.pendingJoin.resolve();
             this.pendingJoin = null;
+            this.flushOutboundQueue();
             if (this.wasReconnecting) {
               this.wasReconnecting = false;
               this.dispatch("reconnected", { type: "reconnected" });
@@ -576,24 +397,43 @@ class ChatAPI {
   }
 
   send(data: Record<string, unknown>): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (this.ws?.readyState === WebSocket.OPEN && (!this.pendingJoin || data.type === "join")) {
       this.ws.send(JSON.stringify(data));
+    } else if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.CONNECTING ||
+        this.ws.readyState === WebSocket.OPEN) &&
+      data.type !== "join"
+    ) {
+      this.outboundQueue.push(data);
+      if (this.outboundQueue.length > 100) {
+        this.outboundQueue.shift();
+      }
     } else {
       console.warn("WebSocket not connected, cannot send", { type: (data as { type?: string }).type });
     }
   }
 
-  sendMessage(content: string, replyTo?: ChatMessage): void {
+  private flushOutboundQueue(): void {
+    if (this.ws?.readyState !== WebSocket.OPEN || this.pendingJoin) return;
+    const queued = this.outboundQueue.splice(0);
+    for (const item of queued) {
+      this.ws.send(JSON.stringify(item));
+    }
+  }
+
+  sendMessage(content: string, replyTo?: ChatMessage, clientMessageId?: string): void {
     if (replyTo) {
       this.send({
         type: "message",
+        client_message_id: clientMessageId,
         content,
         reply_to_id: replyTo.id,
         reply_to_content: replyTo.content,
         reply_to_user: replyTo.username,
       });
     } else {
-      this.send({ type: "message", content });
+      this.send({ type: "message", client_message_id: clientMessageId, content });
     }
   }
 
@@ -612,98 +452,24 @@ class ChatAPI {
     });
   }
 
-  sendDMMessage(to: string, content: string, replyTo?: ChatMessage): void {
-    this.send({
-      type: "dm_message",
-      content,
-      to,
-      ...(replyTo
-        ? {
-            reply_to_id: replyTo.id,
-            reply_to_content: replyTo.content,
-            reply_to_user: replyTo.username,
-          }
-        : {}),
-    });
-  }
-
-  sendGroupMessage(
-    group: string,
-    content: string,
-    replyTo?: ChatMessage,
-  ): void {
-    this.send({
-      type: "group_message",
-      content,
-      group,
-      ...(replyTo
-        ? {
-            reply_to_id: replyTo.id,
-            reply_to_content: replyTo.content,
-            reply_to_user: replyTo.username,
-          }
-        : {}),
-    });
-  }
-
-  sendFriendRequest(to: string): void {
-    this.send({ type: "friend_request", to });
-  }
-
-  sendFriendAccept(from: string): void {
-    this.send({ type: "friend_accept", from });
-  }
-
-  sendFriendReject(from: string): void {
-    this.send({ type: "friend_reject", from });
-  }
-
-  sendGroupCreate(name: string, members?: string[]): void {
-    this.send({ type: "group_create", group: name, members });
-  }
-
-  sendGroupInvite(group: string, username: string): void {
-    this.send({ type: "group_invite", group, username });
-  }
-
-  sendGroupInviteAccept(group: string, from: string): void {
-    this.send({ type: "group_invite_accept", group, from });
-  }
-
-  sendGroupInviteDecline(group: string): void {
-    this.send({ type: "group_invite_decline", group });
-  }
-
   deleteMessage(id: string): void {
     this.send({ type: "message_delete", id });
   }
 
-  sendMarkRead(context?: string, to?: string): void {
-    this.send({ type: "mark_read", context, to });
-  }
-
-  sendRoomJoin(roomID: string): void {
-    this.send({ type: "room_join", room_id: roomID });
-  }
-
-  sendRoomCreate(name: string): void {
-    this.send({ type: "room_create", group: name });
+  sendMarkRead(): void {
+    this.send({ type: "mark_read", context: "public" });
   }
 
   sendRoomLeave(): void {
     this.send({ type: "room_leave" });
   }
 
-  sendForward(messageID: string, toUsername: string): void {
-    this.send({ type: "forward", id: messageID, to: toUsername });
-  }
-
   sendTypingStart(ctx?: TypingContext): void {
-    this.send({ type: "typing_start", context: ctx?.channel, to: ctx?.target, preview: ctx?.preview });
+    this.send({ type: "typing_start", context: ctx?.channel ?? "public", preview: ctx?.preview });
   }
 
   sendTypingStop(ctx?: TypingContext): void {
-    this.send({ type: "typing_stop", context: ctx?.channel, to: ctx?.target });
+    this.send({ type: "typing_stop", context: ctx?.channel ?? "public" });
   }
 
   sendReaction(messageId: string, emoji: string): void {
@@ -742,36 +508,12 @@ class ChatAPI {
     this.send({ type: "unpin_message", id: messageId });
   }
 
-  sendPinConversation(key: string): void {
-    this.send({ type: "pin_conversation", key });
-  }
-
-  sendUnpinConversation(key: string): void {
-    this.send({ type: "unpin_conversation", key });
-  }
-
-  sendMuteConversation(key: string): void {
-    this.send({ type: "mute_conversation", key });
-  }
-
-  sendUnmuteConversation(key: string): void {
-    this.send({ type: "unmute_conversation", key });
-  }
-
   sendSetNotificationPrefs(key: string, mutedUntil: number, showPreview: boolean): void {
     this.send({ type: "notification_prefs_set", key, muted_until: mutedUntil, show_preview: showPreview });
   }
 
   sendGetNotificationPrefs(): void {
     this.send({ type: "notification_prefs_get" });
-  }
-
-  sendArchiveConversation(key: string): void {
-    this.send({ type: "archive_conversation", key });
-  }
-
-  sendUnarchiveConversation(key: string): void {
-    this.send({ type: "unarchive_conversation", key });
   }
 
   sendPollCreate(question: string, options: string[], multipleChoice: boolean, isAnonymous: boolean): void {
@@ -809,94 +551,6 @@ class ChatAPI {
 
   sendStatusUpdate(status: string): void {
     this.send({ type: "status_update", status });
-  }
-
-  sendScheduleMessage(content: string, sendAt: number, roomId?: string, to?: string, group?: string, replyToId?: string, threadId?: string): void {
-    this.send({
-      type: "schedule_message",
-      content,
-      timestamp: sendAt,
-      room_id: roomId ?? "",
-      to: to ?? "",
-      group: group ?? "",
-      reply_to_id: replyToId ?? "",
-      thread_id: threadId ?? "",
-    });
-  }
-
-  sendCancelScheduledMessage(id: string): void {
-    this.send({ type: "cancel_scheduled_message", id });
-  }
-
-  sendScheduledMessagesList(): void {
-    this.send({ type: "scheduled_messages_list" });
-  }
-
-  // Group admin
-  sendGroupKick(group: string, username: string): void {
-    this.send({ type: "group_kick", group, username });
-  }
-
-  sendGroupSetRole(group: string, username: string, role: string): void {
-    this.send({ type: "group_set_role", group, username, role });
-  }
-
-  sendGroupRename(group: string, newName: string): void {
-    this.send({ type: "group_rename", group, content: newName });
-  }
-
-  sendGroupTransfer(group: string, newOwner: string): void {
-    this.send({ type: "group_transfer", group, username: newOwner });
-  }
-
-  sendGroupLeave(group: string): void {
-    this.send({ type: "group_leave", group });
-  }
-
-  sendGroupInfo(group: string): void {
-    this.send({ type: "group_info", group });
-  }
-
-  // Call signaling
-  sendCallStart(to: string, callType: "video" | "voice", sdp: string, roomId?: string): void {
-    this.send({ type: "call_start", to, call_type: callType, sdp, ...(roomId ? { room_id: roomId } : {}) });
-  }
-
-  sendCallAccept(callId: string, sdp: string, roomId?: string): void {
-    this.send({ type: "call_accept", call_id: callId, sdp, ...(roomId ? { room_id: roomId } : {}) });
-  }
-
-  sendCallReject(callId: string): void {
-    this.send({ type: "call_reject", call_id: callId });
-  }
-
-  sendCallEnd(callId: string, roomId?: string): void {
-    this.send({ type: "call_end", call_id: callId, ...(roomId ? { room_id: roomId } : {}) });
-  }
-
-  sendCallIceCandidate(callId: string, candidate: string, roomId?: string, to?: string): void {
-    this.send({ type: "call_ice_candidate", call_id: callId, candidate, ...(roomId ? { room_id: roomId } : {}), ...(to ? { to } : {}) });
-  }
-
-  sendCallList(): void {
-    this.send({ type: "call_list" });
-  }
-
-  // Group call room
-  sendCallRoomCreate(participants: string[], callType: "video" | "voice"): void {
-    this.send({ type: "call_room_create", call_participants: participants, call_type: callType });
-  }
-
-  sendCallRoomJoin(roomId: string, sdp?: string): void {
-    this.send({ type: "call_room_join", room_id: roomId, sdp: sdp ?? "" });
-  }
-
-  sendCallRoomLeave(roomId: string): void {
-    this.send({ type: "call_room_leave", room_id: roomId });
-  }
-
-  sendCallRoomList(roomId: string): void {
-    this.send({ type: "call_room_list", room_id: roomId });
   }
 
   async fetchLinkPreview(url: string): Promise<LinkPreviewData | null> {
@@ -956,7 +610,7 @@ class ChatAPI {
     this.send({ type: "custom_emoji_list" });
   }
 
-  async exportChat(conversation: string, format: 'json' | 'text', username?: string): Promise<Blob> {
+  async exportChat(conversation: "public", format: 'json' | 'text', username?: string): Promise<Blob> {
     const params = new URLSearchParams({ conversation, format });
     if (username) params.set("username", username);
     const resp = await fetch(`/api/export?${params}`, {
@@ -1007,50 +661,6 @@ class ChatAPI {
     }
   }
 
-  sendFolderCreate(name: string): void {
-    this.send({ type: "folder_create", content: name });
-  }
-
-  sendFolderDelete(id: string): void {
-    this.send({ type: "folder_delete", id });
-  }
-
-  sendFolderRename(id: string, newName: string): void {
-    this.send({ type: "folder_rename", id, content: newName });
-  }
-
-  sendFolderAddConversation(folderId: string, key: string): void {
-    this.send({ type: "folder_add_conversation", id: folderId, key });
-  }
-
-  sendFolderRemoveConversation(folderId: string, key: string): void {
-    this.send({ type: "folder_remove_conversation", id: folderId, key });
-  }
-
-  sendFolderList(): void {
-    this.send({ type: "folder_list" });
-  }
-
-  sendWebhookCreate(groupName: string): void {
-    this.send({ type: "webhook_create", group: groupName });
-  }
-
-  sendWebhookDelete(groupName: string, id: string): void {
-    this.send({ type: "webhook_delete", group: groupName, id });
-  }
-
-  sendWebhookRotate(groupName: string, id: string): void {
-    this.send({ type: "webhook_rotate", group: groupName, id });
-  }
-
-  sendWebhookList(groupName: string): void {
-    this.send({ type: "webhook_list", group: groupName });
-  }
-
-  sendWebhookAuditList(groupName: string): void {
-    this.send({ type: "webhook_audit_list", group: groupName });
-  }
-
   sendTranslateMessage(messageId: string, content: string, targetLang?: string): void {
     this.send({ type: "translate_message", message_id: messageId, content, to: targetLang || "" });
   }
@@ -1060,6 +670,8 @@ class ChatAPI {
     this.wasReconnecting = false;
     this.reconnectUsername = null;
     this.reconnectToken = null;
+    this.pendingJoin = null;
+    this.outboundQueue = [];
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -1189,7 +801,7 @@ export async function listInviteCodes(username: string): Promise<InviteCode[]> {
 export async function fetchPublicMessages(limit = 100): Promise<ChatMessage[]> {
   try {
     const params = new URLSearchParams({ limit: String(limit) });
-    const resp = await fetch(`/api/messages?${params}`);
+    const resp = await fetch(`/api/messages?${params}`, { redirect: "manual" });
     if (!resp.ok) return [];
     const data = await resp.json() as { messages?: ChatMessage[] };
     return data.messages || [];
@@ -1218,7 +830,7 @@ export interface OIDCExchangeResponse {
 }
 
 export async function fetchOIDCConfig(): Promise<OIDCConfig> {
-  const resp = await fetch("/api/oidc/config");
+  const resp = await fetch("/api/oidc/config", { redirect: "manual" });
   if (!resp.ok) throw new Error("OIDC not available");
   return (await resp.json()) as OIDCConfig;
 }

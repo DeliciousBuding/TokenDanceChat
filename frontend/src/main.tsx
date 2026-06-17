@@ -1,5 +1,5 @@
 // Global error trap: log the raw error BEFORE React's ErrorBoundary
-// swallows it as #321 (which is often a cascade from an earlier failure).
+// swallows it as React minified error 321 (often a cascade from an earlier failure).
 const _origError = console.error;
 console.error = (...args: unknown[]) => {
   _origError.apply(console, args);
@@ -10,7 +10,7 @@ console.error = (...args: unknown[]) => {
     if (el && args[0] instanceof Error) {
       const banner = document.createElement("div");
       banner.id = "raw-error-banner";
-      banner.style.cssText = "position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;padding:8px 12px;font:12px/1.4 monospace;white-space:pre-wrap;max-height:40vh;overflow:auto;";
+      banner.style.cssText = "position:fixed;bottom:0;left:0;right:0;z-index:99999;background:var(--td-danger);color:var(--td-surface);padding:8px 12px;font:12px/1.4 monospace;white-space:pre-wrap;max-height:40vh;overflow:auto;";
       banner.textContent = `[RAW ERROR] ${args[0].message}\n${args[0].stack || ""}`;
       if (!document.getElementById("raw-error-banner")) {
         document.body.appendChild(banner);

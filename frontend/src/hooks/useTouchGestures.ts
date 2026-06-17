@@ -175,7 +175,6 @@ export function usePullDownGesture(
 export interface SwipeableMessageHandlers {
   onReply?: () => void;
   onCopy?: () => void;
-  onForward?: () => void;
   onDelete?: () => void;
   isOwn?: boolean;
   disabled?: boolean;

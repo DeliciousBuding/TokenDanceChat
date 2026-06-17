@@ -1,9 +1,9 @@
-const CACHE_NAME = "tdchat-v6";
+const CACHE_NAME = "tdchat-v7";
 const STATIC_ASSETS = [
   "/offline.html",
   "/manifest.json",
-  "/icon-192.png",
-  "/icon-512.png",
+  "/tokendance-icon-rounded-192.png",
+  "/tokendance-icon-rounded-512.png",
 ];
 
 // Install: cache app shell

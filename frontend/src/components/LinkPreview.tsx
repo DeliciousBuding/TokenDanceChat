@@ -20,7 +20,7 @@ function extractDomain(url: string): string {
 /** Compact skeleton loading placeholder. */
 const LinkPreviewSkeleton = () => (
   <div
-    className="mt-1.5 flex rounded-lg border border-border bg-card/50 overflow-hidden animate-pulse max-w-[320px] p-2 gap-2 items-center"
+    className="td-chat-card-muted mt-1.5 flex max-w-[320px] animate-pulse items-center gap-2 overflow-hidden p-2"
   >
     <div className="w-10 h-10 rounded bg-muted/60 flex-shrink-0" />
     <div className="flex-1 min-w-0 flex flex-col gap-1.5">
@@ -37,7 +37,7 @@ const LinkPreviewError = ({ domain }: { domain: string }) => (
     href={`https://${domain}`}
     target="_blank"
     rel="noopener noreferrer"
-    className="mt-1.5 flex items-center gap-2 rounded-lg border border-border/50 bg-card/50 px-3 py-2 max-w-[320px] hover:bg-muted/40 transition-colors group/err"
+    className="td-chat-card-muted group/err mt-1.5 flex max-w-[320px] items-center gap-2 px-3 py-2 transition-colors"
     onClick={(e) => e.stopPropagation()}
   >
     <Globe className="h-3.5 w-3.5 text-muted-foreground/40 flex-shrink-0" />
@@ -124,7 +124,7 @@ export const LinkPreview = memo(function LinkPreview({ url, messageTimestamp }: 
       href={data.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="mt-1.5 flex rounded-lg border border-border bg-card/50 overflow-hidden hover:border-primary/30 hover:shadow-sm transition-all duration-200 max-w-[320px] group/preview p-2 gap-2.5 items-center"
+      className="td-chat-card group/preview mt-1.5 flex max-w-[320px] items-center gap-2.5 overflow-hidden p-2 transition-all duration-200 hover:border-[var(--accent)]/35"
       onClick={(e) => e.stopPropagation()}
     >
       {data.image ? (

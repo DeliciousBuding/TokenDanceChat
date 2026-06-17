@@ -13,13 +13,7 @@ vi.mock("@/hooks/useWebSocket", () => ({
     connect: wsMocks.connect,
     disconnect: vi.fn(),
     sendMessage: vi.fn(),
-    sendDMMessage: vi.fn(),
-    sendGroupMessage: vi.fn(),
     markRead: vi.fn(),
-    joinRoom: vi.fn(),
-    createRoom: vi.fn(),
-    leaveRoom: vi.fn(),
-    forwardMessage: vi.fn(),
     sendReaction: vi.fn(),
     sendMessageEdit: vi.fn(),
     uploadImage: vi.fn(),
@@ -106,11 +100,44 @@ describe("App smoke test", () => {
         <App />
       </I18nProvider>,
     );
-    // Chat input placeholder should be visible in read-only guest preview mode.
+    // Chat input placeholder should be visible while the app auto-joins guest mode.
     expect(screen.getByPlaceholderText(/输入消息/)).toBeTruthy();
   });
 
-  it("loads public messages for the unauthenticated preview", async () => {
+  it("auto-joins a guest user instead of leaving the composer disabled", async () => {
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(wsMocks.connect).toHaveBeenCalled();
+    });
+    const guestName = wsMocks.connect.mock.calls[0][0] as string;
+    expect(guestName).toMatch(/^guest_[a-z0-9]{8}$/);
+    expect(useChatStore.getState().username).toBe(guestName);
+    expect(useChatStore.getState().isGuest).toBe(true);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("auto-joins guest mode when React StrictMode re-runs effects", async () => {
+    render(
+      <StrictMode>
+        <I18nProvider>
+          <App />
+        </I18nProvider>
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(wsMocks.connect).toHaveBeenCalled();
+    });
+    expect((wsMocks.connect.mock.calls[0][0] as string)).toMatch(/^guest_[a-z0-9]{8}$/);
+  });
+
+  it("falls back to public preview when guest WebSocket join fails", async () => {
+    wsMocks.connect.mockRejectedValueOnce(new Error("offline"));
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -132,53 +159,15 @@ describe("App smoke test", () => {
     );
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/messages?limit=100");
+      expect(mockFetch).toHaveBeenCalledWith("/api/messages?limit=100", { redirect: "manual" });
     });
     expect(await screen.findByText("Preview welcome")).toBeTruthy();
+    expect(useChatStore.getState().username).toBe("");
+    expect(useChatStore.getState().isGuest).toBe(false);
   });
 
-  it("loads public messages when React StrictMode re-runs effects", async () => {
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          messages: [
-            {
-              id: "preview-strict-1",
-              username: "TokenBot",
-              content: "Strict preview welcome",
-              timestamp: 1000,
-            },
-          ],
-        }),
-      } as unknown as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          messages: [
-            {
-              id: "preview-strict-2",
-              username: "TokenBot",
-              content: "Strict preview welcome",
-              timestamp: 1000,
-            },
-          ],
-        }),
-      } as unknown as Response);
-
-    render(
-      <StrictMode>
-        <I18nProvider>
-          <App />
-        </I18nProvider>
-      </StrictMode>,
-    );
-
-    expect(await screen.findByText("Strict preview welcome")).toBeTruthy();
-  });
-
-  it("ends the public preview loading state when message fetch fails", async () => {
-    mockFetch.mockRejectedValueOnce(new Error("offline"));
+  it("clears stale username-only storage without leaving the auth modal over guest chat", async () => {
+    localStorageMock.setItem("tokendance:username", "stale_guest");
 
     render(
       <I18nProvider>
@@ -187,13 +176,16 @@ describe("App smoke test", () => {
     );
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/messages?limit=100");
+      expect(wsMocks.connect).toHaveBeenCalled();
     });
-    await waitFor(() => {
-      expect(useChatStore.getState().historyLoaded).toBe(true);
-    });
-    expect(screen.queryByRole("status", { name: "加载消息中..." })).toBeNull();
-    expect(screen.getByText("暂无消息")).toBeTruthy();
+
+    const guestName = wsMocks.connect.mock.calls[0][0] as string;
+    expect(guestName).toMatch(/^guest_[a-z0-9]{8}$/);
+    expect(useChatStore.getState().username).toBe(guestName);
+    expect(useChatStore.getState().isGuest).toBe(true);
+    expect(useChatStore.getState().showAuthModal).toBe(false);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(window.localStorage.getItem("tokendance:username")).toBeNull();
   });
 
   it("uses the redeemed OIDC username instead of the callback URL username", async () => {

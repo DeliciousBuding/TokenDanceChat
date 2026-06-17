@@ -83,7 +83,7 @@ export const PollMessage = memo(function PollMessage({ poll, messageId }: PollMe
   const isClosed = poll.is_closed;
 
   return (
-    <div className="rounded-2xl border border-border bg-card px-4 py-3 w-full max-w-[380px] shadow-sm">
+    <div className="td-chat-card w-full max-w-[380px] px-4 py-3">
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
         <svg
@@ -136,8 +136,8 @@ export const PollMessage = memo(function PollMessage({ poll, messageId }: PollMe
                   isUserVoted
                     ? "bg-primary/10 border-primary/30 text-foreground"
                     : isSelected
-                      ? "bg-accent border-primary/30 text-foreground"
-                      : "hover:bg-accent text-foreground/80",
+                    ? "bg-[var(--bg-hover)] border-primary/30 text-foreground"
+                    : "hover:bg-[var(--bg-hover)] text-foreground/80",
                   (isClosed || (hasVoted && !poll.multiple_choice))
                     ? "cursor-default"
                     : "cursor-pointer",
@@ -212,7 +212,7 @@ export const PollMessage = memo(function PollMessage({ poll, messageId }: PollMe
         {!isClosed && isOwnPoll && (
           <button
             onClick={handleClosePoll}
-            className="ml-auto rounded-lg border border-border px-2.5 py-1 text-xxs text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+            className="td-chat-list-row ml-auto px-2.5 py-1 text-xxs text-muted-foreground hover:text-destructive"
           >
             {t("poll.closed")}
           </button>

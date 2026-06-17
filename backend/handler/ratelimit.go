@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,7 +31,7 @@ type rateLimitEntry struct {
 const (
 	wsMaxPerWindow   = 50
 	wsWindow         = 10 * time.Second
-	apiMaxPerWindow  = 30
+	apiMaxPerWindowDefault = 30
 	apiWindow        = 1 * time.Minute
 	authMaxPerWindow = 5
 	authWindow       = 1 * time.Minute
@@ -58,7 +59,19 @@ func (r *rateLimiter) allowOIDC(ip string) bool {
 
 // allowAPI checks whether a REST API request is allowed for the given IP.
 func (r *rateLimiter) allowAPI(ip string) bool {
-	return r.allow(&r.apiEntries, ip, apiMaxPerWindow, apiWindow)
+	return r.allow(&r.apiEntries, ip, apiMaxPerWindow(), apiWindow)
+}
+
+func apiMaxPerWindow() int {
+	value := strings.TrimSpace(os.Getenv("CHAT_API_RATE_LIMIT_PER_MINUTE"))
+	if value == "" {
+		return apiMaxPerWindowDefault
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return apiMaxPerWindowDefault
+	}
+	return parsed
 }
 
 func (r *rateLimiter) allow(m *sync.Map, ip string, max int, window time.Duration) bool {
@@ -212,7 +225,7 @@ func isTrustedProxy(ipString string) bool {
 	return false
 }
 
-// RateLimitMiddleware limits REST API requests to 30 per minute per IP.
+// RateLimitMiddleware limits REST API requests per minute per IP.
 // Place after LoggingMiddleware so blocked requests are still logged.
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

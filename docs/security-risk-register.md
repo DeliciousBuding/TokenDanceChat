@@ -71,8 +71,8 @@ TokenDanceChat is a demo and AgentHub stack validation app. The risk target is t
   - `cd backend; go test . -run "TestCORSMiddleware" -count=1 -v`
   - `cd backend; go test ./hub -run "Test(BroadcastToRoom|HandleChatMessageScopesRoomFanout)$" -count=1 -v`
   - `node --check frontend\public\sw.js`
-  - `cd frontend; npm test -- --run src/components/GroupInfoPanel.test.tsx src/stores/chatStore.test.ts src/hooks/useWebSocket.test.ts`
-  - `cd frontend; E2E_BASE_URL=http://127.0.0.1:18135 npx playwright test src/e2e/webhook-ingress.test.ts --project=chromium --workers=1 --reporter=line`
+  - `cd frontend; pnpm test -- --run src/stores/chatStore.test.ts src/hooks/useWebSocket.test.ts src/lib/api.test.ts`
+  - Historical frontend webhook management UI has been removed from the lightweight contract; webhook security coverage remains in backend handler/hub/store tests.
   - `.\scripts\verify.ps1 -SkipDocker`
 
 ## Verification Queue

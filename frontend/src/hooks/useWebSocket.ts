@@ -5,23 +5,14 @@ import {
   getSessionToken,
   type WSMessage,
   type ChatMessage,
-  type ScheduledMessage,
-  type ChatFolder,
   type WSChatMessage,
   type WSHistoryMessage,
   type WSUserEvent,
   type WSTypingEvent,
   type WSUserStatus,
-  type WSRoomList,
-  type WSRoomJoin,
-  type WSForwardEvent,
   type WSReactionUpdate,
   type WSMessageEditBroadcast,
-  type WSCallIncoming,
-  type WSCallAccepted,
-  type WSCallRejected,
 } from "@/lib/api";
-import { normalizeGroupInfoMembers } from "@/lib/groupInfo";
 
 // ─── Page title utilities ───
 
@@ -94,20 +85,11 @@ export function useWebSocket() {
     addSystemMessage,
     addTypingUser,
     removeTypingUser,
-    setRooms,
-    setCurrentRoomID,
     setPendingImage,
     updateMessageReactions,
     editMessageInPlace,
     setUnreadCount,
     deleteMessage,
-    setFriends,
-    setGroupMembers,
-    setGroupMemberRole,
-    removeMemberFromGroup,
-    renameGroupInStore,
-    addFriendRequest,
-    clearAllConversationUnreads,
     markMessagesReadBy,
     setLatestMention,
     setBlockedUsers,
@@ -116,25 +98,9 @@ export function useWebSocket() {
     setMutedConversations,
     setNotificationPrefs,
     setArchivedConversations,
-    setScheduledMessages,
-    removeScheduledMessage,
     setCustomEmojis,
     addCustomEmoji,
     removeCustomEmoji,
-    setFolders,
-    addFolder,
-    removeFolder,
-    updateFolder,
-    addConversationToFolder,
-    removeConversationFromFolder,
-    setGroupWebhooks,
-    setGroupWebhookAuditLogs,
-    addGroupWebhook,
-    rotateGroupWebhookSecret,
-    removeGroupWebhook,
-    setIncomingCall,
-    setActiveCall,
-    setGroupInfoPanel,
     setTranslation,
     updatePoll,
     removePoll,
@@ -178,91 +144,28 @@ export function useWebSocket() {
       const tempId = `optimistic_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const optimistic: import("@/lib/api").ChatMessage = {
         id: tempId,
+        client_message_id: tempId,
         username: state.username,
         content,
         timestamp: Date.now(),
         edited: false,
       };
       addMessage(optimistic);
-      chatAPI.sendMessage(content, state.replyTo || undefined);
+      window.dispatchEvent(new CustomEvent("tdchat:optimistic-message", { detail: { id: tempId } }));
+      chatAPI.sendMessage(content, state.replyTo || undefined, tempId);
       // Clear reply after sending.
       useChatStore.getState().setReplyTo(null);
     },
     [addMessage],
   );
 
-  const sendDMMessage = useCallback(
-    (to: string, content: string) => {
-      const state = useChatStore.getState();
-      const tempId = `optimistic_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-      const optimistic: import("@/lib/api").ChatMessage = {
-        id: tempId,
-        username: state.username,
-        content,
-        timestamp: Date.now(),
-        from: state.username,
-        to,
-        edited: false,
-      };
-      addMessage(optimistic);
-      chatAPI.sendDMMessage(to, content, state.replyTo || undefined);
-      useChatStore.getState().setReplyTo(null);
-    },
-    [addMessage],
-  );
-
-  const sendGroupMessage = useCallback(
-    (group: string, content: string) => {
-      const state = useChatStore.getState();
-      const tempId = `optimistic_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-      const optimistic: import("@/lib/api").ChatMessage = {
-        id: tempId,
-        username: state.username,
-        content,
-        timestamp: Date.now(),
-        group,
-        edited: false,
-      };
-      addMessage(optimistic);
-      chatAPI.sendGroupMessage(group, content, state.replyTo || undefined);
-      useChatStore.getState().setReplyTo(null);
-    },
-    [addMessage],
-  );
-
   const markRead = useCallback(() => {
-    const state = useChatStore.getState();
-    const chat = state.currentChat;
-    if (chat.type === "dm") {
-      chatAPI.sendMarkRead("dm", chat.username);
-      useChatStore.getState().clearConversationUnread(`dm:${chat.username}`);
-    } else if (chat.type === "group") {
-      chatAPI.sendMarkRead("group", chat.name);
-      useChatStore.getState().clearConversationUnread(`group:${chat.name}`);
-    } else {
-      chatAPI.sendMarkRead("public");
-      useChatStore.getState().clearConversationUnread("public");
-    }
+    chatAPI.sendMarkRead();
+    useChatStore.getState().clearConversationUnread("public");
     setUnreadCount(0);
     unreadTitleCount = 0;
     updatePageTitle();
-  }, [setUnreadCount, clearAllConversationUnreads]);
-
-  const joinRoom = useCallback((roomID: string) => {
-    chatAPI.sendRoomJoin(roomID);
-  }, []);
-
-  const createRoom = useCallback((name: string) => {
-    chatAPI.sendRoomCreate(name);
-  }, []);
-
-  const leaveRoom = useCallback(() => {
-    chatAPI.sendRoomLeave();
-  }, []);
-
-  const forwardMessage = useCallback((messageID: string, toUsername: string) => {
-    chatAPI.sendForward(messageID, toUsername);
-  }, []);
+  }, [setUnreadCount]);
 
   const sendReaction = useCallback((messageId: string, emoji: string) => {
     chatAPI.sendReaction(messageId, emoji);
@@ -278,13 +181,7 @@ export function useWebSocket() {
       const state = useChatStore.getState();
       const isImage = file.type.startsWith("image/");
       const fileMarkdown = isImage ? `![image](${url})` : `[${file.name}](${url})`;
-      if (state.currentChat.type === "dm") {
-        chatAPI.sendDMMessage(state.currentChat.username, fileMarkdown, state.replyTo || undefined);
-      } else if (state.currentChat.type === "group") {
-        chatAPI.sendGroupMessage(state.currentChat.name, fileMarkdown, state.replyTo || undefined);
-      } else {
-        chatAPI.sendMessage(fileMarkdown, state.replyTo || undefined);
-      }
+      chatAPI.sendMessage(fileMarkdown, state.replyTo || undefined);
       state.setReplyTo(null);
     }
     setPendingImage(null);
@@ -316,10 +213,11 @@ export function useWebSocket() {
     // Public chat message
     unsubs.push(
       chatAPI.on("message", (msg: WSMessage) => {
-        const { id, username, content, timestamp, reply_to_id, reply_to_content, reply_to_user } =
+        const { id, client_message_id, username, content, timestamp, reply_to_id, reply_to_content, reply_to_user } =
           msg as WSChatMessage;
         addMessage({
           id,
+          client_message_id,
           username,
           content,
           timestamp: timestamp || Date.now(),
@@ -328,62 +226,10 @@ export function useWebSocket() {
           reply_to_user,
         } as ChatMessage);
         removeTypingUser(username);
-        // Increment unread for public chat if not currently viewing it.
-        const state = useChatStore.getState();
-        if (state.currentChat.type !== "public") {
+        if (!isTabActive && !isConversationMuted("public")) {
           useChatStore.getState().incrementConversationUnread("public");
-          if (!isTabActive && !isConversationMuted("public")) import("@/lib/sound").then((m) => m.playMessageSound());
-          if (!isConversationMuted("public")) notifyMessage(username, content);
-        }
-      }),
-    );
-
-    // DM message
-    unsubs.push(
-      chatAPI.on("dm_message", (msg: WSMessage) => {
-        const m = msg as unknown as ChatMessage;
-        addMessage({
-          id: m.id,
-          username: m.username,
-          content: m.content,
-          timestamp: m.timestamp || Date.now(),
-          to: m.to,
-          from: m.from || m.username,
-          reply_to_id: m.reply_to_id,
-          reply_to_content: m.reply_to_content,
-          reply_to_user: m.reply_to_user,
-        });
-        // Increment unread for this DM if not currently viewing it.
-        const state = useChatStore.getState();
-        const partner = m.username === state.username ? m.to : (m.from || m.username);
-        if (partner && m.username !== state.username && !(state.currentChat.type === "dm" && state.currentChat.username === partner)) {
-          useChatStore.getState().incrementConversationUnread(`dm:${partner}`);
-          if (!isConversationMuted(`dm:${partner}`)) import("@/lib/sound").then((m) => m.playMessageSound());
-          if (!isConversationMuted(`dm:${partner}`)) notifyMessage(partner, m.content);
-        }
-      }),
-    );
-
-    // Group message
-    unsubs.push(
-      chatAPI.on("group_message", (msg: WSMessage) => {
-        const m = msg as unknown as ChatMessage & { group?: string };
-        addMessage({
-          id: m.id,
-          username: m.username,
-          content: m.content,
-          timestamp: m.timestamp || Date.now(),
-          to: m.group || "",
-          reply_to_id: m.reply_to_id,
-          reply_to_content: m.reply_to_content,
-          reply_to_user: m.reply_to_user,
-        });
-        const state = useChatStore.getState();
-        const groupName = m.group || m.to;
-        if (groupName && !(state.currentChat.type === "group" && state.currentChat.name === groupName)) {
-          useChatStore.getState().incrementConversationUnread(`group:${groupName}`);
-          if (!isConversationMuted(`group:${groupName}`)) import("@/lib/sound").then((m) => m.playMessageSound());
-          if (!isConversationMuted(`group:${groupName}`)) notifyMessage(groupName, `${m.username}: ${m.content}`);
+          import("@/lib/sound").then((m) => m.playMessageSound());
+          notifyMessage(username, content);
         }
       }),
     );
@@ -391,7 +237,7 @@ export function useWebSocket() {
     // History
     unsubs.push(
       chatAPI.on("history", (msg: WSMessage) => {
-        const { messages, room_id } = msg as WSHistoryMessage;
+        const { messages } = msg as WSHistoryMessage;
         const state = useChatStore.getState();
         if (state.historyLoaded) {
           // Pagination: prepend older messages.
@@ -403,39 +249,6 @@ export function useWebSocket() {
         } else {
           setHistory(messages || []);
         }
-        if (room_id) {
-          setCurrentRoomID(room_id);
-        }
-      }),
-    );
-
-    unsubs.push(
-      chatAPI.on("room_list", (msg: WSMessage) => {
-        const { rooms } = msg as WSRoomList;
-        if (rooms) {
-          setRooms(rooms);
-        }
-      }),
-    );
-
-    unsubs.push(
-      chatAPI.on("room_join", (msg: WSMessage) => {
-        const { room_id } = msg as WSRoomJoin;
-        if (room_id) {
-          setCurrentRoomID(room_id);
-        }
-      }),
-    );
-
-    unsubs.push(
-      chatAPI.on("forward", (msg: WSMessage) => {
-        const { id, from, content, timestamp } = msg as WSForwardEvent;
-        addMessage({
-          id: id || `fwd-${Date.now()}`,
-          username: from,
-          content: `[Forwarded] ${content}`,
-          timestamp: timestamp || Date.now(),
-        });
       }),
     );
 
@@ -609,45 +422,6 @@ export function useWebSocket() {
       }),
     );
 
-    // Friend request
-    unsubs.push(
-      chatAPI.on("friend_request", (msg: WSMessage) => {
-        const { from } = msg as { type: string; from: string };
-        addFriendRequest(from);
-      }),
-    );
-
-    // Friend accept
-    unsubs.push(
-      chatAPI.on("friend_accept", (msg: WSMessage) => {
-        const { friends } = msg as { type: string; friends: string[] };
-        if (friends) {
-          setFriends(friends);
-        }
-      }),
-    );
-
-    // Friend reject
-    unsubs.push(
-      chatAPI.on("friend_reject", (msg: WSMessage) => {
-        const { from } = msg as { type: string; from: string };
-        addSystemMessage(
-          i18nSys("system.friendRejected", { username: from }),
-          Date.now(),
-        );
-      }),
-    );
-
-    // Friend list
-    unsubs.push(
-      chatAPI.on("friend_list", (msg: WSMessage) => {
-        const { friends } = msg as { type: string; friends: string[] };
-        if (friends) {
-          setFriends(friends);
-        }
-      }),
-    );
-
     // Block list
     unsubs.push(
       chatAPI.on("block_list", (msg: WSMessage) => {
@@ -784,181 +558,6 @@ export function useWebSocket() {
       }),
     );
 
-    // Group create
-    unsubs.push(
-      chatAPI.on("group_create", (msg: WSMessage) => {
-        const { group, members } = msg as {
-          type: string;
-          group: string;
-          members: string[];
-        };
-        if (group && members) {
-          setGroupMembers(group, members);
-        }
-      }),
-    );
-
-    // Group invite
-    unsubs.push(
-      chatAPI.on("group_invite", (msg: WSMessage) => {
-        const { group, from } = msg as {
-          type: string;
-          group: string;
-          from: string;
-        };
-        if (group && from) {
-          useChatStore.getState().addGroupInvite(group, from);
-        }
-      }),
-    );
-
-    // Group join (membership update)
-    unsubs.push(
-      chatAPI.on("group_join", (msg: WSMessage) => {
-        const { group, members } = msg as {
-          type: string;
-          group: string;
-          members: string[];
-        };
-        if (group && members) {
-          setGroupMembers(group, members);
-        }
-      }),
-    );
-
-    // Group member kicked
-    unsubs.push(
-      chatAPI.on("group_member_kicked", (msg: WSMessage) => {
-        const { group, username, members, content } = msg as {
-          type: string;
-          group: string;
-          username: string;
-          members?: string[];
-          content?: string;
-        };
-        if (!group) return;
-        const state = useChatStore.getState();
-        // If you were kicked, switch to public chat.
-        if (username === state.username && content) {
-          addSystemMessage(
-            JSON.stringify({ key: "system.groupInvited", params: { username: "system", group: `${group}: ${content}` } }),
-            Date.now(),
-          );
-          if (state.currentChat.type === "group" && state.currentChat.name === group) {
-            useChatStore.getState().setCurrentChat({ type: "public" });
-          }
-        }
-        if (members) {
-          setGroupMembers(group, members);
-        } else if (username && username !== state.username) {
-          removeMemberFromGroup(group, username);
-        }
-      }),
-    );
-
-    // Group role changed
-    unsubs.push(
-      chatAPI.on("group_role_changed", (msg: WSMessage) => {
-        const { group, username, role } = msg as {
-          type: string;
-          group: string;
-          username: string;
-          role: string;
-        };
-        if (group && username && role) {
-          setGroupMemberRole(group, username, role);
-        }
-      }),
-    );
-
-    // Group renamed
-    unsubs.push(
-      chatAPI.on("group_renamed", (msg: WSMessage) => {
-        const { group, content } = msg as {
-          type: string;
-          group: string;
-          content: string;
-        };
-        if (group && content) {
-          renameGroupInStore(content, group);
-          // Update current chat if viewing the renamed group.
-          const state = useChatStore.getState();
-          if (state.currentChat.type === "group" && state.currentChat.name === content) {
-            useChatStore.getState().setCurrentChat({ type: "group", name: group });
-          }
-        }
-      }),
-    );
-
-    // Group owner changed
-    unsubs.push(
-      chatAPI.on("group_owner_changed", (msg: WSMessage) => {
-        const { group, username } = msg as {
-          type: string;
-          group: string;
-          username: string;
-        };
-        if (group && username) {
-          setGroupMemberRole(group, username, "owner");
-        }
-      }),
-    );
-
-    // Group member left
-    unsubs.push(
-      chatAPI.on("group_member_left", (msg: WSMessage) => {
-        const { group, username, members } = msg as {
-          type: string;
-          group: string;
-          username: string;
-          members?: string[];
-        };
-        if (!group || !username) return;
-        if (members) {
-          setGroupMembers(group, members);
-        } else {
-          removeMemberFromGroup(group, username);
-        }
-      }),
-    );
-
-    // Group info
-    unsubs.push(
-      chatAPI.on("group_info", (msg: WSMessage) => {
-        const { group, content, timestamp } = msg as {
-          type: string;
-          group: string;
-          content?: string;
-          timestamp?: number;
-        };
-        const groupMembers = normalizeGroupInfoMembers(msg);
-        if (!group || groupMembers.length === 0) return;
-        const roles: Record<string, string> = {};
-        const memberNames: string[] = [];
-        for (const m of groupMembers) {
-          memberNames.push(m.username);
-          roles[m.username] = m.role;
-        }
-        const owner = content ?? "";
-        const state = useChatStore.getState();
-        const existing = state.groups[group];
-        setGroupMembers(group, memberNames);
-        // Update roles and owner in store.
-        useChatStore.setState((s) => ({
-          groups: {
-            ...s.groups,
-            [group]: {
-              name: group,
-              members: memberNames,
-              roles,
-              owner,
-              created_at: timestamp ?? existing?.created_at ?? 0,
-            },
-          },
-        }));
-      }),
-    );
-
     // Message delete
     unsubs.push(
       chatAPI.on("message_delete", (msg: WSMessage) => {
@@ -1044,20 +643,12 @@ export function useWebSocket() {
       }),
     );
 
-    // Typing indicator — scoped to current chat context.
+    // Typing indicator — current frontend contract only renders public room typing.
     unsubs.push(
       chatAPI.on("typing", (msg: WSMessage) => {
-        const { username: typingUser, context: typingCtx, to: typingTarget } = msg as WSTypingEvent;
-        // Filter by chat context: only show typing for matching scope.
-        const state = useChatStore.getState();
-        if (typingCtx) {
-          if (typingCtx === "dm") {
-            if (state.currentChat.type !== "dm" || state.currentChat.username !== typingUser) return;
-          } else if (typingCtx === "group") {
-            if (state.currentChat.type !== "group" || state.currentChat.name !== typingTarget) return;
-          } else if (typingCtx === "public") {
-            if (state.currentChat.type !== "public") return;
-          }
+        const { username: typingUser, context: typingCtx } = msg as WSTypingEvent;
+        if (typingCtx && typingCtx !== "public") {
+          return;
         }
         addTypingUser(typingUser);
 
@@ -1207,275 +798,6 @@ export function useWebSocket() {
       }),
     );
 
-    // Webhook management
-    unsubs.push(
-      chatAPI.on("webhook_created", (msg: WSMessage) => {
-        const { group: grp, id, content, secret } = msg as {
-          type: string;
-          group: string;
-          id: string;
-          content: string;
-          secret?: string;
-        };
-        if (grp && id && content && secret) {
-          addGroupWebhook(grp, {
-            id,
-            group_name: grp,
-            url: content,
-            secret,
-            created_by: useChatStore.getState().username,
-            created_at: Date.now(),
-          });
-          setGroupInfoPanel(grp);
-          chatAPI.sendWebhookList(grp);
-          chatAPI.sendWebhookAuditList(grp);
-        }
-      }),
-    );
-
-    unsubs.push(
-      chatAPI.on("webhook_deleted", (msg: WSMessage) => {
-        const { group: grp, id } = msg as { type: string; group: string; id: string };
-        if (grp && id) {
-          removeGroupWebhook(grp, id);
-          setGroupInfoPanel(grp);
-          chatAPI.sendWebhookList(grp);
-          chatAPI.sendWebhookAuditList(grp);
-        }
-      }),
-    );
-
-    unsubs.push(
-      chatAPI.on("webhook_rotated", (msg: WSMessage) => {
-        const { group: grp, id, content, secret, rotated_at, rotated_by } = msg as {
-          type: string;
-          group: string;
-          id: string;
-          content: string;
-          secret?: string;
-          rotated_at?: number;
-          rotated_by?: string;
-        };
-        if (grp && id && content && secret) {
-          rotateGroupWebhookSecret(grp, {
-            id,
-            group_name: grp,
-            url: content,
-            secret,
-            created_by: "",
-            created_at: 0,
-            rotated_at,
-            rotated_by,
-          });
-          setGroupInfoPanel(grp);
-          chatAPI.sendWebhookList(grp);
-          chatAPI.sendWebhookAuditList(grp);
-        }
-      }),
-    );
-
-    unsubs.push(
-      chatAPI.on("webhook_list", (msg: WSMessage) => {
-        const { group: grp, webhooks } = msg as {
-          type: string;
-          group: string;
-          webhooks?: {
-            id: string;
-            group_name: string;
-            url: string;
-            created_by: string;
-            created_at: number;
-            rotated_at?: number;
-            rotated_by?: string;
-          }[];
-        };
-        if (grp && Array.isArray(webhooks)) {
-          setGroupWebhooks(grp, webhooks);
-        }
-      }),
-    );
-
-    unsubs.push(
-      chatAPI.on("webhook_audit_list", (msg: WSMessage) => {
-        const { group: grp, audit_logs } = msg as {
-          type: string;
-          group: string;
-          audit_logs?: {
-            id: string;
-            webhook_id: string;
-            group_name: string;
-            action: string;
-            actor: string;
-            created_at: number;
-          }[];
-        };
-        if (grp && Array.isArray(audit_logs)) {
-          setGroupWebhookAuditLogs(grp, audit_logs);
-        }
-      }),
-    );
-
-    // Scheduled message confirm
-    unsubs.push(
-      chatAPI.on("scheduled_message_confirm", (msg: WSMessage) => {
-        const m = msg as {
-          type: string; id: string; content: string; username: string;
-          timestamp: number; room_id?: string; to?: string; group?: string;
-        };
-        if (m.id) {
-          const newScheduled: ScheduledMessage = {
-            id: m.id,
-            username: m.username,
-            content: m.content,
-            room_id: m.room_id ?? "",
-            to_user: m.to ?? "",
-            group_name: m.group ?? "",
-            reply_to_id: "",
-            thread_id: "",
-            send_at: m.timestamp,
-            created_at: Date.now(),
-            sent: 0,
-          };
-          const state = useChatStore.getState();
-          setScheduledMessages([newScheduled, ...state.scheduledMessages]);
-        }
-      }),
-    );
-
-    // Scheduled messages list
-    unsubs.push(
-      chatAPI.on("scheduled_messages_list", (msg: WSMessage) => {
-        const m = msg as { type: string; messages: ScheduledMessage[] };
-        if (m.messages) {
-          setScheduledMessages(m.messages);
-        }
-      }),
-    );
-
-    // Scheduled message sent by server
-    unsubs.push(
-      chatAPI.on("scheduled_message_sent", (msg: WSMessage) => {
-        const m = msg as { type: string; id: string; content: string; username: string; timestamp: number };
-        if (m.id) {
-          removeScheduledMessage(m.id);
-        }
-      }),
-    );
-
-    // Scheduled message cancelled
-    unsubs.push(
-      chatAPI.on("scheduled_message_cancelled", (msg: WSMessage) => {
-        const m = msg as { type: string; id: string };
-        if (m.id) {
-          removeScheduledMessage(m.id);
-        }
-      }),
-    );
-
-    // Folder events
-    unsubs.push(
-      chatAPI.on("folder_created", (msg: WSMessage) => {
-        const { id, content } = msg as { type: string; id: string; content: string };
-        if (id) {
-          addFolder({ id, username: "", name: content, sort_order: 0, created_at: Date.now(), item_count: 0, items: [] });
-        }
-      }),
-      chatAPI.on("folder_deleted", (msg: WSMessage) => {
-        const { id } = msg as { type: string; id: string };
-        if (id) removeFolder(id);
-      }),
-      chatAPI.on("folder_renamed", (msg: WSMessage) => {
-        const { id, content } = msg as { type: string; id: string; content: string };
-        if (id && content) updateFolder(id, { name: content });
-      }),
-      chatAPI.on("folder_conversation_added", (msg: WSMessage) => {
-        const { id, key } = msg as { type: string; id: string; key: string };
-        if (id && key) addConversationToFolder(id, key);
-      }),
-      chatAPI.on("folder_conversation_removed", (msg: WSMessage) => {
-        const { id, key } = msg as { type: string; id: string; key: string };
-        if (id && key) removeConversationFromFolder(id, key);
-      }),
-      chatAPI.on("folder_list", (msg: WSMessage) => {
-        const { folders } = msg as { type: string; folders: ChatFolder[] };
-        if (folders) setFolders(folders);
-      }),
-    );
-
-    // ─── Call signaling ───
-
-    // Incoming call
-    unsubs.push(
-      chatAPI.on("call_incoming", (msg: WSMessage) => {
-        const m = msg as WSCallIncoming;
-        if (!m.call_id || !m.from) return;
-        // If already in a call, auto-reject with busy.
-        const state = useChatStore.getState();
-        if (state.activeCall || state.incomingCall) {
-          chatAPI.sendCallReject(m.call_id);
-          return;
-        }
-        setIncomingCall({
-          callId: m.call_id,
-          from: m.from,
-          callType: (m.call_type as "video" | "voice") || "voice",
-          sdp: m.sdp || "",
-        });
-        import("@/lib/sound").then((snd) => snd.playMentionSound());
-      }),
-    );
-
-    // Call accepted (by callee — forwarded to caller)
-    unsubs.push(
-      chatAPI.on("call_accepted", (msg: WSMessage) => {
-        const m = msg as WSCallAccepted;
-        if (!m.call_id) return;
-        // The VideoCall component handles the SDP; we don't need to set state here.
-        // But the call_accepted is also consumed by VideoCall's internal listener.
-      }),
-    );
-
-    // Call rejected
-    unsubs.push(
-      chatAPI.on("call_rejected", (msg: WSMessage) => {
-        const m = msg as WSCallRejected;
-        // The VideoCall component handles this via its internal listener.
-        // If no VideoCall is mounted yet (e.g., caller gets rejected before mounting),
-        // just clean up any active call state.
-        const state = useChatStore.getState();
-        if (m.call_id === state.activeCall?.callId) {
-          setActiveCall(null);
-        }
-      }),
-    );
-
-    // Call ended
-    unsubs.push(
-      chatAPI.on("call_ended", () => {
-        // The VideoCall component handles this via its internal listener.
-        // Fallback cleanup if VideoCall is not mounted.
-        const state = useChatStore.getState();
-        if (state.activeCall || state.incomingCall) {
-          setActiveCall(null);
-          setIncomingCall(null);
-        }
-      }),
-    );
-
-    // ICE candidate relay
-    unsubs.push(
-      chatAPI.on("call_ice_candidate", (_msg: WSMessage) => {
-        // Handled by VideoCall component's internal listener.
-      }),
-    );
-
-    // Call history list
-    unsubs.push(
-      chatAPI.on("call_list", (_msg: WSMessage) => {
-        // Handled by caller via chatAPI.sendCallList() — UI for history TBD.
-      }),
-    );
-
     // Periodic cleanup of stale stream accumulators (bot crash/disconnect).
     const streamCleanupTimer = setInterval(() => {
       const now = Date.now();
@@ -1494,7 +816,7 @@ export function useWebSocket() {
       typingTimers.current.clear();
     };
     return releaseSharedWebSocketSubscription;
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, setRooms, setCurrentRoomID, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, setFriends, setGroupMembers, setGroupMemberRole, removeMemberFromGroup, renameGroupInStore, addFriendRequest, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setScheduledMessages, removeScheduledMessage, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setFolders, addFolder, removeFolder, updateFolder, addConversationToFolder, removeConversationFromFolder, setGroupWebhooks, setGroupWebhookAuditLogs, addGroupWebhook, rotateGroupWebhookSecret, removeGroupWebhook, setIncomingCall, setActiveCall, setNotificationPrefs, setTranslation, updatePoll, setGroupInfoPanel, disconnect]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setNotificationPrefs, setTranslation, updatePoll, disconnect]);
 
-  return { connect, disconnect, sendMessage, sendDMMessage, sendGroupMessage, markRead, joinRoom, createRoom, leaveRoom, forwardMessage, sendReaction, sendMessageEdit, uploadImage };
+  return { connect, disconnect, sendMessage, markRead, sendReaction, sendMessageEdit, uploadImage };
 }

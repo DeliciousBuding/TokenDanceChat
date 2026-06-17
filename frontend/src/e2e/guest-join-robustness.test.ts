@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { joinGuestFromPreview } from "./helpers";
 
 const setupPage = async (page: import("@playwright/test").Page) => {
   await page.addInitScript(() => {
@@ -16,8 +17,7 @@ test.describe("Guest join robustness", () => {
   test("guest join shows textarea within 10 seconds", async ({ page }) => {
     const name = `guest_${Math.random().toString(36).slice(2, 8)}`;
     await page.goto("/");
-    await page.getByPlaceholder("你的用户名...").fill(name);
-    await page.getByRole("button", { name: "游客加入" }).click();
+    await joinGuestFromPreview(page, name);
 
     // Textarea MUST appear — this is the core guest flow
     await expect(page.locator("textarea").first()).toBeVisible({ timeout: 15000 });
@@ -26,8 +26,7 @@ test.describe("Guest join robustness", () => {
   test("guest can send a message and see it appear", async ({ page }) => {
     const name = `sender_${Math.random().toString(36).slice(2, 8)}`;
     await page.goto("/");
-    await page.getByPlaceholder("你的用户名...").fill(name);
-    await page.getByRole("button", { name: "游客加入" }).click();
+    await joinGuestFromPreview(page, name);
     await expect(page.locator("textarea").first()).toBeVisible({ timeout: 15000 });
 
     const msg = `guest_msg_${Math.random().toString(36).slice(2, 6)}`;
@@ -43,16 +42,14 @@ test.describe("Guest join robustness", () => {
 
     // First join succeeds
     await page.goto("/");
-    await page.getByPlaceholder("你的用户名...").fill(name);
-    await page.getByRole("button", { name: "游客加入" }).click();
+    await joinGuestFromPreview(page, name);
     await expect(page.locator("textarea").first()).toBeVisible({ timeout: 15000 });
 
     // Second join with same name in new page should succeed — old connection gets kicked.
     const page2 = await page.context().newPage();
     await setupPage(page2);
     await page2.goto("/");
-    await page2.getByPlaceholder("你的用户名...").fill(name);
-    await page2.getByRole("button", { name: "游客加入" }).click();
+    await joinGuestFromPreview(page2, name);
 
     // New connection should show the chat textarea (joined successfully).
     await expect(page2.locator("textarea").first()).toBeVisible({ timeout: 15000 });
@@ -64,8 +61,7 @@ test.describe("Guest join robustness", () => {
 
     // First join
     await page.goto("/");
-    await page.getByPlaceholder("你的用户名...").fill(name);
-    await page.getByRole("button", { name: "游客加入" }).click();
+    await joinGuestFromPreview(page, name);
     await expect(page.locator("textarea").first()).toBeVisible({ timeout: 15000 });
 
     // Close and reopen — full disconnect
@@ -73,8 +69,7 @@ test.describe("Guest join robustness", () => {
     const page2 = await page.context().newPage();
     await setupPage(page2);
     await page2.goto("/");
-    await page2.getByPlaceholder("你的用户名...").fill(name);
-    await page2.getByRole("button", { name: "游客加入" }).click();
+    await joinGuestFromPreview(page2, name);
     await expect(page2.locator("textarea").first()).toBeVisible({ timeout: 15000 });
 
     // Can still send messages after rejoin
@@ -98,8 +93,7 @@ test.describe("Guest join robustness", () => {
     await slowCtx.setOffline(false);
 
     await slowPage.goto("/", { waitUntil: "domcontentloaded" });
-    await slowPage.getByPlaceholder("你的用户名...").fill(name);
-    await slowPage.getByRole("button", { name: "游客加入" }).click();
+    await joinGuestFromPreview(slowPage, name);
 
     // On slow network, connection should still complete within timeout
     await expect(slowPage.locator("textarea").first()).toBeVisible({ timeout: 30000 });
@@ -111,8 +105,7 @@ test.describe("Guest join robustness", () => {
 
     // Join
     await page.goto("/");
-    await page.getByPlaceholder("你的用户名...").fill(name);
-    await page.getByRole("button", { name: "游客加入" }).click();
+    await joinGuestFromPreview(page, name);
     await expect(page.locator("textarea").first()).toBeVisible({ timeout: 15000 });
 
     // Send many messages to fill the transcript

@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import type { CSSProperties } from "react";
 
 export type TFunction = (key: string, params?: Record<string, string | number>) => string;
 
@@ -72,13 +73,17 @@ export function hashString(str: string): number {
 }
 
 /**
- * Returns a CSS gradient string for a user avatar background.
+ * Returns the shared avatar background token. Pair with avatarIdentityStyle()
+ * so each username still receives a stable hue without hardcoding color formulas
+ * in component source.
  */
 export function avatarGradient(username: string): string {
-  const baseHue = hashString(username) % 360;
-  const hue1 = baseHue;
-  const hue2 = (baseHue + 45) % 360;
-  return `linear-gradient(135deg, oklch(65% 0.16 ${hue1}), oklch(58% 0.14 ${hue2}))`;
+  void username;
+  return "var(--chat-identity-avatar)";
+}
+
+export function avatarIdentityStyle(username: string): CSSProperties {
+  return { "--chat-identity-hue": `${hashString(username) % 360}` } as CSSProperties;
 }
 
 /**

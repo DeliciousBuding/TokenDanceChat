@@ -21,21 +21,11 @@ const { apiHandlers, mockChatAPI, mockGetSessionToken } = vi.hoisted(() => {
     disconnect: vi.fn(),
     send: vi.fn(),
     sendMessage: vi.fn(),
-    sendDMMessage: vi.fn(),
-    sendGroupMessage: vi.fn(),
     sendMarkRead: vi.fn(),
     sendBlockList: vi.fn(),
-    sendRoomJoin: vi.fn(),
-    sendRoomCreate: vi.fn(),
-    sendRoomLeave: vi.fn(),
-    sendForward: vi.fn(),
     sendReaction: vi.fn(),
     sendMessageEdit: vi.fn(),
     uploadImage: vi.fn(),
-    sendCallReject: vi.fn(),
-    sendCallAccept: vi.fn(),
-    sendWebhookList: vi.fn(),
-    sendWebhookAuditList: vi.fn(),
     sendPinnedConversations: vi.fn(),
     sendMutedConversations: vi.fn(),
   };
@@ -93,11 +83,8 @@ const DEFAULT_STORE_STATE = {
   onlineUsers: [] as string[],
   userStatusList: [] as any[],
   typingUsers: [] as string[],
-  rooms: [] as any[],
-  currentRoomID: "",
   currentChat: { type: "public" as const },
   replyTo: null as any,
-  friends: [] as string[],
   blockedUsers: [] as string[],
   pinnedMessages: [] as any[],
   pinnedConversations: [] as string[],
@@ -105,22 +92,14 @@ const DEFAULT_STORE_STATE = {
   notificationPrefs: {} as Record<string, any>,
   archivedConversations: [] as string[],
   userProfiles: {} as Record<string, any>,
-  scheduledMessages: [] as any[],
   customEmojis: [] as any[],
-  folders: [] as any[],
-  groupWebhooks: {} as Record<string, any[]>,
-  groupWebhookAuditLogs: {} as Record<string, any[]>,
   translations: {} as Record<string, string>,
   polls: {} as Record<string, any>,
   unreadCount: 0,
   unreadByConversation: {} as Record<string, number>,
   lastReadTimestamps: {} as Record<string, number>,
   latestMention: null as any,
-  incomingCall: null as any,
-  activeCall: null as any,
   pendingImage: null as string | null,
-  groups: {} as Record<string, any>,
-  groupInfoPanel: null as string | null,
   lightboxImage: null as string | null,
   selectedProfileUser: null as string | null,
   lastPreviews: {} as Record<string, any>,
@@ -222,29 +201,29 @@ describe("isConversationMuted", () => {
     });
   });
 
-  it("returns true when key is in legacy mutedConversations list", () => {
-    useChatStore.setState({ mutedConversations: ["dm:bob"] });
-    expect(isConversationMuted("dm:bob")).toBe(true);
+  it("returns true when the public room is in the mutedConversations list", () => {
+    useChatStore.setState({ mutedConversations: ["public"] });
+    expect(isConversationMuted("public")).toBe(true);
   });
 
   it("returns true when notificationPref has an active time-based mute", () => {
     const future = Date.now() + 3600_000; // 1 hour from now
     useChatStore.setState({
       notificationPrefs: {
-        "group:general": { mutedUntil: future, showPreview: true },
+        public: { mutedUntil: future, showPreview: true },
       },
     });
-    expect(isConversationMuted("group:general")).toBe(true);
+    expect(isConversationMuted("public")).toBe(true);
   });
 
   it("returns false when notificationPref mute has expired", () => {
     const past = Date.now() - 3600_000; // 1 hour ago
     useChatStore.setState({
       notificationPrefs: {
-        "group:old": { mutedUntil: past, showPreview: true },
+        public: { mutedUntil: past, showPreview: true },
       },
     });
-    expect(isConversationMuted("group:old")).toBe(false);
+    expect(isConversationMuted("public")).toBe(false);
   });
 
   it("returns false when key is not in any mute list", () => {
@@ -277,14 +256,13 @@ describe("useWebSocket", () => {
     const first = renderHook(() => useWebSocket());
     const second = renderHook(() => useWebSocket());
 
-    expect(apiHandlers.get("group_message")).toHaveLength(1);
+    expect(apiHandlers.get("group_message")).toBeUndefined();
     expect(apiHandlers.get("message")).toHaveLength(1);
 
     first.unmount();
-    expect(apiHandlers.get("group_message")).toHaveLength(1);
+    expect(apiHandlers.get("message")).toHaveLength(1);
 
     second.unmount();
-    expect(apiHandlers.get("group_message")).toHaveLength(0);
     expect(apiHandlers.get("message")).toHaveLength(0);
   });
 
@@ -396,8 +374,8 @@ describe("useWebSocket", () => {
       });
     });
 
-    it("routes DM message to addMessage with from/to fields", () => {
-      useChatStore.setState({ currentChat: { type: "dm", username: "bob" } });
+    it("ignores legacy DM messages in the lightweight public-room contract", () => {
+      useChatStore.setState({ currentChat: { type: "dm", username: "bob" } as any });
       renderHook(() => useWebSocket());
 
       dispatchWS("dm_message", {
@@ -409,17 +387,11 @@ describe("useWebSocket", () => {
       });
 
       const msgs = useChatStore.getState().messages;
-      expect(msgs).toHaveLength(1);
-      expect(msgs[0]).toMatchObject({
-        id: "dm-1",
-        username: "alice",
-        content: "hey bob",
-        to: "testuser",
-      });
+      expect(msgs).toHaveLength(0);
     });
 
-    it("routes group message to addMessage", () => {
-      useChatStore.setState({ currentChat: { type: "group", name: "general" } });
+    it("ignores legacy group messages in the lightweight public-room contract", () => {
+      useChatStore.setState({ currentChat: { type: "group", name: "general" } as any });
       renderHook(() => useWebSocket());
 
       dispatchWS("group_message", {
@@ -431,12 +403,7 @@ describe("useWebSocket", () => {
       });
 
       const msgs = useChatStore.getState().messages;
-      expect(msgs).toHaveLength(1);
-      expect(msgs[0]).toMatchObject({
-        id: "gm-1",
-        username: "alice",
-        content: "hello group",
-      });
+      expect(msgs).toHaveLength(0);
     });
 
     it("routes typing event to addTypingUser", () => {
@@ -479,20 +446,9 @@ describe("useWebSocket", () => {
       expect(statusList[1]).toMatchObject({ username: "bob", online: false });
     });
 
-    it("routes room_list to setRooms", () => {
+    it("does not register legacy room_list handlers", () => {
       renderHook(() => useWebSocket());
-
-      dispatchWS("room_list", {
-        rooms: [
-          { id: "room1", name: "General" },
-          { id: "room2", name: "Random" },
-        ],
-      });
-
-      expect(useChatStore.getState().rooms).toEqual([
-        { id: "room1", name: "General" },
-        { id: "room2", name: "Random" },
-      ]);
+      expect(apiHandlers.get("room_list")).toBeUndefined();
     });
 
     it("routes reaction_update to updateMessageReactions", () => {
@@ -675,7 +631,7 @@ describe("useWebSocket", () => {
       expect(parsed.params).toEqual({ username: "olduser" });
     });
 
-    it("routes forward event to addMessage with [Forwarded] prefix", () => {
+    it("ignores legacy forward events", () => {
       useChatStore.setState({ currentChat: { type: "public" } });
       renderHook(() => useWebSocket());
 
@@ -687,21 +643,15 @@ describe("useWebSocket", () => {
       });
 
       const msgs = useChatStore.getState().messages;
-      expect(msgs).toHaveLength(1);
-      expect(msgs[0]).toMatchObject({
-        username: "alice",
-        content: "[Forwarded] check this out",
-      });
+      expect(msgs).toHaveLength(0);
     });
 
-    it("routes friend_request to addFriendRequest", () => {
+    it("ignores legacy friend requests", () => {
       renderHook(() => useWebSocket());
 
       dispatchWS("friend_request", { from: "newfriend" });
 
-      expect(useChatStore.getState().pendingFriendRequests).toContainEqual(
-        expect.objectContaining({ from: "newfriend" }),
-      );
+      expect(useChatStore.getState().messages).toHaveLength(0);
     });
 
     it("routes online_users to setOnlineUsers", () => {
@@ -772,9 +722,7 @@ describe("useWebSocket", () => {
       (fakeNotification as any).permission = "granted";
       vi.stubGlobal("Notification", fakeNotification);
 
-      // Viewing a DM, so public messages are "unread".
       useChatStore.setState({
-        currentChat: { type: "dm", username: "bob" },
         mutedConversations: [],
       });
       renderHook(() => useWebSocket());
@@ -793,7 +741,7 @@ describe("useWebSocket", () => {
       expect(fakeNotification).toHaveBeenCalled();
     });
 
-    it("triggers notification for DM message from other user when page is hidden", () => {
+    it("does not trigger notification for ignored legacy DM messages", () => {
       const fakeNotification = vi.fn() as unknown as typeof Notification;
       (fakeNotification as any).permission = "granted";
       vi.stubGlobal("Notification", fakeNotification);
@@ -816,17 +764,17 @@ describe("useWebSocket", () => {
         to: "testuser",
       });
 
-      expect(fakeNotification).toHaveBeenCalled();
+      expect(fakeNotification).not.toHaveBeenCalled();
     });
 
-    it("does not trigger notification for own messages", () => {
+    it("does not trigger notification for own ignored legacy DM messages", () => {
       const fakeNotification = vi.fn() as unknown as typeof Notification;
       (fakeNotification as any).permission = "granted";
       vi.stubGlobal("Notification", fakeNotification);
 
       useChatStore.setState({
         username: "testuser",
-        currentChat: { type: "dm", username: "alice" },
+        currentChat: { type: "dm", username: "alice" } as any,
       });
       renderHook(() => useWebSocket());
 
@@ -852,7 +800,7 @@ describe("useWebSocket", () => {
 
       useChatStore.setState({
         currentChat: { type: "public" },
-        mutedConversations: ["dm:alice"],
+        mutedConversations: ["public"],
       });
       renderHook(() => useWebSocket());
 

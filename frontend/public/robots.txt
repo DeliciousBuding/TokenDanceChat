@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /offline.html
 
 Sitemap: https://chat.vectorcontrol.tech/sitemap.xml

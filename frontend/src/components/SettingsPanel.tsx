@@ -21,31 +21,19 @@ function formatMuteExpiry(mutedUntil: number): string {
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const { t } = useTranslation();
-  const { notificationPrefs, mutedConversations, username, onlineUsers, userProfiles } =
-    useChatStore();
+  const { notificationPrefs, mutedConversations } = useChatStore();
 
-  // Build a list of known conversation keys from all sources.
   const conversationKeys = new Set<string>();
   conversationKeys.add("public");
-  for (const u of onlineUsers) {
-    if (u !== username) conversationKeys.add(`dm:${u}`);
-  }
   for (const key of Object.keys(notificationPrefs)) {
-    conversationKeys.add(key);
+    if (key === "public") conversationKeys.add(key);
   }
   for (const key of mutedConversations) {
-    conversationKeys.add(key);
+    if (key === "public") conversationKeys.add(key);
   }
 
   const resolveName = (key: string): string => {
     if (key === "public") return t("chat.publicChat");
-    if (key.startsWith("dm:")) {
-      const u = key.slice(3);
-      return userProfiles[u]?.display_name || u;
-    }
-    if (key.startsWith("group:")) {
-      return key.slice(6);
-    }
     return key;
   };
 
@@ -78,31 +66,35 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className="fixed inset-0 z-50 flex justify-end" data-visual="settings-modal-root">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="td-chat-backdrop absolute inset-0"
         onClick={onClose}
       />
 
       {/* Slide-in panel */}
-      <div className="relative w-full max-w-sm h-full bg-card border-l border-border shadow-2xl flex flex-col animate-slide-in-right">
+      <div
+        className="td-chat-drawer relative w-full max-w-sm h-full flex flex-col animate-slide-in-right"
+        data-visual="settings-modal"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div className="td-chat-drawer-header flex items-center justify-between border-b px-5 py-4">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Bell className="h-4 w-4" />
             {t("settings.notificationPrefs")}
           </h2>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="td-chat-header-action flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={t("a11y.close")}
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="flex-1 overflow-y-auto px-4 py-3" data-visual="settings-content">
           {/* Muted conversations list */}
           <h3 className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-2 px-1">
             {t("settings.mutedConversations")}
@@ -123,7 +115,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 return (
                   <div
                     key={key}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-accent/50 transition-colors"
+                    className="td-chat-list-row flex items-center gap-3 px-3 py-2 text-sm"
                   >
                     <BellOff className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
@@ -139,7 +131,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     </div>
                     <button
                       onClick={() => handleTogglePreview(key)}
-                      className="rounded p-1 text-muted-foreground/50 hover:text-foreground hover:bg-accent transition-colors"
+                      className="td-chat-header-action flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground/50 hover:text-foreground transition-colors"
                       title={showPreview ? t("settings.previewOn") : t("settings.previewOff")}
                     >
                       {showPreview ? (
@@ -150,7 +142,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     </button>
                     <button
                       onClick={() => handleUnmute(key)}
-                      className="rounded p-1 text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
                       title={t("settings.unmute")}
                     >
                       <VolumeX className="h-3.5 w-3.5" />
@@ -177,7 +169,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 return (
                   <div
                     key={key}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-accent/50 transition-colors"
+                    className="td-chat-list-row flex items-center gap-3 px-3 py-2 text-sm"
                   >
                     <Bell className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0" />
                     <span className="flex-1 text-xs text-foreground truncate">
@@ -185,7 +177,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     </span>
                     <button
                       onClick={() => handleTogglePreview(key)}
-                      className="rounded p-1 text-muted-foreground/50 hover:text-foreground hover:bg-accent transition-colors"
+                      className="td-chat-header-action flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground/50 hover:text-foreground transition-colors"
                       title={showPreview ? t("settings.previewOn") : t("settings.previewOff")}
                     >
                       {showPreview ? (

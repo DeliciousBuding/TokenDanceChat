@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   avatarGradient,
+  avatarIdentityStyle,
   cn,
   formatDate,
   formatFullTime,
@@ -169,16 +170,27 @@ describe("hashString", () => {
 });
 
 describe("avatarGradient", () => {
-  it("返回合法的CSS渐变字符串", () => {
+  it("返回共享头像背景token", () => {
     const gradient = avatarGradient("Alice");
-    expect(gradient).toContain("linear-gradient");
-    expect(gradient).toContain("oklch");
+    expect(gradient).toBe("var(--chat-identity-avatar)");
     expect(typeof gradient).toBe("string");
     expect(gradient.length).toBeGreaterThan(0);
   });
 
   it("相同用户名返回相同渐变", () => {
     expect(avatarGradient("Bob")).toBe(avatarGradient("Bob"));
+  });
+});
+
+describe("avatarIdentityStyle", () => {
+  it("相同用户名返回相同色相变量", () => {
+    expect(avatarIdentityStyle("Alice")).toEqual(avatarIdentityStyle("Alice"));
+  });
+
+  it("返回可用于CSS变量的色相", () => {
+    const style = avatarIdentityStyle("Alice") as Record<string, string>;
+    expect(Number(style["--chat-identity-hue"])).toBeGreaterThanOrEqual(0);
+    expect(Number(style["--chat-identity-hue"])).toBeLessThan(360);
   });
 });
 

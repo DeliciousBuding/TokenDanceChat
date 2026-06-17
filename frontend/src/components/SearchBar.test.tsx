@@ -49,8 +49,8 @@ const mockResult: SearchResult = {
 };
 
 /** Render SearchBar and open it via Ctrl+K. Returns the render result. */
-function openSearchBar(currentRoomID = "room-1") {
-  const result = render(<SearchBar currentRoomID={currentRoomID} />);
+function openSearchBar() {
+  const result = render(<SearchBar />);
   fireEvent.keyDown(window, { key: "k", ctrlKey: true });
   return result;
 }
@@ -64,12 +64,12 @@ describe("SearchBar", () => {
   // ---- Existing tests (preserved and slightly hardened) ----
 
   it("renders nothing when closed", () => {
-    const { container } = render(<SearchBar currentRoomID="room-1" />);
+    const { container } = render(<SearchBar />);
     expect(container.innerHTML).toBe("");
   });
 
   it("opens on Ctrl+K and shows search input", () => {
-    render(<SearchBar currentRoomID="room-1" />);
+    render(<SearchBar />);
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
 
     // Input with search placeholder should be visible
@@ -77,7 +77,7 @@ describe("SearchBar", () => {
   });
 
   it("closes on Escape", () => {
-    const { container } = render(<SearchBar currentRoomID="room-1" />);
+    const { container } = render(<SearchBar />);
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     fireEvent.keyDown(window, { key: "Escape" });
 
@@ -85,7 +85,7 @@ describe("SearchBar", () => {
   });
 
   it("shows type-to-search hint when open with empty query", () => {
-    render(<SearchBar currentRoomID="room-1" />);
+    render(<SearchBar />);
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
 
     expect(screen.getByText("输入关键词搜索消息")).toBeTruthy();
@@ -113,7 +113,7 @@ describe("SearchBar", () => {
     openSearchBar();
 
     // Backdrop is the semi-transparent overlay
-    const backdrop = document.querySelector(".bg-black\\/50")!;
+    const backdrop = document.querySelector(".td-chat-backdrop")!;
     expect(backdrop).toBeTruthy();
     fireEvent.click(backdrop);
 
@@ -225,7 +225,7 @@ describe("SearchBar", () => {
   });
 
   it("toggles closed on second Ctrl+K", async () => {
-    const { container } = render(<SearchBar currentRoomID="room-1" />);
+    const { container } = render(<SearchBar />);
 
     // Open
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });

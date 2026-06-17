@@ -8,6 +8,10 @@ import { fetchPublicMessages, getSessionToken, persistSessionToken } from "@/lib
 const USERNAME_STORAGE_KEY = "tokendance:username";
 const AUTH_STORAGE_KEY = "tokendance:auth";
 
+function generateGuestName(): string {
+  return `guest_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function App() {
   const { connect } = useWebSocket();
   const setView = useChatStore((s) => s.setView);
@@ -44,6 +48,26 @@ function App() {
       const messages = await fetchPublicMessages(100);
       if (!cancelled) {
         setHistory(messages);
+      }
+    }
+
+    async function tryGuestConnect() {
+      const name = generateGuestName();
+      try {
+        if (cancelled) return;
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        localStorage.removeItem(USERNAME_STORAGE_KEY);
+        persistSessionToken(null);
+        clearOidcAuth();
+        setStoreUsername(name);
+        setGuest(true);
+        setView("chat");
+        await connect(name);
+      } catch {
+        if (cancelled) return;
+        setStoreUsername("");
+        setGuest(false);
+        await loadPublicPreview();
       }
     }
 
@@ -105,9 +129,9 @@ function App() {
           localStorage.removeItem(USERNAME_STORAGE_KEY);
           persistSessionToken(null);
           clearOidcAuth();
-          setShowAuthModal(true);
+          setShowAuthModal(false);
         }
-        loadPublicPreview();
+        tryGuestConnect();
       }
     }
 

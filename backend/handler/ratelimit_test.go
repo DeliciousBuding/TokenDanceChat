@@ -28,7 +28,7 @@ func TestRateLimiterWS(t *testing.T) {
 }
 
 // TestRateLimiterAPI verifies that allowAPI permits up to 30 requests per minute
-// and rejects the 31st from the same IP.
+// by default and rejects the 31st from the same IP.
 func TestRateLimiterAPI(t *testing.T) {
 	rl := &rateLimiter{}
 	ip := "10.0.0.50"
@@ -43,6 +43,22 @@ func TestRateLimiterAPI(t *testing.T) {
 	// 31st request within the same window should be denied.
 	if rl.allowAPI(ip) {
 		t.Error("expected allowAPI to return false on 31st request within window")
+	}
+}
+
+func TestRateLimiterAPIEnvOverride(t *testing.T) {
+	t.Setenv("CHAT_API_RATE_LIMIT_PER_MINUTE", "3")
+	rl := &rateLimiter{}
+	ip := "10.0.0.60"
+
+	for i := 0; i < 3; i++ {
+		if !rl.allowAPI(ip) {
+			t.Errorf("expected allowAPI to return true for request %d", i+1)
+		}
+	}
+
+	if rl.allowAPI(ip) {
+		t.Error("expected allowAPI to return false on 4th request with env override")
 	}
 }
 
