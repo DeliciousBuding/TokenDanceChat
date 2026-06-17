@@ -30,7 +30,6 @@ function renderMenu(overrides: Partial<Parameters<typeof MessageContextMenu>[0]>
     onClose: vi.fn(),
     onReply: vi.fn(),
     onCopy: vi.fn(),
-    onForward: vi.fn(),
     onDelete: vi.fn(),
     onSelect: vi.fn(),
     ...overrides,
@@ -149,7 +148,6 @@ describe("MessageContextMenu", () => {
           onClose={vi.fn()}
           onReply={vi.fn()}
           onCopy={vi.fn()}
-          onForward={vi.fn()}
           onDelete={vi.fn()}
           onSelect={vi.fn()}
         />

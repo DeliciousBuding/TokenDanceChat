@@ -42,26 +42,8 @@ export function ConversationSearch({ open, onClose, onHighlightChange }: Convers
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const messages = useChatStore((s) => s.messages);
-  const currentChat = useChatStore((s) => s.currentChat);
-  const username = useChatStore((s) => s.username);
 
-  // Filter messages for current conversation.
-  const conversationMessages = useMemo(() => {
-    if (currentChat.type === "dm") {
-      const partner = currentChat.username;
-      return messages.filter((m) => {
-        const sender = m.from || m.username;
-        const recipient = m.to;
-        return (sender === partner && recipient === username) ||
-          (sender === username && recipient === partner);
-      });
-    }
-    if (currentChat.type === "group") {
-      return messages.filter((m) =>
-        m.to === currentChat.name || (m as ChatMessage & { group?: string }).group === currentChat.name);
-    }
-    return messages;
-  }, [currentChat, messages, username]);
+  const conversationMessages = messages;
 
   // Client-side filtering.
   const results = useMemo(() => {
@@ -114,7 +96,7 @@ export function ConversationSearch({ open, onClose, onHighlightChange }: Convers
   const trimmedQuery = query.trim();
 
   return (
-    <div className="border-b border-border bg-card/95 backdrop-blur-sm px-4 py-2 animate-slide-up">
+    <div className="td-chat-statusbar border-b px-4 py-2 animate-slide-up">
       <div className="flex items-center gap-2 max-w-2xl mx-auto">
         <Search className="h-4 w-4 text-muted-foreground/60 flex-shrink-0" />
         <input
@@ -160,14 +142,14 @@ export function ConversationSearch({ open, onClose, onHighlightChange }: Convers
       </div>
 
       {trimmedQuery && results.length > 0 && (
-        <div className="max-h-60 overflow-y-auto mt-2 border-t border-border/50">
+        <div className="mt-2 max-h-60 overflow-y-auto border-t border-[var(--chat-stream-card-border)]">
           {results.map((r, i) => (
             <button
               key={r.id}
               onClick={() => scrollToMessage(r.id)}
               className={cn(
-                "w-full text-left px-2 py-2 border-b border-border/30 last:border-b-0 transition-colors",
-                i === selectedIndex ? "bg-accent" : "hover:bg-accent/50",
+                "td-chat-list-row w-full text-left px-2 py-2",
+                i === selectedIndex && "bg-[var(--bg-hover)]",
               )}
             >
               <div className="flex items-center gap-2 mb-0.5">

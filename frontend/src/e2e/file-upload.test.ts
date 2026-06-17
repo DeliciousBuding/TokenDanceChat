@@ -1,6 +1,7 @@
 /// <reference types="node" />
 
 import { test, expect } from "@playwright/test";
+import { joinGuestFromPreview } from "./helpers";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
@@ -37,8 +38,7 @@ async function joinChat(
   const guestName =
     name ?? `fu_${Math.random().toString(36).slice(2, 8)}`;
   await page.goto("/");
-  await page.getByPlaceholder("你的用户名...").fill(guestName);
-  await page.getByRole("button", { name: "游客加入" }).click();
+  await joinGuestFromPreview(page, guestName);
   await expect(page.locator("textarea").first()).toBeVisible({
     timeout: 15000,
   });
@@ -135,7 +135,7 @@ test.describe("File upload", () => {
 
       // The image upload button is visible in the toolbar.
       const imageBtn = page.getByRole("button", {
-        name: "上传图片",
+        name: /上传图片|添加图片|Upload image/,
       });
       await expect(imageBtn).toBeVisible({ timeout: 5000 });
 
@@ -331,7 +331,7 @@ test.describe("File upload", () => {
       // i18n key file.uploading — the Chinese text depends on the translation.
       // Check for the spinner (Loader2 icon) presence via the progress container.
       await expect(
-        page.locator(".animate-slide-up").first(),
+        page.locator('[data-visual="upload-progress"]').first(),
       ).toBeVisible({ timeout: 5000 });
     });
   });
@@ -359,7 +359,7 @@ test.describe("File upload", () => {
         // The upload progress indicator should appear, showing the file name.
         // Scope to the slide-up container to avoid matching the file link
         // that may appear in chat transcript after successful upload.
-        const progressContainer = page.locator(".animate-slide-up").first();
+        const progressContainer = page.locator('[data-visual="upload-progress"]').first();
         await expect(progressContainer.getByText("e2e-test-file.txt")).toBeVisible({
           timeout: 10000,
         });
@@ -371,7 +371,7 @@ test.describe("File upload", () => {
         // Verify the progress bar element is attached in the DOM.
         // (The inner bar starts at width 0%, so toBeAttached is sufficient.)
         const progressBar = progressContainer.locator(
-          ".h-full.bg-primary.rounded-full",
+          '[data-visual="upload-progress-bar"]',
         );
         await expect(progressBar.first()).toBeAttached({ timeout: 5000 });
       } finally {
@@ -397,7 +397,7 @@ test.describe("File upload", () => {
 
         // Verify progress appears (scope to the slide-up container to
         // avoid matching the file link that may appear in chat transcript).
-        const progressContainer = page.locator(".animate-slide-up").first();
+        const progressContainer = page.locator('[data-visual="upload-progress"]').first();
         await expect(progressContainer.getByText("e2e-test-progress.txt")).toBeVisible({
           timeout: 10000,
         });

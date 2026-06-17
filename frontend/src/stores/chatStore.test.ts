@@ -78,6 +78,29 @@ describe("chatStore", () => {
       expect(msg.content).toBe("new");
       expect(msg.edited).toBe(true);
     });
+
+    it("keeps legacy targeted messages in the public preview bucket only", () => {
+      useChatStore.getState().setUsername("Alice");
+      useChatStore.getState().addMessage({
+        id: "legacy-dm",
+        username: "Alice",
+        from: "Alice",
+        to: "Bob",
+        content: "Old targeted payload",
+        timestamp: 1000,
+      });
+      useChatStore.getState().addMessage({
+        id: "legacy-group",
+        username: "Carol",
+        group: "DevTeam",
+        content: "Old group payload",
+        timestamp: 2000,
+      });
+
+      const previews = useChatStore.getState().lastPreviews;
+      expect(previews.public.content).toBe("Old group payload");
+      expect(Object.keys(previews)).toEqual(["public"]);
+    });
   });
 
   describe("history", () => {
@@ -106,18 +129,17 @@ describe("chatStore", () => {
   });
 
   describe("unread tracking", () => {
-    it("increments and clears per-conversation unread", () => {
-      useChatStore.getState().incrementConversationUnread("dm:Alice");
-      useChatStore.getState().incrementConversationUnread("dm:Alice");
-      expect(useChatStore.getState().unreadByConversation["dm:Alice"]).toBe(2);
+    it("increments and clears public unread", () => {
+      useChatStore.getState().incrementConversationUnread("public");
+      useChatStore.getState().incrementConversationUnread("public");
+      expect(useChatStore.getState().unreadByConversation.public).toBe(2);
 
-      useChatStore.getState().clearConversationUnread("dm:Alice");
-      expect(useChatStore.getState().unreadByConversation["dm:Alice"]).toBeUndefined();
+      useChatStore.getState().clearConversationUnread("public");
+      expect(useChatStore.getState().unreadByConversation.public).toBeUndefined();
     });
 
     it("clearAllConversationUnreads wipes everything", () => {
       useChatStore.getState().incrementConversationUnread("public");
-      useChatStore.getState().incrementConversationUnread("dm:Bob");
       useChatStore.getState().clearAllConversationUnreads();
       expect(Object.keys(useChatStore.getState().unreadByConversation)).toHaveLength(0);
     });
@@ -186,155 +208,6 @@ describe("chatStore", () => {
     });
   });
 
-  describe("friends and groups", () => {
-    it("adds friend request", () => {
-      useChatStore.getState().addFriendRequest("Charlie");
-      expect(useChatStore.getState().pendingFriendRequests).toHaveLength(1);
-      expect(useChatStore.getState().pendingFriendRequests[0].from).toBe("Charlie");
-    });
-
-    it("adds and removes group invites", () => {
-      useChatStore.getState().addGroupInvite("DevTeam", "Alice");
-      expect(useChatStore.getState().pendingGroupInvites).toHaveLength(1);
-
-      useChatStore.getState().removeGroupInvite("DevTeam");
-      expect(useChatStore.getState().pendingGroupInvites).toHaveLength(0);
-    });
-
-    it("sets group members", () => {
-      useChatStore.getState().setGroupMembers("Team", ["A", "B"]);
-      expect(useChatStore.getState().groups["Team"].members).toEqual(["A", "B"]);
-    });
-
-    it("sets friends", () => {
-      useChatStore.getState().setFriends(["Alice", "Bob"]);
-      expect(useChatStore.getState().friends).toHaveLength(2);
-    });
-  });
-
-  describe("group webhooks", () => {
-    it("stores webhook lists without secrets", () => {
-      useChatStore.getState().setGroupWebhooks("Team", [
-        {
-          id: "wh-1",
-          group_name: "Team",
-          url: "wh-path",
-          created_by: "Alice",
-          created_at: 1000,
-        },
-      ]);
-
-      expect(useChatStore.getState().groupWebhooks.Team).toEqual([
-        {
-          id: "wh-1",
-          group_name: "Team",
-          url: "wh-path",
-          created_by: "Alice",
-          created_at: 1000,
-        },
-      ]);
-    });
-
-    it("keeps a newly created webhook secret only in the one-time field", () => {
-      useChatStore.getState().addGroupWebhook("Team", {
-        id: "wh-1",
-        group_name: "Team",
-        url: "wh-path",
-        secret: "secret-once",
-        created_by: "Alice",
-        created_at: 1000,
-      });
-
-      expect(useChatStore.getState().latestCreatedWebhook?.secret).toBe("secret-once");
-      expect(useChatStore.getState().groupWebhooks.Team[0]).not.toHaveProperty("secret");
-
-      useChatStore.getState().clearLatestCreatedWebhook();
-      expect(useChatStore.getState().latestCreatedWebhook).toBeNull();
-    });
-
-    it("removes webhooks and clears matching one-time secret", () => {
-      useChatStore.getState().addGroupWebhook("Team", {
-        id: "wh-1",
-        group_name: "Team",
-        url: "wh-path",
-        secret: "secret-once",
-        created_by: "Alice",
-        created_at: 1000,
-      });
-
-      useChatStore.getState().removeGroupWebhook("Team", "wh-1");
-
-      expect(useChatStore.getState().groupWebhooks.Team).toHaveLength(0);
-      expect(useChatStore.getState().latestCreatedWebhook).toBeNull();
-    });
-
-    it("rotates a webhook secret: new secret goes to one-time field, list never contains secrets", () => {
-      useChatStore.getState().setGroupWebhooks("Team", [
-        {
-          id: "wh-1",
-          group_name: "Team",
-          url: "wh-path",
-          created_by: "Alice",
-          created_at: 1000,
-        },
-      ]);
-
-      useChatStore.getState().rotateGroupWebhookSecret("Team", {
-        id: "wh-1",
-        group_name: "Team",
-        url: "wh-path",
-        secret: "rotated-secret-once",
-        created_by: "Alice",
-        created_at: 1000,
-        rotated_at: 3000,
-        rotated_by: "Bob",
-      });
-
-      expect(useChatStore.getState().latestCreatedWebhook?.secret).toBe("rotated-secret-once");
-      const rotated = useChatStore.getState().groupWebhooks.Team[0];
-      expect(rotated).not.toHaveProperty("secret");
-      expect(rotated.rotated_at).toBe(3000);
-      expect(rotated.rotated_by).toBe("Bob");
-    });
-
-    it("stores audit logs per group and resets them", () => {
-      useChatStore.getState().setGroupWebhookAuditLogs("Team", [
-        {
-          id: "audit-1",
-          webhook_id: "wh-1",
-          group_name: "Team",
-          action: "created",
-          actor: "Alice",
-          created_at: 1000,
-        },
-      ]);
-
-      expect(useChatStore.getState().groupWebhookAuditLogs.Team).toHaveLength(1);
-      expect(useChatStore.getState().groupWebhookAuditLogs.Team[0].action).toBe("created");
-
-      useChatStore.getState().reset();
-      expect(useChatStore.getState().groupWebhookAuditLogs).toEqual({});
-    });
-
-    it("audit log entries never contain secret fields", () => {
-      useChatStore.getState().setGroupWebhookAuditLogs("Team", [
-        {
-          id: "audit-1",
-          webhook_id: "wh-1",
-          group_name: "Team",
-          action: "rotated",
-          actor: "Alice",
-          created_at: 1000,
-        } as any,
-      ]);
-
-      const logs = useChatStore.getState().groupWebhookAuditLogs.Team;
-      expect(logs[0]).not.toHaveProperty("secret");
-      expect(logs[0]).not.toHaveProperty("hash");
-      expect(logs[0]).not.toHaveProperty("metadata");
-    });
-  });
-
   describe("reactions", () => {
     it("updates message reactions in lookup map", () => {
       useChatStore.getState().addMessage({
@@ -351,13 +224,13 @@ describe("chatStore", () => {
       expect(useChatStore.getState().pendingImage).toBe("data:image/png;base64,abc123");
     });
 
-    it("clears pendingImage when switching chats via setCurrentChat", () => {
+    it("clears pendingImage when legacy chat input is cleaned", () => {
       useChatStore.getState().setPendingImage("data:image/png;base64,abc123");
       expect(useChatStore.getState().pendingImage).toBe("data:image/png;base64,abc123");
 
       useChatStore.getState().setCurrentChat({ type: "dm", username: "Alice" });
       expect(useChatStore.getState().pendingImage).toBeNull();
-      expect(useChatStore.getState().currentChat).toEqual({ type: "dm", username: "Alice" });
+      expect(useChatStore.getState().currentChat).toEqual({ type: "public" });
     });
 
     it("setPendingImage(null) clears the image", () => {
@@ -368,17 +241,17 @@ describe("chatStore", () => {
   });
 
   describe("setCurrentChat", () => {
-    it("switches to DM chat", () => {
+    it("coerces legacy DM input to public chat", () => {
       useChatStore.getState().setCurrentChat({ type: "dm", username: "Bob" });
-      expect(useChatStore.getState().currentChat).toEqual({ type: "dm", username: "Bob" });
+      expect(useChatStore.getState().currentChat).toEqual({ type: "public" });
     });
 
-    it("switches to group chat", () => {
+    it("coerces legacy group input to public chat", () => {
       useChatStore.getState().setCurrentChat({ type: "group", name: "DevTeam" });
-      expect(useChatStore.getState().currentChat).toEqual({ type: "group", name: "DevTeam" });
+      expect(useChatStore.getState().currentChat).toEqual({ type: "public" });
     });
 
-    it("switches to public chat", () => {
+    it("keeps public chat for public input", () => {
       useChatStore.getState().setCurrentChat({ type: "dm", username: "Bob" });
       useChatStore.getState().setCurrentChat({ type: "public" });
       expect(useChatStore.getState().currentChat).toEqual({ type: "public" });
@@ -435,14 +308,11 @@ describe("chatStore", () => {
       expect(s.view).toBe("chat");
     });
 
-    it("resets all state fields including pendingImage, friends, groups", () => {
+    it("resets all current lightweight chat state fields", () => {
       useChatStore.getState().setUsername("Alice");
       useChatStore.getState().setConnected(true);
       useChatStore.getState().setView("chat");
       useChatStore.getState().setPendingImage("data:image/png;base64,test");
-      useChatStore.getState().setFriends(["Bob", "Charlie"]);
-      useChatStore.getState().addFriendRequest("Dave");
-      useChatStore.getState().addGroupInvite("Team", "Eve");
       useChatStore.getState().addBlockedUser("Spammer");
       useChatStore.getState().setPinnedMessages([
         { id: "p1", username: "Mod", content: "Rules", timestamp: 1 },
@@ -457,9 +327,6 @@ describe("chatStore", () => {
       expect(s.connected).toBe(false);
       expect(s.messages).toHaveLength(0);
       expect(s.pendingImage).toBeNull();
-      expect(s.friends).toHaveLength(0);
-      expect(s.pendingFriendRequests).toHaveLength(0);
-      expect(s.pendingGroupInvites).toHaveLength(0);
       expect(s.blockedUsers).toHaveLength(0);
       expect(s.pinnedMessages).toHaveLength(0);
       expect(s.unreadCount).toBe(0);
@@ -507,8 +374,8 @@ describe("chatStore", () => {
   describe("lastReadTimestamps", () => {
     it("markConversationRead sets timestamp for a conversation key", () => {
       const before = Date.now();
-      useChatStore.getState().markConversationRead("dm:Alice");
-      const ts = useChatStore.getState().lastReadTimestamps["dm:Alice"];
+      useChatStore.getState().markConversationRead("public");
+      const ts = useChatStore.getState().lastReadTimestamps.public;
       expect(ts).toBeGreaterThanOrEqual(before);
       expect(ts).toBeLessThanOrEqual(Date.now());
     });
@@ -529,37 +396,28 @@ describe("chatStore", () => {
 
     it("persists lastReadTimestamps across state changes", () => {
       useChatStore.getState().setUsername("Alice");
-      useChatStore.getState().markConversationRead("dm:Bob");
+      useChatStore.getState().markConversationRead("public");
       const stored = JSON.parse(localStorage.getItem("tokendance:lastReadTimestamps:Alice") || "{}");
-      expect(stored["dm:Bob"]).toBeGreaterThan(0);
+      expect(stored.public).toBeGreaterThan(0);
     });
   });
 
-  describe("setCurrentChat advanced", () => {
-    it("switches from DM to DM and marks previous DM as read", () => {
+  describe("legacy chat input cleanup", () => {
+    it("keeps currentChat public when old DM inputs arrive", () => {
       useChatStore.getState().setUsername("Alice");
       useChatStore.getState().setCurrentChat({ type: "dm", username: "Bob" });
       useChatStore.getState().setCurrentChat({ type: "dm", username: "Charlie" });
       const s = useChatStore.getState();
-      expect(s.currentChat).toEqual({ type: "dm", username: "Charlie" });
-      expect(s.lastReadTimestamps["dm:Bob"]).toBeGreaterThan(0);
+      expect(s.currentChat).toEqual({ type: "public" });
+      expect(s.lastReadTimestamps.public).toBeGreaterThan(0);
     });
 
-    it("switches from group to public and marks group as read", () => {
+    it("keeps currentChat public when old group inputs arrive", () => {
       useChatStore.getState().setUsername("Alice");
       useChatStore.getState().setCurrentChat({ type: "group", name: "DevTeam" });
       useChatStore.getState().setCurrentChat({ type: "public" });
       const s = useChatStore.getState();
       expect(s.currentChat).toEqual({ type: "public" });
-      expect(s.lastReadTimestamps["group:DevTeam"]).toBeGreaterThan(0);
-    });
-
-    it("switches from public to group and marks public as read", () => {
-      useChatStore.getState().setUsername("Alice");
-      useChatStore.getState().setCurrentChat({ type: "public" });
-      useChatStore.getState().setCurrentChat({ type: "group", name: "DevTeam" });
-      const s = useChatStore.getState();
-      expect(s.currentChat).toEqual({ type: "group", name: "DevTeam" });
       expect(s.lastReadTimestamps["public"]).toBeGreaterThan(0);
     });
 
@@ -716,37 +574,6 @@ describe("chatStore", () => {
     it("updateUserProfileStatus is a no-op for unknown users", () => {
       useChatStore.getState().updateUserProfileStatus("Nobody", "online");
       expect(useChatStore.getState().userProfiles["Nobody"]).toBeUndefined();
-    });
-  });
-
-  describe("room management", () => {
-    it("sets the room list", () => {
-      const rooms = [
-        { id: "room-1", name: "General" },
-        { id: "room-2", name: "Random" },
-      ];
-      useChatStore.getState().setRooms(rooms);
-      expect(useChatStore.getState().rooms).toHaveLength(2);
-      expect(useChatStore.getState().rooms[0].name).toBe("General");
-    });
-
-    it("setRooms with empty array clears rooms", () => {
-      useChatStore.getState().setRooms([{ id: "room-1", name: "General" }]);
-      useChatStore.getState().setRooms([]);
-      expect(useChatStore.getState().rooms).toHaveLength(0);
-    });
-
-    it("sets the current room ID", () => {
-      useChatStore.getState().setCurrentRoomID("room-1");
-      expect(useChatStore.getState().currentRoomID).toBe("room-1");
-    });
-
-    it("reset clears rooms and currentRoomID", () => {
-      useChatStore.getState().setRooms([{ id: "room-1", name: "General" }]);
-      useChatStore.getState().setCurrentRoomID("room-1");
-      useChatStore.getState().reset();
-      expect(useChatStore.getState().rooms).toHaveLength(0);
-      expect(useChatStore.getState().currentRoomID).toBe("");
     });
   });
 

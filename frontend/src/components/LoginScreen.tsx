@@ -68,7 +68,7 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
 
   return (
     <div className="animate-blur-in w-full max-w-md">
-      <div className="rounded-xl border border-border bg-card p-8 shadow-2xl transition-colors duration-300">
+      <div className="td-chat-modal p-8 transition-colors duration-300">
         {/* Back button */}
         <button
           onClick={onBack}
@@ -80,7 +80,7 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
         </button>
 
         {/* Title */}
-        <h1 className="mb-6 text-center text-2xl font-semibold text-foreground tracking-tight">
+        <h1 className="mb-6 text-center text-2xl font-semibold text-foreground">
           {t("auth.login")}
         </h1>
 
@@ -104,7 +104,7 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
               disabled={loading}
               autoComplete="username"
               aria-label={t("auth.username")}
-              className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
+              className="td-chat-input w-full px-4 py-2.5 text-sm transition-all duration-200 disabled:opacity-50"
             />
           </div>
 
@@ -126,7 +126,7 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
                 disabled={loading}
                 autoComplete="current-password"
                 aria-label={t("auth.password")}
-                className="w-full rounded-lg border border-border bg-background px-4 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
+                className="td-chat-input w-full px-4 py-2.5 pr-10 text-sm transition-all duration-200 disabled:opacity-50"
               />
               <button
                 type="button"

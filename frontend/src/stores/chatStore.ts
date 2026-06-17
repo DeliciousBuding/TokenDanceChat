@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, RoomInfo, UserStatus, ScheduledMessage, CustomEmoji, ChatFolder, PollData } from "@/lib/api";
+import type { ChatMessage, UserStatus, CustomEmoji, PollData } from "@/lib/api";
 
 const MESSAGE_CAP = 500;
 
@@ -18,34 +18,12 @@ function loadLastReadTimestamps(username: string): Record<string, number> {
 
 export type ViewState = "chat";
 
-export interface DM {
-  username: string;
-  messages: ChatMessage[];
-}
+export type CurrentChat = { type: "public" };
 
-export interface GroupInfo {
-  name: string;
-  members: string[];
-  roles: Record<string, string>;
-  owner: string;
-  created_at: number;
-}
-
-export type CurrentChat =
-  | { type: "public" }
+export type LegacyChatInput =
+  | CurrentChat
   | { type: "dm"; username: string }
   | { type: "group"; name: string };
-
-export interface PendingFriendRequest {
-  from: string;
-  timestamp: number;
-}
-
-export interface PendingGroupInvite {
-  group: string;
-  from: string;
-  timestamp: number;
-}
 
 export interface MentionNotification {
   from: string;
@@ -69,48 +47,6 @@ export interface UserProfile {
 export interface NotificationPref {
   mutedUntil: number;
   showPreview: boolean;
-}
-
-export interface WebhookInfo {
-  id: string;
-  group_name: string;
-  url: string;
-  created_by: string;
-  created_at: number;
-  rotated_at?: number;
-  rotated_by?: string;
-}
-
-export interface CreatedWebhookInfo extends WebhookInfo {
-  secret: string;
-}
-
-export interface WebhookAuditLog {
-  id: string;
-  webhook_id: string;
-  group_name: string;
-  action: "created" | "rotated" | "deleted" | string;
-  actor: string;
-  created_at: number;
-}
-
-export interface IncomingCall {
-  callId: string;
-  from: string;
-  callType: "video" | "voice";
-  sdp: string;
-}
-
-export interface ActiveCall {
-  callId: string;
-  peer: string;
-  callType: "video" | "voice";
-  startTime: number;
-  // Group call fields
-  roomId?: string;
-  participants?: string[];
-  isGroupCall?: boolean;
-  groupName?: string;
 }
 
 interface ChatState {
@@ -142,28 +78,9 @@ interface ChatState {
   typingUsers: string[];
   typingPreviews: Record<string, string>;
 
-  // Rooms
-  rooms: RoomInfo[];
-  currentRoomID: string;
-
   // Chat context
   currentChat: CurrentChat;
   replyTo: ChatMessage | null;
-
-  // Friends
-  friends: string[];
-
-  // Pending friend requests
-  pendingFriendRequests: PendingFriendRequest[];
-
-  // Pending group invites
-  pendingGroupInvites: PendingGroupInvite[];
-
-  // Groups
-  groups: Record<string, GroupInfo>;
-
-  // Group info panel
-  groupInfoPanel: string | null;
 
   // Image preview (before sending)
   pendingImage: string | null;
@@ -202,18 +119,8 @@ interface ChatState {
   // User profiles
   userProfiles: Record<string, UserProfile>;
 
-  // Scheduled messages
-  scheduledMessages: ScheduledMessage[];
   customEmojis: CustomEmoji[];
-  folders: ChatFolder[];
-  groupWebhooks: Record<string, WebhookInfo[]>;
-  groupWebhookAuditLogs: Record<string, WebhookAuditLog[]>;
-  latestCreatedWebhook: CreatedWebhookInfo | null;
   translations: Record<string, string>; // messageId -> translated text
-
-  // Call state
-  incomingCall: IncomingCall | null;
-  activeCall: ActiveCall | null;
 
   // Polls
   polls: Record<string, PollData>;
@@ -243,19 +150,8 @@ interface ChatState {
   setTypingUsers: (users: string[]) => void;
   addTypingUser: (username: string, preview?: string) => void;
   removeTypingUser: (username: string) => void;
-  setRooms: (rooms: RoomInfo[]) => void;
-  setCurrentRoomID: (roomID: string) => void;
-  setCurrentChat: (chat: CurrentChat) => void;
+  setCurrentChat: (chat: LegacyChatInput) => void;
   setReplyTo: (message: ChatMessage | null) => void;
-  setFriends: (friends: string[]) => void;
-  addFriendRequest: (from: string) => void;
-  addGroupInvite: (group: string, from: string) => void;
-  removeGroupInvite: (group: string) => void;
-  setGroupMembers: (group: string, members: string[]) => void;
-  setGroupMemberRole: (group: string, username: string, role: string) => void;
-  removeMemberFromGroup: (group: string, username: string) => void;
-  renameGroupInStore: (oldName: string, newName: string) => void;
-  setGroupInfoPanel: (groupName: string | null) => void;
   setPendingImage: (imageDataUrl: string | null) => void;
   setUnreadCount: (count: number) => void;
   incrementConversationUnread: (key: string) => void;
@@ -285,26 +181,10 @@ interface ChatState {
   setUserProfile: (profile: UserProfile) => void;
   removeUserProfile: (username: string) => void;
   updateUserProfileStatus: (username: string, status: string) => void;
-  setScheduledMessages: (messages: ScheduledMessage[]) => void;
-  removeScheduledMessage: (id: string) => void;
   setCustomEmojis: (emojis: CustomEmoji[]) => void;
   addCustomEmoji: (emoji: CustomEmoji) => void;
   removeCustomEmoji: (name: string) => void;
-  setFolders: (folders: ChatFolder[]) => void;
-  addFolder: (folder: ChatFolder) => void;
-  removeFolder: (id: string) => void;
-  updateFolder: (id: string, data: Partial<ChatFolder>) => void;
-  addConversationToFolder: (folderId: string, key: string) => void;
-  removeConversationFromFolder: (folderId: string, key: string) => void;
-  setGroupWebhooks: (group: string, webhooks: WebhookInfo[]) => void;
-  setGroupWebhookAuditLogs: (group: string, logs: WebhookAuditLog[]) => void;
-  addGroupWebhook: (group: string, webhook: CreatedWebhookInfo) => void;
-  rotateGroupWebhookSecret: (group: string, webhook: CreatedWebhookInfo) => void;
-  removeGroupWebhook: (group: string, id: string) => void;
-  clearLatestCreatedWebhook: () => void;
   setTranslation: (messageId: string, text: string) => void;
-  setIncomingCall: (call: IncomingCall | null) => void;
-  setActiveCall: (call: ActiveCall | null) => void;
   updatePoll: (pollId: string, poll: PollData) => void;
   removePoll: (pollId: string) => void;
   reset: () => void;
@@ -329,15 +209,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   selectedProfileUser: null,
   typingUsers: [],
   typingPreviews: {},
-  rooms: [],
-  currentRoomID: "",
   currentChat: { type: "public" },
   replyTo: null,
-  friends: [],
-  pendingFriendRequests: [],
-  pendingGroupInvites: [],
-  groups: {},
-  groupInfoPanel: null,
   pendingImage: null,
   unreadCount: 0,
   unreadByConversation: {},
@@ -351,15 +224,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   archivedConversations: [],
   lightboxImage: null,
   userProfiles: {},
-  scheduledMessages: [],
   customEmojis: [],
-  folders: [],
-  groupWebhooks: {},
-  groupWebhookAuditLogs: {},
-  latestCreatedWebhook: null,
   translations: {},
-  incomingCall: null,
-  activeCall: null,
   polls: {},
 
   setView: (view) => set({ view }),
@@ -380,6 +246,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const isOptimistic = message.id.startsWith("optimistic_");
       const messages = [...state.messages];
       if (!isOptimistic) {
+        if (message.client_message_id) {
+          const optimisticIndex = messages.findIndex((m) => m.id === message.client_message_id);
+          if (optimisticIndex >= 0) {
+            messages[optimisticIndex] = { ...message, reactions: messages[optimisticIndex].reactions };
+            return { ...state, messages };
+          }
+        }
         for (let i = messages.length - 1; i >= Math.max(0, messages.length - 5); i--) {
           const m = messages[i];
           if (
@@ -402,24 +275,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messages.splice(0, messages.length - MESSAGE_CAP);
       }
 
-      // Update lastPreviews cache (O(1) map lookup instead of O(n) reverse scan).
+      // Current frontend contract has one public room. Keep a public preview
+      // only; legacy DM/group message fields remain backend compatibility data.
       if (!message.deleted && message.username !== "system" && message.content) {
-        const msgSender = message.from || message.username;
-        const msgRecipient = message.to;
-        let key: string;
-        if (message.group) {
-          key = `group:${message.group}`;
-        } else if (message.to) {
-          // Distinguish group (to is a known group name) from DM (to is a username).
-          if (state.groups[message.to]) {
-            key = `group:${message.to}`;
-          } else {
-            const partner = msgSender === state.username ? msgRecipient : msgSender;
-            key = `dm:${partner}`;
-          }
-        } else {
-          key = "public";
-        }
         let content = message.content;
         if (content.length > 50) {
           content = content.slice(0, 47) + "...";
@@ -427,7 +285,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (message.username === state.username) {
           content = "You: " + content;
         }
-        state.lastPreviews[key] = { content, timestamp: message.timestamp, sender: message.username };
+        state.lastPreviews.public = { content, timestamp: message.timestamp, sender: message.username };
       }
 
       return { messages };
@@ -450,26 +308,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
     })),
   setHistory: (incoming) =>
     set((state) => {
-      const existingIDs = new Set(state.messages.map((m) => m.id));
-      const newMessages = incoming.filter((m) => !existingIDs.has(m.id));
-      // Populate lastPreviews from history messages (chronological, so last wins).
+      const messages = [...state.messages];
+      const existingIDs = new Set(messages.map((m) => m.id));
+      const newMessages: ChatMessage[] = [];
+      for (const incomingMessage of incoming) {
+        if (existingIDs.has(incomingMessage.id)) continue;
+        if (incomingMessage.client_message_id) {
+          const optimisticIndex = messages.findIndex((m) => m.id === incomingMessage.client_message_id);
+          if (optimisticIndex >= 0) {
+            messages[optimisticIndex] = { ...incomingMessage, reactions: messages[optimisticIndex].reactions };
+            existingIDs.add(incomingMessage.id);
+            continue;
+          }
+        }
+        newMessages.push(incomingMessage);
+        existingIDs.add(incomingMessage.id);
+      }
+      // Populate only the public preview from history messages.
       for (const m of newMessages) {
         if (m.deleted || m.username === "system" || !m.content) continue;
-        const msgSender = m.from || m.username;
-        const msgRecipient = m.to;
-        let key: string;
-        if (m.group) {
-          key = `group:${m.group}`;
-        } else if (m.to) {
-          if (state.groups[m.to]) {
-            key = `group:${m.to}`;
-          } else {
-            const partner = msgSender === state.username ? msgRecipient : msgSender;
-            key = `dm:${partner}`;
-          }
-        } else {
-          key = "public";
-        }
         let content = m.content;
         if (content.length > 50) {
           content = content.slice(0, 47) + "...";
@@ -477,10 +334,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (m.username === state.username) {
           content = "You: " + content;
         }
-        state.lastPreviews[key] = { content, timestamp: m.timestamp, sender: m.username };
+        state.lastPreviews.public = { content, timestamp: m.timestamp, sender: m.username };
       }
       return {
-        messages: [...state.messages, ...newMessages],
+        messages: [...messages, ...newMessages],
         historyLoaded: true,
       };
     }),
@@ -510,103 +367,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       typingUsers: state.typingUsers.filter((u) => u !== username),
     })),
-  setRooms: (rooms) => set({ rooms }),
-  setCurrentRoomID: (currentRoomID) => set({ currentRoomID }),
-  setCurrentChat: (currentChat) =>
+  setCurrentChat: () =>
     set((state) => {
-      // Mark the conversation being left as read up to this point.
-      const oldKey =
-        state.currentChat.type === "dm"
-          ? `dm:${state.currentChat.username}`
-          : state.currentChat.type === "group"
-            ? `group:${state.currentChat.name}`
-            : "public";
-      const nextTimestamps = { ...state.lastReadTimestamps, [oldKey]: Date.now() };
+      // Legacy callers may still pass dm/group while old state is being
+      // cleaned. The current frontend contract always returns to public.
+      const nextTimestamps = { ...state.lastReadTimestamps, public: Date.now() };
       try {
         localStorage.setItem(getLSLastReadKey(state.username), JSON.stringify(nextTimestamps));
       } catch { /* quota exceeded */ }
-      return { currentChat, pendingImage: null, lastReadTimestamps: nextTimestamps };
+      return { currentChat: { type: "public" }, pendingImage: null, lastReadTimestamps: nextTimestamps };
     }),
   setReplyTo: (replyTo) => set({ replyTo }),
-  setFriends: (friends) => set({ friends }),
-  addFriendRequest: (from) =>
-    set((state) => ({
-      pendingFriendRequests: [
-        ...state.pendingFriendRequests,
-        { from, timestamp: Date.now() },
-      ],
-    })),
-  addGroupInvite: (group, from) =>
-    set((state) => ({
-      pendingGroupInvites: [
-        ...state.pendingGroupInvites,
-        { group, from, timestamp: Date.now() },
-      ],
-    })),
-  removeGroupInvite: (group) =>
-    set((state) => ({
-      pendingGroupInvites: state.pendingGroupInvites.filter((i) => i.group !== group),
-    })),
-  setGroupMembers: (group, members) =>
-    set((state) => {
-      const existing = state.groups[group];
-      const roles = existing?.roles ?? {};
-      // Preserve existing roles, default new members to "member".
-      for (const m of members) {
-        if (!roles[m]) roles[m] = "member";
-      }
-      return {
-        groups: {
-          ...state.groups,
-          [group]: { name: group, members, roles, owner: existing?.owner ?? "", created_at: existing?.created_at ?? 0 },
-        },
-      };
-    }),
-  setGroupMemberRole: (group, username, role) =>
-    set((state) => {
-      const g = state.groups[group];
-      if (!g) return state;
-      return {
-        groups: {
-          ...state.groups,
-          [group]: {
-            ...g,
-            roles: { ...g.roles, [username]: role },
-            owner: role === "owner" ? username : g.owner,
-          },
-        },
-      };
-    }),
-  removeMemberFromGroup: (group, username) =>
-    set((state) => {
-      const g = state.groups[group];
-      if (!g) return state;
-      const members = g.members.filter((m) => m !== username);
-      const roles = { ...g.roles };
-      delete roles[username];
-      // If group is empty after removal, remove the group entirely.
-      if (members.length === 0) {
-        const next = { ...state.groups };
-        delete next[group];
-        return { groups: next };
-      }
-      return {
-        groups: {
-          ...state.groups,
-          [group]: { ...g, members, roles },
-        },
-      };
-    }),
-  renameGroupInStore: (oldName, newName) =>
-    set((state) => {
-      const g = state.groups[oldName];
-      if (!g) return state;
-      const next = { ...state.groups };
-      delete next[oldName];
-      next[newName] = { ...g, name: newName };
-      return { groups: next };
-    }),
-  setGroupInfoPanel: (groupName) => set({ groupInfoPanel: groupName }),
   setPendingImage: (pendingImage) => set({ pendingImage }),
   setUnreadCount: (unreadCount) => set({ unreadCount }),
   incrementConversationUnread: (key) =>
@@ -735,11 +506,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
       };
     }),
-  setScheduledMessages: (scheduledMessages) => set({ scheduledMessages }),
-  removeScheduledMessage: (id) =>
-    set((state) => ({
-      scheduledMessages: state.scheduledMessages.filter((m) => m.id !== id),
-    })),
   setCustomEmojis: (customEmojis) => set({ customEmojis }),
   addCustomEmoji: (emoji) =>
     set((state) => ({ customEmojis: [...state.customEmojis, emoji] })),
@@ -747,106 +513,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       customEmojis: state.customEmojis.filter((e) => e.name !== name),
     })),
-  setFolders: (folders) => set({ folders }),
-  addFolder: (folder) =>
-    set((state) => ({ folders: [...state.folders, folder] })),
-  removeFolder: (id) =>
-    set((state) => ({ folders: state.folders.filter((f) => f.id !== id) })),
-  updateFolder: (id, data) =>
-    set((state) => ({
-      folders: state.folders.map((f) => (f.id === id ? { ...f, ...data } : f)),
-    })),
-  addConversationToFolder: (folderId, key) =>
-    set((state) => ({
-      folders: state.folders.map((f) =>
-        f.id === folderId
-          ? { ...f, items: f.items.includes(key) ? f.items : [...f.items, key], item_count: f.items.includes(key) ? f.item_count : f.item_count + 1 }
-          : f,
-      ),
-    })),
-  removeConversationFromFolder: (folderId, key) =>
-    set((state) => ({
-      folders: state.folders.map((f) =>
-        f.id === folderId
-          ? { ...f, items: f.items.filter((k) => k !== key), item_count: f.items.includes(key) ? f.item_count - 1 : f.item_count }
-          : f,
-      ),
-    })),
-  setGroupWebhooks: (group, webhooks) =>
-    set((state) => ({
-      groupWebhooks: {
-        ...state.groupWebhooks,
-        [group]: webhooks.map((webhook) => ({
-          id: webhook.id,
-          group_name: webhook.group_name,
-          url: webhook.url,
-          created_by: webhook.created_by,
-          created_at: webhook.created_at,
-          rotated_at: webhook.rotated_at,
-          rotated_by: webhook.rotated_by,
-        })),
-      },
-    })),
-  setGroupWebhookAuditLogs: (group, logs) =>
-    set((state) => ({
-      groupWebhookAuditLogs: { ...state.groupWebhookAuditLogs, [group]: logs },
-    })),
-  addGroupWebhook: (group, webhook) =>
-    set((state) => {
-      const existing = state.groupWebhooks[group] ?? [];
-      const withoutDuplicate = existing.filter((w) => w.id !== webhook.id);
-      const redactedWebhook: WebhookInfo = {
-        id: webhook.id,
-        group_name: webhook.group_name,
-        url: webhook.url,
-        created_by: webhook.created_by,
-        created_at: webhook.created_at,
-        rotated_at: webhook.rotated_at,
-        rotated_by: webhook.rotated_by,
-      };
-      return {
-        groupWebhooks: {
-          ...state.groupWebhooks,
-          [group]: [redactedWebhook, ...withoutDuplicate],
-        },
-        latestCreatedWebhook: webhook,
-      };
-    }),
-  rotateGroupWebhookSecret: (group, webhook) =>
-    set((state) => {
-      const existing = state.groupWebhooks[group] ?? [];
-      const previous = existing.find((w) => w.id === webhook.id);
-      const redactedWebhook: WebhookInfo = {
-        id: webhook.id,
-        group_name: webhook.group_name,
-        url: webhook.url,
-        created_by: webhook.created_by || previous?.created_by || "",
-        created_at: webhook.created_at || previous?.created_at || Date.now(),
-        rotated_at: webhook.rotated_at,
-        rotated_by: webhook.rotated_by,
-      };
-      const withoutDuplicate = existing.filter((w) => w.id !== webhook.id);
-      return {
-        groupWebhooks: {
-          ...state.groupWebhooks,
-          [group]: [redactedWebhook, ...withoutDuplicate],
-        },
-        latestCreatedWebhook: { ...redactedWebhook, secret: webhook.secret },
-      };
-    }),
-  removeGroupWebhook: (group, id) =>
-    set((state) => {
-      const existing = state.groupWebhooks[group] ?? [];
-      const nextWebhooks = { ...state.groupWebhooks, [group]: existing.filter((w) => w.id !== id) };
-      const latest =
-        state.latestCreatedWebhook?.group_name === group && state.latestCreatedWebhook.id === id
-          ? null
-          : state.latestCreatedWebhook;
-      return { groupWebhooks: nextWebhooks, latestCreatedWebhook: latest };
-    }),
-  clearLatestCreatedWebhook: () => set({ latestCreatedWebhook: null }),
-  setIncomingCall: (incomingCall) => set({ incomingCall }),
-  setActiveCall: (activeCall) => set({ activeCall }),
   updatePoll: (pollId, poll) =>
     set((state) => ({
       polls: { ...state.polls, [pollId]: poll },
@@ -885,15 +551,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       selectedProfileUser: null,
       typingUsers: [],
       typingPreviews: {},
-      rooms: [],
-      currentRoomID: "",
       currentChat: { type: "public" },
       replyTo: null,
-      friends: [],
-      pendingFriendRequests: [],
-      pendingGroupInvites: [],
-      groups: {},
-      groupInfoPanel: null,
       pendingImage: null,
       unreadCount: 0,
       unreadByConversation: {},
@@ -907,15 +566,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       archivedConversations: [],
       lightboxImage: null,
       userProfiles: {},
-      scheduledMessages: [],
       customEmojis: [],
-      folders: [],
-      groupWebhooks: {},
-      groupWebhookAuditLogs: {},
-      latestCreatedWebhook: null,
       translations: {},
-      incomingCall: null,
-      activeCall: null,
       polls: {},
     });
   },

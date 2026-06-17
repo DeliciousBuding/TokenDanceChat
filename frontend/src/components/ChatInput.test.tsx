@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { I18nProvider } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 
@@ -20,20 +20,11 @@ vi.mock("@/lib/api", () => ({
     sendTypingStop: vi.fn(),
     uploadImage: vi.fn(),
     sendMessage: vi.fn(),
-    sendDMMessage: vi.fn(),
-    sendGroupMessage: vi.fn(),
     sendReaction: vi.fn(),
     sendMessageEdit: vi.fn(),
     sendSetTopic: vi.fn(),
     sendPinMessage: vi.fn(),
     deleteMessage: vi.fn(),
-    sendFriendRequest: vi.fn(),
-    sendFriendAccept: vi.fn(),
-    sendFriendReject: vi.fn(),
-    sendGroupCreate: vi.fn(),
-    sendGroupInvite: vi.fn(),
-    sendGroupInviteAccept: vi.fn(),
-    sendGroupInviteDecline: vi.fn(),
     fetchLinkPreview: vi.fn(),
   },
   ChatError: class ChatError extends Error {
@@ -190,6 +181,32 @@ describe("ChatInput", () => {
       expect(textarea.value).toBe("");
     });
 
+    it("发送后展示 submitting 状态并阻止短时间重复发送", () => {
+      vi.useFakeTimers();
+      try {
+        const { onSend } = renderChatInput();
+        const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+        typeInTextarea(textarea, "Hello");
+
+        fireEvent.keyDown(textarea, { key: "Enter" });
+
+        const sendButton = screen.getByRole("button", { name: "输入消息... (Shift+Enter 换行)" });
+        expect(sendButton.getAttribute("data-submitting")).toBe("true");
+        expect(document.querySelector("[data-visual='composer-submit-state']")).toBeTruthy();
+
+        fireEvent.keyDown(textarea, { key: "Enter" });
+        expect(onSend).toHaveBeenCalledTimes(1);
+
+        act(() => {
+          vi.advanceTimersByTime(500);
+        });
+
+        expect(sendButton.getAttribute("data-submitting")).toBe("false");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("disconnected 时不发送消息", () => {
       useChatStore.setState({ connected: false });
       const { onSend } = renderChatInput();
@@ -242,19 +259,23 @@ describe("ChatInput", () => {
       expect(document.querySelector(".fixed.inset-0.z-40")).toBeNull();
     });
 
-    it("底部工具条常驻显示主要工具入口并保持 44px 合约", () => {
+    it("composer 使用 AgentHub 风格轻量入口，不渲染旧 IM 工具条", () => {
       const { container } = renderChatInput();
 
-      const toolbar = container.querySelector("[data-visual='composer-toolbar']");
-      expect(toolbar).toBeTruthy();
+      expect(container.querySelector("[data-visual='composer-toolbar']")).toBeNull();
       expect(screen.queryByLabelText("添加附件")).toBeNull();
 
-      for (const label of ["Markdown 格式", "上传图片", "上传文件", "GIF", "录制语音", "定时发送消息"]) {
+      for (const label of ["上传图片", "上传文件"]) {
         expect(screen.getByLabelText(label)).toBeTruthy();
       }
+      expect(screen.queryByLabelText("Markdown 格式")).toBeNull();
+      expect(screen.queryByLabelText("表情")).toBeNull();
+      expect(screen.queryByLabelText("GIF")).toBeNull();
+      expect(screen.queryByLabelText("录制语音")).toBeNull();
+      expect(screen.queryByLabelText("定时发送消息")).toBeNull();
 
       const tools = Array.from(container.querySelectorAll("[data-visual='composer-tool']"));
-      expect(tools).toHaveLength(7);
+      expect(tools).toHaveLength(2);
       for (const tool of tools) {
         expect(tool.className).toContain("h-11");
         expect(tool.className).toContain("w-11");
@@ -341,16 +362,16 @@ describe("ChatInput", () => {
       fireEvent.change(textarea, { target: { value: "@" } });
       Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
 
-      // Navigate down once - first item (TokenBot) should lose accent, second (PicoClaw) gets it
+      // Navigate down once - first item (@all) should lose accent, second (TokenBot) gets it
       fireEvent.keyDown(textarea, { key: "ArrowDown" });
 
-      const picoClawBtn = screen.getByText("PicoClaw").closest("button");
-      expect(picoClawBtn?.className).toContain("bg-[var(--bg-hover)]");
+      const tokenBotBtn = screen.getByText("TokenBot").closest("button");
+      expect(tokenBotBtn?.className).toContain("bg-[var(--bg-hover)]");
 
       // ArrowUp back to first
       fireEvent.keyDown(textarea, { key: "ArrowUp" });
-      const tokenBotBtn = screen.getByText("TokenBot").closest("button");
-      expect(tokenBotBtn?.className).toContain("bg-[var(--bg-hover)]");
+      const allBtn = screen.getByText("all").closest("button");
+      expect(allBtn?.className).toContain("bg-[var(--bg-hover)]");
     });
 
     it("Enter 在 mention 下拉中选择当前项", () => {
@@ -484,15 +505,15 @@ describe("ChatInput", () => {
       expect(textarea.value).toBe("my actual last");
     });
 
-    it("ArrowUp 在 DM 中只加载与该 DM 对端的对话消息", () => {
+    it("ArrowUp ignores private messages when stale DM state is present", () => {
       const messages = [
         { id: "m1", username: "testuser", from: "testuser", to: "alice", content: "DM to alice", timestamp: 1000 },
         { id: "m2", username: "testuser", from: "testuser", to: "bob", content: "DM to bob", timestamp: 2000 },
-        { id: "m3", username: "alice", from: "alice", to: "testuser", content: "from alice", timestamp: 3000 },
+        { id: "m3", username: "testuser", content: "public message", timestamp: 3000 },
       ];
       useChatStore.setState({
         username: "testuser",
-        currentChat: { type: "dm", username: "alice" },
+        currentChat: { type: "dm", username: "alice" } as any,
         messages,
       });
 
@@ -501,7 +522,7 @@ describe("ChatInput", () => {
 
       fireEvent.keyDown(textarea, { key: "ArrowUp" });
 
-      expect(textarea.value).toBe("DM to alice");
+      expect(textarea.value).toBe("public message");
     });
 
     it("有内容时 ArrowUp 不触发编辑（优先导航/不吞键）", () => {
@@ -559,20 +580,22 @@ describe("ChatInput", () => {
       expect(textarea.value).toBe("saved draft");
     });
 
-    it("DM 会话挂载时从 tdchat-draft-dm-{username} 恢复草稿", () => {
+    it("stale DM state still restores the public draft", () => {
+      localStorageMock.setItem("tdchat-draft-public", "public draft");
       localStorageMock.setItem("tdchat-draft-dm-alice", "dm draft");
-      useChatStore.setState({ currentChat: { type: "dm", username: "alice" } });
+      useChatStore.setState({ currentChat: { type: "dm", username: "alice" } as any });
       renderChatInput();
       const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-      expect(textarea.value).toBe("dm draft");
+      expect(textarea.value).toBe("public draft");
     });
 
-    it("group 会话挂载时从 tdchat-draft-group-{name} 恢复草稿", () => {
+    it("stale group state still restores the public draft", () => {
+      localStorageMock.setItem("tdchat-draft-public", "public draft");
       localStorageMock.setItem("tdchat-draft-group-general", "group draft");
-      useChatStore.setState({ currentChat: { type: "group", name: "general" } });
+      useChatStore.setState({ currentChat: { type: "group", name: "general" } as any });
       renderChatInput();
       const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-      expect(textarea.value).toBe("group draft");
+      expect(textarea.value).toBe("public draft");
     });
 
     it("内容变化后防抖 500ms 自动保存草稿", () => {
@@ -772,8 +795,8 @@ describe("ChatInput", () => {
   });
 
   describe("@mention 额外场景", () => {
-    it("DM 会话的 mention 列表不包含 @all", () => {
-      useChatStore.setState({ currentChat: { type: "dm", username: "alice" } });
+    it("stale DM state still uses the public mention list", () => {
+      useChatStore.setState({ currentChat: { type: "dm", username: "alice" } as any });
 
       renderChatInput();
       const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
@@ -784,8 +807,7 @@ describe("ChatInput", () => {
       // TokenBot and PicoClaw (assistants) should appear
       expect(screen.getByText("TokenBot")).toBeTruthy();
       expect(screen.getByText("PicoClaw")).toBeTruthy();
-      // @all should NOT appear in DM context
-      expect(screen.queryByText("all")).toBeNull();
+      expect(screen.getByText("all")).toBeTruthy();
     });
   });
 });

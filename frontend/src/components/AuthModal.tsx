@@ -62,6 +62,7 @@ export function AuthModal() {
         localStorage.setItem(USERNAME_STORAGE_KEY, name);
         setStoreUsername(name);
         setView("chat");
+        setLoading(false);
         setShowAuthModal(false);
       } catch (err) {
         if (persistAuth) {
@@ -149,8 +150,8 @@ export function AuthModal() {
   if (!show) return null;
 
   const title = tab === "guest" ? t("join.buttonGuest") : tab === "login" ? t("auth.login") : t("auth.register");
-  const inputClass = "w-full h-11 rounded-xl border border-[var(--border-base)] bg-[var(--surface-glass)] px-3.5 text-[15px] text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none disabled:opacity-50 transition-colors";
-  const primaryButtonClass = "w-full min-h-[46px] rounded-xl bg-[var(--accent)] text-white font-semibold text-[15px] hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]";
+  const inputClass = "td-chat-input w-full h-11 px-3.5 text-[15px] disabled:opacity-50 transition-colors";
+  const primaryButtonClass = "w-full min-h-[46px] rounded-[var(--radius-control)] bg-[var(--accent)] text-white font-semibold text-[15px] hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]";
   const inlineAuthSwitchClass = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 align-middle text-brand hover:underline font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]";
 
   return (
@@ -160,7 +161,7 @@ export function AuthModal() {
       onClick={close}
     >
       {/* Backdrop */}
-      <div data-visual="auth-modal-backdrop" className="absolute inset-0 bg-black/25 backdrop-blur-md" />
+      <div data-visual="auth-modal-backdrop" className="td-chat-backdrop absolute inset-0" />
 
       {/* Card */}
       <div
@@ -168,7 +169,7 @@ export function AuthModal() {
         aria-modal="true"
         aria-labelledby="auth-modal-title"
         data-visual="auth-modal"
-        className="glass-strong relative z-10 w-full max-w-[380px] overflow-hidden rounded-[22px] shadow-[0_22px_72px_rgba(0,0,0,0.22)] animate-slide-up"
+        className="td-chat-modal relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-[380px] overflow-y-auto animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="auth-modal-title" className="sr-only">{title}</h2>
@@ -179,7 +180,7 @@ export function AuthModal() {
           onClick={close}
           disabled={loading}
           data-visual="auth-modal-close"
-          className="absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] sm:right-3 sm:top-3"
+          className="td-chat-header-action absolute right-2 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] sm:right-3 sm:top-3"
           aria-label={t("a11y.close")}
         >
           <X className="h-4 w-4" />
@@ -209,8 +210,8 @@ export function AuthModal() {
         {/* Tab content */}
         <div data-visual="auth-modal-content" className="p-5">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl shadow-sm">
-              <img src="/token-dance-icon-rounded.svg" alt="TokenDance" className="h-10 w-10" draggable={false} />
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[var(--radius-control)]">
+              <img src="/tokendance-icon-rounded.svg" alt="TokenDance" className="h-10 w-10" draggable={false} />
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-[var(--text-primary)]">TokenDance Chat</p>
@@ -274,7 +275,7 @@ export function AuthModal() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   data-visual="auth-modal-password-toggle"
-                  className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
+                  className="td-chat-header-action absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
                   aria-label={showPassword ? t("a11y.hidePassword") : t("a11y.showPassword")}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -366,7 +367,7 @@ export function AuthModal() {
 
           {/* ── Error ── */}
           {error && (
-            <p className="mt-3 text-center text-[13px] bg-[#fef2f2] text-[#dc2626] rounded-lg p-3" role="alert">
+            <p className="mt-3 rounded-lg bg-[color-mix(in_srgb,var(--td-danger)_10%,var(--td-surface))] p-3 text-center text-[13px] text-[var(--td-danger)]" role="alert">
               {error}
             </p>
           )}

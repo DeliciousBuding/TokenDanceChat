@@ -1,7 +1,7 @@
 /**
  * PWA icon sync.
- * Copies the approved TokenDance rounded app icon into the legacy icon names
- * consumed by the manifest and service worker.
+ * Copies the approved TokenDance Org rounded app icon into the legacy icon
+ * names kept only for browser/PWA cache compatibility.
  *
  * Usage: node scripts/generate-icons.mjs
  */
@@ -14,7 +14,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
 
 for (const size of [192, 512]) {
-  const source = join(publicDir, `token-dance-icon-${size}.png`);
+  const source = join(publicDir, `tokendance-icon-rounded-${size}.png`);
   const target = join(publicDir, `icon-${size}.png`);
   if (!existsSync(source)) {
     throw new Error(`Missing TokenDance icon source: ${source}`);

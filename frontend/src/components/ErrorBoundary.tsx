@@ -54,8 +54,8 @@ export class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback;
       const t = getT();
       return (
-        <div className="flex min-h-screen items-center justify-center bg-background p-8">
-          <div className="flex max-w-md flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 text-center shadow-xl">
+        <div className="td-chat-shell flex min-h-screen items-center justify-center p-8">
+          <div className="td-chat-modal flex max-w-md flex-col items-center gap-4 p-8 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
               <AlertTriangle className="h-7 w-7 text-destructive" aria-hidden="true" />
             </div>

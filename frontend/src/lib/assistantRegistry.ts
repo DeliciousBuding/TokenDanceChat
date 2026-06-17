@@ -19,6 +19,7 @@ export interface AssistantDefinition {
   kind: AssistantKind;
   aliases: string[];
   mention: string;
+  backendMention?: string;
   model: AssistantModel;
   status: AssistantStatus;
 }
@@ -85,9 +86,9 @@ export const assistants: AssistantDefinition[] = [
     id: "tokenbot",
     name: "TokenBot",
     label: "Bot",
-    description: "轻量聊天助手，适合问答、总结和日常协作。",
+    description: "公共聊天 AI 助手，适合问答、总结和日常 AI 聊天。",
     kind: "bot",
-    aliases: ["bot", "tokenbot"],
+    aliases: ["bot", "tokenbot", "webuichat", "webuibot", "webui"],
     mention: "@TokenBot",
     model: modelCatalog[0],
     status: "online",

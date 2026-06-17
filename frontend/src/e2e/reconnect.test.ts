@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { joinGuestFromPreview } from "./helpers";
 
 /**
  * TokenDanceChat WebSocket 自动重连 E2E 测试。
@@ -22,8 +23,7 @@ const setupPage = async (page: import("@playwright/test").Page) => {
 async function joinChat(page: import("@playwright/test").Page, name?: string): Promise<string> {
   const username = name ?? `rc_${Math.random().toString(36).slice(2, 8)}`;
   await page.goto("/");
-  await page.getByPlaceholder("你的用户名...").fill(username);
-  await page.getByRole("button", { name: "游客加入" }).click();
+  await joinGuestFromPreview(page, username);
   await expect(page.locator("textarea").first()).toBeVisible({ timeout: 15000 });
   return username;
 }
@@ -78,8 +78,8 @@ test.describe("WebSocket reconnect", () => {
       ).not.toBeVisible({ timeout: 5000 });
     });
 
-    test("online users section shows count when connected", async ({ page }) => {
-      const name = await joinChat(page);
+    test("lightweight sidebar shows current connection state when connected", async ({ page }) => {
+      await joinChat(page);
 
       // The sidebar shows online users. On desktop the sidebar is always visible.
       // On mobile we need to open it first.
@@ -88,11 +88,10 @@ test.describe("WebSocket reconnect", () => {
         await sidebarToggle.click();
       }
 
-      // The sidebar should show "在线用户" heading.
-      await expect(page.getByText("在线用户")).toBeVisible({ timeout: 10000 });
-
-      // The current user should appear in the online users list.
-      await expect(page.getByText(name).first()).toBeVisible({ timeout: 5000 });
+      const sidebar = page.getByRole("complementary", { name: "公共聊天" });
+      await expect(sidebar.getByRole("button", { name: /公共聊天|Public Chat/ })).toBeVisible({ timeout: 10000 });
+      await expect(sidebar.getByRole("button", { name: /TokenBot/ })).toBeVisible({ timeout: 10000 });
+      await expect(sidebar.getByText(/好友|Friends|群组|Groups|私信|Direct Messages|DM/)).toHaveCount(0);
     });
   });
 
@@ -296,13 +295,10 @@ test.describe("WebSocket reconnect", () => {
       });
     });
 
-    test("shows empty state when connected with no other users", async ({
+    test("lightweight sidebar stays scoped to public room and assistants", async ({
       page,
     }) => {
-      // This test CAN run: it verifies that when connected and onlineUsers
-      // only contains self, the sidebar still shows the user list (not
-      // skeleton and not empty-state placeholder).
-      const name = await joinChat(page);
+      await joinChat(page);
 
       // Open sidebar on mobile.
       const sidebarToggle = page.getByLabel("Open sidebar");
@@ -310,15 +306,10 @@ test.describe("WebSocket reconnect", () => {
         await sidebarToggle.click();
       }
 
-      await expect(page.getByText("在线用户")).toBeVisible({
-        timeout: 10000,
-      });
-
-      // The current user should be listed — this means we're NOT in
-      // skeleton/empty state (which would show "连接中..." or empty state text).
-      await expect(page.getByText(name).first()).toBeVisible({
-        timeout: 5000,
-      });
+      const sidebar = page.getByRole("complementary", { name: "公共聊天" });
+      await expect(sidebar.getByRole("button", { name: /公共聊天|Public Chat/ })).toBeVisible({ timeout: 10000 });
+      await expect(sidebar.getByRole("button", { name: /PicoClaw/ })).toBeVisible({ timeout: 10000 });
+      await expect(sidebar.getByText(/在线用户|Online Users|好友|Friends|群组|Groups|私信|Direct Messages|DM/)).toHaveCount(0);
     });
   });
 

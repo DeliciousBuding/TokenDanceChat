@@ -1,51 +1,37 @@
-import { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense, type KeyboardEvent, type ClipboardEvent } from "react";
-import { Send, Loader2, X, ImagePlus, Paperclip, Mic, Square, Bold, Italic, Strikethrough, Code, Quote, Link, Eye, EyeOff, Film, ArrowUp, SmilePlus } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { useState, useRef, useCallback, useEffect, useMemo, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ClipboardEvent, type PointerEvent } from "react";
+import { Send, Loader2, X, ImagePlus, Paperclip, ArrowUp } from "lucide-react";
 import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI, type ChatMessage, type TypingContext } from "@/lib/api";
-import { mentionableAssistants } from "@/lib/assistantRegistry";
-import { ScheduleButton } from "./ScheduleButton";
-
-const GifPicker = lazy(() => import("@/components/GifPicker").then((m) => ({ default: m.GifPicker })));
-
-const EMOJI_MAP: Record<string, string> = {
-  smile: "😄", laugh: "😆", heart: "❤️", thumbsup: "👍", thumbsdown: "👎",
-  cry: "😢", angry: "😠", fire: "🔥", clap: "👏", ok: "👌",
-  cool: "😎", thinking: "🤔", party: "🎉", rocket: "🚀", eyes: "👀",
-  pray: "🙏", wave: "👋", joy: "😂", sweat_smile: "😅", sob: "😭",
-  screaming: "😱", smirk: "😏", wink: "😉", blush: "😊", yum: "😋",
-  neutral: "😐", confused: "😕", worried: "😟", tired: "😫", star: "⭐",
-  check: "✅", x: "❌", hundred: "💯", plus1: "👍", minus1: "👎",
-};
+import { mentionableAssistants, type AssistantDefinition, type AssistantModel } from "@/lib/assistantRegistry";
+import { AssistantIcon } from "./AssistantIcon";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
   disabled?: boolean;
   replyTo?: ChatMessage | null;
   onUpload?: (file: File) => void;
+  assistantContext?: {
+    assistant: AssistantDefinition;
+    model: AssistantModel;
+  } | null;
 }
 
-const INPUT_MIN_HEIGHT = 24;
+const INPUT_MIN_HEIGHT = 44;
 const INPUT_MAX_HEIGHT = 120;
 export function ChatInput({
   onSend,
   disabled,
   replyTo,
   onUpload,
+  assistantContext = null,
 }: ChatInputProps) {
   const { t } = useTranslation();
-  const { onlineUsers, username, currentChat, pendingImage, setPendingImage, setReplyTo, connected } = useChatStore();
+  const { onlineUsers, username, pendingImage, setPendingImage, setReplyTo, connected } = useChatStore();
   const [content, setContent] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const draftKey = useMemo(() => {
-    if (currentChat.type === "dm") return `dm-${currentChat.username}`;
-    if (currentChat.type === "group") return `group-${currentChat.name}`;
-    return "public";
-  }, [currentChat]);
-  const draftStorageKey = `tdchat-draft-${draftKey}`;
+  const draftStorageKey = "tdchat-draft-public";
   const draftLoadedRef = useRef(false);
 
   // Load draft when conversation changes.
@@ -81,66 +67,14 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [pulseButton, setPulseButton] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [disconnectFeedback, setDisconnectFeedback] = useState(false);
   const hadContentRef = useRef(false);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
   const sendingRef = useRef(false);
   const typingSentRef = useRef(false);
   const mountedRef = useRef(true);
-  const [hasScheduled, setHasScheduled] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const onUploadRef = useRef(onUpload);
-  onUploadRef.current = onUpload;
 
-  // Formatting toolbar state
-  const [previewOn, setPreviewOn] = useState(false);
-  const [linkInputVisible, setLinkInputVisible] = useState(false);
-  const [linkUrl, setLinkUrl] = useState("");
-  const linkInputRef = useRef<HTMLInputElement>(null);
-
-  // Slide-to-cancel gesture
-  const [slideCancelOffset, setSlideCancelOffset] = useState(0);
-  const [slideCancelDragging, setSlideCancelDragging] = useState(false);
-  const slideCancelStartX = useRef(0);
-  const SLIDE_CANCEL_THRESHOLD = 60;
-
-  // Gif picker state
-  const [showGifPicker, setShowGifPicker] = useState(false);
-
-  // Format bubble state
-  const [showFormatBubble, setShowFormatBubble] = useState(false);
-
-  const handleCancelPointerDown = useCallback((e: React.PointerEvent) => {
-    slideCancelStartX.current = e.clientX;
-    setSlideCancelDragging(true);
-    setSlideCancelOffset(0);
-  }, []);
-
-  const handleCancelPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!slideCancelDragging) return;
-    const dx = slideCancelStartX.current - e.clientX;
-    setSlideCancelOffset(Math.max(0, dx));
-  }, [slideCancelDragging]);
-
-  const handleCancelPointerUp = useCallback(() => {
-    if (slideCancelOffset >= SLIDE_CANCEL_THRESHOLD) {
-      cancelRecording();
-    }
-    setSlideCancelDragging(false);
-    setSlideCancelOffset(0);
-  }, [slideCancelOffset]);
-
-  // Cleanup slide-cancel state when recording stops
-  useEffect(() => {
-    if (!isRecording) {
-      setSlideCancelDragging(false);
-      setSlideCancelOffset(0);
-    }
-  }, [isRecording]);
   const dragCounter = useRef(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
@@ -193,120 +127,21 @@ export function ChatInput({
       .filter((u) => u.toLowerCase().includes(lower))
       .slice(0, Math.max(0, 10 - assistants.length));
     const results = [...assistants, ...users];
-    // Add @all in group/public chats when query matches.
-    const inGroupContext = currentChat.type === "group" || currentChat.type === "public";
-    if (inGroupContext) {
-      const allTargets = ["all", "everyone", "here"];
-      for (const target of allTargets) {
-        if (target.startsWith(lower) || lower === "") {
-          results.unshift(target);
-          break; // only add one @all variant
-        }
+    const allTargets = ["all", "everyone", "here"];
+    for (const target of allTargets) {
+      if (target.startsWith(lower) || lower === "") {
+        results.unshift(target);
+        break;
       }
     }
     return results.slice(0, 10);
-  }, [mentionQuery, onlineUsers, currentChat]);
+  }, [mentionQuery, onlineUsers]);
 
   // Sync mentionActive with whether we have matches.
   useEffect(() => {
     setMentionActive(mentionFiltered.length > 0);
     setMentionIndex(0);
   }, [mentionFiltered.length]);
-
-  // ── Slash commands ──
-  const [slashIndex, setSlashIndex] = useState(0);
-  const [emojiIndex, setEmojiIndex] = useState(0);
-  const [slashDismissed, setSlashDismissed] = useState(false);
-  const [emojiDismissed, setEmojiDismissed] = useState(false);
-
-  const slashCommands = useMemo(() => [
-    { command: "me", label: t("slash.me") },
-    { command: "topic", label: t("slash.topic") },
-    { command: "shrug", label: t("slash.shrug") },
-    { command: "tableflip", label: t("slash.tableflip") },
-  ], [t]);
-
-  const slashQuery = useMemo(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return { query: "", startPos: -1, args: "" };
-    const cursorPos = textarea.selectionStart;
-    const textBeforeCursor = content.slice(0, cursorPos);
-    const match = textBeforeCursor.match(/(?:^|\s)\/([\w]*)(\s+.*)?$/);
-    if (!match) return { query: "", startPos: -1, args: "" };
-    const fullMatch = match[0];
-    const slashPos = match.index! + fullMatch.indexOf("/");
-    return {
-      query: match[1] || "",
-      args: (match[2] || "").trimStart(),
-      startPos: slashPos,
-    };
-  }, [content]);
-
-  const slashFiltered = useMemo(() => {
-    const { query, startPos } = slashQuery;
-    if (startPos < 0) return [];
-    const lower = query.toLowerCase();
-    return slashCommands.filter((cmd) =>
-      query === "" || cmd.command.toLowerCase().startsWith(lower),
-    );
-  }, [slashQuery, slashCommands]);
-
-  // ── Emoji shortcuts ──
-  const emojiQuery = useMemo(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return { query: "", startPos: -1 };
-    const cursorPos = textarea.selectionStart;
-    const textBeforeCursor = content.slice(0, cursorPos);
-    const match = textBeforeCursor.match(/:([a-zA-Z0-9_]*)$/);
-    if (!match) return { query: "", startPos: -1 };
-    return {
-      query: match[1] || "",
-      startPos: match.index!,
-    };
-  }, [content]);
-
-  const emojiFiltered = useMemo((): { key: string; emoji: string; custom: boolean; url?: string }[] => {
-    const { query, startPos } = emojiQuery;
-    if (startPos < 0 || query.length < 1) return [];
-    const lower = query.toLowerCase();
-    // Built-in emojis as { key, emoji } entries.
-    const builtin = Object.entries(EMOJI_MAP)
-      .filter(([key]) => key.toLowerCase().includes(lower))
-      .map(([key, emoji]) => ({ key, emoji, custom: false }));
-    // Custom emojis from store.
-    const custom = useChatStore.getState().customEmojis
-      .filter((e) => e.name.toLowerCase().includes(lower))
-      .map((e) => ({ key: e.name, emoji: "", custom: true, url: e.url }));
-    return [...builtin, ...custom].slice(0, 20);
-  }, [emojiQuery]);
-
-  // Active states with priority: mention > slash > emoji
-  const slashActive = useMemo(
-    () => slashFiltered.length > 0 && mentionFiltered.length === 0 && !slashDismissed,
-    [slashFiltered.length, mentionFiltered.length, slashDismissed],
-  );
-
-  const emojiActive = useMemo(
-    () =>
-      emojiFiltered.length > 0 &&
-      mentionFiltered.length === 0 &&
-      slashFiltered.length === 0 &&
-      !emojiDismissed,
-    [emojiFiltered.length, mentionFiltered.length, slashFiltered.length, emojiDismissed],
-  );
-
-  // Reset dismissed flags when query content changes
-  useEffect(() => {
-    setSlashDismissed(false);
-  }, [slashQuery.query, slashQuery.startPos]);
-
-  useEffect(() => {
-    setEmojiDismissed(false);
-  }, [emojiQuery.query, emojiQuery.startPos]);
-
-  // Reset indices when filtered lists change
-  useEffect(() => { setSlashIndex(0); }, [slashFiltered.length]);
-  useEffect(() => { setEmojiIndex(0); }, [emojiFiltered.length]);
 
   // Auto-resize textarea
   const adjustHeight = useCallback(() => {
@@ -328,15 +163,13 @@ export function ChatInput({
 
   // Compute typing context from current chat
   const typingContext = useMemo((): TypingContext => {
-    const base: TypingContext = currentChat.type === "dm" ? { channel: "dm", target: currentChat.username } :
-      currentChat.type === "group" ? { channel: "group", target: currentChat.name } :
-      { channel: "public" };
+    const base: TypingContext = { channel: "public" };
     const trimmed = content.trim();
     if (trimmed) {
       base.preview = trimmed.slice(0, 30);
     }
     return base;
-  }, [currentChat, content]);
+  }, [content]);
 
   // Track latest typing context for unmount cleanup
   const typingContextRef = useRef(typingContext);
@@ -367,11 +200,9 @@ export function ChatInput({
     }
   }, [dragError]);
 
-  // Clean up recording and typing state on unmount
+  // Clean up typing state on unmount.
   useEffect(() => {
     return () => {
-      mediaRecorderRef.current?.stop();
-      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       if (typingSentRef.current) {
         chatAPI.sendTypingStop(typingContextRef.current);
         typingSentRef.current = false;
@@ -475,254 +306,6 @@ export function ChatInput({
       });
   }, [pendingImage, onUpload]);
 
-  // ── Markdown formatting helpers ──
-
-  /** Wrap the current selection with before/after text. If nothing selected, insert placeholder and place cursor inside. */
-  const wrapSelection = useCallback(
-    (before: string, after: string, placeholder: string) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const selected = content.slice(start, end);
-      const replacement = selected
-        ? before + selected + after
-        : before + placeholder + after;
-      const newContent =
-        content.slice(0, start) + replacement + content.slice(end);
-      setContent(newContent);
-      requestAnimationFrame(() => {
-        textarea.focus();
-        if (selected) {
-          const cursor = start + replacement.length;
-          textarea.setSelectionRange(cursor, cursor);
-        } else {
-          const cursor = start + before.length;
-          const selEnd = cursor + placeholder.length;
-          textarea.setSelectionRange(cursor, selEnd);
-        }
-      });
-    },
-    [content],
-  );
-
-  const insertQuote = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const hasSelection = start !== end;
-    let newContent: string;
-    let newCursor: number;
-    if (hasSelection) {
-      const before = content.slice(0, start);
-      const selected = content.slice(start, end);
-      const after = content.slice(end);
-      const quoted = selected
-        .split("\n")
-        .map((line) => "> " + line)
-        .join("\n");
-      newContent = before + quoted + after;
-      newCursor = start + quoted.length;
-    } else {
-      const beforeCursor = content.slice(0, start);
-      const lastNewline = beforeCursor.lastIndexOf("\n");
-      const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
-      newContent =
-        content.slice(0, lineStart) + "> " + content.slice(lineStart);
-      newCursor = start + 2;
-    }
-    setContent(newContent);
-    requestAnimationFrame(() => {
-      textarea?.focus();
-      textarea?.setSelectionRange(newCursor, newCursor);
-    });
-  }, [content]);
-
-  const handleFormatBold = useCallback(
-    () => wrapSelection("**", "**", "bold"),
-    [wrapSelection],
-  );
-  const handleFormatItalic = useCallback(
-    () => wrapSelection("*", "*", "italic"),
-    [wrapSelection],
-  );
-  const handleFormatStrikethrough = useCallback(
-    () => wrapSelection("~~", "~~", "strike"),
-    [wrapSelection],
-  );
-  const handleFormatCode = useCallback(
-    () => wrapSelection("`", "`", "code"),
-    [wrapSelection],
-  );
-
-  const handleFormatLink = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = content.slice(start, end);
-    if (selected) {
-      // Selection exists: show inline URL input
-      setLinkInputVisible(true);
-      setLinkUrl("");
-      requestAnimationFrame(() => {
-        linkInputRef.current?.focus();
-      });
-    } else {
-      // No selection: show inline URL input for manual entry
-      setLinkInputVisible(true);
-      setLinkUrl("");
-      requestAnimationFrame(() => {
-        linkInputRef.current?.focus();
-      });
-    }
-  }, [content]);
-
-  const handleGifSelect = useCallback(
-    (markdown: string) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      // Insert the GIF/sticker markdown with a trailing space.
-      const insertion = markdown + " ";
-      const newContent = content.slice(0, start) + insertion + content.slice(end);
-      setContent(newContent);
-      setShowGifPicker(false);
-      requestAnimationFrame(() => {
-        textarea.focus();
-        const cursor = start + insertion.length;
-        textarea.setSelectionRange(cursor, cursor);
-      });
-    },
-    [content],
-  );
-
-  const commitLink = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const url = linkUrl.trim();
-    if (!url) {
-      setLinkInputVisible(false);
-      return;
-    }
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = content.slice(start, end);
-    const replacement = selected
-      ? `[${selected}](${url})`
-      : `[link](${url})`;
-    const newContent =
-      content.slice(0, start) + replacement + content.slice(end);
-    setContent(newContent);
-    setLinkInputVisible(false);
-    setLinkUrl("");
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const cursor = selected
-        ? start + replacement.length
-        : start + replacement.indexOf("](") + 1;
-      const selEnd = selected ? cursor : start + replacement.indexOf("](");
-      textarea.setSelectionRange(
-        selected ? cursor : selEnd,
-        selected ? cursor : cursor,
-      );
-    });
-  }, [content, linkUrl]);
-
-  const cancelLink = useCallback(() => {
-    setLinkInputVisible(false);
-    setLinkUrl("");
-    textareaRef.current?.focus();
-  }, []);
-
-  // Keyboard shortcuts for formatting
-  useEffect(() => {
-    const handleGlobalShortcut = (e: globalThis.KeyboardEvent) => {
-      const textarea = textareaRef.current;
-      if (!textarea || document.activeElement !== textarea) return;
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod) return;
-
-      if (e.key === "b" || e.key === "B") {
-        e.preventDefault();
-        handleFormatBold();
-      } else if (e.key === "i" || e.key === "I") {
-        e.preventDefault();
-        handleFormatItalic();
-      } else if (e.key === "k" || e.key === "K") {
-        e.preventDefault();
-        handleFormatLink();
-      } else if (e.key === "e" || e.key === "E") {
-        e.preventDefault();
-        handleFormatCode();
-      } else if (mod && e.shiftKey && (e.key === "x" || e.key === "X")) {
-        e.preventDefault();
-        handleFormatStrikethrough();
-      }
-    };
-    window.addEventListener("keydown", handleGlobalShortcut);
-    return () => window.removeEventListener("keydown", handleGlobalShortcut);
-  }, [handleFormatBold, handleFormatItalic, handleFormatStrikethrough, handleFormatCode, handleFormatLink]);
-
-  const startRecording = useCallback(async () => {
-    if (isRecording) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm';
-      const recorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = recorder;
-      chunksRef.current = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      recorder.onstop = () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blobType = mimeType.split(';')[0];
-        const blob = new Blob(chunksRef.current, { type: blobType });
-        const file = new File([blob], `voice-${Date.now()}.webm`, { type: blobType });
-        onUploadRef.current?.(file);
-      };
-      recorder.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-      timerRef.current = setInterval(() => setRecordingTime(t => {
-        if (t + 1 >= 300) {
-          // Auto-stop at 5 minutes
-          mediaRecorderRef.current?.stop();
-          setIsRecording(false);
-          if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-          return 0;
-        }
-        return t + 1;
-      }), 1000);
-    } catch {
-      setDragError(t("input.micPermissionDenied"));
-    }
-  }, [onUpload]);
-
-  const stopRecording = useCallback(() => {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    setRecordingTime(0);
-  }, []);
-
-  const cancelRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      // Remove onstop handler to prevent upload, then stop
-      mediaRecorderRef.current.onstop = () => {};
-      mediaRecorderRef.current.stop();
-    }
-    chunksRef.current = [];
-    setIsRecording(false);
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    setRecordingTime(0);
-  }, []);
-
   // Pulse send button when content goes from empty to non-empty
   useEffect(() => {
     const hasContent = content.trim().length > 0;
@@ -737,10 +320,11 @@ export function ChatInput({
     }
   }, [content]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback((immediateContent?: string) => {
     // Prevent double-send from rapid clicks or Enter+click firing.
     if (sendingRef.current) return;
-    const trimmed = content.trim();
+    const rawContent = immediateContent ?? textareaRef.current?.value ?? content;
+    const trimmed = rawContent.trim();
     if (!trimmed || disabled) return;
 
     // Unauthenticated: show auth modal instead of sending.
@@ -756,7 +340,9 @@ export function ChatInput({
       setTimeout(() => { if (mountedRef.current) setDisconnectFeedback(false); }, 3000);
       return;
     }
+
     sendingRef.current = true;
+    setIsSubmitting(true);
 
     // If editing a previous message, send edit instead
     if (editingMessageId) {
@@ -784,42 +370,11 @@ export function ChatInput({
       textareaRef.current.style.overflowY = "hidden";
     }
     // Allow sending again after a short delay.
-    setTimeout(() => { sendingRef.current = false; }, 500);
+    setTimeout(() => {
+      sendingRef.current = false;
+      if (mountedRef.current) setIsSubmitting(false);
+    }, 500);
   }, [content, disabled, connected, onSend, typingContext, draftStorageKey, editingMessageId]);
-
-  // Schedule a message for future delivery.
-  const handleSchedule = useCallback(
-    (sendAt: number) => {
-      if (!content.trim() || !connected) return;
-      const trimmed = content.trim();
-      const state = useChatStore.getState();
-      const currentRoomId = state.currentRoomID;
-
-      if (currentChat.type === "dm") {
-        chatAPI.sendScheduleMessage(trimmed, sendAt, currentRoomId, currentChat.username, "", state.replyTo?.id);
-      } else if (currentChat.type === "group") {
-        chatAPI.sendScheduleMessage(trimmed, sendAt, currentRoomId, "", currentChat.name, state.replyTo?.id);
-      } else {
-        chatAPI.sendScheduleMessage(trimmed, sendAt, currentRoomId, "", "", state.replyTo?.id);
-      }
-
-      setContent("");
-      setReplyTo(null);
-      setHasScheduled(true);
-      try { localStorage.removeItem(draftStorageKey); } catch { /* ignore */ }
-      if (typingSentRef.current) {
-        chatAPI.sendTypingStop(typingContext);
-        typingSentRef.current = false;
-      }
-      if (textareaRef.current) {
-        textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`;
-        textareaRef.current.style.overflowY = "hidden";
-      }
-      // Reset scheduled indicator after 2 sec
-      setTimeout(() => setHasScheduled(false), 2500);
-    },
-    [content, connected, currentChat, setReplyTo, draftStorageKey, typingContext],
-  );
 
   // Insert @username at cursor position.
   const insertMention = useCallback(
@@ -846,90 +401,8 @@ export function ChatInput({
     [content, mentionQuery],
   );
 
-  // Insert slash command at cursor position.
-  const insertSlashCommand = useCallback(
-    (command: string) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      const { startPos, args } = slashQuery;
-      if (startPos < 0) return;
-
-      const cursorPos = textarea.selectionStart;
-      const before = content.slice(0, startPos);
-      const after = content.slice(cursorPos);
-
-      let replacement = "";
-      if (command === "shrug") {
-        replacement = "¯\\_(ツ)_/¯";
-      } else if (command === "tableflip") {
-        replacement = "(╯°□°)╯︵ ┻━┻";
-      } else if (command === "me") {
-        replacement = `_${username} ${args}_`;
-      } else if (command === "topic") {
-        if (args) {
-          chatAPI.sendSetTopic(args);
-        }
-        replacement = "";
-      }
-
-      const newContent = before + replacement + after;
-      setContent(newContent);
-
-      const newCursor = startPos + replacement.length;
-      requestAnimationFrame(() => {
-        textarea.focus();
-        textarea.setSelectionRange(newCursor, newCursor);
-      });
-    },
-    [content, slashQuery, username],
-  );
-
-  // Insert emoji at cursor position.
-  const insertEmoji = useCallback(
-    (emojiKey: string) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-      const { startPos } = emojiQuery;
-      if (startPos < 0) return;
-
-      const cursorPos = textarea.selectionStart;
-      const before = content.slice(0, startPos);
-      const after = content.slice(cursorPos);
-
-      // Check if this is a custom emoji (no unicode char in EMOJI_MAP)
-      const emojiChar = EMOJI_MAP[emojiKey];
-      const replacement = emojiChar || `:${emojiKey}:`;
-
-      const newContent = before + replacement + after;
-      setContent(newContent);
-
-      const newCursor = startPos + replacement.length;
-      requestAnimationFrame(() => {
-        textarea.focus();
-        textarea.setSelectionRange(newCursor, newCursor);
-      });
-    },
-    [content, emojiQuery],
-  );
-
-  // Insert ":" at cursor to trigger emoji autocomplete
-  const handleEmojiButton = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const insertion = ":";
-    const newContent = content.slice(0, start) + insertion + content.slice(end);
-    setContent(newContent);
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const cursor = start + insertion.length;
-      textarea.setSelectionRange(cursor, cursor);
-    });
-  }, [content]);
-
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
       // @mention autocomplete keyboard handling
       if (mentionActive) {
         if (e.key === "ArrowDown") {
@@ -958,87 +431,19 @@ export function ChatInput({
         }
       }
 
-      // Slash command keyboard handling
-      if (slashActive) {
-        if (e.key === "ArrowDown") {
-          e.preventDefault();
-          setSlashIndex((prev) =>
-            Math.min(prev + 1, slashFiltered.length - 1),
-          );
-          return;
-        }
-        if (e.key === "ArrowUp") {
-          e.preventDefault();
-          setSlashIndex((prev) => Math.max(prev - 1, 0));
-          return;
-        }
-        if (e.key === "Enter" && !e.shiftKey && !isComposing) {
-          e.preventDefault();
-          if (slashFiltered[slashIndex]) {
-            insertSlashCommand(slashFiltered[slashIndex].command);
-          }
-          return;
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setSlashDismissed(true);
-          return;
-        }
-      }
-
-      // Emoji shortcut keyboard handling
-      if (emojiActive) {
-        if (e.key === "ArrowDown") {
-          e.preventDefault();
-          setEmojiIndex((prev) =>
-            Math.min(prev + 1, emojiFiltered.length - 1),
-          );
-          return;
-        }
-        if (e.key === "ArrowUp") {
-          e.preventDefault();
-          setEmojiIndex((prev) => Math.max(prev - 1, 0));
-          return;
-        }
-        if (e.key === "Enter" && !e.shiftKey && !isComposing) {
-          e.preventDefault();
-          if (emojiFiltered[emojiIndex]) {
-            insertEmoji(emojiFiltered[emojiIndex].key);
-          }
-          return;
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setEmojiDismissed(true);
-          return;
-        }
-      }
-
       if (e.key === "Enter" && !e.shiftKey && !isComposing) {
         e.preventDefault();
-        handleSend();
+        handleSend(e.currentTarget.value);
       }
 
       // ↑ key with empty input -> edit last sent message (Telegram-style).
-      if (e.key === "ArrowUp" && !e.shiftKey && !content && !mentionActive && !slashActive && !emojiActive) {
+      if (e.key === "ArrowUp" && !e.shiftKey && !content && !mentionActive) {
         e.preventDefault();
         const allMessages = useChatStore.getState().messages;
-        // Filter by current conversation context
-        const partner = currentChat.type === "dm" ? currentChat.username : null;
-        const group = currentChat.type === "group" ? currentChat.name : null;
         for (let i = allMessages.length - 1; i >= 0; i--) {
           const m = allMessages[i];
           if (m.username !== username || m.deleted) continue;
-          // Conversation filter
-          if (partner) {
-            const sender = m.from || m.username;
-            const recipient = m.to;
-            if (!((sender === partner && recipient === username) || (sender === username && recipient === partner))) continue;
-          } else if (group) {
-            if (m.to !== group && (m as any).group !== group) continue;
-          } else if (m.to) {
-            continue; // public chat: only messages without specific recipient
-          }
+          if (m.to) continue;
           setContent(m.content);
           setEditingMessageId(m.id);
           requestAnimationFrame(() => {
@@ -1064,47 +469,35 @@ export function ChatInput({
       mentionFiltered,
       mentionIndex,
       insertMention,
-      slashActive,
-      slashFiltered,
-      slashIndex,
-      insertSlashCommand,
-      emojiActive,
-      emojiFiltered,
-      emojiIndex,
-      insertEmoji,
       content,
       username,
-      currentChat,
       editingMessageId,
     ],
+  );
+
+  const handleSendPointerDown = useCallback(
+    (e: PointerEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      handleSend(textareaRef.current?.value);
+    },
+    [handleSend],
   );
 
   const hasContent = content.trim().length > 0;
   const canOpenComposerPopovers = !disabled && Boolean(username);
 
-  useEffect(() => {
-    if (!canOpenComposerPopovers) {
-      setShowFormatBubble(false);
-    }
-  }, [canOpenComposerPopovers]);
-
   // Determine placeholder based on chat context.
   const placeholder = useMemo(() => {
-    if (currentChat.type === "dm") {
-      return t("input.dmPlaceholder", {
-        username: currentChat.username,
-      });
-    }
-    if (currentChat.type === "group") {
-      return t("input.groupPlaceholder", { name: currentChat.name });
+    if (assistantContext) {
+      return `${assistantContext.assistant.mention} ${assistantContext.model.name}`;
     }
     return t("input.placeholder");
-  }, [currentChat, t]);
+  }, [assistantContext, t]);
 
   // Shared button class for toolbar and bottom-row icon buttons
   const iconBtnClass = cn(
-    "flex h-11 w-11 items-center justify-center rounded-xl flex-shrink-0 transition-colors duration-150",
-    "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]",
+    "flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] flex-shrink-0 transition-colors duration-150",
+    "td-chat-header-action text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]",
     "[&_svg]:h-[18px] [&_svg]:w-[18px]",
     "disabled:cursor-not-allowed disabled:opacity-30",
   );
@@ -1114,7 +507,7 @@ export function ChatInput({
 
   return (
     <div
-      className="relative flex-shrink-0 rounded-2xl border border-[var(--border-glass)] bg-[var(--surface-glass-strong)] shadow-md pb-safe"
+      className="td-chat-composer relative z-30 flex-shrink-0 pb-safe"
       data-testid="chat-input"
       data-visual="composer-card"
       onDragEnter={(e) => {
@@ -1158,7 +551,7 @@ export function ChatInput({
       {/* Reply indicator */}
       {replyTo && (
         <div className="reply-indicator-enter flex items-center gap-2 px-1 pt-1 pb-2">
-          <div className="flex-1 flex items-center gap-2 rounded-lg bg-[var(--bg-1)] border border-[var(--border-base)]/50 px-3 py-1.5">
+          <div className="td-chat-stream-card td-chat-stream-card-muted flex-1 flex items-center gap-2 px-3 py-1.5">
             <span className="text-xs text-[var(--text-tertiary)]">
               {t("input.replyTo")}{" "}
               <span className="font-medium text-[var(--text-secondary)]">
@@ -1173,7 +566,7 @@ export function ChatInput({
           <button
             onClick={() => setReplyTo(null)}
             aria-label={t("input.cancel")}
-            className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+            className="flex size-11 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -1183,7 +576,7 @@ export function ChatInput({
       {/* Editing indicator */}
       {editingMessageId && !replyTo && (
         <div className="reply-indicator-enter flex items-center gap-2 px-1 pt-1 pb-2">
-          <div className="flex-1 flex items-center gap-2 rounded-lg bg-[var(--accent)]/10 border border-[var(--accent)]/20 px-3 py-1.5">
+          <div className="td-chat-stream-card td-chat-stream-card-accent flex-1 flex items-center gap-2 px-3 py-1.5">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-[var(--accent)]">
               <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
             </svg>
@@ -1194,7 +587,7 @@ export function ChatInput({
           <button
             onClick={() => { setEditingMessageId(null); setContent(""); }}
             aria-label={t("input.cancel")}
-            className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+            className="flex size-11 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -1203,13 +596,13 @@ export function ChatInput({
 
       {/* Image preview */}
       {pendingImage && (
-        <div className="image-preview-enter px-1 pt-1 pb-2">
-          <div className="flex items-start gap-3 rounded-xl border border-[var(--border-base)]/40 bg-[var(--bg-1)]/60 p-3">
+        <div className="image-preview-enter pointer-events-auto relative z-20 px-1 pt-1 pb-2">
+          <div className="td-chat-stream-card flex items-start gap-3 p-3">
             <div className="relative flex-shrink-0">
               <img
                 src={pendingImage}
                 alt="Preview"
-                className="h-24 w-auto rounded-lg border border-[var(--border-base)]/30 object-cover shadow-sm"
+                className="h-24 w-auto rounded-[var(--radius-control)] border border-[var(--chat-stream-card-border)] object-cover"
                 onLoad={(e) => {
                   const img = e.currentTarget;
                   setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
@@ -1217,7 +610,7 @@ export function ChatInput({
               />
               <button
                 onClick={handleCancelImage}
-                className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--danger)] text-white hover:brightness-110 transition-colors shadow-sm"
+                className="absolute -right-3 -top-3 z-10 flex size-11 items-center justify-center rounded-full bg-[var(--danger)] text-white transition-colors hover:brightness-110"
                 aria-label={t("a11y.removeImage")}
               >
                 <X className="h-3 w-3" />
@@ -1239,7 +632,7 @@ export function ChatInput({
               </div>
               <button
                 onClick={handleSendImage}
-                className="mt-1 flex items-center gap-1.5 self-start rounded-lg px-3 py-1.5 text-xs font-medium bg-[var(--accent)] text-white hover:brightness-110 transition-all"
+                className="mt-1 flex min-h-11 items-center gap-1.5 self-start rounded-[var(--radius-control)] bg-[var(--accent)] px-3 py-2 text-xs font-medium text-white transition-all hover:brightness-110"
               >
                 <Send className="h-3 w-3" />
                 {t("input.sendImage")}
@@ -1261,138 +654,25 @@ export function ChatInput({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.zip,.tar,.gz,.7z,.rar,.mp3,.wav,.m4a,.webm,.ogg,.mp4,.mov"
+        accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.zip,.tar,.gz,.7z,.rar"
         onChange={handleFileSelect}
         className="hidden"
         aria-hidden="true"
       />
 
-      {/* Recording indicator */}
-      {isRecording ? (
-        <div className="px-1">
-          <div className="recording-bar-enter flex flex-col gap-2 py-2 transition-all duration-300 ease-out">
-            {/* Duration limit bar */}
-            <div className="recording-limit-bar">
-              <div
-                className="recording-limit-bar-fill"
-                style={{ width: `${Math.min((recordingTime / 300) * 100, 100)}%` }}
-              />
-            </div>
-
-            <div
-              className={cn(
-                "flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors duration-200",
-                slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD
-                  ? "border-[var(--danger)]/60 bg-[var(--danger)]/15"
-                  : "border-[var(--danger)]/30 bg-[var(--danger)]/5",
-              )}
-            >
-              {/* Pulsing red dot */}
-              <span className="relative flex h-3 w-3 flex-shrink-0">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+      <div className="td-chat-composer-body">
+          {assistantContext && (
+            <div className="td-chat-composer-context" data-visual="composer-ai-context">
+              <AssistantIcon assistant={assistantContext.assistant} size="sm" />
+              <span className="min-w-0 truncate text-[11px] font-semibold text-[var(--text-primary)]">
+                {assistantContext.assistant.name}
               </span>
-
-              {/* Recording time */}
-              <span className="text-sm font-mono text-[var(--danger)]/80 tabular-nums flex-shrink-0 min-w-[44px]">
-                {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:{String(recordingTime % 60).padStart(2, '0')}
+              <span className="hidden min-w-0 truncate text-[10px] text-[var(--text-tertiary)] sm:inline">
+                {assistantContext.model.context}
               </span>
-
-              {/* Waveform visualizer */}
-              <div className="recording-waveform">
-                {[16, 24, 12, 20, 14].map((peak, i) => (
-                  <div
-                    key={i}
-                    className="waveform-bar"
-                    style={{
-                      '--wv-peak': `${peak}px`,
-                      animationDelay: `${i * 0.12}s`,
-                    } as React.CSSProperties}
-                  />
-                ))}
-              </div>
-
-              {/* Cancel button with slide-to-cancel gesture */}
-              <div
-                className={cn(
-                  "slide-cancel-track relative flex-shrink-0",
-                  slideCancelDragging && "slide-cancel-dragging",
-                  slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD && "slide-cancel-threshold-reached",
-                )}
-                onPointerDown={handleCancelPointerDown}
-                onPointerMove={handleCancelPointerMove}
-                onPointerUp={handleCancelPointerUp}
-                onPointerCancel={handleCancelPointerUp}
-              >
-                <button
-                  onClick={() => {
-                    if (!slideCancelDragging) cancelRecording();
-                  }}
-                  className={cn(
-                    "flex h-11 w-11 items-center justify-center rounded-xl border transition-colors",
-                    slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD
-                      ? "border-[var(--danger)]/50 bg-[var(--danger)]/20 text-[var(--danger)]"
-                      : "border-[var(--border-base)] bg-[var(--bg-1)] text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--danger)]",
-                  )}
-                  style={slideCancelDragging ? { transform: `translateX(${-slideCancelOffset}px)` } : undefined}
-                  aria-label={t("a11y.cancelRecording")}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-                <span className="slide-cancel-hint">
-                  {slideCancelDragging && slideCancelOffset >= SLIDE_CANCEL_THRESHOLD ? t("input.releaseToCancel") : t("input.slideToCancel")}
-                </span>
-              </div>
-
-              {/* Stop / Send button */}
-              <button
-                onClick={stopRecording}
-                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white hover:brightness-110 transition-colors"
-                aria-label={t("a11y.stopRecording")}
-              >
-                <Square className="h-4 w-4" fill="currentColor" />
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="p-3">
-          {/* Inline link URL input */}
-          {linkInputVisible && (
-            <div className="flex items-center gap-1.5 mb-2.5 animate-scale-in">
-              <input
-                ref={linkInputRef}
-                type="url"
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    commitLink();
-                  } else if (e.key === "Escape") {
-                    e.preventDefault();
-                    cancelLink();
-                  }
-                }}
-                placeholder={t("editor.linkUrl")}
-                className="flex-1 h-8 rounded-lg border border-[var(--border-base)] bg-[var(--bg-1)] px-3 text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50"
-              />
-              <button
-                type="button"
-                onClick={commitLink}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-white hover:brightness-110 transition-colors flex-shrink-0"
-                aria-label={t("a11y.ok")}
-              >
-                <Send className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={cancelLink}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors flex-shrink-0"
-                aria-label={t("a11y.close")}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <span className="rounded-[var(--radius-control)] border border-[var(--accent)]/20 px-2 py-0.5 text-[10px] font-medium text-[var(--accent)]">
+                {assistantContext.assistant.mention}
+              </span>
             </div>
           )}
 
@@ -1402,7 +682,7 @@ export function ChatInput({
             {mentionActive && (
               <div
                 ref={mentionRef}
-                className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-[var(--border-base)] bg-[var(--surface-glass-strong)] backdrop-blur-xl shadow-lg animate-scale-in z-20"
+                className="td-chat-composer-popover absolute bottom-full left-0 right-0 z-20 mb-1 overflow-hidden rounded-[var(--radius-control)] animate-scale-in"
                 style={{ maxHeight: "200px", overflowY: "auto" }}
               >
                 {mentionFiltered.map((user, idx) => (
@@ -1418,10 +698,8 @@ export function ChatInput({
                     )}
                   >
                     <span
-                      className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-                      style={{
-                        background: `linear-gradient(135deg, oklch(65% 0.16 ${hashString(user) % 360}), oklch(58% 0.14 ${(hashString(user) + 45) % 360}))`,
-                      }}
+                      className="chat-generated-avatar flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-[var(--td-surface)]"
+                      style={{ "--chat-identity-hue": `${hashString(user) % 360}` } as CSSProperties}
                     >
                       {user.charAt(0).toUpperCase()}
                     </span>
@@ -1441,64 +719,6 @@ export function ChatInput({
               </div>
             )}
 
-            {/* Slash command dropdown */}
-            {slashActive && (
-              <div
-                className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-[var(--border-base)] bg-[var(--surface-glass-strong)] backdrop-blur-xl shadow-lg animate-scale-in z-20"
-                style={{ maxHeight: "200px", overflowY: "auto" }}
-              >
-                {slashFiltered.map((cmd, idx) => (
-                  <button
-                    key={cmd.command}
-                    onClick={() => insertSlashCommand(cmd.command)}
-                    onMouseEnter={() => setSlashIndex(idx)}
-                    className={cn(
-                      "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
-                      idx === slashIndex
-                        ? "bg-[var(--bg-hover)] text-[var(--text-primary)]"
-                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]",
-                    )}
-                  >
-                    <span className="text-xs font-mono font-semibold text-[var(--text-tertiary)]">
-                      /{cmd.command}
-                    </span>
-                    <span className="truncate">{cmd.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Emoji shortcut dropdown */}
-            {emojiActive && (
-              <div
-                className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-[var(--border-base)] bg-[var(--surface-glass-strong)] backdrop-blur-xl shadow-lg animate-scale-in z-20"
-                style={{ maxHeight: "200px", overflowY: "auto" }}
-              >
-                {emojiFiltered.map((item, idx) => (
-                  <button
-                    key={item.key}
-                    onClick={() => insertEmoji(item.key)}
-                    onMouseEnter={() => setEmojiIndex(idx)}
-                    className={cn(
-                      "flex w-full items-center gap-2 px-3 py-2 text-sm text-left transition-colors",
-                      idx === emojiIndex
-                        ? "bg-[var(--bg-hover)] text-[var(--text-primary)]"
-                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]",
-                    )}
-                  >
-                    {item.custom ? (
-                      <img src={(item as unknown as { url: string }).url} alt={item.key} className="w-5 h-5 object-contain" />
-                    ) : (
-                      <span className="text-base">{item.emoji}</span>
-                    )}
-                    <span className="text-xs text-[var(--text-tertiary)]">
-                      :{item.key}:
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-
             <textarea
               ref={textareaRef}
               data-visual="composer-textarea"
@@ -1508,76 +728,18 @@ export function ChatInput({
               onPaste={handlePaste}
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
-              onSelect={(e) => {
-                const target = e.currentTarget;
-                if (canOpenComposerPopovers && target.selectionStart !== target.selectionEnd) {
-                  setShowFormatBubble(true);
-                }
-              }}
               placeholder={placeholder}
               rows={1}
               maxLength={2000}
               disabled={disabled}
               aria-label={placeholder}
-              className="block w-full resize-none overflow-y-hidden bg-transparent border-none shadow-none outline-none text-[15px] leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] disabled:opacity-50"
+              className="td-chat-composer-field block w-full resize-none overflow-y-hidden bg-transparent border-none shadow-none outline-none text-[15px] leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] disabled:opacity-50"
               style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT, minHeight: INPUT_MIN_HEIGHT, maxHeight: INPUT_MAX_HEIGHT }}
             />
-
-            {/* ── Formatting bubble (floating, contextual) ── */}
-            {showFormatBubble && canOpenComposerPopovers && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowFormatBubble(false)} />
-                <div
-                  className="absolute left-0 -top-11 z-50 flex items-center gap-0.5 rounded-xl border border-[var(--border-glass)] bg-[var(--surface-glass-strong)] backdrop-blur-xl shadow-lg px-1 py-1 animate-scale-in"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button type="button" onClick={handleFormatBold} disabled={disabled} aria-label={t("editor.bold")} title={t("editor.bold") + " (Ctrl+B)"} className={toolbarBtnClass()}>
-                    <Bold size={15} strokeWidth={1.5} />
-                  </button>
-                  <button type="button" onClick={handleFormatItalic} disabled={disabled} aria-label={t("editor.italic")} title={t("editor.italic") + " (Ctrl+I)"} className={toolbarBtnClass()}>
-                    <Italic size={15} strokeWidth={1.5} />
-                  </button>
-                  <button type="button" onClick={handleFormatStrikethrough} disabled={disabled} aria-label={t("editor.strikethrough")} title={t("editor.strikethrough")} className={toolbarBtnClass()}>
-                    <Strikethrough size={15} strokeWidth={1.5} />
-                  </button>
-                  <button type="button" onClick={handleFormatCode} disabled={disabled} aria-label={t("editor.code")} title={t("editor.code") + " (Ctrl+E)"} className={toolbarBtnClass()}>
-                    <Code size={15} strokeWidth={1.5} />
-                  </button>
-                  <button type="button" onClick={insertQuote} disabled={disabled} aria-label={t("editor.quote")} title={t("editor.quote")} className={toolbarBtnClass()}>
-                    <Quote size={15} strokeWidth={1.5} />
-                  </button>
-                  <button type="button" onClick={handleFormatLink} disabled={disabled} aria-label={t("editor.link")} title={t("editor.link") + " (Ctrl+K)"} className={toolbarBtnClass(linkInputVisible)}>
-                    <Link size={15} strokeWidth={1.5} />
-                  </button>
-                  <button type="button" onClick={() => setShowGifPicker((p) => !p)} disabled={disabled} aria-label={t("a11y.gif")} title={t("a11y.gifStickers")} className={toolbarBtnClass(showGifPicker)}>
-                    <Film size={15} strokeWidth={1.5} />
-                  </button>
-                  <button type="button" onClick={() => setPreviewOn((p) => !p)} disabled={disabled} aria-label={t("editor.preview")} title={t("editor.preview")} className={toolbarBtnClass(previewOn)}>
-                    {previewOn ? <EyeOff size={15} strokeWidth={1.5} /> : <Eye size={15} strokeWidth={1.5} />}
-                  </button>
-                </div>
-              </>
-            )}
           </div>
 
-          {/* ── Bottom row: single-line tools + send ── */}
-          <div className="relative mt-2.5 flex items-center gap-2" data-visual="composer-bottom-row">
-            <div
-              className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              data-visual="composer-toolbar"
-            >
-              <button
-                type="button"
-                onClick={() => setShowFormatBubble((p) => !p)}
-                disabled={!canOpenComposerPopovers}
-                aria-label={t("editor.formatting")}
-                title={t("editor.formatting")}
-                data-visual="composer-tool"
-                className={toolbarBtnClass(showFormatBubble)}
-              >
-                <Bold size={15} strokeWidth={1.5} />
-              </button>
-
+          {/* ── AgentHub-style inline actions + send ── */}
+          <div className="td-chat-composer-actions" data-visual="composer-bottom-row">
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
@@ -1602,84 +764,32 @@ export function ChatInput({
                 <Paperclip size={15} strokeWidth={1.5} />
               </button>
 
-              <button
-                type="button"
-                onClick={handleEmojiButton}
-                disabled={!canOpenComposerPopovers}
-                aria-label={t("a11y.emoji")}
-                title={t("a11y.emoji")}
-                data-visual="composer-tool"
-                className={toolbarBtnClass()}
-              >
-                <SmilePlus size={15} strokeWidth={1.5} />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowGifPicker((p) => !p)}
-                disabled={!canOpenComposerPopovers}
-                aria-label={t("a11y.gif")}
-                title={t("a11y.gifStickers")}
-                data-visual="composer-tool"
-                className={toolbarBtnClass(showGifPicker)}
-              >
-                <Film size={15} strokeWidth={1.5} />
-              </button>
-
-              <ScheduleButton
-                onSchedule={handleSchedule}
-                disabled={!canOpenComposerPopovers || !hasContent}
-                scheduled={hasScheduled}
-              />
-
-              <button
-                type="button"
-                onClick={startRecording}
-                disabled={!canOpenComposerPopovers}
-                aria-label={t("a11y.recordVoice")}
-                title={t("a11y.recordVoice")}
-                data-visual="composer-tool"
-                className={toolbarBtnClass()}
-              >
-                <Mic size={15} strokeWidth={1.5} />
-              </button>
-            </div>
-
             <button
               ref={sendBtnRef}
-              onClick={handleSend}
-              disabled={disabled || !hasContent}
+              onPointerDown={handleSendPointerDown}
+              onClick={() => handleSend()}
+              disabled={disabled || isSubmitting || !hasContent}
               aria-label={
-                disabled ? t("join.buttonConnecting") : hasScheduled ? t("schedule.schedule") : t("input.placeholder")
+                disabled ? t("join.buttonConnecting") : t("input.placeholder")
               }
               data-visual="composer-send"
+              data-submitting={isSubmitting ? "true" : "false"}
               className={cn(
-                "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-all duration-200 ease-out [&_svg]:h-[18px] [&_svg]:w-[18px]",
+                "td-chat-composer-send flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-all duration-200 ease-out [&_svg]:h-[18px] [&_svg]:w-[18px]",
                 hasContent
-                  ? "bg-[var(--accent)] text-white hover:brightness-110 shadow-md shadow-[var(--accent)]/20"
+                  ? "bg-[var(--accent)] text-white hover:brightness-110"
                   : "text-[var(--text-tertiary)]",
                 "disabled:cursor-not-allowed",
                 pulseButton && "animate-pulse-once",
               )}
             >
-              {disabled ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+              {disabled || isSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" data-visual="composer-submit-state" />
               ) : (
                 <ArrowUp size={16} strokeWidth={2.5} />
               )}
             </button>
           </div>
-
-          {/* Markdown preview */}
-          {!isRecording && previewOn && content.trim() && (
-            <div className="mt-2.5 border-t border-[var(--border-base)]/30 pt-2.5">
-              <div className="prose prose-sm dark:prose-invert max-w-none text-[var(--text-primary)]/90 prose-p:my-1 prose-headings:my-1.5 prose-code:before:content-none prose-code:after:content-none prose-code:bg-[var(--bg-hover)] prose-code:rounded prose-code:px-1 prose-code:py-0.5 prose-pre:bg-[var(--bg-2)] prose-blockquote:border-l-[var(--accent)]/50">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {content}
-                </ReactMarkdown>
-              </div>
-            </div>
-          )}
 
           {/* Character count */}
           {content.length > 0 && (
@@ -1706,12 +816,11 @@ export function ChatInput({
               </p>
             </div>
           )}
-        </div>
-      )}
+      </div>
 
       {/* Drag-and-drop overlay */}
       {isDragOver && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--surface-glass-strong)]/90 backdrop-blur-md border-2 border-dashed border-[var(--accent)]/50 rounded-2xl m-0">
+        <div className="td-chat-drop-overlay absolute inset-0 z-20 m-0 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2 text-[var(--accent)]/70">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -1725,16 +834,17 @@ export function ChatInput({
 
       {/* Upload progress bar */}
       {uploadProgress && (
-        <div className="px-4 pt-2 animate-slide-up">
-          <div className="flex items-center gap-3 rounded-lg bg-[var(--bg-2)]/30 border border-[var(--border-base)]/40 px-3 py-2">
+        <div className="px-4 pt-2 animate-slide-up" data-visual="upload-progress">
+          <div className="td-chat-stream-card td-chat-stream-card-muted flex items-center gap-3 px-3 py-2">
             <Loader2 className="h-4 w-4 text-[var(--accent)] animate-spin flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-xs text-[var(--text-secondary)] truncate">{uploadProgress.fileName}</p>
               <p className="text-[10px] text-[var(--text-tertiary)]">{t("file.uploading")}</p>
             </div>
-            <div className="w-20 h-1.5 bg-[var(--bg-3)] rounded-full overflow-hidden flex-shrink-0">
+            <div className="w-20 h-1.5 bg-[var(--bg-3)] rounded-full overflow-hidden flex-shrink-0" data-visual="upload-progress-track">
               <div
                 className="h-full bg-[var(--accent)] rounded-full transition-all duration-300 ease-out"
+                data-visual="upload-progress-bar"
                 style={{ width: `${Math.min(uploadProgress.progress, 100)}%` }}
               />
             </div>
@@ -1744,20 +854,11 @@ export function ChatInput({
 
       {/* Drag error toast */}
       {dragError && (
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-[var(--danger)] text-white text-xs font-medium animate-slide-up shadow-lg whitespace-nowrap">
+        <div className="absolute bottom-2 left-1/2 z-20 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full bg-[var(--danger)] px-3 py-1.5 text-center text-xs font-medium text-white shadow-[var(--td-shadow-lg)] animate-slide-up whitespace-normal">
           {dragError}
         </div>
       )}
 
-      {/* Gif Picker */}
-      {showGifPicker && (
-        <Suspense fallback={null}>
-          <GifPicker
-            onSelect={handleGifSelect}
-            onClose={() => setShowGifPicker(false)}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }

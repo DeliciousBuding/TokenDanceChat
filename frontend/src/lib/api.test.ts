@@ -613,7 +613,7 @@ describe("chatAPI.send", () => {
     );
   });
 
-  it("does not send when WebSocket is CONNECTING", () => {
+  it("queues non-join messages when WebSocket is CONNECTING", () => {
     const mockWsSend = vi.fn();
     (chatAPI as any).ws = {
       readyState: WebSocket.CONNECTING,
@@ -626,7 +626,8 @@ describe("chatAPI.send", () => {
     chatAPI.send({ type: "test" });
 
     expect(mockWsSend).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalled();
+    expect((chatAPI as any).outboundQueue).toEqual([{ type: "test" }]);
+    expect(warn).not.toHaveBeenCalled();
 
     warn.mockRestore();
   });
@@ -723,152 +724,6 @@ describe("chatAPI thread operations", () => {
 });
 
 // ===========================================================================
-// chatAPI.sendDMMessage
-// ===========================================================================
-describe("chatAPI.sendDMMessage", () => {
-  afterEach(() => {
-    chatAPI.disconnect();
-  });
-
-  it("sends a DM with to and content", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendDMMessage("bob", "secret message");
-    expect(spy).toHaveBeenCalledWith({
-      type: "dm_message",
-      content: "secret message",
-      to: "bob",
-    });
-    spy.mockRestore();
-  });
-
-  it("includes reply_to fields when replying in a DM", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    const replyTo = {
-      id: "dm-1",
-      content: "original dm",
-      username: "bob",
-      timestamp: 456,
-    };
-
-    chatAPI.sendDMMessage("bob", "reply", replyTo);
-
-    expect(spy).toHaveBeenCalledWith({
-      type: "dm_message",
-      content: "reply",
-      to: "bob",
-      reply_to_id: "dm-1",
-      reply_to_content: "original dm",
-      reply_to_user: "bob",
-    });
-    spy.mockRestore();
-  });
-
-  it("does not include reply_to fields when replyTo is undefined", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendDMMessage("bob", "no reply", undefined);
-
-    const call = spy.mock.calls[0][0] as Record<string, unknown>;
-    expect(call.type).toBe("dm_message");
-    expect(call).not.toHaveProperty("reply_to_id");
-    expect(call).not.toHaveProperty("reply_to_content");
-    expect(call).not.toHaveProperty("reply_to_user");
-    spy.mockRestore();
-  });
-});
-
-// ===========================================================================
-// chatAPI.sendGroupMessage
-// ===========================================================================
-describe("chatAPI.sendGroupMessage", () => {
-  afterEach(() => {
-    chatAPI.disconnect();
-  });
-
-  it("sends a group message with group and content", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupMessage("general", "hello group");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_message",
-      content: "hello group",
-      group: "general",
-    });
-    spy.mockRestore();
-  });
-
-  it("includes reply_to fields when replying in a group", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    const replyTo = {
-      id: "grp-1",
-      content: "group msg",
-      username: "carol",
-      timestamp: 789,
-    };
-
-    chatAPI.sendGroupMessage("general", "reply", replyTo);
-
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_message",
-      content: "reply",
-      group: "general",
-      reply_to_id: "grp-1",
-      reply_to_content: "group msg",
-      reply_to_user: "carol",
-    });
-    spy.mockRestore();
-  });
-});
-
-// ===========================================================================
-// chatAPI.sendScheduleMessage
-// ===========================================================================
-describe("chatAPI.sendScheduleMessage", () => {
-  afterEach(() => {
-    chatAPI.disconnect();
-  });
-
-  it("sends schedule_message with all fields filled", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendScheduleMessage(
-      "later msg",
-      9999999,
-      "room-1",
-      "bob",
-      "grp",
-      "reply-1",
-      "thread-1",
-    );
-    expect(spy).toHaveBeenCalledWith({
-      type: "schedule_message",
-      content: "later msg",
-      timestamp: 9999999,
-      room_id: "room-1",
-      to: "bob",
-      group: "grp",
-      reply_to_id: "reply-1",
-      thread_id: "thread-1",
-    });
-    spy.mockRestore();
-  });
-
-  it("uses empty string defaults for optional fields", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendScheduleMessage("msg", 123);
-
-    expect(spy).toHaveBeenCalledWith({
-      type: "schedule_message",
-      content: "msg",
-      timestamp: 123,
-      room_id: "",
-      to: "",
-      group: "",
-      reply_to_id: "",
-      thread_id: "",
-    });
-    spy.mockRestore();
-  });
-});
-
-// ===========================================================================
 // chatAPI.sendPollCreate
 // ===========================================================================
 describe("chatAPI.sendPollCreate", () => {
@@ -917,56 +772,51 @@ describe("chatAPI typing events", () => {
     chatAPI.disconnect();
   });
 
-  it("sendTypingStart sends type, channel, target, and preview", () => {
+  it("sendTypingStart sends public context and preview", () => {
     const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
     chatAPI.sendTypingStart({
-      channel: "dm",
-      target: "bob",
+      channel: "public",
       preview: "hello...",
     });
 
     expect(spy).toHaveBeenCalledWith({
       type: "typing_start",
-      context: "dm",
-      to: "bob",
+      context: "public",
       preview: "hello...",
     });
     spy.mockRestore();
   });
 
-  it("sendTypingStart works with undefined context (no crash)", () => {
+  it("sendTypingStart defaults to public context", () => {
     const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
     chatAPI.sendTypingStart(undefined);
 
     expect(spy).toHaveBeenCalledWith({
       type: "typing_start",
-      context: undefined,
-      to: undefined,
+      context: "public",
       preview: undefined,
     });
     spy.mockRestore();
   });
 
-  it("sendTypingStop sends type, channel, and target", () => {
+  it("sendTypingStop sends public context", () => {
     const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendTypingStop({ channel: "public", target: "room-1" });
+    chatAPI.sendTypingStop({ channel: "public" });
 
     expect(spy).toHaveBeenCalledWith({
       type: "typing_stop",
       context: "public",
-      to: "room-1",
     });
     spy.mockRestore();
   });
 
-  it("sendTypingStop works with undefined context", () => {
+  it("sendTypingStop defaults to public context", () => {
     const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
     chatAPI.sendTypingStop(undefined);
 
     expect(spy).toHaveBeenCalledWith({
       type: "typing_stop",
-      context: undefined,
-      to: undefined,
+      context: "public",
     });
     spy.mockRestore();
   });
@@ -1009,164 +859,6 @@ describe("chatAPI.disconnect", () => {
     chatAPI.disconnect();
 
     expect(mockClose).toHaveBeenCalled();
-  });
-});
-
-// ===========================================================================
-// chatAPI friend operations
-// ===========================================================================
-describe("chatAPI friend operations", () => {
-  afterEach(() => {
-    chatAPI.disconnect();
-  });
-
-  it("sendFriendRequest sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendFriendRequest("alice");
-    expect(spy).toHaveBeenCalledWith({ type: "friend_request", to: "alice" });
-    spy.mockRestore();
-  });
-
-  it("sendFriendAccept sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendFriendAccept("bob");
-    expect(spy).toHaveBeenCalledWith({ type: "friend_accept", from: "bob" });
-    spy.mockRestore();
-  });
-
-  it("sendFriendReject sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendFriendReject("carol");
-    expect(spy).toHaveBeenCalledWith({ type: "friend_reject", from: "carol" });
-    spy.mockRestore();
-  });
-});
-
-// ===========================================================================
-// chatAPI group management
-// ===========================================================================
-describe("chatAPI group management", () => {
-  afterEach(() => {
-    chatAPI.disconnect();
-  });
-
-  it("sendGroupCreate sends with name and optional members", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupCreate("devs", ["alice", "bob"]);
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_create",
-      group: "devs",
-      members: ["alice", "bob"],
-    });
-    spy.mockRestore();
-  });
-
-  it("sendGroupCreate sends without members when omitted", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupCreate("solo");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_create",
-      group: "solo",
-      members: undefined,
-    });
-    spy.mockRestore();
-  });
-
-  it("sendGroupInvite sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupInvite("devs", "dave");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_invite",
-      group: "devs",
-      username: "dave",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendGroupInviteAccept sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupInviteAccept("devs", "alice");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_invite_accept",
-      group: "devs",
-      from: "alice",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendGroupInviteDecline sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupInviteDecline("devs");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_invite_decline",
-      group: "devs",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendGroupKick sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupKick("devs", "troll");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_kick",
-      group: "devs",
-      username: "troll",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendGroupSetRole sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupSetRole("devs", "alice", "admin");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_set_role",
-      group: "devs",
-      username: "alice",
-      role: "admin",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendGroupRename sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupRename("devs", "engineers");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_rename",
-      group: "devs",
-      content: "engineers",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendGroupTransfer sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupTransfer("devs", "bob");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_transfer",
-      group: "devs",
-      username: "bob",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendGroupLeave sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupLeave("devs");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_leave",
-      group: "devs",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendGroupInfo sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendGroupInfo("devs");
-    expect(spy).toHaveBeenCalledWith({
-      type: "group_info",
-      group: "devs",
-    });
-    spy.mockRestore();
   });
 });
 
@@ -1256,45 +948,17 @@ describe("chatAPI message actions", () => {
 });
 
 // ===========================================================================
-// chatAPI room operations
+// chatAPI public room operations
 // ===========================================================================
-describe("chatAPI room operations", () => {
+describe("chatAPI public room operations", () => {
   afterEach(() => {
     chatAPI.disconnect();
-  });
-
-  it("sendRoomJoin sends room_id", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendRoomJoin("room-42");
-    expect(spy).toHaveBeenCalledWith({
-      type: "room_join",
-      room_id: "room-42",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendRoomCreate sends group name", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendRoomCreate("lounge");
-    expect(spy).toHaveBeenCalledWith({ type: "room_create", group: "lounge" });
-    spy.mockRestore();
   });
 
   it("sendRoomLeave sends type only", () => {
     const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
     chatAPI.sendRoomLeave();
     expect(spy).toHaveBeenCalledWith({ type: "room_leave" });
-    spy.mockRestore();
-  });
-
-  it("sendForward sends id and to", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendForward("msg-99", "bob");
-    expect(spy).toHaveBeenCalledWith({
-      type: "forward",
-      id: "msg-99",
-      to: "bob",
-    });
     spy.mockRestore();
   });
 
@@ -1320,101 +984,29 @@ describe("chatAPI room operations", () => {
 });
 
 // ===========================================================================
-// chatAPI conversation management
+// chatAPI public notification preferences
 // ===========================================================================
-describe("chatAPI conversation management", () => {
+describe("chatAPI public notification preferences", () => {
   afterEach(() => {
     chatAPI.disconnect();
   });
 
-  it("sendPinConversation sends key", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendPinConversation("dm:alice");
-    expect(spy).toHaveBeenCalledWith({
-      type: "pin_conversation",
-      key: "dm:alice",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendUnpinConversation sends key", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendUnpinConversation("dm:alice");
-    expect(spy).toHaveBeenCalledWith({
-      type: "unpin_conversation",
-      key: "dm:alice",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendMuteConversation sends key", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendMuteConversation("group:devs");
-    expect(spy).toHaveBeenCalledWith({
-      type: "mute_conversation",
-      key: "group:devs",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendUnmuteConversation sends key", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendUnmuteConversation("group:devs");
-    expect(spy).toHaveBeenCalledWith({
-      type: "unmute_conversation",
-      key: "group:devs",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendArchiveConversation sends key", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendArchiveConversation("group:old");
-    expect(spy).toHaveBeenCalledWith({
-      type: "archive_conversation",
-      key: "group:old",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendUnarchiveConversation sends key", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendUnarchiveConversation("group:old");
-    expect(spy).toHaveBeenCalledWith({
-      type: "unarchive_conversation",
-      key: "group:old",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendMarkRead sends context and to", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendMarkRead("dm", "alice");
-    expect(spy).toHaveBeenCalledWith({
-      type: "mark_read",
-      context: "dm",
-      to: "alice",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendMarkRead works with no arguments", () => {
+  it("sendMarkRead marks the public room", () => {
     const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
     chatAPI.sendMarkRead();
     expect(spy).toHaveBeenCalledWith({
       type: "mark_read",
-      context: undefined,
-      to: undefined,
+      context: "public",
     });
     spy.mockRestore();
   });
 
-  it("sendSetNotificationPrefs sends all fields", () => {
+  it("sendSetNotificationPrefs sends all fields for the public room", () => {
     const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendSetNotificationPrefs("dm:bob", 1716159123, true);
+    chatAPI.sendSetNotificationPrefs("public", 1716159123, true);
     expect(spy).toHaveBeenCalledWith({
       type: "notification_prefs_set",
-      key: "dm:bob",
+      key: "public",
       muted_until: 1716159123,
       show_preview: true,
     });
@@ -1425,125 +1017,6 @@ describe("chatAPI conversation management", () => {
     const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
     chatAPI.sendGetNotificationPrefs();
     expect(spy).toHaveBeenCalledWith({ type: "notification_prefs_get" });
-    spy.mockRestore();
-  });
-});
-
-// ===========================================================================
-// chatAPI call signaling
-// ===========================================================================
-describe("chatAPI call signaling", () => {
-  afterEach(() => {
-    chatAPI.disconnect();
-  });
-
-  it("sendCallStart sends call_start with required fields", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallStart("bob", "video", "sdp-data");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_start",
-      to: "bob",
-      call_type: "video",
-      sdp: "sdp-data",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallStart includes optional room_id", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallStart("bob", "voice", "sdp", "room-1");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_start",
-      to: "bob",
-      call_type: "voice",
-      sdp: "sdp",
-      room_id: "room-1",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallAccept sends call_accept with required fields", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallAccept("call-1", "answer-sdp");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_accept",
-      call_id: "call-1",
-      sdp: "answer-sdp",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallAccept includes optional room_id", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallAccept("call-1", "sdp", "room-x");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_accept",
-      call_id: "call-1",
-      sdp: "sdp",
-      room_id: "room-x",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallReject sends call_reject", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallReject("call-2");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_reject",
-      call_id: "call-2",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallEnd sends call_end", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallEnd("call-3");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_end",
-      call_id: "call-3",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallEnd includes optional room_id", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallEnd("call-3", "room-x");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_end",
-      call_id: "call-3",
-      room_id: "room-x",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallIceCandidate sends ice candidate with optional fields", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallIceCandidate("call-4", "candidate-data", "room-1", "bob");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_ice_candidate",
-      call_id: "call-4",
-      candidate: "candidate-data",
-      room_id: "room-1",
-      to: "bob",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallIceCandidate sends without optional fields", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallIceCandidate("call-5", "candidate-data");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_ice_candidate",
-      call_id: "call-5",
-      candidate: "candidate-data",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallList sends call_list", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallList();
-    expect(spy).toHaveBeenCalledWith({ type: "call_list" });
     spy.mockRestore();
   });
 });
@@ -1647,123 +1120,11 @@ describe("chatAPI poll operations", () => {
 });
 
 // ===========================================================================
-// chatAPI webhook / folder / emoji / translate operations
+// chatAPI emoji and translate operations
 // ===========================================================================
-describe("chatAPI webhook, folder, emoji, and translate operations", () => {
+describe("chatAPI emoji and translate operations", () => {
   afterEach(() => {
     chatAPI.disconnect();
-  });
-
-  it("sendFolderCreate sends with content", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendFolderCreate("work");
-    expect(spy).toHaveBeenCalledWith({
-      type: "folder_create",
-      content: "work",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendFolderDelete sends id", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendFolderDelete("folder-1");
-    expect(spy).toHaveBeenCalledWith({
-      type: "folder_delete",
-      id: "folder-1",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendFolderRename sends id and new name", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendFolderRename("folder-1", "renamed");
-    expect(spy).toHaveBeenCalledWith({
-      type: "folder_rename",
-      id: "folder-1",
-      content: "renamed",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendFolderAddConversation sends folder id and conversation key", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendFolderAddConversation("folder-1", "dm:bob");
-    expect(spy).toHaveBeenCalledWith({
-      type: "folder_add_conversation",
-      id: "folder-1",
-      key: "dm:bob",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendFolderRemoveConversation sends folder id and conversation key", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendFolderRemoveConversation("folder-1", "dm:bob");
-    expect(spy).toHaveBeenCalledWith({
-      type: "folder_remove_conversation",
-      id: "folder-1",
-      key: "dm:bob",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendFolderList sends correct payload", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendFolderList();
-    expect(spy).toHaveBeenCalledWith({ type: "folder_list" });
-    spy.mockRestore();
-  });
-
-  it("sendWebhookCreate sends group", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendWebhookCreate("devs");
-    expect(spy).toHaveBeenCalledWith({
-      type: "webhook_create",
-      group: "devs",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendWebhookDelete sends group and id", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendWebhookDelete("devs", "wh-1");
-    expect(spy).toHaveBeenCalledWith({
-      type: "webhook_delete",
-      group: "devs",
-      id: "wh-1",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendWebhookRotate sends group and id", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendWebhookRotate("devs", "wh-1");
-    expect(spy).toHaveBeenCalledWith({
-      type: "webhook_rotate",
-      group: "devs",
-      id: "wh-1",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendWebhookList sends group", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendWebhookList("devs");
-    expect(spy).toHaveBeenCalledWith({
-      type: "webhook_list",
-      group: "devs",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendWebhookAuditList sends group", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendWebhookAuditList("devs");
-    expect(spy).toHaveBeenCalledWith({
-      type: "webhook_audit_list",
-      group: "devs",
-    });
-    spy.mockRestore();
   });
 
   it("sendCustomEmojiAdd sends name and url", () => {
@@ -1814,107 +1175,6 @@ describe("chatAPI webhook, folder, emoji, and translate operations", () => {
       message_id: "msg-1",
       content: "Hello",
       to: "",
-    });
-    spy.mockRestore();
-  });
-});
-
-// ===========================================================================
-// chatAPI scheduled message operations
-// ===========================================================================
-describe("chatAPI scheduled message operations", () => {
-  afterEach(() => {
-    chatAPI.disconnect();
-  });
-
-  it("sendCancelScheduledMessage sends cancel_scheduled_message", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCancelScheduledMessage("sched-1");
-    expect(spy).toHaveBeenCalledWith({
-      type: "cancel_scheduled_message",
-      id: "sched-1",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendScheduledMessagesList sends list request", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendScheduledMessagesList();
-    expect(spy).toHaveBeenCalledWith({
-      type: "scheduled_messages_list",
-    });
-    spy.mockRestore();
-  });
-});
-
-// ===========================================================================
-// chatAPI group call room operations
-// ===========================================================================
-describe("chatAPI group call room operations", () => {
-  afterEach(() => {
-    chatAPI.disconnect();
-  });
-
-  it("sendCallRoomCreate sends participants and call type", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallRoomCreate(["alice", "bob"], "video");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_room_create",
-      call_participants: ["alice", "bob"],
-      call_type: "video",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallRoomCreate works with empty participants array", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallRoomCreate([], "voice");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_room_create",
-      call_participants: [],
-      call_type: "voice",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallRoomJoin sends room_id with optional sdp", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallRoomJoin("room-1", "sdp-offer");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_room_join",
-      room_id: "room-1",
-      sdp: "sdp-offer",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallRoomJoin defaults sdp to empty string", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallRoomJoin("room-1");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_room_join",
-      room_id: "room-1",
-      sdp: "",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallRoomLeave sends room_id", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallRoomLeave("room-1");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_room_leave",
-      room_id: "room-1",
-    });
-    spy.mockRestore();
-  });
-
-  it("sendCallRoomList sends room_id", () => {
-    const spy = vi.spyOn(chatAPI, "send").mockImplementation(() => {});
-    chatAPI.sendCallRoomList("room-1");
-    expect(spy).toHaveBeenCalledWith({
-      type: "call_room_list",
-      room_id: "room-1",
     });
     spy.mockRestore();
   });
@@ -1983,6 +1243,7 @@ describe("fetchPublicMessages", () => {
     await fetchPublicMessages(25);
 
     expect(mockFetch.mock.calls[0][0]).toBe("/api/messages?limit=25");
+    expect(mockFetch.mock.calls[0][1]).toEqual({ redirect: "manual" });
   });
 
   it("returns public messages from the response", async () => {
@@ -2139,11 +1400,11 @@ describe("chatAPI exportChat", () => {
       blob: async () => blob,
     } as unknown as Response);
 
-    await chatAPI.exportChat("dm:alice", "json");
+    await chatAPI.exportChat("public", "json");
 
     const [url, init] = mockFetch.mock.calls[0];
     expect(url).toContain("/api/export?");
-    expect(url).toContain("conversation=dm%3Aalice");
+    expect(url).toContain("conversation=public");
     expect(url).toContain("format=json");
     expect(init.headers).toEqual({ Authorization: "Bearer session-token-1" });
   });
@@ -2155,7 +1416,7 @@ describe("chatAPI exportChat", () => {
       blob: async () => blob,
     } as unknown as Response);
 
-    await chatAPI.exportChat("group:devs", "text", "admin");
+    await chatAPI.exportChat("public", "text", "admin");
 
     const [url] = mockFetch.mock.calls[0];
     expect(url).toContain("username=admin");
@@ -2168,7 +1429,7 @@ describe("chatAPI exportChat", () => {
       blob: async () => blob,
     } as unknown as Response);
 
-    await chatAPI.exportChat("dm:bob", "json");
+    await chatAPI.exportChat("public", "json");
 
     const [url] = mockFetch.mock.calls[0];
     expect(url).not.toContain("username=");
@@ -2181,7 +1442,7 @@ describe("chatAPI exportChat", () => {
       blob: async () => blob,
     } as unknown as Response);
 
-    const result = await chatAPI.exportChat("dm:alice", "json");
+    const result = await chatAPI.exportChat("public", "json");
     expect(result).toBe(blob);
   });
 
@@ -2191,7 +1452,7 @@ describe("chatAPI exportChat", () => {
       status: 500,
     } as unknown as Response);
 
-    await expect(chatAPI.exportChat("dm:alice", "json")).rejects.toThrow("Export failed");
+    await expect(chatAPI.exportChat("public", "json")).rejects.toThrow("Export failed");
   });
 
   it("supports text format", async () => {
@@ -2201,7 +1462,7 @@ describe("chatAPI exportChat", () => {
       blob: async () => blob,
     } as unknown as Response);
 
-    const result = await chatAPI.exportChat("dm:bob", "text");
+    const result = await chatAPI.exportChat("public", "text");
     expect(result).toBe(blob);
   });
 });

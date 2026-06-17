@@ -94,14 +94,14 @@ describe("I18nContext", () => {
           <LangSwitcher />
         </I18nProvider>,
       );
-      // 中文：实时聊天 · AI 助手 @TokenBot @PicoClaw 在线陪伴
-      expect(screen.getByTestId("translated").textContent).toBe("实时聊天 · AI 助手 @TokenBot @PicoClaw 在线陪伴");
+      // 中文：公共聊天室 · AI 助手 @TokenBot @PicoClaw 在线陪伴
+      expect(screen.getByTestId("translated").textContent).toBe("公共聊天室 · AI 助手 @TokenBot @PicoClaw 在线陪伴");
 
       fireEvent.click(screen.getByTestId("switch-lang"));
 
-      // 英文：Real-time chat · AI assistants @TokenBot @PicoClaw at your service
+      // 英文：Public chat · AI assistants @TokenBot @PicoClaw at your service
       expect(screen.getByTestId("translated").textContent).toBe(
-        "Real-time chat · AI assistants @TokenBot @PicoClaw at your service",
+        "Public chat · AI assistants @TokenBot @PicoClaw at your service",
       );
       expect(screen.getByTestId("lang").textContent).toBe("en-US");
     });
@@ -123,10 +123,10 @@ describe("I18nContext", () => {
       localStorageMock.setItem("tokendance:lang", "zh-CN");
       render(
         <I18nProvider>
-          <TestConsumer tKey="chat.dmWith" params={{ username: "Alice" }} />
+          <TestConsumer tKey="system.userJoined" params={{ username: "Alice" }} />
         </I18nProvider>,
       );
-      expect(screen.getByTestId("translated").textContent).toBe("与 Alice 的私聊");
+      expect(screen.getByTestId("translated").textContent).toBe("Alice 加入了聊天室");
     });
 
     it("替换 {{count}} 数字参数", () => {

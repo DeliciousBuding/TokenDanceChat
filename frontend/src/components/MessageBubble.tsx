@@ -1,8 +1,9 @@
 import { memo, useMemo, useCallback, useState, useRef, useEffect, lazy, Suspense } from "react";
+import type { CSSProperties } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Copy, Check, Forward, Reply, Trash2, Mic, Play, Pause, MoreHorizontal } from "lucide-react";
+import { Copy, Check, Reply, Trash2, MoreHorizontal } from "lucide-react";
 import { cn, formatTime, formatFullTime, usernameHue } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
@@ -28,8 +29,6 @@ interface MessageBubbleProps {
   onReply?: (message: ChatMessage) => void;
   /** Callback for delete action */
   onDelete?: (messageId: string) => void;
-  /** Callback for forward action */
-  onForward?: (message: ChatMessage) => void;
   /** Number of replies to this message */
   replyCount?: number;
   /** Callback to open the thread panel for this message */
@@ -56,24 +55,21 @@ interface MessageBubbleProps {
 
 /** Simple code block renderer with syntax highlighting and copy button */
 
-/** Helper: detect if a URL points to an audio file */
-const AUDIO_EXT_RE = /\.(webm|ogg|mp3|wav|m4a)(\?.*)?$/i;
-const isAudioUrl = (url: string): boolean => AUDIO_EXT_RE.test(url);
+function normalizeMentionDisplay(username: string): string {
+  const lower = username.toLowerCase();
+  if (["tokenbot", "webuichat", "webuibot", "webui"].includes(lower)) {
+    return "TokenBot";
+  }
+  return username;
+}
+
 /** Regex: detect image file extensions to skip link preview */
 
-/** Markdown components with link sanitization, audio player for voice messages, and message-link navigation */
+/** Markdown components with link sanitization and message-link navigation. */
 const safeMarkdownComponents = {
   a: ({ href, children, ...props }: ComponentPropsWithoutRef<'a'>) => {
     if (href && /^(javascript|data|vbscript):/i.test(href)) {
       return <span {...(props as ComponentPropsWithoutRef<'span'>)}>{children}</span>;
-    }
-    if (href && isAudioUrl(href)) {
-      return (
-        <div className="flex items-center gap-2 my-1">
-          <Mic className="voice-mic-icon h-3.5 w-3.5" />
-          <VoiceMessagePlayer audioUrl={href} primaryColor="var(--primary)" />
-        </div>
-      );
     }
     // Detect message links: href contains #msg-<id> fragment
     const msgMatch = href?.match(/#msg-(.+)$/);
@@ -104,14 +100,6 @@ const safeMarkdownComponents = {
     return <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
   },
   img: ({ src, alt, ...props }: ComponentPropsWithoutRef<'img'>) => {
-    if (src && isAudioUrl(src)) {
-      return (
-        <div className="flex items-center gap-2 my-1">
-          <Mic className="voice-mic-icon h-3.5 w-3.5" />
-          <VoiceMessagePlayer audioUrl={src} primaryColor="var(--primary)" />
-        </div>
-      );
-    }
     return (
       <img
         src={src}
@@ -149,7 +137,7 @@ const CodeBlock = memo(function CodeBlock({
   }, [code]);
 
   return (
-    <div className="relative group/code my-2 rounded-xl overflow-hidden border border-[var(--border-subtle)] bg-[var(--bg-2)]">
+    <div className="relative group/code my-2 overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border-subtle)] bg-[var(--bg-2)]">
       {/* Header bar */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border-subtle)]">
         <span className="text-[11px] text-[var(--text-tertiary)] font-mono uppercase tracking-wider">
@@ -168,254 +156,6 @@ const CodeBlock = memo(function CodeBlock({
       <pre className="!bg-[var(--bg-2)] !p-3 !m-0 overflow-x-auto text-[0.8125rem] leading-relaxed">
         <code className={`language-${language || ""}`}>{code}</code>
       </pre>
-    </div>
-  );
-});
-
-/** ─── Voice Message Player (Telegram-quality custom audio UI) ─── */
-
-/** Generate pseudo-random peak heights for waveform bars */
-const WAVEFORM_BARS = 25;
-const waveformPeaks: number[] = (() => {
-  const peaks: number[] = [];
-  for (let i = 0; i < WAVEFORM_BARS; i++) {
-    const t = Math.sin(i * 2.5 + 1.7) * 10000;
-    const raw = (t - Math.floor(t)) * 14 + 4;
-    peaks.push(Math.round(raw));
-  }
-  return peaks;
-})();
-
-function formatAudioTime(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-const VoiceMessagePlayer = memo(function VoiceMessagePlayer({
-  audioUrl,
-  primaryColor,
-}: {
-  audioUrl: string;
-  primaryColor: string;
-}) {
-  const { t } = useTranslation();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const rafRef = useRef<number>(0);
-
-  const updateTime = useCallback(() => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-      rafRef.current = requestAnimationFrame(updateTime);
-    }
-  }, []);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const onLoaded = () => {
-      if (isFinite(audio.duration)) setDuration(audio.duration);
-    };
-    const onPlay = () => {
-      setPlaying(true);
-      rafRef.current = requestAnimationFrame(updateTime);
-    };
-    const onPause = () => {
-      setPlaying(false);
-      cancelAnimationFrame(rafRef.current);
-    };
-    const onEnded = () => {
-      setPlaying(false);
-      setCurrentTime(0);
-      cancelAnimationFrame(rafRef.current);
-    };
-
-    audio.addEventListener("loadedmetadata", onLoaded);
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("ended", onEnded);
-
-    return () => {
-      audio.removeEventListener("loadedmetadata", onLoaded);
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("ended", onEnded);
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, [updateTime]);
-
-  const togglePlay = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.paused) {
-      audio.play().catch(() => { /* autoplay blocked */ });
-    } else {
-      audio.pause();
-    }
-  }, []);
-
-  const handleWaveformClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      const audio = audioRef.current;
-      if (!audio || !isFinite(duration)) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      audio.currentTime = ratio * duration;
-      setCurrentTime(ratio * duration);
-    },
-    [duration],
-  );
-
-  return (
-    <div className="custom-audio-player">
-      <audio ref={audioRef} src={audioUrl} preload="metadata">
-        <track kind="captions" />
-      </audio>
-
-      <button
-        onClick={togglePlay}
-        className="play-pause-btn"
-        style={{ backgroundColor: primaryColor }}
-        aria-label={playing ? "Pause voice message" : "Play voice message"}
-      >
-        {playing ? (
-          <Pause className="h-4 w-4 text-white" fill="white" />
-        ) : (
-          <Play className="h-4 w-4 text-white ml-0.5" fill="white" />
-        )}
-      </button>
-
-      <div
-        className={cn("waveform-container", playing && "is-playing")}
-        onClick={handleWaveformClick}
-        role="slider"
-        aria-label={t("a11y.audioSeek")}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={duration > 0 ? Math.round((currentTime / duration) * 100) : 0}
-      >
-        {waveformPeaks.map((peak, i) => (
-          <div
-            key={i}
-            className="audio-waveform-bar"
-            style={{
-              "--aw-base": "4px",
-              "--aw-peak": `${peak}px`,
-              animationDelay: `${i * 0.06}s`,
-            } as React.CSSProperties}
-          />
-        ))}
-      </div>
-
-      <span className="time-display">
-        <span className="current-time">{formatAudioTime(currentTime)}</span>
-        <span className="separator"> / </span>
-        <span className="total-time">{formatAudioTime(duration)}</span>
-      </span>
-    </div>
-  );
-});
-
-/** ─── GIF Renderer ─── */
-const GifRenderer = memo(function GifRenderer({ url, alt }: { url: string; alt: string }) {
-  const [paused, setPaused] = useState(false);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [firstFrame, setFirstFrame] = useState<string | null>(null);
-
-  // Capture first frame on load.
-  const handleLoad = useCallback(() => {
-    const img = imgRef.current;
-    if (!img || !canvasRef.current) return;
-    const canvas = canvasRef.current;
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.drawImage(img, 0, 0);
-      setFirstFrame(canvas.toDataURL());
-    }
-  }, []);
-
-  const handleClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (firstFrame) {
-        setPaused((p) => !p);
-      } else {
-        useChatStore.getState().setLightboxImage(url);
-      }
-    },
-    [firstFrame, url],
-  );
-
-  return (
-    <div className="relative group/gif my-1">
-      {/* Paused: show canvas snapshot */}
-      {paused && firstFrame && (
-        <img
-          src={firstFrame}
-          alt={alt}
-          className="max-w-[240px] max-h-[240px] rounded-xl cursor-pointer border border-border/50"
-          onClick={handleClick}
-        />
-      )}
-      {/* Playing: show animated GIF */}
-      <img
-        ref={imgRef}
-        src={url}
-        alt={alt}
-        loading="lazy"
-        onLoad={handleLoad}
-        className={cn(
-          "max-w-[240px] max-h-[240px] rounded-xl cursor-pointer border border-border/50",
-          paused && firstFrame ? "hidden" : "",
-        )}
-        onClick={handleClick}
-      />
-      <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
-
-      {/* Play/pause overlay button */}
-      {firstFrame && (
-        <button
-          onClick={handleClick}
-          className={cn(
-            "absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/80 hover:bg-black/70 hover:text-white transition-all",
-            "opacity-0 group-hover/gif:opacity-100",
-          )}
-          aria-label={paused ? "Play GIF" : "Pause GIF"}
-        >
-          {paused ? (
-            <Play className="h-3.5 w-3.5 ml-0.5" fill="currentColor" />
-          ) : (
-            <Pause className="h-3.5 w-3.5" fill="currentColor" />
-          )}
-        </button>
-      )}
-    </div>
-  );
-});
-
-/** ─── Sticker Renderer (Telegram-style floating, no bubble) ─── */
-const StickerRenderer = memo(function StickerRenderer({ url, alt }: { url: string; alt: string }) {
-  return (
-    <div className="my-1">
-      <img
-        src={url}
-        alt={alt}
-        loading="lazy"
-        className="max-w-[128px] max-h-[128px] cursor-pointer hover:scale-110 transition-transform duration-200"
-        draggable={false}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (url) useChatStore.getState().setLightboxImage(url);
-        }}
-      />
     </div>
   );
 });
@@ -458,7 +198,6 @@ export const MessageBubble = memo(function MessageBubble({
   isGrouped = false,
   onReply,
   onDelete,
-  onForward,
   replyCount = 0,
   onOpenThread,
   selectMode = false,
@@ -508,7 +247,6 @@ export const MessageBubble = memo(function MessageBubble({
     onCopy: async () => {
       try { await navigator.clipboard.writeText(message.content); } catch { /* noop */ }
     },
-    onForward: () => onForward?.(message),
     onDelete: () => onDelete?.(message.id),
     isOwn,
     disabled: selectMode || isDeleted,
@@ -615,25 +353,13 @@ export const MessageBubble = memo(function MessageBubble({
     return () => window.removeEventListener("tdchat:close-emoji-picker", handler);
   }, []);
 
-  const nameColor = useMemo(
-    () => {
-      const hue = usernameHue(message.username);
-      return `oklch(72% 0.16 ${hue})`;
-    },
-    [message.username],
-  );
+  const nameHue = useMemo(() => usernameHue(message.username), [message.username]);
 
   // Get profile info for display name and avatar.
   const userProfiles = useChatStore((s) => s.userProfiles);
   const userProfile = userProfiles[message.username];
   const messageDisplayName = userProfile?.display_name || message.username;
   const messageAvatarUrl = userProfile?.avatar_url || null;
-
-  // Detect if this message is a voice message (audio-only)
-  const isVoiceMessage = useMemo(() => {
-    if (isDeleted) return false;
-    return AUDIO_EXT_RE.test(message.content);
-  }, [message.content, isDeleted]);
 
   const handleAvatarClick = useCallback(() => {
     if (selectMode) return;
@@ -714,10 +440,11 @@ export const MessageBubble = memo(function MessageBubble({
         <span key={key}>
           {segParts.map((part, j) => {
             if (part.type === "mention") {
+              const mentionDisplay = normalizeMentionDisplay(part.username);
               return (
                 <button
                   key={j}
-                  onClick={() => setSelectedProfileUser(part.username)}
+                  onClick={() => setSelectedProfileUser(mentionDisplay)}
                   className={cn(
                     "hover:underline cursor-pointer",
                     isOwn
@@ -725,7 +452,7 @@ export const MessageBubble = memo(function MessageBubble({
                       : "bg-[var(--accent)]/12 text-[var(--accent)] rounded-md px-1.5 py-0.5",
                   )}
                 >
-                  @{part.username}
+                  @{mentionDisplay}
                 </button>
               );
             }
@@ -748,34 +475,6 @@ export const MessageBubble = memo(function MessageBubble({
         </span>
       );
     };
-
-    // Detect GIF/sticker markdown — skip for highlight mode.
-    if (!highlight) {
-      const gifMatch = processedContent.match(/^\s*!\[gif\]\(([^)]+)\)\s*$/);
-      const stickerMatch = processedContent.match(/^\s*!\[sticker\]\(([^)]+)\)\s*$/);
-      if (gifMatch) return <GifRenderer url={gifMatch[1]} alt="GIF" />;
-      if (stickerMatch) return <StickerRenderer url={stickerMatch[1]} alt="Sticker" />;
-
-      const audioMatch = rawContent.match(/!?\[([^\]]*)\]\(([^)]+)\)/);
-      const audioUrl = audioMatch?.[2] || null;
-      const isAudioOnly = audioUrl && AUDIO_EXT_RE.test(audioUrl) && rawContent.trim() === audioMatch?.[0];
-      if (isAudioOnly && audioUrl) {
-        return (
-          <div className="flex items-center gap-2">
-            <Mic className="voice-mic-icon h-4 w-4" />
-            <VoiceMessagePlayer audioUrl={audioUrl} primaryColor={isOwn ? "var(--message-user-bg)" : "var(--brand)"} />
-          </div>
-        );
-      }
-      if (audioUrl && AUDIO_EXT_RE.test(audioUrl) && rawContent.trim() !== audioMatch?.[0]) {
-        return (
-          <div className="flex items-center gap-2 my-1">
-            <Mic className="voice-mic-icon h-4 w-4" />
-            <VoiceMessagePlayer audioUrl={audioUrl} primaryColor="var(--primary)" />
-          </div>
-        );
-      }
-    }
 
     // Highlight mode: split content by search term, wrap matches in <mark>.
     if (highlight) {
@@ -804,7 +503,7 @@ export const MessageBubble = memo(function MessageBubble({
   }, [message.content, currentUsername, isDeleted, t, emojiPreprocess, highlight, isOwn]);
 
   const paddingY =
-    isGrouped && hideAvatar ? "py-0.5" : "py-1 sm:py-1.5";
+    isGrouped && hideAvatar ? "py-0.5" : "py-0.5 sm:py-1";
 
   return (
     <>
@@ -836,15 +535,6 @@ export const MessageBubble = memo(function MessageBubble({
           >
             <Copy className="h-4 w-4" />
           </button>
-          {onForward && (
-            <button
-              onClick={() => { onForward(message); swipe.closeActions(); }}
-              aria-label={t("message.forward")}
-              className="flex w-11 h-11 items-center justify-center rounded-full border border-[var(--border-base)] bg-[var(--bg-base)] text-[var(--text-secondary)] hover:text-[var(--brand)] hover:bg-[var(--brand-light)] transition-colors"
-            >
-              <Forward className="h-4 w-4" />
-            </button>
-          )}
           {isOwn && onDelete && (
             <button
               onClick={() => { onDelete(message.id); swipe.closeActions(); }}
@@ -880,15 +570,15 @@ export const MessageBubble = memo(function MessageBubble({
       data-visual="message-bubble"
       data-message-own={isOwn ? "true" : "false"}
       className={cn(
-        "group flex gap-2 px-3 scroll-mt-16 sm:gap-3 sm:px-4",
-        isNew ? "animate-message-in" : "animate-spring-up",
+        "group td-ah-message-row flex gap-1.5 px-2.5 scroll-mt-16 sm:gap-3 sm:px-4",
+        isNew && "animate-message-in",
         isOwn ? "justify-end" : "justify-start",
         paddingY,
         selectMode && "cursor-pointer",
         isSelected && "bg-primary/5",
       )}
       style={{
-        animationDelay: staggerDelay ? `${staggerDelay}ms` : undefined,
+        animationDelay: !isNew && staggerDelay ? `${staggerDelay}ms` : undefined,
         ...(isNew ? { willChange: "transform, opacity" } : {}),
       }}
     >
@@ -938,48 +628,25 @@ export const MessageBubble = memo(function MessageBubble({
 
       <div
         className={cn(
-          "flex min-w-0 flex-col",
-          isVoiceMessage
-            ? "max-w-[280px]"
-            : "max-w-[70%]",
+          "td-ah-message-stack flex min-w-0 flex-col",
+          "max-w-[82%] sm:max-w-[76%] xl:max-w-[68%]",
           isOwn ? "items-end" : "items-start",
         )}
       >
-        {!hideUsername && (
+        {!hideUsername && !isOwn && (
           <div
             className={cn(
-              "mb-0.5 flex items-baseline gap-2 sm:mb-1",
-              isOwn ? "justify-end" : "justify-start",
+              "td-ah-message-header mb-0.5 flex items-baseline gap-2 sm:mb-1",
+              "justify-start",
             )}
           >
-            {!isOwn && (
-              <span
-                className="text-xs font-medium"
-                style={{ color: nameColor }}
-              >
-                {messageDisplayName}
-              </span>
-            )}
-            {isOwn && !isGrouped && (
-              <span
-                data-visual="message-bubble-meta"
-                className="text-[11px] text-[var(--text-tertiary)]"
-                title={formatFullTime(message.timestamp)}
-              >
-                {formatTime(message.timestamp, t)}
-                {message.edited && (
-                  <span className="text-[10px] text-muted-foreground/40 ml-1">
-                    {t("message.edited")}
-                  </span>
-                )}
-                {(message as ChatMessage).mention_all && (
-                  <span className="text-[10px] text-amber-500/70 ml-1 font-medium">
-                    @all
-                  </span>
-                )}
-              </span>
-            )}
-            {!isOwn && !isGrouped && (
+            <span
+              className="chat-name-token text-xs font-medium"
+              style={{ "--chat-identity-hue": `${nameHue}` } as CSSProperties}
+            >
+              {messageDisplayName}
+            </span>
+            {!isGrouped && (
               <span
                 data-visual="message-bubble-meta"
                 className="text-[11px] text-[var(--text-tertiary)]"
@@ -987,13 +654,12 @@ export const MessageBubble = memo(function MessageBubble({
               >
                 {formatTime(message.timestamp, t)}
                 {(message as ChatMessage).mention_all && (
-                  <span className="text-[10px] text-amber-500/70 ml-1 font-medium">
+                  <span className="ml-1 text-[10px] font-medium text-[var(--td-amber)]">
                     @all
                   </span>
                 )}
               </span>
             )}
-
           </div>
         )}
 
@@ -1001,7 +667,7 @@ export const MessageBubble = memo(function MessageBubble({
         {!selectMode && (message.reply_to_id || message.reply_to_content) && (
           <div
             data-visual="message-bubble-reply-preview"
-            className="mb-1 ml-0 border-l-2 border-border/80 pl-2 py-0.5 rounded-sm bg-card cursor-pointer hover:border-border transition-colors"
+            className="td-chat-stream-card mb-1 ml-0 cursor-pointer border-l-2 border-l-[var(--accent)]/35 pl-2 py-0.5 transition-colors hover:border-[var(--accent)]/45"
             role="button"
             tabIndex={0}
             aria-label={`Jump to replied message from ${message.reply_to_user || "unknown"}`}
@@ -1035,11 +701,11 @@ export const MessageBubble = memo(function MessageBubble({
         <div
           data-visual="message-bubble-surface"
           className={cn(
-            "relative border text-[15px] leading-relaxed shadow-[0_1px_2px_rgba(15,23,42,0.05)] backdrop-blur-sm",
-            isVoiceMessage ? "px-2 py-2" : "px-4 py-2.5",
+            "td-chat-bubble relative border text-[15px] leading-relaxed",
+            "px-3.5 py-2",
             isOwn
-              ? "rounded-[20px] rounded-br-md border-[var(--accent)]/16 bg-[var(--message-user-bg)] shadow-[0_10px_24px_rgba(0,113,188,0.08)] dark:border-[var(--accent)]/18"
-              : "rounded-[20px] rounded-bl-md border-[var(--border-glass)] bg-[var(--surface-glass-strong)] shadow-[0_10px_24px_rgba(15,23,42,0.06)]",
+              ? "td-chat-bubble-own"
+              : "td-chat-bubble-agent",
             isDeleted && "opacity-40",
           )}
         >
@@ -1059,7 +725,7 @@ export const MessageBubble = memo(function MessageBubble({
                     setIsEditing(false);
                   }
                 }}
-                className="w-full rounded-lg border border-[var(--hairline)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--ink)] placeholder:text-[var(--ink-subtle)] outline-none focus:border-[var(--plum)] focus:ring-2 focus:ring-[var(--ring-focus)] resize-none"
+                className="w-full rounded-[var(--radius-control)] border border-[var(--td-line)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--ring-focus)] resize-none"
                 style={{ minHeight: "60px", scrollbarWidth: "thin" }}
                 autoFocus
               />
@@ -1069,7 +735,7 @@ export const MessageBubble = memo(function MessageBubble({
                 </span>
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="rounded-lg px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  className="td-chat-list-row px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
                 >
                   {t("input.cancel")}
                 </button>
@@ -1089,7 +755,7 @@ export const MessageBubble = memo(function MessageBubble({
           ) : (polls[message.id] || message.poll) ? (
             <PollMessage poll={(polls[message.id] || message.poll)!} messageId={message.id} />
           ) : (
-            <div className="markdown-body text-foreground/90 select-text">
+            <div className="markdown-body td-message-markdown select-text">
               {mentionContent}
             </div>
           )}
@@ -1109,7 +775,7 @@ export const MessageBubble = memo(function MessageBubble({
                 type="button"
                 onClick={openContextMenuFromButton}
                 data-visual="message-bubble-menu"
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--border-glass)] bg-[var(--surface-glass-strong)]/95 text-[var(--text-secondary)] opacity-0 shadow-sm backdrop-blur-xl transition-all group-hover:opacity-100 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 [&_svg]:h-[18px] [&_svg]:w-[18px]"
+                className="td-chat-popover flex h-11 w-11 items-center justify-center rounded-full text-[var(--text-secondary)] opacity-0 transition-all group-hover:opacity-100 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 [&_svg]:h-[18px] [&_svg]:w-[18px]"
                 aria-label={t("message.contextMenu")}
                 title={t("message.contextMenu")}
               >
@@ -1121,7 +787,7 @@ export const MessageBubble = memo(function MessageBubble({
 
         {/* Translation display */}
         {translatedText && (
-          <div className="mt-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 text-sm text-foreground/80 italic">
+          <div className="td-chat-info-card mt-1.5 px-3 py-1.5 text-sm text-foreground/80 italic">
             <span className="text-[10px] text-muted-foreground/50 block mb-0.5">Translated</span>
             {translatedText}
           </div>
@@ -1150,7 +816,7 @@ export const MessageBubble = memo(function MessageBubble({
                     );
                   }
                 }}
-                className="inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-[var(--border-subtle)] bg-[var(--bg-1)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-secondary)]"
+                className="td-chat-pill inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-[var(--border-subtle)] bg-[var(--bg-1)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-secondary)]"
                 aria-label={`${replyCount} replies`}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1171,7 +837,7 @@ export const MessageBubble = memo(function MessageBubble({
                         handleAddReaction(emoji)
                       }
                       className={cn(
-                        "inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-[var(--border-subtle)] bg-[var(--bg-1)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-secondary)]",
+                        "td-chat-pill inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-xs border border-[var(--border-subtle)] bg-[var(--bg-1)] hover:bg-[var(--bg-hover)] transition-colors text-[var(--text-secondary)]",
                         currentUsername &&
                           users.includes(currentUsername) &&
                           "bg-[var(--accent)]/10 border-[var(--accent)]/30",
@@ -1200,7 +866,7 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         {isOwn && (
-          <div data-visual="message-bubble-meta" className="mt-1 flex justify-end items-center gap-1">
+          <div data-visual="message-bubble-meta" className="td-ah-message-meta mt-1 flex justify-end items-center gap-1">
             {/* Delivery status icons — Telegram-style checkmarks */}
             {readBy && readBy.length > 0 ? (
               <>
@@ -1212,14 +878,6 @@ export const MessageBubble = memo(function MessageBubble({
                   userProfiles={userProfiles}
                   onlineUsers={onlineUsers}
                 />
-                {message.group && (
-                  <GroupSeenByLabel
-                    readers={readBy}
-                    userProfiles={userProfiles}
-                    seenByLabel={t("message.seenBy", { n: readBy.length })}
-                    readLabel={t("message.read")}
-                  />
-                )}
               </>
             ) : message.id ? (
               <span className="inline-flex text-muted-foreground/40" aria-label={t("message.sent")}>
@@ -1239,7 +897,7 @@ export const MessageBubble = memo(function MessageBubble({
               {formatTime(message.timestamp, t)}
               {message.edited && (
                 <span className="text-[10px] text-muted-foreground/40 ml-1">
-                  (edited)
+                  {t("message.edited")}
                 </span>
               )}
             </span>
@@ -1248,21 +906,6 @@ export const MessageBubble = memo(function MessageBubble({
 
       </div>
 
-      {isOwn && !hideAvatar && (
-        <div className="mt-0.5 flex-shrink-0">
-          <Avatar
-            src={messageAvatarUrl}
-            name={messageDisplayName}
-            size="md"
-            onClick={handleAvatarClick}
-            className="ring-1 ring-white/10 hover:ring-white/30 hover:scale-110 transition-all"
-          />
-        </div>
-      )}
-
-      {isOwn && hideAvatar && (
-        <div className="w-8 flex-shrink-0" aria-hidden="true" />
-      )}
     </div>
         </div>
       </div>
@@ -1279,10 +922,6 @@ export const MessageBubble = memo(function MessageBubble({
             onCopy={async () => {
               setContextMenu({ visible: false, x: 0, y: 0 });
               try { await navigator.clipboard.writeText(message.content); } catch { /* noop */ }
-            }}
-            onForward={() => {
-              setContextMenu({ visible: false, x: 0, y: 0 });
-              onForward?.(message);
             }}
             onDelete={() => {
               setContextMenu({ visible: false, x: 0, y: 0 });
@@ -1318,53 +957,6 @@ export const MessageBubble = memo(function MessageBubble({
       </>
     );
 });
-
-
-
-// ── GroupSeenByLabel: compact "Seen by N" label for group messages ──
-
-function GroupSeenByLabel({ readers, userProfiles, seenByLabel, readLabel }: {
-  readers: string[];
-  userProfiles: Record<string, { display_name?: string; avatar_url?: string }>;
-  seenByLabel: string;
-  readLabel: string;
-}) {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const first5 = readers.slice(0, 5);
-  const more = readers.length - 5;
-
-  return (
-    <span className="relative inline-flex">
-      <button
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
-        onClick={(e) => { e.stopPropagation(); setShowTooltip(!showTooltip); }}
-        className="text-[11px] text-muted-foreground/70 cursor-pointer hover:text-muted-foreground transition-colors"
-        aria-label={readLabel}
-      >
-        {seenByLabel}
-      </button>
-      {showTooltip && (
-        <div className="absolute bottom-full right-0 mb-1.5 z-50 rounded-lg border border-border bg-card shadow-xl p-2 min-w-[120px] animate-scale-in">
-          {first5.map((r) => {
-            const profile = userProfiles[r];
-            return (
-              <div key={r} className="flex items-center gap-2 px-1 py-0.5 text-xs text-foreground/80">
-                <span className="truncate">{profile?.display_name || r}</span>
-              </div>
-            );
-          })}
-          {more > 0 && (
-            <div className="text-[10px] text-muted-foreground/60 mt-1 px-1">
-              +{more}
-            </div>
-          )}
-        </div>
-      )}
-    </span>
-  );
-}
-
 // ── ReadReceipt: clickable tooltip showing who read a message ──
 
 function ReadReceipt({ readers, readByLabel, readLabel, onlineLabel, userProfiles, onlineUsers }: {
@@ -1384,11 +976,11 @@ function ReadReceipt({ readers, readByLabel, readLabel, onlineLabel, userProfile
         className="inline-flex cursor-pointer hover:opacity-80 transition-opacity"
         aria-label={readLabel}
       >
-        <Check className="h-3 w-3 text-blue-500" />
-        <Check className="h-3 w-3 text-blue-500 -ml-1.5" />
+        <Check className="h-3 w-3 text-[var(--accent)]" />
+        <Check className="h-3 w-3 text-[var(--accent)] -ml-1.5" />
       </button>
       {showTooltip && (
-        <div className="absolute bottom-full right-0 mb-1.5 z-50 rounded-lg border border-border bg-card shadow-xl p-2 min-w-[140px] animate-scale-in">
+        <div className="td-chat-popover absolute bottom-full right-0 mb-1.5 z-50 p-2 min-w-[140px] animate-scale-in">
           <div className="text-[10px] text-muted-foreground/60 mb-1.5 px-1">{readByLabel}</div>
           {readers.map((r) => {
             const profile = userProfiles[r];

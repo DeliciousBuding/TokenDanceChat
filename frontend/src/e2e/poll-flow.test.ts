@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { joinGuestFromPreview } from "./helpers";
 
 /**
  * TokenDanceChat Poll E2E Tests.
@@ -44,8 +45,7 @@ async function joinChat(
   const guestName = name ?? `e2e_${Math.random().toString(36).slice(2, 8)}`;
 
   await page.goto(path);
-  await page.getByPlaceholder("你的用户名...").fill(guestName);
-  await page.getByRole("button", { name: "游客加入" }).click();
+  await joinGuestFromPreview(page, guestName);
 
   await expect(page.locator("textarea").first()).toBeVisible({
     timeout: 15000,
@@ -415,8 +415,7 @@ test.describe("Poll Creation & Voting Flow", () => {
 
       // Join as the poll creator (with ?e2e to expose __chatAPI).
       await page.goto("/?e2e");
-      await page.getByPlaceholder("你的用户名...").fill(creatorName);
-      await page.getByRole("button", { name: "游客加入" }).click();
+      await joinGuestFromPreview(page, creatorName);
       await expect(page.locator("textarea").first()).toBeVisible({
         timeout: 15000,
       });
@@ -493,25 +492,6 @@ test.describe("Poll Creation & Voting Flow", () => {
     });
   });
 
-  test.describe("Group chat polls", () => {
-    test("poll in group chat appears for group members", async ({ page: _page }) => {
-      test.skip(
-        true,
-        "Groups may not be accessible to guests. " +
-          "This test requires either group-creation capability for guests " +
-          "or a pre-seeded group. Keep skipped until group access is available.",
-      );
-
-      // This test requires a pre-existing group or group-creation capability.
-      // Guests typically cannot create groups, so this test is gated on
-      // either having group-creation UI for guests or using a pre-seeded group.
-      //
-      // When ready, the flow would be:
-      // 1. Join as user with group access
-      // 2. Navigate to the group chat
-      // 3. Create a poll in the group
-      // 4. Verify the poll appears
-      // 5. Verify other group members can see and vote on it
-    });
-  });
+  // Polls remain scoped to the public-room contract. Historical group-poll
+  // coverage was removed with the rich IM UI.
 });

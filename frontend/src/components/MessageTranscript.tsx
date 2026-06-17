@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
-import { Reply, Copy, Trash2, Forward, UsersRound } from "lucide-react";
+import { Reply, Copy, Trash2 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
 import { usePullDownGesture } from "@/hooks/useTouchGestures";
@@ -17,7 +17,6 @@ interface MessageTranscriptProps {
   className?: string;
   onReply?: (message: ChatMessage) => void;
   onDelete?: (messageId: string) => void;
-  onForward?: (message: ChatMessage) => void;
   onOpenThread?: (message: ChatMessage) => void;
   highlight?: string;
   /** Ref that will be set to the scrollable container element. */
@@ -78,7 +77,6 @@ export function MessageTranscript({
   className,
   onReply,
   onDelete,
-  onForward,
   onOpenThread,
   highlight,
   scrollContainerRef,
@@ -89,9 +87,6 @@ export function MessageTranscript({
     username,
     historyLoaded,
     typingUsers,
-    currentChat,
-    onlineUsers,
-    groups: chatGroups,
     lastReadTimestamps,
     customEmojis,
   } = useChatStore();
@@ -107,7 +102,7 @@ export function MessageTranscript({
   const pendingScrollRestore = useRef(0);
   const firstMessageIdBeforeLoad = useRef("");
   const scrollPositions = useRef<Map<string, number>>(new Map());
-  const conversationKey = currentChat.type === "dm" ? `dm:${currentChat.username}` : currentChat.type === "group" ? `group:${currentChat.name}` : "public";
+  const conversationKey = "public";
 
   // Track new messages that arrived while user is scrolled up for the FAB badge.
   const [newMessageCount, setNewMessageCount] = useState(0);
@@ -148,24 +143,7 @@ export function MessageTranscript({
     }
   }, [conversationKey]);
 
-  // Filter messages based on current chat context.
-  const effectiveMessages = useMemo(() => {
-    if (currentChat.type === "dm") {
-      const partner = currentChat.username;
-      return messages.filter((m) => {
-        const msgSender = m.from || m.username;
-        const msgRecipient = m.to;
-        return (
-          (msgSender === partner && msgRecipient === username) ||
-          (msgSender === username && msgRecipient === partner)
-        );
-      });
-    }
-    if (currentChat.type === "group") {
-      return messages.filter((m) => m.to === currentChat.name || (m as ChatMessage & { group?: string }).group === currentChat.name);
-    }
-    return messages;
-  }, [currentChat, messages, username]);
+  const effectiveMessages = messages;
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false, x: 0, y: 0, message: null, isOwn: false,
@@ -173,8 +151,6 @@ export function MessageTranscript({
 
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [showBatchForwardPicker, setShowBatchForwardPicker] = useState(false);
-  const [batchForwardUser, setBatchForwardUser] = useState("");
 
   // Drag-select: after long-press enters select mode, continue holding and drag
   // to select adjacent messages (Telegram-style gesture).
@@ -300,10 +276,6 @@ export function MessageTranscript({
     }
     return -1;
   }, [groups, lastReadTimestamp]);
-  const currentGroupMemberCount = currentChat.type === "group"
-    ? chatGroups[currentChat.name]?.members.length ?? 1
-    : 0;
-
   // Count replies for each message.
   // Cached via ref: thread replies are immutable once sent, so counts only
   // change when effectiveMessages.length changes (new messages added/removed).
@@ -341,6 +313,18 @@ export function MessageTranscript({
       });
     }
   }, [groups, shouldAutoScroll]);
+
+  useEffect(() => {
+    const handler = () => {
+      requestAnimationFrame(() => {
+        const container = containerRef.current;
+        if (!container) return;
+        container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
+      });
+    };
+    window.addEventListener("tdchat:optimistic-message", handler);
+    return () => window.removeEventListener("tdchat:optimistic-message", handler);
+  }, []);
 
   // Increment new-message counter when messages arrive while user is scrolled up.
   useEffect(() => {
@@ -420,11 +404,6 @@ export function MessageTranscript({
     closeContextMenu();
   }, [contextMenu.message, onDelete, closeContextMenu]);
 
-  const handleContextForward = useCallback(() => {
-    if (contextMenu.message && onForward) onForward(contextMenu.message);
-    closeContextMenu();
-  }, [contextMenu.message, onForward, closeContextMenu]);
-
   const enterSelectMode = useCallback((messageId: string) => {
     setSelectMode(true);
     setSelectedIds(new Set([messageId]));
@@ -433,8 +412,6 @@ export function MessageTranscript({
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
     setSelectedIds(new Set());
-    setShowBatchForwardPicker(false);
-    setBatchForwardUser("");
   }, []);
 
   const toggleSelect = useCallback((messageId: string) => {
@@ -456,13 +433,6 @@ export function MessageTranscript({
     for (const msg of ownMessages) chatAPI.deleteMessage(msg.id);
     exitSelectMode();
   }, [effectiveMessages, selectedIds, username, exitSelectMode]);
-
-  const handleBatchForward = useCallback(() => {
-    if (!batchForwardUser) return;
-    const selectedMessages = effectiveMessages.filter((m) => selectedIds.has(m.id));
-    for (const msg of selectedMessages) chatAPI.sendForward(msg.id, batchForwardUser);
-    exitSelectMode();
-  }, [effectiveMessages, selectedIds, batchForwardUser, exitSelectMode]);
 
   // Select all visible non-deleted messages
   const handleSelectAll = useCallback(() => {
@@ -550,47 +520,31 @@ export function MessageTranscript({
         onPointerMove={handleContainerPointerMove}
         onPointerUp={handleContainerPointerUp}
         onPointerCancel={handleContainerPointerUp}
-        className={cn("flex-1 min-h-0 overflow-y-auto relative scrollbar-thin", className)}
+        className={cn("td-ah-transcript-region td-chat-transcript flex-1 min-h-0 overflow-y-auto relative scrollbar-thin", className)}
       {...pullDownHandlers}
     >
       {selectMode && (
-        <div className="sticky top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center gap-3 shadow-lg">
-          <span className="text-sm font-medium text-foreground">{t("transcript.selected", { count: selectedIds.size })}</span>
-          <div className="flex-1" />
-          <button onClick={handleSelectAll} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors" aria-label={t("transcript.selectAll")}>
+        <div className="td-chat-statusbar sticky top-0 left-0 right-0 z-50 flex items-center gap-2 overflow-x-auto overscroll-x-contain border-b px-3 py-3 sm:gap-3 sm:px-4">
+          <span className="shrink-0 text-sm font-medium text-foreground">{t("transcript.selected", { count: selectedIds.size })}</span>
+          <div className="hidden flex-1 sm:block" />
+          <button onClick={handleSelectAll} className="td-chat-list-row flex min-h-11 shrink-0 items-center gap-1.5 px-3 py-1.5 text-sm text-foreground/80 hover:text-foreground" aria-label={t("transcript.selectAll")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
             </svg>
             {t("transcript.selectAll")}
           </button>
-          <button onClick={handleCopySelected} disabled={selectedIds.size === 0} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed" aria-label={t("transcript.copySelected")}>
+          <button onClick={handleCopySelected} disabled={selectedIds.size === 0} className="td-chat-list-row flex min-h-11 shrink-0 items-center gap-1.5 px-3 py-1.5 text-sm text-foreground/80 hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed" aria-label={t("transcript.copySelected")}>
             <Copy className="h-4 w-4" />
             {t("transcript.copySelected")}
           </button>
-          <button onClick={handleBatchDelete} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-destructive/80 hover:bg-destructive/10 hover:text-destructive transition-colors" aria-label={t("transcript.contextDelete")}>
+          <button onClick={handleBatchDelete} className="td-chat-list-row flex min-h-11 shrink-0 items-center gap-1.5 px-3 py-1.5 text-sm text-destructive/80 hover:text-destructive" aria-label={t("transcript.contextDelete")}>
             <Trash2 className="h-4 w-4" />{t("transcript.contextDelete")}
           </button>
-          <button onClick={() => setShowBatchForwardPicker((prev) => !prev)} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground transition-colors" aria-label={t("transcript.contextForward")}>
-            <Forward className="h-4 w-4" />{t("transcript.contextForward")}
-          </button>
-          <button onClick={exitSelectMode} className="flex items-center gap-1 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors" aria-label={t("a11y.exitSelect")}>
+          <button onClick={exitSelectMode} className="td-chat-header-action flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground" aria-label={t("a11y.exitSelect")}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
-        </div>
-      )}
-      {selectMode && showBatchForwardPicker && (
-        <div className="sticky top-14 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 shadow-lg">
-          <div className="flex items-center gap-3 max-w-md mx-auto">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">{t("transcript.contextForwardTo")}</span>
-            <select value={batchForwardUser} onChange={(e) => setBatchForwardUser(e.target.value)} className="flex-1 rounded-lg border border-border bg-secondary px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary/50">
-              <option value="">{t("transcript.contextSelectRecipient")}</option>
-              {onlineUsers.filter((u) => u !== username).map((u) => (<option key={u} value={u}>{u}</option>))}
-            </select>
-            <button onClick={handleBatchForward} disabled={!batchForwardUser} className="rounded-lg px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-opacity">{t("transcript.contextSend")}</button>
-            <button onClick={() => { setShowBatchForwardPicker(false); setBatchForwardUser(""); }} className="rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">{t("transcript.contextCancel")}</button>
-          </div>
         </div>
       )}
       {isLoadingMore && (
@@ -640,7 +594,7 @@ export function MessageTranscript({
         </div>
       )}
 
-      {!historyLoaded ? (
+      {!historyLoaded && effectiveMessages.length === 0 ? (
         /* Loading skeleton with shimmer */
         <div
           className="flex flex-col items-center justify-center h-full gap-6 py-12"
@@ -654,13 +608,13 @@ export function MessageTranscript({
               <div className="h-8 w-8 rounded-full animate-shimmer flex-shrink-0" />
               <div className="flex flex-col gap-1.5">
                 <div className="h-3 w-16 rounded-md animate-shimmer" />
-                <div className="h-8 w-48 rounded-2xl rounded-bl-md animate-shimmer" />
+                <div className="h-8 w-48 rounded-[var(--radius-bubble)] rounded-bl-md animate-shimmer" />
               </div>
             </div>
             {/* Sent message skeleton */}
             <div className="flex items-end gap-2 justify-end">
               <div className="flex flex-col gap-1.5 items-end">
-                <div className="h-8 w-36 rounded-2xl rounded-br-md animate-shimmer" />
+                <div className="h-8 w-36 rounded-[var(--radius-bubble)] rounded-br-md animate-shimmer" />
               </div>
               <div className="h-8 w-8 rounded-full animate-shimmer flex-shrink-0" />
             </div>
@@ -668,7 +622,7 @@ export function MessageTranscript({
             <div className="flex items-end gap-2">
               <div className="h-8 w-8 rounded-full animate-shimmer flex-shrink-0" />
               <div className="flex flex-col gap-1.5">
-                <div className="h-8 w-64 rounded-2xl rounded-bl-md animate-shimmer" />
+                <div className="h-8 w-64 rounded-[var(--radius-bubble)] rounded-bl-md animate-shimmer" />
               </div>
             </div>
           </div>
@@ -682,45 +636,10 @@ export function MessageTranscript({
           </p>
         </div>
       ) : effectiveMessages.length === 0 ? (
-        /* Empty state — context-aware per conversation type */
-        (() => {
-          if (currentChat.type === "dm") {
-            const initial = currentChat.username.charAt(0).toUpperCase();
-            return (
-              <div className="flex flex-col items-center justify-center h-full py-12 px-4">
-                <div
-                  className="mb-5 flex h-20 w-20 items-center justify-center rounded-full text-2xl font-semibold text-white ring-1 ring-border shadow-sm"
-                  style={{ background: `linear-gradient(135deg, oklch(65% 0.16 ${currentChat.username.charCodeAt(0) % 360}), oklch(58% 0.14 ${(currentChat.username.charCodeAt(0) + 45) % 360}))` }}
-                >
-                  {initial}
-                </div>
-                <h3 className="text-sm font-semibold text-foreground/80 mb-1.5">{t("transcript.emptyDmTitle")}</h3>
-                <p className="text-xs text-muted-foreground/50 text-center max-w-xs leading-relaxed">{t("transcript.emptyDmDescription", { username: currentChat.username })}</p>
-              </div>
-            );
-          }
-          if (currentChat.type === "group") {
-            return (
-              <div data-visual="group-empty-state" className="flex h-full items-center justify-center px-4 py-10">
-                <div className="w-full max-w-sm text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
-                    <UsersRound className="h-6 w-6" />
-                  </div>
-                  <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                    {t("transcript.emptyGroupMembers", { count: currentGroupMemberCount })}
-                  </p>
-                  <h3 className="mb-1.5 text-base font-semibold text-foreground/85">{t("transcript.emptyGroupTitle")}</h3>
-                  <p className="mx-auto max-w-xs text-sm leading-6 text-muted-foreground">
-                    {t("transcript.emptyGroupDescription", { name: currentChat.name })}
-                  </p>
-                </div>
-              </div>
-            );
-          }
-          /* Public chat empty state */
-          return (
+        /* Public chat empty state */
+        (
             <div className="flex flex-col items-center justify-center h-full py-12 px-4">
-              <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary/10 to-accent ring-1 ring-border shadow-sm animate-chat-bubble">
+              <div className="td-chat-card-muted mb-5 flex h-20 w-20 items-center justify-center rounded-full animate-chat-bubble">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary/50">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
@@ -728,8 +647,7 @@ export function MessageTranscript({
               <h3 className="text-sm font-semibold text-foreground/80 mb-1.5">{t("transcript.emptyTitle")}</h3>
               <p className="text-xs text-muted-foreground/50 text-center max-w-xs leading-relaxed">{t("transcript.emptyDescription")}</p>
             </div>
-          );
-        })()
+        )
       ) : (
         <div
           role="log"
@@ -737,13 +655,13 @@ export function MessageTranscript({
           aria-atomic="false"
           aria-relevant="additions"
           aria-label={t("chat.roomName")}
-          className="mx-auto w-full max-w-7xl px-1 py-3 sm:px-3 sm:py-4"
+          className="td-ah-transcript-list"
         >
           {hiddenCount > 0 && (
             <div className="flex justify-center pb-3">
               <button
                 onClick={() => { setShowAllMessages(true); setIsLoadingMore(false); }}
-                className="touch-target rounded-full border border-border bg-card px-4 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
+                className="td-chat-pill touch-target rounded-full px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-all"
               >
                 {t("transcript.newMessages", { count: hiddenCount })}
               </button>
@@ -823,40 +741,47 @@ export function MessageTranscript({
                   </div>
                 )}
                 {dateSep}
-                <div className="message-group">
+                <ol
+                  className="td-ah-transcript-group message-group"
+                  data-message-own={isOwn ? "true" : "false"}
+                  aria-label={group.username}
+                >
                   {groupMessages.map((msg, idx) => {
                     const isFirst = idx === 0;
                     const isLast = idx === groupMessages.length - 1;
                     const isSolo = groupMessages.length === 1;
 
                     return (
-                      <MessageBubble
+                      <li
                         key={msg.id}
-                        message={msg}
-                        isOwn={isOwn}
-                        currentUsername={username}
-                        hideAvatar={!isFirst}
-                        hideUsername={!isFirst}
-                        forceShowTimestamp={isLast}
-                        isGrouped={!isSolo}
-                        isNew={newMessageIds.has(msg.id)}
-                        onReply={onReply}
-                        onDelete={onDelete}
-                        onForward={onForward}
-                        replyCount={replyCounts[msg.id] || 0}
-                        onOpenThread={onOpenThread}
-                        selectMode={selectMode}
-                        isSelected={selectedIds.has(msg.id)}
-                        onToggleSelect={toggleSelect}
-                        onLongPress={startDragSelect}
-                        staggerDelay={gi * 50}
-                        highlight={highlight}
-                        onlineUsers={onlineUsers}
-                        emojiPreprocess={emojiPreprocess}
-                      />
+                        className="td-ah-transcript-block"
+                        data-message-own={isOwn ? "true" : "false"}
+                      >
+                        <MessageBubble
+                          message={msg}
+                          isOwn={isOwn}
+                          currentUsername={username}
+                          hideAvatar={!isFirst}
+                          hideUsername={!isFirst}
+                          forceShowTimestamp={isLast}
+                          isGrouped={!isSolo}
+                          isNew={msg.id.startsWith("optimistic_") || newMessageIds.has(msg.id)}
+                          onReply={onReply}
+                          onDelete={onDelete}
+                          replyCount={replyCounts[msg.id] || 0}
+                          onOpenThread={onOpenThread}
+                          selectMode={selectMode}
+                          isSelected={selectedIds.has(msg.id)}
+                          onToggleSelect={toggleSelect}
+                          onLongPress={startDragSelect}
+                          staggerDelay={gi * 50}
+                          highlight={highlight}
+                          emojiPreprocess={emojiPreprocess}
+                        />
+                      </li>
                     );
                   })}
-                </div>
+                </ol>
               </div>
             );
           })}
@@ -888,33 +813,29 @@ export function MessageTranscript({
       {contextMenu.visible && (
         <>
           <div className="context-menu-backdrop" onClick={closeContextMenu} onTouchEnd={closeContextMenu} />
-          <div className="context-menu border border-border bg-card shadow-2xl" style={menuStyle}>
-            <button onClick={handleContextSelect} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
+          <div className="td-chat-popover context-menu" style={menuStyle}>
+            <button onClick={handleContextSelect} className="td-chat-list-row flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:text-foreground touch-target">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
                 <path d="M9 11l3 3L22 4"/>
                 <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
               </svg>
               <span>{t("transcript.contextSelect")}</span>
             </button>
-            <div className="border-t border-border mx-3" />
-            <button onClick={handleContextReply} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
+            <div className="mx-3 border-t border-[var(--chat-stream-card-border)]" />
+            <button onClick={handleContextReply} className="td-chat-list-row flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:text-foreground touch-target">
               <Reply className="h-4 w-4 text-muted-foreground" />
               <span>{t("input.replyTo")}</span>
             </button>
-            <button onClick={handleContextCopy} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
+            <button onClick={handleContextCopy} className="td-chat-list-row flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:text-foreground touch-target">
               <Copy className="h-4 w-4 text-muted-foreground" />
               <span>{t("transcript.contextCopy")}</span>
             </button>
             {contextMenu.isOwn && (
-              <button onClick={handleContextDelete} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-destructive/80 hover:bg-destructive/20 hover:text-destructive touch-target">
+              <button onClick={handleContextDelete} className="td-chat-list-row flex w-full items-center gap-3 px-4 py-3 text-sm text-destructive/80 hover:text-destructive touch-target">
                 <Trash2 className="h-4 w-4" />
                 <span>{t("transcript.contextDelete")}</span>
               </button>
             )}
-            <button onClick={handleContextForward} className="flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:bg-accent hover:text-foreground touch-target">
-              <Forward className="h-4 w-4 text-muted-foreground" />
-              <span>{t("transcript.contextForward")}</span>
-            </button>
           </div>
         </>
       )}

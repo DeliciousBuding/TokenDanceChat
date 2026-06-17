@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo } from "react";
 import type { ComponentType } from "react";
-import { Copy, Reply, Forward, Trash2, CheckSquare, Pencil, Pin, Languages, SmilePlus } from "lucide-react";
+import { Copy, Reply, Trash2, CheckSquare, Pencil, Pin, Languages, SmilePlus } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 import { useTranslation } from "@/i18n/context";
 import type { ChatMessage } from "@/lib/api";
@@ -12,7 +12,6 @@ interface MessageContextMenuProps {
   onClose: () => void;
   onReply: () => void;
   onCopy: () => void;
-  onForward: () => void;
   onDelete: () => void;
   onSelect: () => void;
   onEdit?: () => void;
@@ -41,7 +40,6 @@ export function MessageContextMenu({
   onClose,
   onReply,
   onCopy,
-  onForward,
   onDelete,
   onSelect,
   onEdit,
@@ -83,7 +81,7 @@ export function MessageContextMenu({
   const menuStyle = useMemo(() => {
     const menuWidth = 220;
     // Estimate height based on visible items
-    let itemCount = 4; // Reply, Copy, Forward, Select
+    let itemCount = 3; // Reply, Copy, Select
     if (isOwn && onEdit) itemCount += 1;
     if (onPin) itemCount += 1;
     if (onReact) itemCount += 1;
@@ -112,12 +110,6 @@ export function MessageContextMenu({
       label: t("transcript.contextCopy"),
       shortcut: "Ctrl+C",
       onClick: onCopy,
-      className: "text-foreground/85",
-    },
-    {
-      icon: Forward,
-      label: t("transcript.contextForward"),
-      onClick: onForward,
       className: "text-foreground/85",
     },
     ...(onReact
@@ -195,7 +187,7 @@ export function MessageContextMenu({
         ref={menuRef}
         role="menu"
         aria-label={t("message.contextMenu")}
-        className="context-menu min-w-[220px] rounded-xl border border-border/60 bg-card/95 backdrop-blur-xl shadow-2xl py-1 overflow-hidden ring-1 ring-black/5 animate-scale-in-origin"
+        className="td-chat-popover context-menu min-w-[220px] py-1 overflow-hidden animate-scale-in-origin"
         style={{
           left: menuStyle.left,
           top: menuStyle.top,
@@ -206,7 +198,7 @@ export function MessageContextMenu({
         {menuItems.map((item, idx) => {
           if (item.kind === "divider") {
             return (
-              <div key={idx} className="my-1 border-t border-border/50" />
+              <div key={idx} className="my-1 border-t border-[var(--chat-stream-card-border)]" />
             );
           }
           return (
@@ -214,7 +206,7 @@ export function MessageContextMenu({
               key={idx}
               role="menuitem"
               onClick={item.onClick}
-              className={`animate-menu-item flex min-h-11 w-full items-center gap-3 px-4 py-2 text-sm transition-colors hover:bg-accent/80 ${item.className}`}
+              className={`td-chat-list-row animate-menu-item flex min-h-11 w-full items-center gap-3 px-4 py-2 text-sm ${item.className}`}
               style={{ animationDelay: `${idx * 25}ms` }}
             >
               <item.icon className="h-4 w-4 flex-shrink-0 opacity-70" />

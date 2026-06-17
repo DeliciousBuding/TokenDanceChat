@@ -152,7 +152,7 @@ export const EmojiPicker = memo(function EmojiPicker({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); onClose(); } }}
     >
-      <div className="animate-scale-in rounded-xl border border-border bg-card shadow-2xl w-[340px] max-h-[440px] flex flex-col">
+      <div className="td-chat-popover animate-scale-in w-[340px] max-h-[440px] flex flex-col">
         {/* Search bar */}
         <div className="px-3 pt-3 pb-2">
           <input
@@ -161,18 +161,18 @@ export const EmojiPicker = memo(function EmojiPicker({
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("emoji.search")}
             aria-label={t("emoji.search")}
-            className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+            className="td-chat-input w-full px-3 py-1.5 text-xs"
           />
         </div>
 
         {/* Recent emojis */}
         {!search && recents.length > 0 && (
-          <div className="px-3 pb-2 border-b border-border">
+          <div className="td-chat-section border-b px-3 pb-2">
             <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider mb-1 block">{t("emoji.recent")}</span>
             <div className="flex flex-wrap gap-1">
               {recents.map((emoji) => (
                 <button key={emoji} onClick={() => handleSelect(emoji)}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-accent text-lg transition-colors">
+                  className="td-chat-list-row flex items-center justify-center w-8 h-8 text-lg">
                   {emoji}
                 </button>
               ))}
@@ -182,18 +182,18 @@ export const EmojiPicker = memo(function EmojiPicker({
 
         {/* Category tabs */}
         {!search && (
-          <div className="flex gap-0.5 px-3 pb-2 border-b border-border">
+          <div className="td-chat-section flex gap-0.5 border-b px-3 pb-2">
             {CATEGORIES.map((cat, i) => (
               <button key={cat.name} onClick={() => setActiveCat(i)}
                 className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                  i === activeCat ? "bg-accent text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground"
+                  i === activeCat ? "bg-[var(--bg-hover)] text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground"
                 }`}>
                 {categoryLabels[cat.name as keyof typeof categoryLabels] || cat.name}
               </button>
             ))}
             <button onClick={() => setActiveCat(-1)}
               className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                -1 === activeCat ? "bg-accent text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground"
+                -1 === activeCat ? "bg-[var(--bg-hover)] text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground"
               }`}>
               {categoryLabels.Custom}
             </button>
@@ -234,7 +234,7 @@ export const EmojiPicker = memo(function EmojiPicker({
                     <button
                       onClick={() => handleCustomSelect(emoji.name)}
                       title={`:${emoji.name}:`}
-                      className="flex flex-col items-center gap-1 w-full p-1.5 rounded-lg hover:bg-accent transition-colors"
+                      className="td-chat-list-row flex flex-col items-center gap-1 w-full p-1.5"
                     >
                       <div className="w-10 h-10 flex items-center justify-center">
                         <img
@@ -270,7 +270,7 @@ export const EmojiPicker = memo(function EmojiPicker({
           <div className="grid grid-cols-8 gap-0.5">
             {filteredEmojis.map((emoji) => (
               <button key={emoji} onClick={() => handleSelect(emoji)}
-                className="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-accent text-lg transition-colors">
+                className="td-chat-list-row flex items-center justify-center w-9 h-9 text-lg">
                 {emoji}
               </button>
             ))}

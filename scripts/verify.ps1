@@ -190,6 +190,7 @@ if ($WithE2E) {
   $env:CHAT_ADDR = ":$e2ePort"
   $env:CHAT_OIDC_ENABLED = "false"
   $env:CHAT_SESSION_SECRET = "verify-local-session-secret"
+  $env:CHAT_API_RATE_LIMIT_PER_MINUTE = "1000"
 
   $e2eBackend = Start-Process -FilePath "$ProjectRoot\backend\backend.exe" -PassThru -NoNewWindow
   Start-Sleep -Seconds 3
@@ -209,6 +210,7 @@ if ($WithE2E) {
     $script:Failures += "E2E backend startup"
   } finally {
     Stop-Process -Id $e2eBackend.Id -Force -ErrorAction SilentlyContinue
+    Remove-Item Env:CHAT_API_RATE_LIMIT_PER_MINUTE -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $e2eDB -ErrorAction SilentlyContinue
     Write-Host "  E2E backend stopped" -ForegroundColor Cyan
   }

@@ -79,9 +79,10 @@ describe("Avatar", () => {
     expect(container).toBeInTheDocument();
   });
 
-  it("applies gradient background to initials", () => {
+  it("applies tokenized identity background to initials", () => {
     render(<Avatar name="TestUser" />);
     const initials = screen.getByText("T");
-    expect(initials.style.background).toContain("linear-gradient");
+    expect(initials.style.background).toContain("var(--chat-identity-avatar)");
+    expect(initials.style.getPropertyValue("--chat-identity-hue")).not.toBe("");
   });
 });

@@ -1,19 +1,20 @@
 {
   "name": "TokenDanceChat",
   "short_name": "TDChat",
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f5f5f7",
   "theme_color": "#0071BC",
-  "description": "Lightweight real-time public chat — TokenDanceChat",
+  "description": "Real-time chat and AgentHub interaction proving ground for WebSocket, PWA, OIDC, assistant, and group collaboration workflows.",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/tokendance-icon-rounded-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/tokendance-icon-rounded-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }

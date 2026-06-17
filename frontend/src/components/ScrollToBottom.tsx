@@ -66,13 +66,13 @@ export function ScrollToBottom({ containerRef, threshold = 200, newCount, onClea
       onClick={scrollToBottom}
       aria-label={newCount ? `${t("a11y.scrollToBottom")} (${newCount})` : t("a11y.scrollToBottom")}
       className={cn(
-        "fixed bottom-24 right-4 z-30 flex h-10 w-10 items-center justify-center",
-        "rounded-full bg-card border border-border shadow-lg",
-        "hover:bg-accent hover:shadow-xl hover:scale-105",
+        "fixed bottom-24 right-4 z-30 flex h-11 w-11 items-center justify-center",
+        "td-chat-popover rounded-full",
+        "hover:shadow-[var(--e-3)] hover:scale-105",
         "transition-all duration-200 text-muted-foreground hover:text-foreground",
         visible
           ? "opacity-100 scale-100 pointer-events-auto"
-          : "opacity-0 scale-75 pointer-events-none",
+          : "opacity-0 scale-100 pointer-events-none",
       )}
     >
       <ChevronDown className="h-5 w-5" />

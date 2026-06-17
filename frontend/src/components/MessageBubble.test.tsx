@@ -92,6 +92,28 @@ describe("MessageBubble", () => {
       expect(document.querySelector("[title]")).toBeTruthy();
     });
 
+    it("does not delay real-time new message rendering", () => {
+      renderBubble({ isNew: true, staggerDelay: 5000 });
+      const bubble = document.querySelector<HTMLElement>("[data-visual='message-bubble']");
+      expect(bubble).toBeTruthy();
+      expect(bubble?.style.animationDelay).toBe("");
+    });
+
+    it("renders old WebUIChat mentions as TokenBot", () => {
+      renderBubble({
+        message: {
+          id: "msg-webui-mention",
+          username: "alice",
+          content: "Ask @WebUIChat and @webuibot",
+          timestamp: 1700000000000,
+        },
+      });
+
+      expect(screen.getAllByText("@TokenBot")).toHaveLength(2);
+      expect(screen.queryByText("@WebUIChat")).toBeNull();
+      expect(screen.queryByText("@webuibot")).toBeNull();
+    });
+
     it("renders deleted state", () => {
       renderBubble({
         message: {
@@ -261,8 +283,8 @@ describe("MessageBubble", () => {
     });
   });
 
-  describe("voice message player", () => {
-    it("renders voice message player for audio markdown", () => {
+  describe("legacy media markdown", () => {
+    it("does not restore the removed voice-message player for audio markdown", () => {
       renderBubble({
         message: {
           id: "msg-voice",
@@ -271,12 +293,12 @@ describe("MessageBubble", () => {
           timestamp: 1700000000000,
         },
       });
-      // Should render the mic icon and custom audio player container
-      expect(document.querySelector(".voice-mic-icon")).toBeTruthy();
-      expect(document.querySelector(".custom-audio-player")).toBeTruthy();
+      expect(document.querySelector(".voice-mic-icon")).toBeNull();
+      expect(document.querySelector(".custom-audio-player")).toBeNull();
+      expect(screen.getByAltText("voice")).toBeTruthy();
     });
 
-    it("renders play/pause button for voice message", () => {
+    it("does not render play/pause controls for audio markdown", () => {
       renderBubble({
         message: {
           id: "msg-voice2",
@@ -285,12 +307,10 @@ describe("MessageBubble", () => {
           timestamp: 1700000000000,
         },
       });
-      // Play button is present
-      const playBtn = screen.getByLabelText("Play voice message");
-      expect(playBtn).toBeTruthy();
+      expect(screen.queryByLabelText("Play voice message")).toBeNull();
     });
 
-    it("renders time display for voice message", () => {
+    it("does not render waveform time display for audio markdown", () => {
       renderBubble({
         message: {
           id: "msg-voice3",
@@ -299,15 +319,12 @@ describe("MessageBubble", () => {
           timestamp: 1700000000000,
         },
       });
-      // Time display shows current and total time
-      expect(document.querySelector(".time-display")).toBeTruthy();
-      expect(document.querySelector(".current-time")).toBeTruthy();
-      expect(document.querySelector(".total-time")).toBeTruthy();
+      expect(document.querySelector(".time-display")).toBeNull();
+      expect(document.querySelector(".current-time")).toBeNull();
+      expect(document.querySelector(".total-time")).toBeNull();
     });
-  });
 
-  describe("GIF and sticker messages", () => {
-    it("renders GIF message with GifRenderer", () => {
+    it("renders GIF markdown as a plain Markdown image", () => {
       renderBubble({
         message: {
           id: "msg-gif",
@@ -316,15 +333,13 @@ describe("MessageBubble", () => {
           timestamp: 1700000000000,
         },
       });
-      // GifRenderer includes a hidden canvas element
-      expect(document.querySelector("canvas")).toBeTruthy();
-      // The GIF image is rendered
-      const img = screen.getByAltText("GIF");
+      expect(document.querySelector("canvas")).toBeNull();
+      const img = screen.getByAltText("gif");
       expect(img).toBeTruthy();
       expect(img.getAttribute("src")).toBe("https://example.com/animation.gif");
     });
 
-    it("renders sticker message with StickerRenderer", () => {
+    it("renders sticker markdown as a plain Markdown image", () => {
       renderBubble({
         message: {
           id: "msg-sticker",
@@ -333,11 +348,10 @@ describe("MessageBubble", () => {
           timestamp: 1700000000000,
         },
       });
-      // StickerRenderer renders a draggable={false} image
-      const img = screen.getByAltText("Sticker");
+      const img = screen.getByAltText("sticker");
       expect(img).toBeTruthy();
       expect(img.getAttribute("src")).toBe("https://example.com/sticker.webp");
-      expect(img.getAttribute("draggable")).toBe("false");
+      expect(img.getAttribute("draggable")).toBeNull();
     });
   });
 
@@ -495,17 +509,17 @@ describe("MessageBubble", () => {
     });
   });
 
-  describe("forwarded message indicator", () => {
-    it("renders [Forwarded] prefix in message content", () => {
+  describe("plain bracketed text", () => {
+    it("renders bracketed prefixes as ordinary message content", () => {
       renderBubble({
         message: {
-          id: "msg-fwd",
+          id: "msg-bracket",
           username: "alice",
-          content: "[Forwarded] check this out",
+          content: "[Archived] check this out",
           timestamp: 1700000000000,
         },
       });
-      expect(screen.getByText("[Forwarded] check this out")).toBeTruthy();
+      expect(screen.getByText("[Archived] check this out")).toBeTruthy();
     });
   });
 

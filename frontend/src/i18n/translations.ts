@@ -42,6 +42,7 @@ export interface TranslationDict {
     backToLogin: string;
     oidcLoginButton: string;
     oidcError: string;
+    sessionBoundary: string;
   };
   invite: {
     inviteCodes: string;
@@ -56,63 +57,19 @@ export interface TranslationDict {
     subtitle: string;
     leave: string;
     disconnect: string;
-    dmWith: string;
-    groupChat: string;
     publicChat: string;
-    dmIndicator: string;
-    groupIndicator: string;
     deletedMessage: string;
     guestWarning: string;
   };
   sidebar: {
     publicChat: string;
     publicChatSub: string;
-    onlineUsers: string;
-    emptyState: string;
     you: string;
-    friends: string;
-    friendsOnline: string;
-    groups: string;
-    directMessages: string;
     assistants: string;
-    models: string;
-    noFriends: string;
-    noFriendsHint: string;
-    noGroups: string;
-    noGroupsHint: string;
-    noDMs: string;
-    noDMsHint: string;
-    createGroup: string;
-    sendMessage: string;
-    addFriend: string;
     online: string;
-    lastSeen: string;
-    offline: string;
-    requestPending: string;
-    pinned: string;
-    pinConversation: string;
-    unpinConversation: string;
-    unmuteConversation: string;
-    archivedSection: string;
-    archiveConversation: string;
-    unarchiveConversation: string;
-    searchConversations: string;
-    searchResults: string;
-    searchEmpty: string;
     aiAssistants: string;
-    adminDashboard: string;
     closeSidebar: string;
-    clearSearch: string;
     connecting: string;
-  };
-  admin: {
-    totalMessages: string;
-    activeConnections: string;
-    registeredUsers: string;
-    rooms: string;
-    groups: string;
-    friends: string;
-    serverStats: string;
   };
   transcript: {
     loading: string;
@@ -123,20 +80,10 @@ export interface TranslationDict {
     loadErrorRetry: string;
     newMessagesDivider: string;
     olderMessages: string;
-    emptyDmTitle: string;
-    emptyDmDescription: string;
-    emptyGroupTitle: string;
-    emptyGroupDescription: string;
-    emptyGroupMembers: string;
     selected: string;
     contextSelect: string;
     contextCopy: string;
     contextDelete: string;
-    contextForward: string;
-    contextForwardTo: string;
-    contextSelectRecipient: string;
-    contextSend: string;
-    contextCancel: string;
     selectAll: string;
     copySelected: string;
   };
@@ -144,23 +91,17 @@ export interface TranslationDict {
     placeholder: string;
     replyTo: string;
     characters: string;
-    dmPlaceholder: string;
-    groupPlaceholder: string;
     pastedImage: string;
     sendImage: string;
     escapeToCancel: string;
     cancel: string;
     save: string;
     fileTooLarge: string;
-    micPermissionDenied: string;
-    slideToCancel: string;
-    releaseToCancel: string;
     uploadFailed: string;
     editingMessage: string;
   };
   message: {
     edited: string;
-    forward: string;
     copy: string;
     delete: string;
     read: string;
@@ -187,10 +128,6 @@ export interface TranslationDict {
     typing: string;
     typingTwo: string;
     typingMany: string;
-    friendRejected: string;
-    groupInvited: string;
-    friendRequest: string;
-    friendAccepted: string;
   };
   error: {
     timeout: string;
@@ -208,77 +145,12 @@ export interface TranslationDict {
   more: {
     label: string;
   };
-  group: {
-    createTitle: string;
-    namePlaceholder: string;
-    selectMembers: string;
-    create: string;
-    cancel: string;
-    nameErrorEmpty: string;
-    nameErrorTooLong: string;
-    noUsersAvailable: string;
-    // Group admin
-    groupInfo: string;
-    members: string;
-    owner: string;
-    admin: string;
-    member: string;
-    kickMember: string;
-    promoteAdmin: string;
-    demoteMember: string;
-    transferOwnership: string;
-    renameGroup: string;
-    leaveGroup: string;
-    leaveGroupConfirm: string;
-    kickConfirm: string;
-    renamePlaceholder: string;
-    webhooks: string;
-    webhookDescription: string;
-    createWebhook: string;
-    webhookSecretOnce: string;
-    webhookSecretHint: string;
-    webhookCopied: string;
-    noWebhooks: string;
-    copyWebhook: string;
-    rotateWebhook: string;
-    deleteWebhook: string;
-    webhookCreatedBy: string;
-    webhookRotatedBy: string;
-    webhookAudit: string;
-    refreshWebhookAudit: string;
-    webhookAuditEmpty: string;
-    webhookAuditCreated: string;
-    webhookAuditRotated: string;
-    webhookAuditDeleted: string;
-  };
-  forward: {
-    title: string;
-    selectRecipient: string;
-    noUsers: string;
-    cancel: string;
-    forward: string;
-  };
-  friend: {
-    accept: string;
-    reject: string;
-    decline: string;
+  mention: {
     mentionedYou: string;
     view: string;
     dismiss: string;
   };
   profile: {
-    sendMessage: string;
-    addFriend: string;
-    blockUser: string;
-    unblockUser: string;
-    editProfile: string;
-    displayName: string;
-    bio: string;
-    status: string;
-    save: string;
-    cancel: string;
-    avatarUpload: string;
-    lastSeen: string;
     justNow: string;
     minutesAgo: string;
     hoursAgo: string;
@@ -312,9 +184,6 @@ export interface TranslationDict {
     deleteEmoji: string;
     noCustomEmoji: string;
   };
-  model: {
-    selectModel: string;
-  };
   settings: {
     sound: string;
     soundOn: string;
@@ -343,11 +212,6 @@ export interface TranslationDict {
     myAccount: string;
     openSettings: string;
   };
-  folders: {
-    addToFolder: string;
-    removeFromFolder: string;
-    noFolders: string;
-  };
   slash: {
     me: string;
     topic: string;
@@ -371,17 +235,6 @@ export interface TranslationDict {
     linkUrl: string;
     formatting: string;
   };
-  schedule: {
-    schedule: string;
-    scheduleMessage: string;
-    sendAt: string;
-    cancelSchedule: string;
-    scheduledMessages: string;
-    noScheduled: string;
-    today: string;
-    tomorrow: string;
-    confirmSchedule: string;
-  };
   export: {
     exportJson: string;
     exportText: string;
@@ -393,33 +246,6 @@ export interface TranslationDict {
     downloadFile: string;
     fileSize: string;
     dropFilesHere: string;
-  };
-  gif: {
-    searchGifs: string;
-    trending: string;
-    stickers: string;
-    gifs: string;
-    noResults: string;
-    poweredBy: string;
-  };
-  call: {
-    incomingCall: string;
-    calling: string;
-    voiceCall: string;
-    videoCall: string;
-    groupCall: string;
-    muteMic: string;
-    unmuteMic: string;
-    muteCamera: string;
-    unmuteCamera: string;
-    endCall: string;
-    screenShare: string;
-    switchCamera: string;
-    acceptCall: string;
-    rejectCall: string;
-    callEnded: string;
-    joiningRoom: string;
-    participants: string;
   };
   poll: {
     closed: string;
@@ -436,13 +262,9 @@ export interface TranslationDict {
     moreActions: string;
     addAttachment: string;
     removeImage: string;
-    gif: string;
     ok: string;
-    cancelRecording: string;
-    stopRecording: string;
     uploadImage: string;
     uploadFile: string;
-    recordVoice: string;
     prevResult: string;
     nextResult: string;
     closeSearch: string;
@@ -456,7 +278,6 @@ export interface TranslationDict {
     hour: string;
     minute: string;
     scrollToBottom: string;
-    gifStickers: string;
     online: string;
     showPassword: string;
     hidePassword: string;
@@ -466,12 +287,12 @@ export interface TranslationDict {
 const zhCN: TranslationDict = {
   join: {
     title: "TokenDance Chat",
-    subtitle: "实时聊天 · AI 助手 @TokenBot @PicoClaw 在线陪伴",
+    subtitle: "公共聊天室 · AI 助手 @TokenBot @PicoClaw 在线陪伴",
     placeholder: "你的用户名...",
     buttonJoin: "加入聊天",
     buttonConnecting: "连接中...",
     footer: "公共聊天室 · 文明交流",
-    welcomeHint: "支持 Markdown · 图片拖拽 · 表情反应 · 私信群组 · 文件分享",
+    welcomeHint: "支持 Markdown · 图片拖拽 · 表情反应 · 公共聊天室 · AI 工作区",
     errorEmpty: "请输入用户名",
     errorTooShort: "用户名至少需要2个字符",
     errorTooLong: "用户名不能超过20个字符",
@@ -505,6 +326,7 @@ const zhCN: TranslationDict = {
     backToLogin: "返回登录",
     oidcLoginButton: "使用 TokenDance ID 登录",
     oidcError: "OIDC 登录失败",
+    sessionBoundary: "受保护 REST 请求使用 Authorization: Bearer <session_token>；TokenDance ID 登录不能替代模型 API key。",
   },
   invite: {
     inviteCodes: "邀请码管理",
@@ -519,63 +341,19 @@ const zhCN: TranslationDict = {
     subtitle: "在线聊天室",
     leave: "离开",
     disconnect: "断开连接",
-    dmWith: "与 {{username}} 的私聊",
-    groupChat: "群聊: {{name}}",
     publicChat: "公共聊天",
-    dmIndicator: "私信",
-    groupIndicator: "群聊",
     deletedMessage: "此消息已被删除",
     guestWarning: "游客模式：你的身份未经验证，其他人可以使用相同用户名",
   },
   sidebar: {
     publicChat: "公共聊天",
     publicChatSub: "公共聊天室",
-    onlineUsers: "在线用户",
-    emptyState: "暂无在线用户",
     you: "你",
-    friends: "好友",
-    friendsOnline: "好友在线",
-    groups: "群组",
-    directMessages: "私信",
     assistants: "助手",
-    models: "模型",
-    noFriends: "暂无好友",
-    noFriendsHint: "在线用户中点击用户名添加好友",
-    noGroups: "暂无群组",
-    noGroupsHint: "点击上方 + 创建群组",
-    noDMs: "暂无私信",
-    noDMsHint: "点击在线用户发起私信",
-    createGroup: "创建群组",
-    sendMessage: "发送消息",
-    addFriend: "添加好友",
     online: "在线",
-    lastSeen: "最后在线 {{time}}",
-    offline: "离线",
-    requestPending: "请求待处理",
-    pinned: "置顶",
-    pinConversation: "置顶会话",
-    unpinConversation: "取消置顶",
-    unmuteConversation: "取消免打扰",
-    archivedSection: "已归档会话",
-    archiveConversation: "归档会话",
-    unarchiveConversation: "取消归档",
-    searchConversations: "搜索对话...",
-    searchResults: "搜索结果",
-    searchEmpty: "未找到匹配的对话",
     aiAssistants: "AI 助手",
-    adminDashboard: "管理面板",
     closeSidebar: "关闭侧边栏",
-    clearSearch: "清除搜索",
     connecting: "连接中...",
-  },
-  admin: {
-    totalMessages: "消息总数",
-    activeConnections: "活跃连接",
-    registeredUsers: "注册用户",
-    rooms: "房间",
-    groups: "群组",
-    friends: "好友",
-    serverStats: "TokenDanceChat 服务器状态",
   },
   transcript: {
     loading: "加载消息中...",
@@ -586,20 +364,10 @@ const zhCN: TranslationDict = {
     loadErrorRetry: "加载失败，点击重试",
     newMessagesDivider: "新消息",
     olderMessages: "更早的消息",
-    emptyDmTitle: "暂无消息",
-    emptyDmDescription: "向 {{username}} 发送第一条消息吧！",
-    emptyGroupTitle: "群聊已就绪",
-    emptyGroupDescription: "向 {{name}} 发送第一条消息，开始同步上下文。",
-    emptyGroupMembers: "{{count}} 名成员",
     selected: "已选择 {{count}} 条",
     contextSelect: "选择",
     contextCopy: "复制",
     contextDelete: "删除",
-    contextForward: "转发",
-    contextForwardTo: "转发给：",
-    contextSelectRecipient: "选择接收者...",
-    contextSend: "发送",
-    contextCancel: "取消",
     selectAll: "全选",
     copySelected: "复制选中",
   },
@@ -607,23 +375,17 @@ const zhCN: TranslationDict = {
     placeholder: "输入消息... (Shift+Enter 换行)",
     replyTo: "回复",
     characters: "{{current}}/{{max}}",
-    dmPlaceholder: "发送私信给 {{username}}...",
-    groupPlaceholder: "发送消息到 {{name}}...",
     pastedImage: "已粘贴图片",
     sendImage: "发送图片",
     escapeToCancel: "按 Esc 取消",
     cancel: "取消",
     save: "保存",
     fileTooLarge: "文件过大（最大 50MB）",
-    micPermissionDenied: "无法访问麦克风，请在浏览器设置中允许麦克风权限",
-    slideToCancel: "← 滑动取消",
-    releaseToCancel: "松开取消",
     uploadFailed: "上传失败",
     editingMessage: "编辑消息",
   },
   message: {
     edited: "（已编辑）",
-    forward: "转发",
     copy: "复制",
     delete: "删除",
     read: "已读",
@@ -650,10 +412,6 @@ const zhCN: TranslationDict = {
     typing: "{{username}} 正在输入...",
     typingTwo: "{{name1}} 和 {{name2}} 正在输入...",
     typingMany: "{{name}} 和另外 {{count}} 人正在输入...",
-    friendRejected: "{{username}} 拒绝了你的好友请求",
-    groupInvited: "{{username}} 邀请你加入群组 {{group}}",
-    friendRequest: "{{username}} 向你发送了好友请求",
-    friendAccepted: "{{username}} 接受了你的好友请求",
   },
   error: {
     timeout: "连接超时，请检查服务器是否运行",
@@ -671,76 +429,12 @@ const zhCN: TranslationDict = {
   more: {
     label: "更多",
   },
-  group: {
-    createTitle: "创建群组",
-    namePlaceholder: "群组名称...",
-    selectMembers: "选择成员",
-    create: "创建",
-    cancel: "取消",
-    nameErrorEmpty: "群组名称不能为空",
-    nameErrorTooLong: "群组名称过长（最多30个字符）",
-    noUsersAvailable: "没有好友或在线用户可添加",
-    groupInfo: "群组信息",
-    members: "成员",
-    owner: "群主",
-    admin: "管理员",
-    member: "成员",
-    kickMember: "踢出群组",
-    promoteAdmin: "设为管理员",
-    demoteMember: "降为成员",
-    transferOwnership: "转让群主",
-    renameGroup: "重命名群组",
-    leaveGroup: "退出群组",
-    leaveGroupConfirm: "确定要退出群组吗？",
-    kickConfirm: "确定要踢出 {{name}} 吗？",
-    renamePlaceholder: "新群组名称...",
-    webhooks: "传入 Webhook",
-    webhookDescription: "让外部系统向本群发送消息",
-    createWebhook: "新建",
-    webhookSecretOnce: "请立即复制 URL 和 Authorization header，密钥只显示一次",
-    webhookSecretHint: "列表不会再次显示 secret；HTTP 调用必须使用 Authorization: Bearer。",
-    webhookCopied: "已复制",
-    noWebhooks: "暂无 webhook",
-    copyWebhook: "复制 webhook 地址",
-    rotateWebhook: "轮换 webhook 密钥",
-    deleteWebhook: "删除 webhook",
-    webhookCreatedBy: "创建者：{{name}}",
-    webhookRotatedBy: "轮换：{{name}} · {{time}}",
-    webhookAudit: "Webhook 审计",
-    refreshWebhookAudit: "刷新",
-    webhookAuditEmpty: "暂无审计记录",
-    webhookAuditCreated: "创建 webhook",
-    webhookAuditRotated: "轮换密钥",
-    webhookAuditDeleted: "删除 webhook",
-  },
-  forward: {
-    title: "转发消息",
-    selectRecipient: "选择接收者：",
-    noUsers: "没有其他在线用户",
-    cancel: "取消",
-    forward: "转发",
-  },
-  friend: {
-    accept: "接受",
-    reject: "拒绝",
-    decline: "拒绝",
+  mention: {
     mentionedYou: "提到了你",
     view: "查看",
     dismiss: "关闭",
   },
   profile: {
-    sendMessage: "发送消息",
-    addFriend: "添加好友",
-    blockUser: "屏蔽用户",
-    unblockUser: "取消屏蔽",
-    editProfile: "编辑资料",
-    displayName: "显示名称",
-    bio: "个人签名",
-    status: "状态",
-    save: "保存",
-    cancel: "取消",
-    avatarUpload: "上传头像",
-    lastSeen: "最后在线 {{time}}",
     justNow: "刚刚",
     minutesAgo: "{{n}}分钟前",
     hoursAgo: "{{n}}小时前",
@@ -774,9 +468,6 @@ const zhCN: TranslationDict = {
     deleteEmoji: "删除表情",
     noCustomEmoji: "暂无自定义表情",
   },
-  model: {
-    selectModel: "选择模型",
-  },
   settings: {
     sound: "音效",
     soundOn: "音效已开启",
@@ -805,14 +496,9 @@ const zhCN: TranslationDict = {
     myAccount: "我的账号",
     openSettings: "打开设置",
   },
-  folders: {
-    addToFolder: "添加到文件夹",
-    removeFromFolder: "从文件夹移除",
-    noFolders: "暂无文件夹",
-  },
   slash: {
     me: "以动作方式发送消息",
-    topic: "修改群组话题",
+    topic: "修改聊天室话题",
     shrug: "¯\\_(ツ)_/¯",
     tableflip: "(╯°□°)╯︵ ┻━┻",
   },
@@ -833,17 +519,6 @@ const zhCN: TranslationDict = {
     linkUrl: "输入链接",
     formatting: "Markdown 格式",
   },
-  schedule: {
-    schedule: "定时",
-    scheduleMessage: "定时发送消息",
-    sendAt: "发送时间",
-    cancelSchedule: "取消定时",
-    scheduledMessages: "定时消息",
-    noScheduled: "没有定时消息",
-    today: "今天",
-    tomorrow: "明天",
-    confirmSchedule: "确认定时",
-  },
   export: {
     exportJson: "导出为 JSON",
     exportText: "导出为文本",
@@ -855,33 +530,6 @@ const zhCN: TranslationDict = {
     downloadFile: "下载文件",
     fileSize: "{{size}}",
     dropFilesHere: "拖放文件到此处",
-  },
-  gif: {
-    searchGifs: "搜索 GIF 和贴纸...",
-    trending: "热门",
-    stickers: "贴纸",
-    gifs: "GIF",
-    noResults: "未找到结果",
-    poweredBy: "由 GIPHY 提供支持",
-  },
-  call: {
-    incomingCall: "{{name}} 正在呼叫你",
-    calling: "正在呼叫 {{name}}...",
-    voiceCall: "语音通话",
-    videoCall: "视频通话",
-    groupCall: "群组通话",
-    muteMic: "关闭麦克风",
-    unmuteMic: "打开麦克风",
-    muteCamera: "关闭摄像头",
-    unmuteCamera: "打开摄像头",
-    endCall: "结束通话",
-    screenShare: "屏幕共享",
-    switchCamera: "切换摄像头",
-    acceptCall: "接听",
-    rejectCall: "拒绝",
-    callEnded: "通话已结束",
-    joiningRoom: "正在加入通话...",
-    participants: "人",
   },
   poll: {
     closed: "投票已关闭",
@@ -898,13 +546,9 @@ const zhCN: TranslationDict = {
     moreActions: "更多操作",
     addAttachment: "添加附件",
     removeImage: "移除图片",
-    gif: "GIF",
     ok: "确定",
-    cancelRecording: "取消录制",
-    stopRecording: "停止录制",
     uploadImage: "上传图片",
     uploadFile: "上传文件",
-    recordVoice: "录制语音",
     prevResult: "上一个结果",
     nextResult: "下一个结果",
     closeSearch: "关闭搜索",
@@ -918,7 +562,6 @@ const zhCN: TranslationDict = {
     hour: "小时",
     minute: "分钟",
     scrollToBottom: "回到底部",
-    gifStickers: "GIF 和贴纸",
     online: "在线",
     showPassword: "显示密码",
     hidePassword: "隐藏密码",
@@ -930,12 +573,12 @@ const zhCN: TranslationDict = {
 const enUS: TranslationDict = {
   join: {
     title: "TokenDance Chat",
-    subtitle: "Real-time chat · AI assistants @TokenBot @PicoClaw at your service",
+    subtitle: "Public chat · AI assistants @TokenBot @PicoClaw at your service",
     placeholder: "Your username...",
     buttonJoin: "Join Chat",
     buttonConnecting: "Connecting...",
     footer: "Public Chat Room · Be respectful",
-    welcomeHint: "Markdown · Image drag-drop · Emoji reactions · DMs & Groups · File sharing",
+    welcomeHint: "Markdown · Image drag-drop · Emoji reactions · Public room · AI workspaces",
     errorEmpty: "Please enter a username",
     errorTooShort: "Username must be at least 2 characters",
     errorTooLong: "Username cannot exceed 20 characters",
@@ -970,6 +613,7 @@ const enUS: TranslationDict = {
     backToLogin: "Back to Login",
     oidcLoginButton: "Login with TokenDance ID",
     oidcError: "OIDC login failed",
+    sessionBoundary: "Protected REST requests use Authorization: Bearer <session_token>; TokenDance ID login is not a model API key.",
   },
   invite: {
     inviteCodes: "Invite Codes",
@@ -984,63 +628,19 @@ const enUS: TranslationDict = {
     subtitle: "Online Chat Room",
     leave: "Leave",
     disconnect: "Disconnect",
-    dmWith: "DM with {{username}}",
-    groupChat: "Group: {{name}}",
     publicChat: "Public Chat",
-    dmIndicator: "DM",
-    groupIndicator: "Group",
     deletedMessage: "This message was deleted",
     guestWarning: "Guest mode: your identity is unverified. Others may use the same username.",
   },
   sidebar: {
     publicChat: "Public Chat",
     publicChatSub: "Public Chat Room",
-    onlineUsers: "Online Users",
-    emptyState: "No users online",
     you: "You",
-    friends: "Friends",
-    friendsOnline: "Friends Online",
-    groups: "Groups",
-    directMessages: "Direct Messages",
     assistants: "Assistants",
-    models: "Models",
-    noFriends: "No friends yet",
-    noFriendsHint: "Click a username in online users to add",
-    noGroups: "No groups yet",
-    noGroupsHint: "Click + above to create a group",
-    noDMs: "No DMs yet",
-    noDMsHint: "Click an online user to start a chat",
-    createGroup: "Create Group",
-    sendMessage: "Send Message",
-    addFriend: "Add Friend",
     online: "Online",
-    lastSeen: "Last seen {{time}}",
-    offline: "Offline",
-    requestPending: "Request pending",
-    pinned: "Pinned",
-    pinConversation: "Pin conversation",
-    unpinConversation: "Unpin conversation",
-    unmuteConversation: "Unmute",
-    archivedSection: "Archived",
-    archiveConversation: "Archive",
-    unarchiveConversation: "Unarchive",
-    searchConversations: "Search conversations...",
-    searchResults: "Search results",
-    searchEmpty: "No matching conversations",
     aiAssistants: "AI Assistants",
-    adminDashboard: "Admin Dashboard",
     closeSidebar: "Close sidebar",
-    clearSearch: "Clear search",
     connecting: "Connecting...",
-  },
-  admin: {
-    totalMessages: "Total Messages",
-    activeConnections: "Active Connections",
-    registeredUsers: "Registered Users",
-    rooms: "Rooms",
-    groups: "Groups",
-    friends: "Friends",
-    serverStats: "TokenDanceChat Server Stats",
   },
   transcript: {
     loading: "Loading messages...",
@@ -1051,20 +651,10 @@ const enUS: TranslationDict = {
     loadErrorRetry: "Failed to load — tap to retry",
     newMessagesDivider: "New messages",
     olderMessages: "Older messages",
-    emptyDmTitle: "No messages yet",
-    emptyDmDescription: "Send your first message to {{username}}!",
-    emptyGroupTitle: "Group is ready",
-    emptyGroupDescription: "Send the first message to {{name}} and start syncing context.",
-    emptyGroupMembers: "{{count}} members",
     selected: "{{count}} selected",
     contextSelect: "Select",
     contextCopy: "Copy",
     contextDelete: "Delete",
-    contextForward: "Forward",
-    contextForwardTo: "Forward to:",
-    contextSelectRecipient: "Select recipient...",
-    contextSend: "Send",
-    contextCancel: "Cancel",
     selectAll: "Select All",
     copySelected: "Copy Selected",
   },
@@ -1072,23 +662,17 @@ const enUS: TranslationDict = {
     placeholder: "Type a message... (Shift+Enter for new line)",
     replyTo: "Reply to",
     characters: "{{current}}/{{max}}",
-    dmPlaceholder: "Send DM to {{username}}...",
-    groupPlaceholder: "Send message to {{name}}...",
     pastedImage: "Pasted image",
     sendImage: "Send image",
     escapeToCancel: "Escape to cancel",
     cancel: "Cancel",
     save: "Save",
     fileTooLarge: "File too large (max 50MB)",
-    micPermissionDenied: "Cannot access microphone. Allow microphone access in browser settings.",
-    slideToCancel: "← slide to cancel",
-    releaseToCancel: "Release to cancel",
     uploadFailed: "Upload failed",
     editingMessage: "Edit message",
   },
   message: {
     edited: "(edited)",
-    forward: "Forward",
     copy: "Copy",
     delete: "Delete",
     read: "Read",
@@ -1115,10 +699,6 @@ const enUS: TranslationDict = {
     typing: "{{username}} is typing...",
     typingTwo: "{{name1}} and {{name2}} are typing...",
     typingMany: "{{name}} and {{count}} others are typing...",
-    friendRejected: "{{username}} rejected your friend request",
-    groupInvited: "{{username}} invited you to group {{group}}",
-    friendRequest: "{{username}} sent you a friend request",
-    friendAccepted: "{{username}} accepted your friend request",
   },
   error: {
     timeout: "Connection timed out. Please check if the server is running",
@@ -1136,76 +716,12 @@ const enUS: TranslationDict = {
   more: {
     label: "More",
   },
-  group: {
-    createTitle: "Create Group",
-    namePlaceholder: "Group name...",
-    selectMembers: "Select members",
-    create: "Create",
-    cancel: "Cancel",
-    nameErrorEmpty: "Group name cannot be empty",
-    nameErrorTooLong: "Group name too long (max 30 chars)",
-    noUsersAvailable: "No friends or online users to add",
-    groupInfo: "Group Info",
-    members: "Members",
-    owner: "Owner",
-    admin: "Admin",
-    member: "Member",
-    kickMember: "Kick from group",
-    promoteAdmin: "Promote to admin",
-    demoteMember: "Demote to member",
-    transferOwnership: "Transfer ownership",
-    renameGroup: "Rename group",
-    leaveGroup: "Leave group",
-    leaveGroupConfirm: "Are you sure you want to leave the group?",
-    kickConfirm: "Kick {{name}} from the group?",
-    renamePlaceholder: "New group name...",
-    webhooks: "Incoming Webhooks",
-    webhookDescription: "Let external systems post into this group",
-    createWebhook: "New",
-    webhookSecretOnce: "Copy the URL and Authorization header now; the secret is shown once",
-    webhookSecretHint: "The list will not show the secret again. HTTP calls must use Authorization: Bearer.",
-    webhookCopied: "Copied",
-    noWebhooks: "No webhooks yet",
-    copyWebhook: "Copy webhook URL",
-    rotateWebhook: "Rotate webhook secret",
-    deleteWebhook: "Delete webhook",
-    webhookCreatedBy: "Created by {{name}}",
-    webhookRotatedBy: "Rotated by {{name}} · {{time}}",
-    webhookAudit: "Webhook Audit",
-    refreshWebhookAudit: "Refresh",
-    webhookAuditEmpty: "No audit events yet",
-    webhookAuditCreated: "Created webhook",
-    webhookAuditRotated: "Rotated secret",
-    webhookAuditDeleted: "Deleted webhook",
-  },
-  forward: {
-    title: "Forward Message",
-    selectRecipient: "Select recipient:",
-    noUsers: "No other users online",
-    cancel: "Cancel",
-    forward: "Forward",
-  },
-  friend: {
-    accept: "Accept",
-    reject: "Reject",
-    decline: "Decline",
+  mention: {
     mentionedYou: "mentioned you",
     view: "View",
     dismiss: "Dismiss",
   },
   profile: {
-    sendMessage: "Send Message",
-    addFriend: "Add Friend",
-    blockUser: "Block User",
-    unblockUser: "Unblock User",
-    editProfile: "Edit Profile",
-    displayName: "Display Name",
-    bio: "Bio",
-    status: "Status",
-    save: "Save",
-    cancel: "Cancel",
-    avatarUpload: "Upload Avatar",
-    lastSeen: "Last seen {{time}}",
     justNow: "just now",
     minutesAgo: "{{n}}m ago",
     hoursAgo: "{{n}}h ago",
@@ -1239,9 +755,6 @@ const enUS: TranslationDict = {
     deleteEmoji: "Delete Emoji",
     noCustomEmoji: "No custom emojis",
   },
-  model: {
-    selectModel: "Select Model",
-  },
   settings: {
     sound: "Sound",
     soundOn: "Sound on",
@@ -1270,14 +783,9 @@ const enUS: TranslationDict = {
     myAccount: "My Account",
     openSettings: "Open Settings",
   },
-  folders: {
-    addToFolder: "Add to Folder",
-    removeFromFolder: "Remove from Folder",
-    noFolders: "No folders",
-  },
   slash: {
     me: "Send as action message",
-    topic: "Change group topic",
+    topic: "Change chat topic",
     shrug: "¯\\_(ツ)_/¯",
     tableflip: "(╯°□°)╯︵ ┻━┻",
   },
@@ -1298,17 +806,6 @@ const enUS: TranslationDict = {
     linkUrl: "Enter URL",
     formatting: "Markdown formatting",
   },
-  schedule: {
-    schedule: "Schedule",
-    scheduleMessage: "Schedule Message",
-    sendAt: "Send at",
-    cancelSchedule: "Cancel Schedule",
-    scheduledMessages: "Scheduled Messages",
-    noScheduled: "No scheduled messages",
-    today: "Today",
-    tomorrow: "Tomorrow",
-    confirmSchedule: "Confirm Schedule",
-  },
   export: {
     exportJson: "Export as JSON",
     exportText: "Export as Text",
@@ -1320,33 +817,6 @@ const enUS: TranslationDict = {
     downloadFile: "Download file",
     fileSize: "{{size}}",
     dropFilesHere: "Drop files here",
-  },
-  gif: {
-    searchGifs: "Search GIFs & Stickers...",
-    trending: "Trending",
-    stickers: "Stickers",
-    gifs: "GIFs",
-    noResults: "No results found",
-    poweredBy: "Powered by GIPHY",
-  },
-  call: {
-    incomingCall: "{{name}} is calling you",
-    calling: "Calling {{name}}...",
-    voiceCall: "Voice Call",
-    videoCall: "Video Call",
-    groupCall: "Group Call",
-    muteMic: "Mute Mic",
-    unmuteMic: "Unmute Mic",
-    muteCamera: "Mute Camera",
-    unmuteCamera: "Unmute Camera",
-    endCall: "End Call",
-    screenShare: "Screen Share",
-    switchCamera: "Switch Camera",
-    acceptCall: "Accept",
-    rejectCall: "Reject",
-    callEnded: "Call ended",
-    joiningRoom: "Joining call...",
-    participants: "participants",
   },
   poll: {
     closed: "Poll closed",
@@ -1363,13 +833,9 @@ const enUS: TranslationDict = {
     moreActions: "More actions",
     addAttachment: "Add attachment",
     removeImage: "Remove image",
-    gif: "GIF",
     ok: "OK",
-    cancelRecording: "Cancel recording",
-    stopRecording: "Stop recording",
     uploadImage: "Upload image",
     uploadFile: "Upload file",
-    recordVoice: "Record voice",
     prevResult: "Previous result",
     nextResult: "Next result",
     closeSearch: "Close search",
@@ -1383,7 +849,6 @@ const enUS: TranslationDict = {
     hour: "Hour",
     minute: "Minute",
     scrollToBottom: "Scroll to bottom",
-    gifStickers: "GIF & Stickers",
     online: "Online",
     showPassword: "Show password",
     hidePassword: "Hide password",

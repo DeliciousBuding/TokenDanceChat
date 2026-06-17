@@ -37,13 +37,13 @@ export function ConfirmDialog({
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+        className="td-chat-backdrop absolute inset-0 animate-fade-in"
         onClick={onCancel}
       />
 
       {/* Dialog */}
       <div
-        className="relative z-10 w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-2xl animate-scale-in"
+        className="td-chat-modal relative z-10 w-full max-w-sm p-6 animate-scale-in"
         ref={dialogRef}
         tabIndex={-1}
         role="alertdialog"
@@ -56,7 +56,7 @@ export function ConfirmDialog({
         {/* Close button */}
         <button
           onClick={onCancel}
-          className="absolute top-3 right-3 rounded-full p-1 text-muted-foreground/50 hover:text-muted-foreground hover:bg-accent transition-colors"
+          className="td-chat-header-action absolute top-3 right-3 rounded-full p-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
           aria-label={t("a11y.close")}
         >
           <X className="h-3.5 w-3.5" />
@@ -72,7 +72,7 @@ export function ConfirmDialog({
         <div className="flex items-center gap-2 justify-end">
           <button
             onClick={onCancel}
-            className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="td-chat-list-row px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             {cancelLabel}
           </button>
