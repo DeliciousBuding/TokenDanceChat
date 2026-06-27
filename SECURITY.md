@@ -14,6 +14,10 @@
 | **MEDIUM** | 见 active register | OIDC 边界、call room bearer、service worker API cache deploy verification、admin stats role policy、webhook sender/rate limit 等在 active register 持续跟踪。 |
 | **LOW** | 见 active register | PWA stale asset、文档脱敏和 demo 阶段可接受项按 release checklist 复核。 |
 
+**2026-06-27 安全简化**:
+
+- **移除文件上传功能**: 删除 `/api/upload` + `/uploads/` 路由、`UploadImage`/`ServeUpload` handler、前端 `uploadImage` API、`ChatInput` 粘贴/拖拽/按钮上传 UI、`FileMessage` 组件及所有相关测试。消除上传面安全风险（magic bytes 绕过、Content-Type 误判、DoS via large uploads）。自定义 emoji 上传独立保留（`/api/emoji/upload` + `/uploads/emojis/`）。
+
 **2026-05-23 安全更新**:
 
 - **密码哈希升级为 bcrypt**: `store.go` 中的 `hashPassword`/`checkPassword` 从 SHA-256 迁移至 bcrypt（cost 12）。`VerifyUser` 在旧 SHA-256 哈希用户成功登录时自动升级为 bcrypt，实现无缝迁移。

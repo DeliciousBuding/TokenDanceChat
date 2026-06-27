@@ -18,7 +18,6 @@ vi.mock("@/hooks/useWebSocket", () => ({
     markRead: wsMocks.markRead,
     sendReaction: vi.fn(),
     sendMessageEdit: vi.fn(),
-    uploadImage: vi.fn(),
   }),
 }));
 
@@ -51,7 +50,6 @@ vi.mock("@/lib/api", () => {
       },
       sendTypingStart: vi.fn(),
       sendTypingStop: vi.fn(),
-      uploadImage: vi.fn().mockResolvedValue("https://example.com/uploads/file.png"),
       sendMessage: vi.fn(),
       sendMessageEdit: vi.fn(),
       sendThreadReply: vi.fn(),

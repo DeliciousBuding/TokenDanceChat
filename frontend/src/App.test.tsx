@@ -16,7 +16,6 @@ vi.mock("@/hooks/useWebSocket", () => ({
     markRead: vi.fn(),
     sendReaction: vi.fn(),
     sendMessageEdit: vi.fn(),
-    uploadImage: vi.fn(),
   }),
 }));
 

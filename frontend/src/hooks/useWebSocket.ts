@@ -85,7 +85,6 @@ export function useWebSocket() {
     addSystemMessage,
     addTypingUser,
     removeTypingUser,
-    setPendingImage,
     updateMessageReactions,
     editMessageInPlace,
     setUnreadCount,
@@ -174,18 +173,6 @@ export function useWebSocket() {
   const sendMessageEdit = useCallback((messageId: string, content: string) => {
     chatAPI.sendMessageEdit(messageId, content);
   }, []);
-
-  const uploadImage = useCallback(async (file: File) => {
-    const url = await chatAPI.uploadImage(file);
-    if (url) {
-      const state = useChatStore.getState();
-      const isImage = file.type.startsWith("image/");
-      const fileMarkdown = isImage ? `![image](${url})` : `[${file.name}](${url})`;
-      chatAPI.sendMessage(fileMarkdown, state.replyTo || undefined);
-      state.setReplyTo(null);
-    }
-    setPendingImage(null);
-  }, [setPendingImage]);
 
   useEffect(() => {
     sharedWebSocketSubscriptionCount += 1;
@@ -818,5 +805,5 @@ export function useWebSocket() {
     return releaseSharedWebSocketSubscription;
   }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setNotificationPrefs, setTranslation, updatePoll, disconnect]);
 
-  return { connect, disconnect, sendMessage, markRead, sendReaction, sendMessageEdit, uploadImage };
+  return { connect, disconnect, sendMessage, markRead, sendReaction, sendMessageEdit };
 }

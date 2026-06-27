@@ -72,7 +72,6 @@ export function mockI18n(overrides?: Record<string, string>) {
     "a11y.moreActions": "更多操作",
     "a11y.removeImage": "移除图片",
     "a11y.ok": "确定",
-    "a11y.uploadImage": "上传图片",
     "a11y.uploadFile": "上传文件",
     "a11y.prevResult": "上一个结果",
     "a11y.nextResult": "下一个结果",

@@ -1270,64 +1270,6 @@ describe("fetchPublicMessages", () => {
 });
 
 // ===========================================================================
-// chatAPI HTTP method — uploadImage
-// ===========================================================================
-describe("chatAPI uploadImage", () => {
-  afterEach(() => {
-    chatAPI.disconnect();
-  });
-
-  it("POSTs to /api/upload with the file in FormData", async () => {
-    window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, "session-token-1");
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ url: "https://cdn.example.com/img.png" }),
-    } as unknown as Response);
-
-    const file = new File(["content"], "test.png", { type: "image/png" });
-    await chatAPI.uploadImage(file);
-
-    const [url, init] = mockFetch.mock.calls[0];
-    expect(url).toBe("/api/upload");
-    expect(init.method).toBe("POST");
-    expect(init.headers).toEqual({ Authorization: "Bearer session-token-1" });
-    const fd = init.body as FormData;
-    expect(fd.get("file")).toBe(file);
-  });
-
-  it("returns the url string on success", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ url: "https://cdn.example.com/uploaded.png" }),
-    } as unknown as Response);
-
-    const file = new File(["data"], "photo.jpg");
-    const result = await chatAPI.uploadImage(file);
-    expect(result).toBe("https://cdn.example.com/uploaded.png");
-  });
-
-  it("returns null when response is not ok", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 413,
-      json: async () => ({ error: "File too large" }),
-    } as unknown as Response);
-
-    const file = new File(["big"], "big.bin");
-    const result = await chatAPI.uploadImage(file);
-    expect(result).toBeNull();
-  });
-
-  it("returns null on network error", async () => {
-    mockFetch.mockRejectedValueOnce(new Error("Upload failed"));
-
-    const file = new File(["x"], "f.txt");
-    const result = await chatAPI.uploadImage(file);
-    expect(result).toBeNull();
-  });
-});
-
-// ===========================================================================
 // chatAPI HTTP method — uploadEmoji
 // ===========================================================================
 describe("chatAPI uploadEmoji", () => {

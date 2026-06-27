@@ -563,23 +563,6 @@ class ChatAPI {
     }
   }
 
-  async uploadImage(file: File): Promise<string | null> {
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const resp = await fetch("/api/upload", {
-        method: "POST",
-        headers: getSessionAuthHeaders(),
-        body: formData,
-      });
-      if (!resp.ok) return null;
-      const data = await resp.json() as { url: string };
-      return data.url;
-    } catch {
-      return null;
-    }
-  }
-
   async uploadEmoji(file: File, name: string): Promise<string | null> {
     try {
       const formData = new FormData();

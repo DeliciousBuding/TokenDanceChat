@@ -218,28 +218,6 @@ describe("chatStore", () => {
     });
   });
 
-  describe("pendingImage", () => {
-    it("sets pendingImage", () => {
-      useChatStore.getState().setPendingImage("data:image/png;base64,abc123");
-      expect(useChatStore.getState().pendingImage).toBe("data:image/png;base64,abc123");
-    });
-
-    it("clears pendingImage when legacy chat input is cleaned", () => {
-      useChatStore.getState().setPendingImage("data:image/png;base64,abc123");
-      expect(useChatStore.getState().pendingImage).toBe("data:image/png;base64,abc123");
-
-      useChatStore.getState().setCurrentChat({ type: "dm", username: "Alice" });
-      expect(useChatStore.getState().pendingImage).toBeNull();
-      expect(useChatStore.getState().currentChat).toEqual({ type: "public" });
-    });
-
-    it("setPendingImage(null) clears the image", () => {
-      useChatStore.getState().setPendingImage("data:image/png;base64,abc123");
-      useChatStore.getState().setPendingImage(null);
-      expect(useChatStore.getState().pendingImage).toBeNull();
-    });
-  });
-
   describe("setCurrentChat", () => {
     it("coerces legacy DM input to public chat", () => {
       useChatStore.getState().setCurrentChat({ type: "dm", username: "Bob" });
@@ -312,7 +290,6 @@ describe("chatStore", () => {
       useChatStore.getState().setUsername("Alice");
       useChatStore.getState().setConnected(true);
       useChatStore.getState().setView("chat");
-      useChatStore.getState().setPendingImage("data:image/png;base64,test");
       useChatStore.getState().addBlockedUser("Spammer");
       useChatStore.getState().setPinnedMessages([
         { id: "p1", username: "Mod", content: "Rules", timestamp: 1 },
@@ -326,7 +303,6 @@ describe("chatStore", () => {
       expect(s.username).toBe("");
       expect(s.connected).toBe(false);
       expect(s.messages).toHaveLength(0);
-      expect(s.pendingImage).toBeNull();
       expect(s.blockedUsers).toHaveLength(0);
       expect(s.pinnedMessages).toHaveLength(0);
       expect(s.unreadCount).toBe(0);
@@ -421,17 +397,9 @@ describe("chatStore", () => {
       expect(s.lastReadTimestamps["public"]).toBeGreaterThan(0);
     });
 
-    it("clears pendingImage when switching chats", () => {
-      useChatStore.getState().setPendingImage("data:image/png;base64,abc123");
-      useChatStore.getState().setCurrentChat({ type: "dm", username: "Bob" });
-      expect(useChatStore.getState().pendingImage).toBeNull();
-      useChatStore.getState().setPendingImage("data:image/png;base64,xyz");
-      useChatStore.getState().setCurrentChat({ type: "group", name: "Team" });
-      expect(useChatStore.getState().pendingImage).toBeNull();
     });
-  });
 
-  describe("addMessage edge cases", () => {
+    describe("addMessage edge cases", () => {
     it("deduplicates repeated messages by persisted id", () => {
       useChatStore.getState().addMessage({
         id: "dup-1", username: "Alice", content: "first", timestamp: 1000,

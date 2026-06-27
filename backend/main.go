@@ -155,7 +155,6 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	mux.HandleFunc("/api/users/online", hdlr.GetOnlineUsers)
 	mux.HandleFunc("/api/stats", hdlr.Stats)
 	mux.HandleFunc("/api/link-preview", hdlr.LinkPreview)
-	mux.HandleFunc("/api/upload", hdlr.UploadImage)
 	mux.HandleFunc("/api/emoji/upload", hdlr.UploadEmoji)
 	mux.HandleFunc("/api/search", hdlr.Search)
 	mux.HandleFunc("/api/export", hdlr.ExportMessages)
@@ -168,7 +167,6 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	mux.HandleFunc("/api/webhook/", hdlr.WebhookHandler)
 	mux.HandleFunc("/api/admin/stats", hdlr.AdminStats)
 	mux.HandleFunc("/uploads/emojis/", hdlr.ServeEmoji)
-	mux.HandleFunc("/uploads/", hdlr.ServeUpload)
 	mux.HandleFunc("/ws", hdlr.HandleWebSocket)
 
 	// OIDC routes (only registered when enabled).

@@ -604,95 +604,10 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// --- Image Upload ---
+// --- Custom Emoji Upload ---
 
-const maxUploadSize = 50 << 20       // 50 MB
 const maxEmojiUploadSize = 128 << 10 // 128 KB
 const maxLinkPreviewCacheSize = 1000
-
-// UploadImage handles POST /api/upload (multipart form).
-func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
-	requestID := requestIDFromContext(r.Context())
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
-		return
-	}
-	if _, ok := h.requireSession(w, r); !ok {
-		return
-	}
-
-	// Limit request body to maxUploadSize.
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
-
-	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "file too large (max 5MB)", "FILE_TOO_LARGE", requestID)
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing file field", "MISSING_FILE", requestID)
-		return
-	}
-	defer file.Close()
-
-	// Validate file type.
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	allowedExts := map[string]bool{
-		".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
-		".pdf": true, ".doc": true, ".docx": true, ".txt": true, ".md": true,
-		".csv": true, ".json": true, ".xml": true,
-		".zip": true, ".tar": true, ".gz": true, ".7z": true, ".rar": true,
-		".webm": true, ".ogg": true, ".mp3": true, ".wav": true, ".m4a": true,
-	}
-	if !allowedExts[ext] {
-		writeJSONError(w, http.StatusBadRequest, "unsupported file type", "INVALID_FILE_TYPE", requestID)
-		return
-	}
-
-	// Generate a unique filename.
-	filename := uuid.New().String() + ext
-	contentType := contentTypeForFilename(filename)
-
-	if err := h.mediaStore.Save(r.Context(), filename, contentType, file); err != nil {
-		log.Printf("upload save failed for %s: %v", filename, err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to write file", "SERVER_ERROR", requestID)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"url":      "/uploads/" + filename,
-		"filename": filename,
-	})
-}
-
-// ServeUpload handles GET /uploads/{filename}
-func (h *Handler) ServeUpload(w http.ResponseWriter, r *http.Request) {
-	// Extract filename from path.
-	filename := filepath.Base(r.URL.Path)
-	if filename == "." || filename == "/" || filename == "" {
-		http.NotFound(w, r)
-		return
-	}
-
-	media, err := h.mediaStore.Open(r.Context(), filename)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	defer media.Body.Close()
-
-	if media.ContentType != "" {
-		w.Header().Set("Content-Type", media.ContentType)
-	}
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	if _, err := io.Copy(w, media.Body); err != nil {
-		log.Printf("failed to stream upload %s: %v", filename, err)
-	}
-}
-
-// --- Custom Emoji Upload ---
 
 // validEmojiExts are the allowed image extensions for custom emojis.
 var validEmojiExts = map[string]bool{

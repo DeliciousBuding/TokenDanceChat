@@ -18,7 +18,6 @@ vi.mock("@/lib/api", () => ({
   chatAPI: {
     sendTypingStart: vi.fn(),
     sendTypingStop: vi.fn(),
-    uploadImage: vi.fn(),
     sendMessage: vi.fn(),
     sendReaction: vi.fn(),
     sendMessageEdit: vi.fn(),
@@ -81,7 +80,6 @@ function renderChatInput(props?: {
   onSend?: (content: string) => void;
   disabled?: boolean;
   replyTo?: ChatMessage | null;
-  onUpload?: (file: File) => void;
 }) {
   const onSend = props?.onSend ?? vi.fn();
   const result = render(
@@ -90,7 +88,6 @@ function renderChatInput(props?: {
         onSend={onSend}
         disabled={props?.disabled ?? false}
         replyTo={props?.replyTo ?? null}
-        onUpload={props?.onUpload ?? vi.fn()}
       />
     </I18nProvider>,
   );
@@ -111,7 +108,6 @@ describe("ChatInput", () => {
       onlineUsers: ["testuser", "alice", "bob", "TokenBot", "PicoClaw"],
       currentChat: { type: "public" },
       replyTo: null,
-      pendingImage: null,
     });
   });
 
@@ -635,66 +631,6 @@ describe("ChatInput", () => {
       fireEvent.keyDown(textarea, { key: "Enter" });
 
       expect(localStorageMock.getItem("tdchat-draft-public")).toBeNull();
-    });
-  });
-
-  describe("文件/图片粘贴 (file/image paste)", () => {
-    it("粘贴图片调用 FileReader 并设置 pendingImage", () => {
-      const readAsDataURLSpy = vi
-        .spyOn(FileReader.prototype, "readAsDataURL")
-        .mockImplementation(function (this: FileReader, _blob: Blob) {
-          Object.defineProperty(this, "result", { value: "data:image/png;base64,mock123" });
-          this.onload?.(new Event("load") as ProgressEvent<FileReader>);
-        });
-
-      renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
-
-      const file = new File(["fake-image"], "test.png", { type: "image/png" });
-      fireEvent.paste(textarea, {
-        clipboardData: {
-          items: [{ type: "image/png", getAsFile: () => file }],
-        },
-      });
-
-      expect(readAsDataURLSpy).toHaveBeenCalledWith(file);
-      expect(useChatStore.getState().pendingImage).toBe("data:image/png;base64,mock123");
-      readAsDataURLSpy.mockRestore();
-    });
-
-    it("粘贴非图片内容不触发 FileReader", () => {
-      const readAsDataURLSpy = vi.spyOn(FileReader.prototype, "readAsDataURL");
-
-      renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
-
-      fireEvent.paste(textarea, {
-        clipboardData: {
-          items: [{ type: "text/plain", getAsFile: () => null }],
-        },
-      });
-
-      expect(readAsDataURLSpy).not.toHaveBeenCalled();
-      readAsDataURLSpy.mockRestore();
-    });
-
-    it("粘贴超过 50MB 的图片被忽略", () => {
-      const readAsDataURLSpy = vi.spyOn(FileReader.prototype, "readAsDataURL");
-
-      renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
-
-      const largeFile = new File([], "large.png", { type: "image/png" });
-      Object.defineProperty(largeFile, "size", { value: 51 * 1024 * 1024 });
-
-      fireEvent.paste(textarea, {
-        clipboardData: {
-          items: [{ type: "image/png", getAsFile: () => largeFile }],
-        },
-      });
-
-      expect(readAsDataURLSpy).not.toHaveBeenCalled();
-      readAsDataURLSpy.mockRestore();
     });
   });
 
