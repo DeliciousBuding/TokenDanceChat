@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect, useMemo, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ClipboardEvent, type PointerEvent } from "react";
-import { Send, Loader2, X, ImagePlus, Paperclip, ArrowUp } from "lucide-react";
+import { useState, useRef, useCallback, useEffect, useMemo, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from "react";
+import { Loader2, X, ArrowUp } from "lucide-react";
 import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
@@ -11,7 +11,6 @@ interface ChatInputProps {
   onSend: (content: string) => void;
   disabled?: boolean;
   replyTo?: ChatMessage | null;
-  onUpload?: (file: File) => void;
   assistantContext?: {
     assistant: AssistantDefinition;
     model: AssistantModel;
@@ -24,11 +23,10 @@ export function ChatInput({
   onSend,
   disabled,
   replyTo,
-  onUpload,
   assistantContext = null,
 }: ChatInputProps) {
   const { t } = useTranslation();
-  const { onlineUsers, username, pendingImage, setPendingImage, setReplyTo, connected } = useChatStore();
+  const { onlineUsers, username, setReplyTo, connected } = useChatStore();
   const [content, setContent] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const draftStorageKey = "tdchat-draft-public";
@@ -63,8 +61,6 @@ export function ChatInput({
     return () => clearTimeout(saveDraftRef.current);
   }, [content, draftStorageKey]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [pulseButton, setPulseButton] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,21 +70,6 @@ export function ChatInput({
   const sendingRef = useRef(false);
   const typingSentRef = useRef(false);
   const mountedRef = useRef(true);
-
-  const dragCounter = useRef(0);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [dragError, setDragError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number } | null>(null);
-  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
-
-  // Estimate image file size from data URL
-  const estimateImageSize = useCallback((dataUrl: string): string => {
-    const base64 = dataUrl.split(',')[1] || '';
-    const bytes = Math.round(base64.length * 0.75);
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }, []);
 
   // @mention autocomplete state
   const [mentionActive, setMentionActive] = useState(false);
@@ -192,14 +173,6 @@ export function ChatInput({
     textareaRef.current?.focus();
   }, []);
 
-  // Auto-dismiss drag error toast
-  useEffect(() => {
-    if (dragError) {
-      const timer = setTimeout(() => setDragError(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [dragError]);
-
   // Clean up typing state on unmount.
   useEffect(() => {
     return () => {
@@ -230,81 +203,6 @@ export function ChatInput({
       window.removeEventListener("tdchat:insert-mention", handleInsertAssistant);
     };
   }, [adjustHeight, content]);
-
-  // Image paste handler — works for all image types.
-  const handlePaste = useCallback(
-    (e: ClipboardEvent<HTMLTextAreaElement>) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-
-      for (const item of Array.from(items)) {
-        if (item.type.startsWith("image/")) {
-          e.preventDefault();
-          const file = item.getAsFile();
-          if (file) {
-            if (file.size > 50 * 1024 * 1024) {
-              setDragError(t("input.fileTooLarge"));
-              return;
-            }
-            const reader = new FileReader();
-            reader.onload = () => {
-              setPendingImage(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-            break;
-          }
-        }
-      }
-    },
-    [setPendingImage],
-  );
-
-  // Image file select handler
-  const handleImageSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      if (file.size > 50 * 1024 * 1024) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        setPendingImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-      if (imageInputRef.current) imageInputRef.current.value = "";
-    },
-    [setPendingImage],
-  );
-
-  // General file upload handler — upload directly and insert link.
-  const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file || !onUpload) return;
-      if (file.size > 50 * 1024 * 1024) return;
-      setUploadProgress({ fileName: file.name, progress: 0 });
-      onUpload(file);
-      setTimeout(() => setUploadProgress(null), 3000);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    },
-    [onUpload],
-  );
-
-  // Cancel pending image
-  const handleCancelImage = useCallback(() => {
-    setPendingImage(null);
-  }, [setPendingImage]);
-
-  // Send pending image
-  const handleSendImage = useCallback(() => {
-    if (!pendingImage || !onUpload) return;
-    // Convert data URL to File and upload.
-    fetch(pendingImage)
-      .then((res) => res.blob())
-      .then((blob) => {
-        const file = new File([blob], `paste-${Date.now()}.png`, { type: blob.type });
-        onUpload(file);
-      });
-  }, [pendingImage, onUpload]);
 
   // Pulse send button when content goes from empty to non-empty
   useEffect(() => {
@@ -484,7 +382,6 @@ export function ChatInput({
   );
 
   const hasContent = content.trim().length > 0;
-  const canOpenComposerPopovers = !disabled && Boolean(username);
 
   // Determine placeholder based on chat context.
   const placeholder = useMemo(() => {
@@ -494,59 +391,11 @@ export function ChatInput({
     return t("input.placeholder");
   }, [assistantContext, t]);
 
-  // Shared button class for toolbar and bottom-row icon buttons
-  const iconBtnClass = cn(
-    "flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] flex-shrink-0 transition-colors duration-150",
-    "td-chat-header-action text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]",
-    "[&_svg]:h-[18px] [&_svg]:w-[18px]",
-    "disabled:cursor-not-allowed disabled:opacity-30",
-  );
-
-  const toolbarBtnClass = (active = false) =>
-    cn(iconBtnClass, active && "text-[var(--accent)] bg-[var(--accent)]/10");
-
   return (
     <div
       className="td-chat-composer relative z-30 flex-shrink-0 pb-safe"
       data-testid="chat-input"
       data-visual="composer-card"
-      onDragEnter={(e) => {
-        e.preventDefault();
-        dragCounter.current += 1;
-        setIsDragOver(true);
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-      }}
-      onDragLeave={(e) => {
-        e.preventDefault();
-        dragCounter.current -= 1;
-        if (dragCounter.current === 0) {
-          setIsDragOver(false);
-        }
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        dragCounter.current = 0;
-        setIsDragOver(false);
-        const files = e.dataTransfer?.files;
-        if (!files || files.length === 0) return;
-        const file = files[0];
-        if (file.size > 50 * 1024 * 1024) {
-          setDragError(t("input.fileTooLarge"));
-          return;
-        }
-        if (file.type.startsWith("image/")) {
-          const reader = new FileReader();
-          reader.onload = () => setPendingImage(reader.result as string);
-          reader.readAsDataURL(file);
-        } else if (onUpload) {
-          setUploadProgress({ fileName: file.name, progress: 0 });
-          onUpload(file);
-          // Clear progress after a short delay (upload completes async in parent)
-          setTimeout(() => setUploadProgress(null), 3000);
-        }
-      }}
     >
       {/* Reply indicator */}
       {replyTo && (
@@ -593,72 +442,6 @@ export function ChatInput({
           </button>
         </div>
       )}
-
-      {/* Image preview */}
-      {pendingImage && (
-        <div className="image-preview-enter pointer-events-auto relative z-20 px-1 pt-1 pb-2">
-          <div className="td-chat-stream-card flex items-start gap-3 p-3">
-            <div className="relative flex-shrink-0">
-              <img
-                src={pendingImage}
-                alt="Preview"
-                className="h-24 w-auto rounded-[var(--radius-control)] border border-[var(--chat-stream-card-border)] object-cover"
-                onLoad={(e) => {
-                  const img = e.currentTarget;
-                  setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-                }}
-              />
-              <button
-                onClick={handleCancelImage}
-                className="absolute -right-3 -top-3 z-10 flex size-11 items-center justify-center rounded-full bg-[var(--danger)] text-white transition-colors hover:brightness-110"
-                aria-label={t("a11y.removeImage")}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-            <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-[var(--text-secondary)] truncate">
-                  {t("input.pastedImage")}
-                </span>
-                {imageDimensions && (
-                  <span className="text-[10px] text-[var(--text-tertiary)]/60 flex-shrink-0">
-                    {imageDimensions.width} x {imageDimensions.height}
-                  </span>
-                )}
-              </div>
-              <div className="text-[10px] text-[var(--text-tertiary)]/50">
-                {estimateImageSize(pendingImage)}
-              </div>
-              <button
-                onClick={handleSendImage}
-                className="mt-1 flex min-h-11 items-center gap-1.5 self-start rounded-[var(--radius-control)] bg-[var(--accent)] px-3 py-2 text-xs font-medium text-white transition-all hover:brightness-110"
-              >
-                <Send className="h-3 w-3" />
-                {t("input.sendImage")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Hidden file inputs */}
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp"
-        onChange={handleImageSelect}
-        className="hidden"
-        aria-hidden="true"
-      />
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.zip,.tar,.gz,.7z,.rar"
-        onChange={handleFileSelect}
-        className="hidden"
-        aria-hidden="true"
-      />
 
       <div className="td-chat-composer-body">
           {assistantContext && (
@@ -725,7 +508,6 @@ export function ChatInput({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
               placeholder={placeholder}
@@ -740,30 +522,6 @@ export function ChatInput({
 
           {/* ── AgentHub-style inline actions + send ── */}
           <div className="td-chat-composer-actions" data-visual="composer-bottom-row">
-              <button
-                type="button"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={!canOpenComposerPopovers}
-                aria-label={t("a11y.uploadImage")}
-                title={t("a11y.uploadImage")}
-                data-visual="composer-tool"
-                className={toolbarBtnClass()}
-              >
-                <ImagePlus size={15} strokeWidth={1.5} />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!canOpenComposerPopovers}
-                aria-label={t("a11y.uploadFile")}
-                title={t("a11y.uploadFile")}
-                data-visual="composer-tool"
-                className={toolbarBtnClass()}
-              >
-                <Paperclip size={15} strokeWidth={1.5} />
-              </button>
-
             <button
               ref={sendBtnRef}
               onPointerDown={handleSendPointerDown}
@@ -817,47 +575,6 @@ export function ChatInput({
             </div>
           )}
       </div>
-
-      {/* Drag-and-drop overlay */}
-      {isDragOver && (
-        <div className="td-chat-drop-overlay absolute inset-0 z-20 m-0 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-2 text-[var(--accent)]/70">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <span className="text-sm font-medium">{t("file.dropFilesHere")}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Upload progress bar */}
-      {uploadProgress && (
-        <div className="px-4 pt-2 animate-slide-up" data-visual="upload-progress">
-          <div className="td-chat-stream-card td-chat-stream-card-muted flex items-center gap-3 px-3 py-2">
-            <Loader2 className="h-4 w-4 text-[var(--accent)] animate-spin flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-[var(--text-secondary)] truncate">{uploadProgress.fileName}</p>
-              <p className="text-[10px] text-[var(--text-tertiary)]">{t("file.uploading")}</p>
-            </div>
-            <div className="w-20 h-1.5 bg-[var(--bg-3)] rounded-full overflow-hidden flex-shrink-0" data-visual="upload-progress-track">
-              <div
-                className="h-full bg-[var(--accent)] rounded-full transition-all duration-300 ease-out"
-                data-visual="upload-progress-bar"
-                style={{ width: `${Math.min(uploadProgress.progress, 100)}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Drag error toast */}
-      {dragError && (
-        <div className="absolute bottom-2 left-1/2 z-20 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full bg-[var(--danger)] px-3 py-1.5 text-center text-xs font-medium text-white shadow-[var(--td-shadow-lg)] animate-slide-up whitespace-normal">
-          {dragError}
-        </div>
-      )}
 
     </div>
   );

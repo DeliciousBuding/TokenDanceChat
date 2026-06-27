@@ -42,7 +42,6 @@ export function ChatLayout() {
   const [activeSpace, setActiveSpace] = useState<ChatSpace>("public");
   const [assistantId, setAssistantId] = useState(defaultAssistant.id);
   const [modelId, setModelId] = useState(defaultAssistant.model.id);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [threadParent, setThreadParent] = useState<ChatMessage | null>(null);
   const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
@@ -125,12 +124,6 @@ export function ChatLayout() {
     setConversationSearchOpen(false);
     setSearchHighlight("");
   }, [activeSpace, assistantId]);
-
-  useEffect(() => {
-    if (!uploadError) return;
-    const timer = setTimeout(() => setUploadError(null), 3000);
-    return () => clearTimeout(timer);
-  }, [uploadError]);
 
   useEffect(() => {
     if (!exportToast) return;
@@ -253,24 +246,6 @@ export function ChatLayout() {
       sendMessage(buildOutgoingContent(content));
     },
     [buildOutgoingContent, sendMessage],
-  );
-
-  const handleUpload = useCallback(
-    async (file: File) => {
-      const url = await chatAPI.uploadImage(file);
-      if (!url) {
-        setUploadError(t("input.uploadFailed"));
-        useChatStore.getState().setPendingImage(null);
-        return;
-      }
-      const state = useChatStore.getState();
-      const isImage = file.type.startsWith("image/");
-      const fileMarkdown = isImage ? `![image](${url})` : `[${file.name}](${url})`;
-      chatAPI.sendMessage(buildOutgoingContent(fileMarkdown), state.replyTo || undefined);
-      state.setReplyTo(null);
-      state.setPendingImage(null);
-    },
-    [buildOutgoingContent, t],
   );
 
   const handleExport = useCallback(
@@ -632,7 +607,6 @@ export function ChatLayout() {
           <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground/50">Chat input unavailable</div>}>
             <ChatInput
               onSend={sendHandler}
-              onUpload={handleUpload}
               disabled={unauthenticated || !connected}
               assistantContext={assistantMode ? { assistant: activeAssistant, model: activeModel } : null}
             />
@@ -653,12 +627,6 @@ export function ChatLayout() {
 
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
       <SearchBar />
-
-      {uploadError && (
-        <div className="fixed bottom-6 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full bg-destructive px-4 py-2 text-center text-sm font-medium text-destructive-foreground shadow-[var(--e-3)] animate-slide-up whitespace-normal">
-          {uploadError}
-        </div>
-      )}
 
       {exportToast && (
         <div className="fixed bottom-6 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground shadow-[var(--e-3)] animate-slide-up whitespace-normal">

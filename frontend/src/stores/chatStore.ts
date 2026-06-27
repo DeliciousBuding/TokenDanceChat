@@ -82,9 +82,6 @@ interface ChatState {
   currentChat: CurrentChat;
   replyTo: ChatMessage | null;
 
-  // Image preview (before sending)
-  pendingImage: string | null;
-
   // Unread count
   unreadCount: number;
   unreadByConversation: Record<string, number>;
@@ -152,7 +149,6 @@ interface ChatState {
   removeTypingUser: (username: string) => void;
   setCurrentChat: (chat: LegacyChatInput) => void;
   setReplyTo: (message: ChatMessage | null) => void;
-  setPendingImage: (imageDataUrl: string | null) => void;
   setUnreadCount: (count: number) => void;
   incrementConversationUnread: (key: string) => void;
   clearConversationUnread: (key: string) => void;
@@ -211,7 +207,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   typingPreviews: {},
   currentChat: { type: "public" },
   replyTo: null,
-  pendingImage: null,
   unreadCount: 0,
   unreadByConversation: {},
   lastReadTimestamps: loadLastReadTimestamps(""),
@@ -375,10 +370,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       try {
         localStorage.setItem(getLSLastReadKey(state.username), JSON.stringify(nextTimestamps));
       } catch { /* quota exceeded */ }
-      return { currentChat: { type: "public" }, pendingImage: null, lastReadTimestamps: nextTimestamps };
+      return { currentChat: { type: "public" }, lastReadTimestamps: nextTimestamps };
     }),
   setReplyTo: (replyTo) => set({ replyTo }),
-  setPendingImage: (pendingImage) => set({ pendingImage }),
   setUnreadCount: (unreadCount) => set({ unreadCount }),
   incrementConversationUnread: (key) =>
     set((state) => ({
@@ -553,7 +547,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       typingPreviews: {},
       currentChat: { type: "public" },
       replyTo: null,
-      pendingImage: null,
       unreadCount: 0,
       unreadByConversation: {},
       lastReadTimestamps: {},

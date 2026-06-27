@@ -263,7 +263,6 @@ export interface TranslationDict {
     addAttachment: string;
     removeImage: string;
     ok: string;
-    uploadImage: string;
     uploadFile: string;
     prevResult: string;
     nextResult: string;
@@ -547,7 +546,6 @@ const zhCN: TranslationDict = {
     addAttachment: "添加附件",
     removeImage: "移除图片",
     ok: "确定",
-    uploadImage: "上传图片",
     uploadFile: "上传文件",
     prevResult: "上一个结果",
     nextResult: "下一个结果",
@@ -834,7 +832,6 @@ const enUS: TranslationDict = {
     addAttachment: "Add attachment",
     removeImage: "Remove image",
     ok: "OK",
-    uploadImage: "Upload image",
     uploadFile: "Upload file",
     prevResult: "Previous result",
     nextResult: "Next result",

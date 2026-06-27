@@ -25,7 +25,6 @@ const { apiHandlers, mockChatAPI, mockGetSessionToken } = vi.hoisted(() => {
     sendBlockList: vi.fn(),
     sendReaction: vi.fn(),
     sendMessageEdit: vi.fn(),
-    uploadImage: vi.fn(),
     sendPinnedConversations: vi.fn(),
     sendMutedConversations: vi.fn(),
   };
@@ -99,7 +98,6 @@ const DEFAULT_STORE_STATE = {
   unreadByConversation: {} as Record<string, number>,
   lastReadTimestamps: {} as Record<string, number>,
   latestMention: null as any,
-  pendingImage: null as string | null,
   lightboxImage: null as string | null,
   selectedProfileUser: null as string | null,
   lastPreviews: {} as Record<string, any>,
