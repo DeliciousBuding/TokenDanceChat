@@ -604,14 +604,67 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// --- Custom Emoji Upload ---
+// --- Media Uploads ---
 
+const maxUploadSize = 50 << 20       // 50 MB
 const maxEmojiUploadSize = 128 << 10 // 128 KB
 const maxLinkPreviewCacheSize = 1000
+
+// validImageExts are the allowed image extensions for normal chat uploads.
+var validImageExts = map[string]bool{
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
+}
 
 // validEmojiExts are the allowed image extensions for custom emojis.
 var validEmojiExts = map[string]bool{
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
+}
+
+// UploadImage handles POST /api/upload (multipart form, image only, max 50MB).
+func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
+		return
+	}
+	if _, ok := h.requireSession(w, r); !ok {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "file too large (max 50MB)", "FILE_TOO_LARGE", requestID)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "missing file field", "MISSING_FILE", requestID)
+		return
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if !validImageExts[ext] {
+		writeJSONError(w, http.StatusBadRequest, "unsupported file type (allowed: png, jpg, gif, webp)", "INVALID_FILE_TYPE", requestID)
+		return
+	}
+
+	filename := uuid.New().String() + ext
+	contentType := contentTypeForFilename(filename)
+
+	if err := h.mediaStore.Save(r.Context(), filename, contentType, file); err != nil {
+		log.Printf("image upload: failed to save %s: %v", filename, err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to save file", "SERVER_ERROR", requestID)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"url":      "/uploads/" + filename,
+		"filename": filename,
+	})
 }
 
 // UploadEmoji handles POST /api/emoji/upload (multipart form, image only, max 128KB).
@@ -660,6 +713,35 @@ func (h *Handler) UploadEmoji(w http.ResponseWriter, r *http.Request) {
 		"url":      "/uploads/emojis/" + filename,
 		"filename": filename,
 	})
+}
+
+// ServeUpload handles GET /uploads/{filename}.
+func (h *Handler) ServeUpload(w http.ResponseWriter, r *http.Request) {
+	trimmed := strings.TrimPrefix(r.URL.Path, "/uploads/")
+	if strings.Contains(trimmed, "/") || strings.Contains(trimmed, "\\") {
+		http.NotFound(w, r)
+		return
+	}
+	filename := filepath.Base(trimmed)
+	if filename == "." || filename == "/" || filename == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	media, err := h.mediaStore.Open(r.Context(), filename)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer media.Body.Close()
+
+	if media.ContentType != "" {
+		w.Header().Set("Content-Type", media.ContentType)
+	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	if _, err := io.Copy(w, media.Body); err != nil {
+		log.Printf("failed to stream upload %s: %v", filename, err)
+	}
 }
 
 // ServeEmoji handles GET /uploads/emojis/{filename}

@@ -11,6 +11,8 @@
 
 **Live**: [chat.vectorcontrol.tech](https://chat.vectorcontrol.tech)
 
+**Container**: `ghcr.io/tokendancelab/tokendance-chat` (`latest`, `YYYYMMDD`, short SHA, and `vX.Y.Z`/`X.Y` tags from GitHub Actions)
+
 ---
 
 ## Public Packaging
