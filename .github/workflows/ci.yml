@@ -93,7 +93,7 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8199/api/health >/dev/null
           cd "$GITHUB_WORKSPACE/frontend"
-          E2E_BASE_URL=http://127.0.0.1:8199 npx playwright test src/e2e/public-preview-smoke.test.ts --project=chromium --workers=1 --reporter=line
+          E2E_BASE_URL=http://127.0.0.1:8199 npx playwright test src/e2e/lightweight-chat.test.ts src/e2e/page-load.test.ts --project=chromium --workers=1 --reporter=line
           VISUAL_BASE_URL=http://127.0.0.1:8199 VISUAL_OUTPUT_DIR="$RUNNER_TEMP/tdchat-visual" npm run visual:acceptance
       - name: Upload visual acceptance artifacts
         if: always()
