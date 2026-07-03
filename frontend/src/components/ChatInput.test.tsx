@@ -262,7 +262,7 @@ describe("ChatInput", () => {
       expect(screen.queryByLabelText("添加附件")).toBeNull();
 
       for (const label of ["上传图片", "上传文件"]) {
-        expect(screen.getByLabelText(label)).toBeTruthy();
+        expect(screen.queryByLabelText(label)).toBeNull();
       }
       expect(screen.queryByLabelText("Markdown 格式")).toBeNull();
       expect(screen.queryByLabelText("表情")).toBeNull();
@@ -271,11 +271,7 @@ describe("ChatInput", () => {
       expect(screen.queryByLabelText("定时发送消息")).toBeNull();
 
       const tools = Array.from(container.querySelectorAll("[data-visual='composer-tool']"));
-      expect(tools).toHaveLength(2);
-      for (const tool of tools) {
-        expect(tool.className).toContain("h-11");
-        expect(tool.className).toContain("w-11");
-      }
+      expect(tools).toHaveLength(0);
     });
 
     it("字符计数器显示", () => {
@@ -395,16 +391,15 @@ describe("ChatInput", () => {
   });
 
   describe("文件拖拽 (file drag-and-drop)", () => {
-    it("拖入文件时显示 drop overlay", () => {
+    it("拖入文件时不显示旧 drop overlay", () => {
       renderChatInput();
       const container = screen.getByTestId("chat-input");
 
       fireEvent.dragEnter(container);
-      // Drop overlay text should appear
-      expect(screen.getByText("拖放文件到此处")).toBeTruthy();
+      expect(screen.queryByText("拖放文件到此处")).toBeNull();
     });
 
-    it("离开拖拽区域后 overlay 消失", () => {
+    it("离开拖拽区域后仍无 overlay", () => {
       renderChatInput();
       const container = screen.getByTestId("chat-input");
 
@@ -414,7 +409,7 @@ describe("ChatInput", () => {
       expect(screen.queryByText("拖放文件到此处")).toBeNull();
     });
 
-    it("拖拽超大文件显示错误提示", () => {
+    it("拖拽超大文件不触发旧上传错误提示", () => {
       renderChatInput();
       const container = screen.getByTestId("chat-input");
 
@@ -429,7 +424,7 @@ describe("ChatInput", () => {
 
       fireEvent.drop(container, { dataTransfer });
 
-      expect(screen.getByText("文件过大（最大 50MB）")).toBeTruthy();
+      expect(screen.queryByText("文件过大（最大 50MB）")).toBeNull();
     });
 
     it("dragOver 阻止默认行为", () => {

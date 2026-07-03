@@ -1,5 +1,6 @@
 services:
   chat:
+    image: ghcr.io/tokendancelab/tokendance-chat:latest
     build: .
     container_name: tokendancechat
     ports:

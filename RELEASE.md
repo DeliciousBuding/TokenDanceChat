@@ -19,6 +19,8 @@ git tag -a v0.x.0 -m "v0.x.0: <简要描述>"
 git push origin v0.x.0
 ```
 
+GitHub Actions publishes `ghcr.io/tokendancelab/tokendance-chat` with `latest`, `YYYYMMDD`, short SHA, and semver tags (`X.Y.Z`, `X.Y`).
+
 ## 生产部署后验证
 
 - [ ] `/api/health` 返回 `{"status":"ok"}`
