@@ -27,6 +27,44 @@
     <link rel="apple-touch-icon" href="/tokendance-icon-rounded-192.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/tokendance-icon-rounded-512.png" />
     <link rel="manifest" href="/manifest.json" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://chat.vectorcontrol.tech/#organization",
+          "name": "TokenDanceChat",
+          "url": "https://chat.vectorcontrol.tech",
+          "logo": "https://chat.vectorcontrol.tech/tokendance-icon-rounded-512.png",
+          "sameAs": ["https://github.com/TokenDanceLab/tokendance-chat"],
+          "parentOrganization": {
+            "@type": "Organization",
+            "name": "TokenDance",
+            "url": "https://tokendance.vectorcontrol.tech"
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://chat.vectorcontrol.tech/#website",
+          "url": "https://chat.vectorcontrol.tech",
+          "name": "TokenDanceChat",
+          "inLanguage": "zh-CN",
+          "publisher": { "@id": "https://chat.vectorcontrol.tech/#organization" }
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://chat.vectorcontrol.tech/#application",
+          "url": "https://chat.vectorcontrol.tech",
+          "name": "TokenDanceChat",
+          "description": "Real-time chat and AgentHub interaction proving ground for WebSocket, PWA, OIDC, and IM-style collaboration.",
+          "applicationCategory": "CommunicationApplication",
+          "operatingSystem": "Web",
+          "browserRequirements": "Requires JavaScript"
+        }
+      ]
+    }
+    </script>
     <title>TokenDanceChat — AgentHub interaction proving ground</title>
   </head>
   <body class="antialiased">
