@@ -1,10 +1,22 @@
 name: CI
 
+# S3: concurrency + master-focused triggers (policy github-actions-ci-cd-policy.md)
 on:
   push:
-    branches: [dev, master]
+    branches: [master]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   pull_request:
-    branches: [dev, master]
+    branches: [master]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend-test:
