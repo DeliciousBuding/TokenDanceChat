@@ -12,6 +12,10 @@ on:
       - ".github/workflows/cd-chat.yml"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   IMAGE_NAME: ghcr.io/tokendancelab/tokendance-chat
 
@@ -57,5 +61,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=tokendance-chat
+          cache-to: type=gha,mode=max,scope=tokendance-chat
