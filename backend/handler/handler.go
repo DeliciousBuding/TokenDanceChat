@@ -39,14 +39,15 @@ type Handler struct {
 	sessionSecret    []byte
 
 	// OIDC configuration.
-	oidcEnabled     bool
-	oidcClientID    string
-	oidcIssuer      string
-	oidcRedirectURI string
-	oidcConfig      *OIDCConfig
-	oidcStates      *OIDCStateStore
-	oidcTokens      *OIDCTokenStore
-	oidcJWKS        *oidcJWKSCache
+	oidcEnabled      bool
+	oidcClientID     string
+	oidcClientSecret string // confidential-client secret; empty = PKCE public client
+	oidcIssuer       string
+	oidcRedirectURI  string
+	oidcConfig       *OIDCConfig
+	oidcStates       *OIDCStateStore
+	oidcTokens       *OIDCTokenStore
+	oidcJWKS         *oidcJWKSCache
 }
 
 // linkPreviewResult stores cached OpenGraph data for a URL.
