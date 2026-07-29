@@ -19,6 +19,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// lastTokenForm records the most recent form received by the mock OIDC
+// provider's /token endpoint, so tests can assert client_secret / PKCE
+// behaviour without spinning up a separate provider.
+var lastTokenForm url.Values
+
 // generateTestRSAKey creates a 2048-bit RSA key pair for test token signing.
 func generateTestRSAKey(t *testing.T) *rsa.PrivateKey {
 	t.Helper()
@@ -167,12 +172,31 @@ func TestSetupOIDCFailureDoesNotInstallTransientStores(t *testing.T) {
 	defer srv.Close()
 
 	h := &Handler{store: &mockStore{}}
-	err := h.SetupOIDC(true, "test-client", srv.URL, "http://localhost:8080/api/oidc/callback")
+	err := h.SetupOIDC(true, "test-client", "", srv.URL, "http://localhost:8080/api/oidc/callback")
 	if err == nil {
 		t.Fatal("expected SetupOIDC to fail")
 	}
 	if h.oidcStates != nil || h.oidcTokens != nil {
 		t.Fatal("expected failed SetupOIDC to leave transient stores uninstalled")
+	}
+}
+
+func TestSetupOIDCFailureDoesNotInstallTransientStoresConfidential(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	h := &Handler{store: &mockStore{}}
+	err := h.SetupOIDC(true, "test-client", "test-secret", srv.URL, "http://localhost:8080/api/oidc/callback")
+	if err == nil {
+		t.Fatal("expected SetupOIDC to fail")
+	}
+	if h.oidcStates != nil || h.oidcTokens != nil {
+		t.Fatal("expected failed SetupOIDC to leave transient stores uninstalled")
+	}
+	if h.oidcClientSecret != "" {
+		t.Fatalf("expected failed SetupOIDC to not retain client secret, got %q", h.oidcClientSecret)
 	}
 }
 
@@ -184,12 +208,12 @@ func TestSetupOIDCReconfigureClosesPreviousTransientStores(t *testing.T) {
 	defer second.Close()
 
 	h := &Handler{store: &mockStore{}}
-	if err := h.SetupOIDC(true, "test-client", first.URL, "http://localhost:8080/api/oidc/callback"); err != nil {
+	if err := h.SetupOIDC(true, "test-client", "", first.URL, "http://localhost:8080/api/oidc/callback"); err != nil {
 		t.Fatalf("first SetupOIDC failed: %v", err)
 	}
 	oldStates := h.oidcStates
 	oldTokens := h.oidcTokens
-	if err := h.SetupOIDC(true, "test-client", second.URL, "http://localhost:8080/api/oidc/callback"); err != nil {
+	if err := h.SetupOIDC(true, "test-client", "", second.URL, "http://localhost:8080/api/oidc/callback"); err != nil {
 		t.Fatalf("second SetupOIDC failed: %v", err)
 	}
 	t.Cleanup(h.closeOIDCStores)
@@ -274,11 +298,16 @@ func startMockOIDCProvider(t *testing.T, key *rsa.PrivateKey, kid string) *httpt
 	})
 
 	// Token endpoint.
+	// Records the received form values on the test server's request so tests
+	// can assert that a confidential client sends client_secret (and that a
+	// PKCE public client does not).
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", 400)
 			return
 		}
+		// Expose the parsed form to tests via a package-level recorder.
+		lastTokenForm = r.PostForm
 		grantType := r.FormValue("grant_type")
 
 		switch grantType {
@@ -440,7 +469,16 @@ func TestResolveOIDCUsername(t *testing.T) {
 
 func setupOIDCForTest(t *testing.T, h *Handler, issuer string) {
 	t.Helper()
-	if err := h.SetupOIDC(true, "test-client", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
+	if err := h.SetupOIDC(true, "test-client", "", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
+		t.Fatalf("SetupOIDC failed: %v", err)
+	}
+	t.Cleanup(h.closeOIDCStores)
+}
+
+// setupOIDCForTestConfidential enables OIDC with a client secret (confidential client).
+func setupOIDCForTestConfidential(t *testing.T, h *Handler, issuer string) {
+	t.Helper()
+	if err := h.SetupOIDC(true, "test-client", "test-secret", issuer, "http://localhost:8080/api/oidc/callback"); err != nil {
 		t.Fatalf("SetupOIDC failed: %v", err)
 	}
 	t.Cleanup(h.closeOIDCStores)
@@ -778,6 +816,189 @@ func TestOIDCExchange(t *testing.T) {
 	}
 	if resp["username"] == nil || resp["username"] == "" {
 		t.Error("expected non-empty username")
+	}
+}
+
+// TestOIDCExchangeSendsClientSecretForConfidentialClient asserts that when a
+// client secret is configured, the token exchange includes client_secret in
+// the form body. This is the core of confidential-client support.
+func TestOIDCExchangeSendsClientSecretForConfidentialClient(t *testing.T) {
+	key := generateTestRSAKey(t)
+	kid := "test-kid-conf-exchange"
+	srv := startMockOIDCProvider(t, key, kid)
+	defer srv.Close()
+
+	addr := srv.Listener.Addr().String()
+	issuer := "http://" + addr
+
+	st := newMockStoreForOIDC()
+	h := &Handler{store: st}
+	setupOIDCForTestConfidential(t, h, issuer)
+
+	lastTokenForm = nil
+	body := stringsNewReader(`{"code":"test-code","code_verifier":"test-verifier"}`)
+	req := httptest.NewRequest("POST", "/api/oidc/exchange", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.OIDCExchange(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if lastTokenForm == nil {
+		t.Fatal("expected mock provider to record token form")
+	}
+	if got := lastTokenForm.Get("client_secret"); got != "test-secret" {
+		t.Errorf("expected client_secret=test-secret in token form, got %q", got)
+	}
+	if got := lastTokenForm.Get("client_id"); got != "test-client" {
+		t.Errorf("expected client_id=test-client, got %q", got)
+	}
+	// PKCE verifier must still be sent (confidential client uses both).
+	if got := lastTokenForm.Get("code_verifier"); got != "test-verifier" {
+		t.Errorf("expected code_verifier preserved, got %q", got)
+	}
+}
+
+// TestOIDCExchangeOmitsClientSecretForPublicClient asserts that without a
+// configured secret the token exchange stays a pure PKCE public-client request
+// (no client_secret field), preserving the existing behaviour.
+func TestOIDCExchangeOmitsClientSecretForPublicClient(t *testing.T) {
+	key := generateTestRSAKey(t)
+	kid := "test-kid-pub-exchange"
+	srv := startMockOIDCProvider(t, key, kid)
+	defer srv.Close()
+
+	addr := srv.Listener.Addr().String()
+	issuer := "http://" + addr
+
+	st := newMockStoreForOIDC()
+	h := &Handler{store: st}
+	setupOIDCForTest(t, h, issuer)
+
+	lastTokenForm = nil
+	body := stringsNewReader(`{"code":"test-code","code_verifier":"test-verifier"}`)
+	req := httptest.NewRequest("POST", "/api/oidc/exchange", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.OIDCExchange(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if lastTokenForm == nil {
+		t.Fatal("expected mock provider to record token form")
+	}
+	if got := lastTokenForm.Get("client_secret"); got != "" {
+		t.Errorf("expected no client_secret for public client, got %q", got)
+	}
+	if _, ok := lastTokenForm["client_secret"]; ok {
+		t.Error("expected client_secret key absent from public-client token form")
+	}
+}
+
+// TestOIDCRefreshSendsClientSecretForConfidentialClient asserts the refresh
+// grant includes client_secret when configured.
+func TestOIDCRefreshSendsClientSecretForConfidentialClient(t *testing.T) {
+	key := generateTestRSAKey(t)
+	kid := "test-kid-conf-refresh"
+	srv := startMockOIDCProvider(t, key, kid)
+	defer srv.Close()
+
+	addr := srv.Listener.Addr().String()
+	issuer := "http://" + addr
+
+	h := &Handler{store: &mockStore{}}
+	setupOIDCForTestConfidential(t, h, issuer)
+
+	lastTokenForm = nil
+	req := httptest.NewRequest("POST", "/api/oidc/refresh", stringsNewReader(`{"refresh_token":"rt"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.OIDCRefresh(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if lastTokenForm == nil {
+		t.Fatal("expected mock provider to record token form")
+	}
+	if got := lastTokenForm.Get("client_secret"); got != "test-secret" {
+		t.Errorf("expected client_secret=test-secret in refresh form, got %q", got)
+	}
+	if got := lastTokenForm.Get("refresh_token"); got != "rt" {
+		t.Errorf("expected refresh_token=rt, got %q", got)
+	}
+}
+
+// TestOIDCRefreshOmitsClientSecretForPublicClient asserts the refresh grant
+// stays PKCE-public (no client_secret) when no secret is configured.
+func TestOIDCRefreshOmitsClientSecretForPublicClient(t *testing.T) {
+	key := generateTestRSAKey(t)
+	kid := "test-kid-pub-refresh"
+	srv := startMockOIDCProvider(t, key, kid)
+	defer srv.Close()
+
+	addr := srv.Listener.Addr().String()
+	issuer := "http://" + addr
+
+	h := &Handler{store: &mockStore{}}
+	setupOIDCForTest(t, h, issuer)
+
+	lastTokenForm = nil
+	req := httptest.NewRequest("POST", "/api/oidc/refresh", stringsNewReader(`{"refresh_token":"rt"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.OIDCRefresh(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if lastTokenForm == nil {
+		t.Fatal("expected mock provider to record token form")
+	}
+	if got := lastTokenForm.Get("client_secret"); got != "" {
+		t.Errorf("expected no client_secret for public client refresh, got %q", got)
+	}
+}
+
+// TestOIDCCallbackSendsClientSecretForConfidentialClient drives the full
+// authorization-code callback flow and asserts the server-side token exchange
+// includes client_secret when the client is confidential.
+func TestOIDCCallbackSendsClientSecretForConfidentialClient(t *testing.T) {
+	key := generateTestRSAKey(t)
+	kid := "test-kid-conf-callback"
+	srv := startMockOIDCProvider(t, key, kid)
+	defer srv.Close()
+
+	addr := srv.Listener.Addr().String()
+	issuer := "http://" + addr
+
+	st := newMockStoreForOIDC()
+	h := &Handler{store: st}
+	setupOIDCForTestConfidential(t, h, issuer)
+
+	// Trigger a login to mint a state entry.
+	reqLogin := httptest.NewRequest("GET", "/api/oidc/login", nil)
+	recLogin := httptest.NewRecorder()
+	h.OIDCLogin(recLogin, reqLogin)
+	parsed, _ := url.Parse(recLogin.Header().Get("Location"))
+	state := parsed.Query().Get("state")
+
+	lastTokenForm = nil
+	callbackURL := fmt.Sprintf("/api/oidc/callback?state=%s&code=fake-auth-code", state)
+	req := httptest.NewRequest("GET", callbackURL, nil)
+	rec := httptest.NewRecorder()
+	h.OIDCCallback(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected 302, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if lastTokenForm == nil {
+		t.Fatal("expected mock provider to record token form from callback")
+	}
+	if got := lastTokenForm.Get("client_secret"); got != "test-secret" {
+		t.Errorf("expected client_secret=test-secret in callback token exchange, got %q", got)
 	}
 }
 

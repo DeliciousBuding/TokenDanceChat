@@ -17,7 +17,7 @@ TokenDanceChat supports login via [TokenDance ID](https://id.vectorcontrol.tech)
    - **Redirect URI**: `http://localhost:8080/api/oidc/callback` (for local dev)
 5. After creation, note your credentials:
    - **client_id**: format `c_xxxxxxxxxxxxxxxx`
-   - **client_secret**: format `cs_xxxxxxxxxxxxxxxx`, shown once. The current TokenDanceChat backend does not read a client secret, so register/use a PKCE public-client style app unless you also add a `CHAT_OIDC_CLIENT_SECRET` code path.
+   - **client_secret**: format `cs_xxxxxxxxxxxxxxxx`, shown once. Set `CHAT_OIDC_CLIENT_SECRET` (below) to use it as a confidential client; leave it unset to register/use a PKCE public-client style app instead.
 
 ## Step 2: Configure Environment Variables
 
@@ -29,6 +29,8 @@ CHAT_OIDC_ISSUER=https://id.vectorcontrol.tech
 CHAT_OIDC_CLIENT_ID=c_YOUR_CLIENT_ID_HERE
 CHAT_OIDC_REDIRECT_URI=http://localhost:8080/api/oidc/callback
 CHAT_SESSION_SECRET=replace_with_a_stable_random_secret
+# Optional: set for a confidential client; omit for PKCE public client
+CHAT_OIDC_CLIENT_SECRET=cs_YOUR_CLIENT_SECRET_HERE
 ```
 
 **Important**: Never commit `.env` or `.env.local` files. They are gitignored. Keep `CHAT_SESSION_SECRET` stable in deployed environments; if it is omitted, the server generates an ephemeral per-process secret and existing app sessions fail after restart.
@@ -106,7 +108,7 @@ Based on the discovery document at https://id.vectorcontrol.tech/.well-known/ope
 
 ## Current Gaps / TODO
 
-1. **Client Secret**: The current backend does not send `client_secret` at the token endpoint. Keep the OAuth app compatible with PKCE public-client exchange, or add `CHAT_OIDC_CLIENT_SECRET` and token-endpoint authentication before switching to a confidential client.
+1. **Client Secret**: ✅ Resolved. The backend now reads `CHAT_OIDC_CLIENT_SECRET`; when set, the token exchange (`/api/oidc/callback`, `/api/oidc/exchange`) and refresh (`/api/oidc/refresh`) include `client_secret` in the form body, enabling confidential-client apps. Leave the variable empty to keep the original PKCE public-client exchange (still sends `code_verifier`). PKCE is always sent regardless, so a confidential client uses both `client_secret` and `code_verifier`.
 
 2. **UserInfo Endpoint**: The backend intentionally relies on validated ID token claims and does not call UserInfo. Add UserInfo only if the chat app needs profile fields not present in the ID token.
 
@@ -135,7 +137,7 @@ For production deployment to `https://chat.vectorcontrol.tech`:
 
 4. Set `CHAT_ALLOWED_ORIGINS=https://chat.vectorcontrol.tech` for the deployed app origin. If a deployment intentionally serves trusted subdomains, use an explicit scheme wildcard such as `https://*.example.com`; bare domains, `.example.com`, and `*` are not valid cross-origin allowlist entries.
 
-5. Consider setting a `CHAT_OIDC_CLIENT_SECRET` environment variable and updating the backend to include it in token requests if required by the provider.
+5. For a confidential client, set `CHAT_OIDC_CLIENT_SECRET` to the production client secret; the backend now includes it in token and refresh requests. Leave it unset to run as a PKCE public client.
 
 ## Troubleshooting
 
