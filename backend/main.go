@@ -141,12 +141,13 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	oidcEnabled := parseEnvBool(os.Getenv("CHAT_OIDC_ENABLED"))
 	oidcIssuer := os.Getenv("CHAT_OIDC_ISSUER")
 	oidcClientID := os.Getenv("CHAT_OIDC_CLIENT_ID")
+	oidcClientSecret := os.Getenv("CHAT_OIDC_CLIENT_SECRET")
 	oidcRedirectURI := os.Getenv("CHAT_OIDC_REDIRECT_URI")
-	if err := hdlr.SetupOIDC(oidcEnabled, oidcClientID, oidcIssuer, oidcRedirectURI); err != nil {
+	if err := hdlr.SetupOIDC(oidcEnabled, oidcClientID, oidcClientSecret, oidcIssuer, oidcRedirectURI); err != nil {
 		return nil, nil, nil, fmt.Errorf("OIDC setup failed: %w", err)
 	}
 	if oidcEnabled {
-		log.Printf("oidc: enabled — issuer=%s client_id=%s", oidcIssuer, oidcClientID)
+		log.Printf("oidc: enabled — issuer=%s client_id=%s confidential=%v", oidcIssuer, oidcClientID, oidcClientSecret != "")
 	}
 
 	mux := http.NewServeMux()

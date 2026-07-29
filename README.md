@@ -166,6 +166,7 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 | `CHAT_OIDC_ENABLED` | `false` | 是否启用 OIDC 登录 |
 | `CHAT_OIDC_ISSUER` | — | OIDC issuer；启用 OIDC 时必须由部署环境提供 |
 | `CHAT_OIDC_CLIENT_ID` | — | OAuth client id；启用 OIDC 时必须由部署环境提供 |
+| `CHAT_OIDC_CLIENT_SECRET` | — | Confidential client 密钥；留空则按 PKCE public client 走（仍带 `code_verifier`）。填值后 token 交换与 refresh 会附 `client_secret` |
 | `CHAT_OIDC_REDIRECT_URI` | `http://localhost:8080/api/oidc/callback` | OIDC 回调地址；生产使用部署域名的 `/api/oidc/callback` |
 
 ---

@@ -360,7 +360,8 @@ type oidcConfigResponse struct {
 }
 
 // SetupOIDC initializes the OIDC subsystem by fetching the discovery document.
-func (h *Handler) SetupOIDC(enabled bool, clientID, issuer, redirectURI string) error {
+// clientSecret is the confidential-client secret; pass "" for a PKCE public client.
+func (h *Handler) SetupOIDC(enabled bool, clientID, clientSecret, issuer, redirectURI string) error {
 	if !enabled {
 		h.closeOIDCStores()
 		h.oidcEnabled = false
@@ -394,6 +395,7 @@ func (h *Handler) SetupOIDC(enabled bool, clientID, issuer, redirectURI string) 
 	h.closeOIDCStores()
 	h.oidcEnabled = true
 	h.oidcClientID = clientID
+	h.oidcClientSecret = clientSecret
 	h.oidcIssuer = normalizedIssuer
 	h.oidcRedirectURI = redirectURI
 	h.oidcStates = newStates
@@ -403,7 +405,7 @@ func (h *Handler) SetupOIDC(enabled bool, clientID, issuer, redirectURI string) 
 	if h.hub != nil {
 		h.hub.SetOIDCTokenVerifier(h)
 	}
-	log.Printf("oidc: discovered provider at %s", h.oidcIssuer)
+	log.Printf("oidc: discovered provider at %s (confidential_client=%v)", h.oidcIssuer, h.oidcClientSecret != "")
 	return nil
 }
 
@@ -704,6 +706,9 @@ func (h *Handler) OIDCRefresh(w http.ResponseWriter, r *http.Request) {
 		"refresh_token": {body.RefreshToken},
 		"client_id":     {h.oidcClientID},
 	}
+	if h.oidcClientSecret != "" {
+		data.Set("client_secret", h.oidcClientSecret)
+	}
 	resp, err := oidcHTTPClient.PostForm(h.oidcConfig.TokenEndpoint, data)
 	if err != nil {
 		log.Printf("oidc refresh: request failed: %v", err)
@@ -729,6 +734,9 @@ func (h *Handler) OIDCRefresh(w http.ResponseWriter, r *http.Request) {
 }
 
 // exchangeCodeForTokens calls POST /oidc/token with an authorization code.
+// When a client secret is configured (confidential client) it is included in
+// the token request alongside the PKCE verifier; without a secret the request
+// is a pure PKCE public-client exchange.
 func (h *Handler) exchangeCodeForTokens(code, codeVerifier string) (*oidcTokenResponse, error) {
 	data := url.Values{
 		"grant_type":    {"authorization_code"},
@@ -736,6 +744,9 @@ func (h *Handler) exchangeCodeForTokens(code, codeVerifier string) (*oidcTokenRe
 		"redirect_uri":  {h.oidcRedirectURI},
 		"client_id":     {h.oidcClientID},
 		"code_verifier": {codeVerifier},
+	}
+	if h.oidcClientSecret != "" {
+		data.Set("client_secret", h.oidcClientSecret)
 	}
 	resp, err := oidcHTTPClient.PostForm(h.oidcConfig.TokenEndpoint, data)
 	if err != nil {
