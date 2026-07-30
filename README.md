@@ -9,7 +9,7 @@
 [![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.4-646CFF?logo=vite)](https://vite.dev/)
 
-**Live**: [chat.vectorcontrol.tech](https://chat.vectorcontrol.tech)
+**Live**: [chat.tokendancelab.com](https://chat.tokendancelab.com)
 
 **Container**: `ghcr.io/tokendancelab/tokendance-chat` (`latest`, `YYYYMMDD`, short SHA, and `vX.Y.Z`/`X.Y` tags from GitHub Actions)
 

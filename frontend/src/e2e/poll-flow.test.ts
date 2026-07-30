@@ -5,7 +5,7 @@ import { joinGuestFromPreview } from "./helpers";
  * TokenDanceChat Poll E2E Tests.
  *
  * Run:
- *   E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/poll-flow.test.ts --project=chromium
+ *   E2E_BASE_URL=https://chat.tokendancelab.com npx playwright test src/e2e/poll-flow.test.ts --project=chromium
  *
  * Coverage:
  *   1. Poll creation renders question and options in chat

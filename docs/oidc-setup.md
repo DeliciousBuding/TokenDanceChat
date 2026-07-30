@@ -1,15 +1,15 @@
 # TokenDance ID OIDC Integration Guide
 
-TokenDanceChat supports login via [TokenDance ID](https://id.vectorcontrol.tech), a real OIDC provider that supports Authorization Code + PKCE flow.
+TokenDanceChat supports login via [TokenDance ID](https://id.tokendancelab.com), a real OIDC provider that supports Authorization Code + PKCE flow.
 
 ## Prerequisites
 
-- Access to https://id.vectorcontrol.tech
+- Access to https://id.tokendancelab.com
 - Administrator access to the TokenDance ID dashboard
 
 ## Step 1: Register an OAuth App
 
-1. Log in to https://id.vectorcontrol.tech
+1. Log in to https://id.tokendancelab.com
 2. Navigate to **Dashboard** -> **Apps**
 3. Click **New App**
 4. Fill in the application details:
@@ -25,7 +25,7 @@ Copy `.env.example` to `.env` (or `.env.local`) and set:
 
 ```bash
 CHAT_OIDC_ENABLED=true
-CHAT_OIDC_ISSUER=https://id.vectorcontrol.tech
+CHAT_OIDC_ISSUER=https://id.tokendancelab.com
 CHAT_OIDC_CLIENT_ID=c_YOUR_CLIENT_ID_HERE
 CHAT_OIDC_REDIRECT_URI=http://localhost:8080/api/oidc/callback
 CHAT_SESSION_SECRET=replace_with_a_stable_random_secret
@@ -45,8 +45,8 @@ go run ./backend
 
 The server will log on startup:
 ```
-oidc: discovered provider at https://id.vectorcontrol.tech
-oidc: enabled — issuer=https://id.vectorcontrol.tech client_id=c_xxx
+oidc: discovered provider at https://id.tokendancelab.com
+oidc: enabled — issuer=https://id.tokendancelab.com client_id=c_xxx
 ```
 
 If OIDC discovery fails, check that:
@@ -57,7 +57,7 @@ If OIDC discovery fails, check that:
 
 1. Open http://localhost:8080 in a browser
 2. Click the **"Login with TokenDance ID"** button
-3. You will be redirected to https://id.vectorcontrol.tech/oidc/authorize
+3. You will be redirected to https://id.tokendancelab.com/oidc/authorize
 4. Log in with your TokenDance ID credentials (email/password, GitHub, Google, or Feishu)
 5. After authorization, you are redirected back to the chat app
 6. The URL will contain `?oidc_success=1&oidc_username=<your_username>&oidc_rid=<redeem_id>`
@@ -67,7 +67,7 @@ If OIDC discovery fails, check that:
 
 | Boundary | Current TokenDanceChat behavior |
 |----------|---------------------------------|
-| Callback | Local `http://localhost:8080/api/oidc/callback`; production `https://chat.vectorcontrol.tech/api/oidc/callback` |
+| Callback | Local `http://localhost:8080/api/oidc/callback`; production `https://chat.tokendancelab.com/api/oidc/callback` |
 | Token exchange | Backend `/api/oidc/callback` exchanges code with `client_id`, `redirect_uri`, and `code_verifier`; no `client_secret` is sent |
 | Token handoff | Backend keeps provider tokens behind a one-time redeem ID for 5 minutes; the browser receives only `oidc_rid` in the callback URL |
 | Browser storage | Redeemed OIDC access/refresh tokens live in Zustand memory; app `session_token` is stored in `tokendance:sessionToken` for REST Bearer auth and local registered-user WS joins |
@@ -89,14 +89,14 @@ If OIDC discovery fails, check that:
 
 ## Provider Endpoints
 
-Based on the discovery document at https://id.vectorcontrol.tech/.well-known/openid-configuration:
+Based on the discovery document at https://id.tokendancelab.com/.well-known/openid-configuration:
 
 | Endpoint | URL |
 |----------|-----|
-| Authorization | `https://id.vectorcontrol.tech/oidc/authorize` |
-| Token | `https://id.vectorcontrol.tech/oidc/token` |
-| UserInfo | `https://id.vectorcontrol.tech/oidc/userinfo` |
-| JWKS | `https://id.vectorcontrol.tech/oidc/jwks` |
+| Authorization | `https://id.tokendancelab.com/oidc/authorize` |
+| Token | `https://id.tokendancelab.com/oidc/token` |
+| UserInfo | `https://id.tokendancelab.com/oidc/userinfo` |
+| JWKS | `https://id.tokendancelab.com/oidc/jwks` |
 
 ## Supported Features
 
@@ -118,24 +118,24 @@ Based on the discovery document at https://id.vectorcontrol.tech/.well-known/ope
 
 ## Production Deployment
 
-For production deployment to `https://chat.vectorcontrol.tech`:
+For production deployment to `https://chat.tokendancelab.com`:
 
 1. Register a separate OAuth App in the TokenDance ID dashboard with the production redirect URI:
    ```
-   https://chat.vectorcontrol.tech/api/oidc/callback
+   https://chat.tokendancelab.com/api/oidc/callback
    ```
 
 2. Set production environment variables:
    ```bash
    CHAT_OIDC_ENABLED=true
-   CHAT_OIDC_ISSUER=https://id.vectorcontrol.tech
+   CHAT_OIDC_ISSUER=https://id.tokendancelab.com
    CHAT_OIDC_CLIENT_ID=c_YOUR_PRODUCTION_CLIENT_ID
-   CHAT_OIDC_REDIRECT_URI=https://chat.vectorcontrol.tech/api/oidc/callback
+   CHAT_OIDC_REDIRECT_URI=https://chat.tokendancelab.com/api/oidc/callback
    ```
 
 3. Ensure HTTPS is properly configured for the production deployment.
 
-4. Set `CHAT_ALLOWED_ORIGINS=https://chat.vectorcontrol.tech` for the deployed app origin. If a deployment intentionally serves trusted subdomains, use an explicit scheme wildcard such as `https://*.example.com`; bare domains, `.example.com`, and `*` are not valid cross-origin allowlist entries.
+4. Set `CHAT_ALLOWED_ORIGINS=https://chat.tokendancelab.com` for the deployed app origin. If a deployment intentionally serves trusted subdomains, use an explicit scheme wildcard such as `https://*.example.com`; bare domains, `.example.com`, and `*` are not valid cross-origin allowlist entries.
 
 5. For a confidential client, set `CHAT_OIDC_CLIENT_SECRET` to the production client secret; the backend now includes it in token and refresh requests. Leave it unset to run as a PKCE public client.
 
