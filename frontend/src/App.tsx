@@ -93,10 +93,10 @@ function App() {
             })
             .then((data: { username?: string; access_token?: string; refresh_token?: string; session_token?: string }) => {
               if (cancelled) return;
-              if (!data.username || !data.access_token || !data.refresh_token || !data.session_token) {
+              if (!data.username || !data.access_token || !data.session_token) {
                 throw new Error("OIDC redeem response missing credentials");
               }
-              setOidcAuth(data.access_token, data.refresh_token);
+              setOidcAuth(data.access_token, data.refresh_token ?? null);
               localStorage.setItem(AUTH_STORAGE_KEY, "true");
               localStorage.setItem(USERNAME_STORAGE_KEY, data.username);
               persistSessionToken(data.session_token);

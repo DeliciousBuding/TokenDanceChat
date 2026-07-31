@@ -178,9 +178,9 @@ TokenDanceChat 是服务端型 OIDC consumer；详细步骤见 [docs/oidc-setup.
 | 项 | 当前实现 |
 |----|----------|
 | Callback | 本地 `http://localhost:8080/api/oidc/callback`；生产使用部署域名的 `/api/oidc/callback` |
-| Token exchange | 后端 `/api/oidc/callback` 使用 Authorization Code + PKCE 兑换 token，并通过一次性 `oidc_rid` 交给前端 redeem |
+| Token exchange | 后端 `/api/oidc/callback` 使用 Authorization Code + PKCE 兑换 token，并通过一次性 `oidc_rid` 交给前端 redeem；初次登录只要求 access token 与应用 `session_token`，refresh token 可选 |
 | Token storage | 后端临时保存 redeem token 5 分钟；前端 OIDC access/refresh token 只放 Zustand 内存；应用 `session_token` 存入 `tokendance:sessionToken`，用于 REST Bearer 鉴权和本地注册用户 WS join |
-| Refresh | `/api/oidc/refresh` 已实现并转发 TokenDance ID refresh flow；当前 UI 不持久化 refresh token，刷新页面后不会继续 OIDC token refresh |
+| Refresh | `/api/oidc/refresh` 已实现并转发 TokenDance ID refresh flow；只有 provider 实际签发 refresh token 时才可使用，当前 UI 不持久化它，刷新页面后不会继续 OIDC token refresh |
 | Provider bounds | OIDC discovery、JWKS、token exchange、refresh 请求使用 5s HTTP timeout，并对 provider 响应体做大小上限检查 |
 | Runtime bounds | OIDC state/redeem token stores 有容量上限；满载时拒绝新建而不静默淘汰既有登录流程；cleanup loop 可关闭，`SetupOIDC` 失败不安装 transient store，重配置会关闭旧 store；OIDC endpoints 有独立 per-IP rate limit |
 | Logout | 当前 disconnect/logout 只清除本地聊天状态，不跳转 TokenDance ID `/logout` |

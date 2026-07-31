@@ -68,10 +68,10 @@ If OIDC discovery fails, check that:
 | Boundary | Current TokenDanceChat behavior |
 |----------|---------------------------------|
 | Callback | Local `http://localhost:8080/api/oidc/callback`; production `https://chat.tokendancelab.com/api/oidc/callback` |
-| Token exchange | Backend `/api/oidc/callback` exchanges code with `client_id`, `redirect_uri`, and `code_verifier`; no `client_secret` is sent |
+| Token exchange | Backend `/api/oidc/callback` exchanges code with `client_id`, `redirect_uri`, and `code_verifier`; it also sends `client_secret` when `CHAT_OIDC_CLIENT_SECRET` is configured |
 | Token handoff | Backend keeps provider tokens behind a one-time redeem ID for 5 minutes; the browser receives only `oidc_rid` in the callback URL |
-| Browser storage | Redeemed OIDC access/refresh tokens live in Zustand memory; app `session_token` is stored in `tokendance:sessionToken` for REST Bearer auth and local registered-user WS joins |
-| Refresh | `/api/oidc/refresh` forwards refresh tokens to TokenDance ID, but the current UI does not persist refresh tokens across page reload |
+| Browser storage | Redeemed OIDC access token and any optional refresh token live in Zustand memory; app `session_token` is stored in `tokendance:sessionToken` for REST Bearer auth and local registered-user WS joins |
+| Refresh | Initial login requires an access token and app `session_token`, not a refresh token. `/api/oidc/refresh` is available only when TokenDance ID issued one, and the current UI does not persist it across page reload |
 | Logout | Chat disconnect clears local chat state only; it does not call TokenDance ID `/logout` |
 | Validation | Backend validates ID Token via RS256/JWKS with issuer, audience, expiration leeway, and non-empty `sub`; protected REST endpoints require `Authorization: Bearer <session_token>`; WS joins use OIDC access tokens for OIDC users, app session tokens for local registered users, and no token for guests |
 
@@ -102,7 +102,7 @@ Based on the discovery document at https://id.tokendancelab.com/.well-known/open
 
 - **Authorization Code + PKCE** (S256 challenge method)
 - **ID Token signing**: RS256
-- **Scopes**: `openid profile email offline_access`
+- **Login scopes requested by Chat**: `openid profile email`; TokenDance ID supports `offline_access`, but Chat does not request it for the current memory-only session flow
 - **Token auth**: `client_secret_basic`, `client_secret_post`
 - **Claims**: `iss`, `sub`, `aud`, `exp`, `iat`, `email`, `email_verified`, `name`, `picture`
 
@@ -112,7 +112,7 @@ Based on the discovery document at https://id.tokendancelab.com/.well-known/open
 
 2. **UserInfo Endpoint**: The backend intentionally relies on validated ID token claims and does not call UserInfo. Add UserInfo only if the chat app needs profile fields not present in the ID token.
 
-3. **Refresh Persistence**: The refresh endpoint is implemented, but the current UI keeps refresh tokens only in memory. A reload falls back to local username reconnect instead of a durable OIDC session.
+3. **Refresh Persistence**: The refresh endpoint is implemented, but refresh tokens are optional and kept only in memory when issued. A reload falls back to the app `session_token` and username rather than a durable provider refresh flow.
 
 4. **Provider Logout**: Chat logout/disconnect is local-only. Add a TokenDance ID `/logout` redirect if global logout semantics are required.
 

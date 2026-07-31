@@ -187,7 +187,7 @@ describe("App smoke test", () => {
     expect(window.localStorage.getItem("tokendance:username")).toBeNull();
   });
 
-  it("uses the redeemed OIDC username instead of the callback URL username", async () => {
+  it("connects with the redeemed OIDC username when no refresh token is issued", async () => {
     window.history.replaceState({}, "", "/?oidc_success=1&oidc_username=mallory&oidc_rid=redeem-1");
     mockFetch.mockImplementation((input: RequestInfo | URL) => {
       const url = input.toString();
@@ -197,7 +197,6 @@ describe("App smoke test", () => {
           json: async () => ({
             username: "alice",
             access_token: "access-token-1",
-            refresh_token: "refresh-token-1",
             session_token: "session-token-1",
           }),
         } as unknown as Response);
@@ -226,5 +225,6 @@ describe("App smoke test", () => {
     expect(window.localStorage.getItem("tokendance:username")).toBe("alice");
     expect(window.localStorage.getItem("tokendance:sessionToken")).toBe("session-token-1");
     expect(useChatStore.getState().oidcAccessToken).toBe("access-token-1");
+    expect(useChatStore.getState().oidcRefreshToken).toBeNull();
   });
 });

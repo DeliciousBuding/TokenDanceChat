@@ -1,6 +1,6 @@
 # TokenDanceChat ROADMAP
 
-最后更新：2026-06-09
+最后更新：2026-07-31
 
 发布: [v0.2.13](https://github.com/TokenDanceLab/TokenDanceChat/releases/tag/v0.2.13) | Docker: `tokendancechat:v0.2.13` | 测试: **690** 前端 / 35 文件 / Backend **6/6** / Skills **6** 活跃 / CI 全绿 | OIDC + session auth
 
@@ -50,6 +50,8 @@ TokenDanceChat 是 AgentHub Hub/IM 验证项目兼可玩 Demo。
 ## 当前增量（dev）：测试覆盖 + 性能优化 + UI 打磨 + 工程基建
 
 状态：持续推进。690 tests / 35 files / tsc 0 / CI 就绪 / E2E 本地 public preview PASS / Backend 6/6 PASS；当前前端矩阵聚焦公共房间、TokenBot/PicoClaw、消息渲染、composer、设置、搜索、文件、poll/reconnect 等核心聊天能力。
+
+- [x] 2026-07-31 OIDC 可选 refresh token 修复：真实 GitHub→TokenDance ID→Chat 回调已成功兑换 access token 与应用 `session_token`，但 Chat 请求的 scope 不含 `offline_access`，provider 未签发 refresh token 时前端在建立 WebSocket 前错误回退。初次登录合同现只要求 username/access/session，refresh 仅在签发时保留于内存；新增 App 回归覆盖缺少 refresh 仍以认证用户名连接，待生产真实 GitHub 登录验收后关闭 `CHAT-SR-011`。
 
 - [x] 2026-06-08 轻量聊天合同重构：主界面只保留公共聊天室、TokenBot 和 PicoClaw；移除主 UI 对旧 Sidebar、联系人/好友、群组创建/信息面板、转发入口、语音/视频通话、GIF picker 和定时发送的依赖。`ChatInput` 实际删除隐藏录音/GIF/定时代码，不再用 `false &&` 保留旧功能。E2E 旧 DM/群组/通话/GIF/webhook 套件移出测试矩阵，新增 `lightweight-chat.test.ts` 覆盖桌面/移动公共房间和 AI 工作区，并补 guest 自动加入、发送、刷新后持久化断言。v4 token 收敛：panel radius 10px、bubble radius 12px、composer shadow 更轻，AI workbench/message edit 改用已定义 `--td-*`/chat tokens。验证：`npx tsc --noEmit`、`npm test`（44 files / 861 tests）、`npm run build`、`go test ./hub`、`npx playwright test src/e2e/lightweight-chat.test.ts --project=chromium`、`.\scripts\verify-design-tokens.ps1`、`.\scripts\verify-design-hygiene.ps1`、`git diff --check` 均通过；生产：`chat.vectorcontrol.tech` 已运行 `tokendancechat:codex-20260608-tokenbot-normalize`，guest 自动加入后输入框等到 WebSocket connected 后启用，自发消息不再继承历史分组 stagger animation delay，公网首页 asset `index-xNcyymEk.js`，公开域名 `lightweight-chat.test.ts` 2/2 通过，发送可见性连续探针 `visibleMs=[1078,920,927]`，旧名 DOM 探针 `WebUIChat=0` / `WebUIBot=0`；截图：`frontend/artifacts/visual/lightweight-desktop.png`、`frontend/artifacts/visual/lightweight-mobile.png`、`frontend/artifacts/visual/tokenbot-desktop.png`。
 - [x] 2026-06-09 AgentHub v4 聊天渲染迁移：聊天区改为 AgentHub transcript/list/block 布局，输入框压回 v4 composer row 视觉层，panel/bubble radius 统一到 16px，消息气泡和 composer 使用 v4 token 别名、低动效和受控阴影；消息渲染删除旧语音播放器、GIF canvas 与 sticker 专用控件，历史媒体只按普通 Markdown 链接/图片展示。同步更新 `docs/agenthub-validation.md`、`docs/engineering-goal.md`、`docs/governance-execution.md`、`docs/visual-acceptance.md`，明确 rich IM 为历史压力测试/后端兼容，当前前端合同只保留公共房间、TokenBot、PicoClaw。`frontend/scripts/visual-acceptance.mjs` 改为轻量合同验收，不再创建群组/Webhook 或要求 7 个旧工具入口；`page-load.test.ts` 和 E2E helper 改为自动 guest + 公共聊天室可发送合同；`SettingsPanel` 补当前通知抽屉 visual markers 和 44px 控件。阶段验证：`cd frontend; npx tsc --noEmit` PASS；`npm test -- --run src/components/ChatInput.test.tsx src/components/MessageBubble.test.tsx src/components/MessageTranscript.test.tsx src/components/ChatLayout.test.tsx` PASS（4 files / 103 tests）；`npm exec -- playwright test src/e2e/page-load.test.ts --project=chromium --reporter=line` PASS（4/4）；`npm run build` PASS，最新本地 asset `/assets/index-60VvBmUV.js`；干净本地 DB + `VISUAL_BASE_URL=http://127.0.0.1:18180 npm run visual:acceptance` PASS，输出 `C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-06-08T17-49-54-966Z`，桌面 composer 820x66 radius 16px、移动 composer 346x66 radius 16px、`oldLabels=0`。
