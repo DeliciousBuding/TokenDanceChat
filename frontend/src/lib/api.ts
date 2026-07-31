@@ -808,7 +808,7 @@ export interface OIDCExchangeResponse {
   success: boolean;
   username: string;
   access_token: string;
-  refresh_token: string;
+  refresh_token?: string;
   session_token: string;
 }
 
