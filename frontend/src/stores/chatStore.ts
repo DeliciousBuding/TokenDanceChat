@@ -134,7 +134,7 @@ interface ChatState {
   oidcAuthenticated: boolean;
   oidcAccessToken: string | null;
   oidcRefreshToken: string | null;
-  setOidcAuth: (accessToken: string, refreshToken: string) => void;
+  setOidcAuth: (accessToken: string, refreshToken: string | null) => void;
   clearOidcAuth: () => void;
   addMessage: (message: ChatMessage) => void;
   deleteMessage: (id: string) => void;
