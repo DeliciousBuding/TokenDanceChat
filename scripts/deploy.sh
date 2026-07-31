@@ -96,4 +96,4 @@ ssh "$SERVER_HOST" "curl -s http://localhost:8080/api/health || echo 'Health che
 echo ""
 echo "=== Deploy complete ==="
 echo "View logs:  journalctl -u $REMOTE_SERVICE -f"
-echo "Service URL: https://chat.vectorcontrol.tech"
+echo "Service URL: https://chat.tokendancelab.com"

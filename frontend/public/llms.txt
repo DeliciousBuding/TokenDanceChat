@@ -2,8 +2,8 @@
 
 TokenDanceChat is TokenDance's real-time chat product and AgentHub interaction proving ground. It validates WebSocket chat, PWA behavior, OIDC login, and IM-style interaction patterns before they graduate into AgentHub.
 
-Canonical site: https://chat.vectorcontrol.tech
-Identity provider: https://id.vectorcontrol.tech
+Canonical site: https://chat.tokendancelab.com
+Identity provider: https://id.tokendancelab.com
 Repository: https://github.com/TokenDanceLab/tokendance-chat
 
 ## Agent Notes
@@ -12,6 +12,6 @@ Repository: https://github.com/TokenDanceLab/tokendance-chat
 - Authentication should be described as TokenDance ID OIDC. Durable server-backed auth should use backend exchange or an HttpOnly app session.
 - The app is also a validation surface for AgentHub-style chat, group, PWA, and assistant interaction features.
 - Public docs live in the repository README and docs folder until a dedicated marketing/docs site exists.
-- Public discovery files are https://chat.vectorcontrol.tech/robots.txt, https://chat.vectorcontrol.tech/sitemap.xml, and https://chat.vectorcontrol.tech/llms.txt.
+- Public discovery files are https://chat.tokendancelab.com/robots.txt, https://chat.tokendancelab.com/sitemap.xml, and https://chat.tokendancelab.com/llms.txt.
 - Keep PWA, offline, auth, error, and assistant surfaces aligned across Chinese and English copy.
 - If a feature proves reusable for AgentHub, document it as an AgentHub proving-ground result rather than presenting TokenDanceChat as a separate long-term platform.

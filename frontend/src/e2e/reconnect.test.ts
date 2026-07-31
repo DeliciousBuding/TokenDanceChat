@@ -5,7 +5,7 @@ import { joinGuestFromPreview } from "./helpers";
  * TokenDanceChat WebSocket 自动重连 E2E 测试。
  *
  * 运行方式：
- *   E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/reconnect.test.ts --project=chromium
+ *   E2E_BASE_URL=https://chat.tokendancelab.com npx playwright test src/e2e/reconnect.test.ts --project=chromium
  *
  * 注意：大多数重连场景需要控制服务端 WebSocket 生命周期（kill/restart），
  * 当前 E2E 环境不具备该能力。这些测试使用 test.skip() 标记，并注明所需前置条件。

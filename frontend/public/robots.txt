@@ -28,4 +28,4 @@ Allow: /
 User-agent: Bytespider
 Allow: /
 
-Sitemap: https://chat.vectorcontrol.tech/sitemap.xml
+Sitemap: https://chat.tokendancelab.com/sitemap.xml
