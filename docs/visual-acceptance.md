@@ -128,7 +128,7 @@ npm run visual:acceptance
 
 生产 smoke：
 
-- 目标：`https://chat.vectorcontrol.tech`
+- 目标：`https://chat.tokendancelab.com`
 - 镜像：当前运行容器文件系统已 overlay 并 commit 为 `tokendancechat:codex-20260609-own-right-align`；`docker inspect .Config.Image` 仍显示基础镜像 `tokendancechat:codex-20260609-picoclaw-fallback`。
 - 资源：公网首页加载 `/assets/index-BK_YVSvU.js`。
 - E2E：公开域名 `lightweight-chat.test.ts` 2/2 通过，`page-load.test.ts` 4/4 通过，合计 6/6；更新后的 `lightweight-chat.test.ts` 已覆盖 `composer-submit-state`、TokenBot/PicoClaw prefixed sends 和旧 `@webuibot` -> `@TokenBot` 归一。

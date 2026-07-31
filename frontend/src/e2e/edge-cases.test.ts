@@ -5,7 +5,7 @@ import { joinGuestFromPreview } from "./helpers";
  * TokenDanceChat Edge Cases E2E Tests.
  *
  * Run:
- *   E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/edge-cases.test.ts --project=chromium --workers=1
+ *   E2E_BASE_URL=https://chat.tokendancelab.com npx playwright test src/e2e/edge-cases.test.ts --project=chromium --workers=1
  *
  * Coverage:
  *   1. Poll edge cases:

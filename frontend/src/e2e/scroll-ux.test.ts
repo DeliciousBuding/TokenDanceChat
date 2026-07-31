@@ -5,7 +5,7 @@ import { joinGuestFromPreview } from "./helpers";
  * TokenDanceChat Scroll Behavior & UX E2E Tests.
  *
  * 运行方式：
- *   E2E_BASE_URL=https://chat.vectorcontrol.tech npx playwright test src/e2e/scroll-ux.test.ts --project=chromium
+ *   E2E_BASE_URL=https://chat.tokendancelab.com npx playwright test src/e2e/scroll-ux.test.ts --project=chromium
  *
  * 覆盖：
  *   1. 消息列表容器可滚动（overflow-y CSS 检查）
