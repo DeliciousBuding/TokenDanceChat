@@ -112,30 +112,6 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	}
 
 	hdlr := handler.New(h, st, uploadsDir)
-	if endpoint := os.Getenv("CHAT_MEDIA_S3_ENDPOINT"); endpoint != "" {
-		mediaStore, err := handler.NewS3MediaStore(handler.S3MediaStoreConfig{
-			Endpoint:        endpoint,
-			Region:          os.Getenv("CHAT_MEDIA_S3_REGION"),
-			Bucket:          os.Getenv("CHAT_MEDIA_S3_BUCKET"),
-			AccessKeyID:     os.Getenv("CHAT_MEDIA_S3_ACCESS_KEY_ID"),
-			SecretAccessKey: os.Getenv("CHAT_MEDIA_S3_SECRET_ACCESS_KEY"),
-			SessionToken:    os.Getenv("CHAT_MEDIA_S3_SESSION_TOKEN"),
-			Prefix:          os.Getenv("CHAT_MEDIA_S3_PREFIX"),
-			UsePathStyle:    parseEnvBool(os.Getenv("CHAT_MEDIA_S3_FORCE_PATH_STYLE")),
-		})
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("invalid S3 media store configuration: %w", err)
-		}
-		hdlr.SetMediaStore(mediaStore)
-		log.Printf("media uploads configured for S3-compatible endpoint %s", endpoint)
-	} else if endpoint := os.Getenv("CHAT_MEDIA_WEBDAV_ENDPOINT"); endpoint != "" {
-		hdlr.SetMediaStore(handler.NewWebDAVMediaStore(
-			endpoint,
-			os.Getenv("CHAT_MEDIA_WEBDAV_USER"),
-			os.Getenv("CHAT_MEDIA_WEBDAV_PASS"),
-		))
-		log.Printf("media uploads configured for WebDAV endpoint %s", endpoint)
-	}
 
 	// OIDC setup (TokenDance ID integration).
 	oidcEnabled := parseEnvBool(os.Getenv("CHAT_OIDC_ENABLED"))
@@ -156,12 +132,9 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	mux.HandleFunc("/api/users/online", hdlr.GetOnlineUsers)
 	mux.HandleFunc("/api/stats", hdlr.Stats)
 	mux.HandleFunc("/api/link-preview", hdlr.LinkPreview)
-	mux.HandleFunc("/api/upload", hdlr.UploadImage)
 	mux.HandleFunc("/api/emoji/upload", hdlr.UploadEmoji)
 	mux.HandleFunc("/api/search", hdlr.Search)
 	mux.HandleFunc("/api/export", hdlr.ExportMessages)
-	mux.HandleFunc("/api/giphy/search", hdlr.GiphySearch)
-	mux.HandleFunc("/api/giphy/trending", hdlr.GiphyTrending)
 	mux.HandleFunc("/api/register", hdlr.Register)
 	mux.HandleFunc("/api/login", hdlr.Login)
 	mux.HandleFunc("/api/invite/generate", hdlr.InviteGenerate)
@@ -169,7 +142,6 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	mux.HandleFunc("/api/webhook/", hdlr.WebhookHandler)
 	mux.HandleFunc("/api/admin/stats", hdlr.AdminStats)
 	mux.HandleFunc("/uploads/emojis/", hdlr.ServeEmoji)
-	mux.HandleFunc("/uploads/", hdlr.ServeUpload)
 	mux.HandleFunc("/ws", hdlr.HandleWebSocket)
 
 	// OIDC routes (only registered when enabled).
@@ -185,6 +157,17 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	fs := http.FileServer(http.Dir(frontendDist))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cleanPath := filepath.Clean(r.URL.Path)
+
+		// Retired routes must 404, not fall through to the SPA fallback (which
+		// would serve index.html and make route removal look green). Check the
+		// raw URL path: filepath.Clean is platform-dependent (backslashes on
+		// Windows) and strips trailing slashes ("/uploads/" -> "/uploads").
+		rawPath := r.URL.Path
+		if rawPath == "/api" || strings.HasPrefix(rawPath, "/api/") ||
+			rawPath == "/uploads" || strings.HasPrefix(rawPath, "/uploads/") {
+			http.NotFound(w, r)
+			return
+		}
 
 		// SPA fallback: root or empty path serves index.html.
 		if cleanPath == "/" || cleanPath == "." {
@@ -228,7 +211,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 		Addr:         addr,
 		Handler:      srv,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 120 * time.Second, // allow large media uploads
+		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
