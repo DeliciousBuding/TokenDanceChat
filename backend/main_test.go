@@ -366,3 +366,91 @@ func TestServerLLMMemoryPath(t *testing.T) {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 }
+
+// TestRetiredRoutesReturn404 is the route contract test for the PR-1
+// retirement: deleted routes (/api/upload, /api/giphy/*, /uploads/) must
+// return 404 — not fall through to the SPA fallback which would return
+// index.html and make route removal look green — while the retained emoji
+// routes must still be registered.
+func TestRetiredRoutesReturn404(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tokendancechat-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	frontendDir := filepath.Join(tmpDir, "frontend")
+	if err := os.MkdirAll(frontendDir, 0755); err != nil {
+		t.Fatalf("failed to create frontend dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(frontendDir, "index.html"), []byte("<!DOCTYPE html><html><body>SPA</body></html>"), 0644); err != nil {
+		t.Fatalf("failed to write index.html: %v", err)
+	}
+
+	ts := startTestServer(t, filepath.Join(tmpDir, "chat.db"), frontendDir)
+	defer ts.Close()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	// Deleted routes must 404 (not the SPA fallback 200).
+	retired := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/upload"},
+		{http.MethodGet, "/api/upload"},
+		{http.MethodGet, "/uploads/sample.png"},
+		{http.MethodGet, "/uploads/"},
+		{http.MethodGet, "/api/giphy/search?q=test"},
+		{http.MethodGet, "/api/giphy/trending"},
+	}
+	for _, tt := range retired {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			req, err := http.NewRequest(tt.method, "http://"+ts.addr+tt.path, nil)
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusNotFound {
+				t.Errorf("expected 404 for %s %s, got %d", tt.method, tt.path, resp.StatusCode)
+			}
+		})
+	}
+
+	// Retained emoji routes must still be registered: wrong method on a
+	// registered route yields 405, not the 404 of a deleted route.
+	t.Run("GET /api/emoji/upload is 405 not 404", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "http://"+ts.addr+"/api/emoji/upload", nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %v", err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusMethodNotAllowed {
+			t.Errorf("expected 405 for GET /api/emoji/upload (route registered, wrong method), got %d", resp.StatusCode)
+		}
+	})
+
+	// /uploads/emojis/ is still registered: a missing file is a handler 404.
+	t.Run("GET /uploads/emojis/x.png is 404 from handler", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "http://"+ts.addr+"/uploads/emojis/x.png", nil)
+		if err != nil {
+			t.Fatalf("failed to create request: %v", err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404 for GET /uploads/emojis/x.png (route registered, file missing), got %d", resp.StatusCode)
+		}
+	})
+}
