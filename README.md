@@ -44,11 +44,11 @@ AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/�
 
 ## 功能 Features
 
+> 完整能力清单与各能力状态（Core / Experiment / Compat / Archived）以 [docs/capability-matrix.md](./docs/capability-matrix.md) 为唯一事实来源，以下仅列当前主界面在用的核心能力。文件/图片等上传能力已退休（后端 `/api/upload` 等路由仍在清理中，见能力矩阵），composer 不再提供附件/图片入口。
+
 ### 核心聊天 Core Chat
 - 公共聊天室
 - Markdown 消息渲染（代码高亮、表格、GFM）
-- 图片粘贴/拖拽上传（本地/WebDAV/S3-compatible 存储）
-- 文件分享（文档、压缩包）
 - 消息编辑 · 删除 · 引用回复
 - 表情反应 (Emoji Reactions)
 - 消息搜索（全文检索，FTS5）
