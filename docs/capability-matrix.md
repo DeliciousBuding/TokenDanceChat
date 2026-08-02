@@ -25,8 +25,8 @@
 | 自定义 Emoji | Compat（上传/删除入口仍在运行面，清理待裁决） | 有（EmojiPicker 展示 customEmojis，并保留「上传表情」按钮与删除） | 有（/api/emoji/upload、/uploads/emojis/ 仍注册） | 有（custom_emoji_add/list/delete 仍处理） | 有 | 有 | 是 |
 | DM/群组 | Compat | 无（主界面不暴露） | 无 | 后端协议保留（dm_message、group_*、friend_*）；前端不消费 | 否 | 有（历史数据仍在 store） | 否 |
 | Webhook | Archived（运行面清理中） | 无 | 后端 /api/webhook/ 仍注册（HTTP ingress）；前端无调用 | 后端 webhook 相关事件仍处理；前端不消费 | 否 | 有（历史消息只读） | 否 |
-| Giphy 检索 | Archived（运行面清理中） | 无 | 后端 /api/giphy/search、/api/giphy/trending 仍注册；前端无调用 | 无 | 否 | 否 | 否 |
-| 普通文件上传 | Archived（运行面清理中） | 无（composer 无附件/图片入口） | 后端 /api/upload、/uploads/ 仍注册（后续 PR 删除）；前端无调用 | 无 | 否 | 有（历史媒体按 Markdown 链接/图片只读渲染） | 否 |
+| Giphy 检索 | Archived（已清理） | 无 | 无（/api/giphy/* 路由已删除，请求 404） | 无 | 否 | 否 | 否 |
+| 普通文件上传 | Archived（已清理） | 无（composer 无附件/图片入口） | 无（/api/upload、/uploads/ 路由已删除，请求 404） | 无 | 否 | 否（历史上传文件不再可访问） | 否 |
 | 语音/视频通话 | Archived（运行面清理中） | 无 | 无 | 后端 call_* 事件仍处理；前端不消费 | 否 | 否 | 否 |
 | 定时消息 | Archived（运行面清理中） | 无 | 无 | 后端 schedule_* 事件仍处理；前端不消费 | 否 | 否 | 否 |
 | 转发 | Archived（运行面清理中） | 无 | 无 | 后端 forward 事件仍处理；前端不消费 | 否 | 有（历史转发标记只读） | 否 |
@@ -34,7 +34,7 @@
 
 ## 说明
 
-- **普通文件上传已退休**：前端入口已删（composer 无附件/图片工具），但后端 `/api/upload`、`/uploads/` 等路由仍注册，属「运行面清理中」，由后续 PR 删除；清理完成前历史上传文件仍可经 `/uploads/` 只读访问。
+- **普通文件上传已退休**：前端入口已删（composer 无附件/图片工具）；后端 `/api/upload`、`/uploads/` 路由已删除（2026-08-03 清理），请求返回 404，历史上传文件不再可访问。
 - **自定义 Emoji**：EmojiPicker 仍展示 customEmojis 且保留上传/删除入口（调用 `/api/emoji/upload`），与「只读展示」不符——上传入口是否一并退休待裁决（见 BLOCKED.md）。
-- 其余 Archived 能力的后端路由/WS 事件（/api/giphy/*、/api/webhook/、call_*、schedule_*、forward 等）同理属「运行面清理中」，前端一律无入口。
+- 其余 Archived 能力的后端路由/WS 事件（/api/webhook/、call_*、schedule_*、forward 等）同理属「运行面清理中」，前端一律无入口。
 - 状态随代码事实更新：任何能力增删或运行面清理完成后，先更新本矩阵，再同步其他文档。

@@ -154,15 +154,6 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 | `CHAT_ALLOWED_ORIGINS` | — | 允许的跨源 CORS/WebSocket browser origins，必须包含 scheme；示例：`https://chat.example.com,https://*.example.com`，`*` 不会放行跨源请求 |
 | `CHAT_TRUSTED_PROXY_CIDRS` | — | 可信反代 IP/CIDR；只有这些来源的 `X-Forwarded-For` / `X-Real-IP` 会用于 REST、OIDC、auth、WS 限流 |
 | `CHAT_SESSION_SECRET` | — | 应用 `session_token` HMAC 签名 secret；生产/共享环境必须稳定配置；`docker compose` 部署会强制要求该值 |
-| `CHAT_MEDIA_S3_ENDPOINT` | — | S3-compatible 媒体存储端点；配置后优先于 WebDAV |
-| `CHAT_MEDIA_S3_REGION` | — | S3 签名 region，S3-compatible 服务可用 `auto` |
-| `CHAT_MEDIA_S3_BUCKET` | — | 媒体对象 bucket |
-| `CHAT_MEDIA_S3_ACCESS_KEY_ID` | — | 媒体对象存储 Access Key |
-| `CHAT_MEDIA_S3_SECRET_ACCESS_KEY` | — | 媒体对象存储 Secret Key |
-| `CHAT_MEDIA_S3_SESSION_TOKEN` | — | 可选临时凭证 token |
-| `CHAT_MEDIA_S3_PREFIX` | `uploads` | 媒体对象前缀 |
-| `CHAT_MEDIA_S3_FORCE_PATH_STYLE` | `false` | 是否使用 path-style bucket URL |
-| `CHAT_MEDIA_WEBDAV_ENDPOINT` | — | WebDAV 媒体存储端点；仅在未配置 S3 时启用 |
 | `CHAT_OIDC_ENABLED` | `false` | 是否启用 OIDC 登录 |
 | `CHAT_OIDC_ISSUER` | — | OIDC issuer；启用 OIDC 时必须由部署环境提供 |
 | `CHAT_OIDC_CLIENT_ID` | — | OAuth client id；启用 OIDC 时必须由部署环境提供 |
