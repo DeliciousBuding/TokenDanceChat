@@ -31,13 +31,24 @@
   - 后端运行面：`/api/upload`、`/api/emoji/upload`、`/api/giphy/search|trending`、`/api/webhook/`、`/uploads/` 仍注册（main.go:159-172）；hub 仍处理 call_*/schedule_*/forward/dm/group/friend 等 legacy WS 事件 → 除 GIF picker（前端已删）外，Archived 行统一标注「运行面清理中」。
   - 前端 composer 现状：ChatInput = textarea + 发送按钮，无任何附件/图片/emoji 工具（已读 render 确认）→ agenthub-validation.md:83「附件/图片预览」在「已迁移/对齐」列属失实表述，一并收口。
   - engineering-goal.md：无「上传/文件分享/图片/Giphy」表述（:23 的 GIF 在已退休清单内），无需改动。
-- [ ] 任务 1 各步骤（进行中）
-- [ ] 全量验收（后端测试 / 前端测试+tsc+build / grep / git status / frontend/src diff）
-- [ ] 4 个 commit 落地
+- [x] 任务 1 全部步骤（5 个 commit：骨架 / 矩阵 / 四文档 / visual-acceptance / store.go seed）
+- [x] 全量验收（见下表）
 
-## 验收记录
+## 验收记录（2026-08-03 实测）
 
-（最终验收命令输出贴此处）
+| 验收项 | 命令 | 结果 |
+|---|---|---|
+| 合同 grep | `grep -rn "文件分享\|图片上传\|拖拽上传\|GIPHY\|Giphy" README.md ROADMAP.md docs/agenthub-validation.md docs/engineering-goal.md` | 零命中（exit=1）；历史台账/带日期增量条目保留未动 |
+| 后端测试 | `cd backend && go test ./... -count=1` | 5 包全 ok；988 个测试（`-v` 计数）≥ 基线 988 |
+| 前端类型 | `cd frontend && npx tsc --noEmit` | 通过 |
+| 前端测试 | `cd frontend && npm test` | 34 files / 658 passed，≥ 基线 658，skipped = 0 |
+| 前端构建 | `cd frontend && npm run build` | 成功，asset `/assets/index-C40gUqtE.js` |
+| git 状态 | `git status` | 干净 |
+| frontend/src diff | `git diff HEAD -- frontend/src` | 空（业务代码一行未动） |
+| visual-acceptance diff | `git diff master~4..HEAD -- frontend/scripts/visual-acceptance.mjs` | 仅删除 1 行（tabs!==3 断言） |
+| 变更文件清单 | `git diff --stat master~4 HEAD` | 仅白名单：README/ROADMAP/agenthub-validation/capability-matrix/visual-acceptance/store.go（+PROGRESS/BLOCKED） |
+
+提交序列：`b6f0476` 骨架 → `bd1929c` 矩阵 → `3dda26a` 四文档 → `2b25bee` visual-acceptance → `c5c7a17` store.go seed。
 
 ## 决策记录（理由）
 
