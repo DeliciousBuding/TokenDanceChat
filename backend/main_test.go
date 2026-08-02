@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -369,9 +370,9 @@ func TestServerLLMMemoryPath(t *testing.T) {
 
 // TestRetiredRoutesReturn404 is the route contract test for the PR-1
 // retirement: deleted routes (/api/upload, /api/giphy/*, /uploads/) must
-// return 404 — not fall through to the SPA fallback which would return
-// index.html and make route removal look green — while the retained emoji
-// routes must still be registered.
+// return 404 for every HTTP method — not fall through to the SPA fallback
+// which would return index.html and make route removal look green — while
+// the retained emoji routes must still be registered.
 func TestRetiredRoutesReturn404(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "tokendancechat-test-*")
 	if err != nil {
@@ -392,34 +393,50 @@ func TestRetiredRoutesReturn404(t *testing.T) {
 
 	client := &http.Client{Timeout: 5 * time.Second}
 
-	// Deleted routes must 404 (not the SPA fallback 200).
-	retired := []struct {
-		method string
-		path   string
-	}{
-		{http.MethodPost, "/api/upload"},
-		{http.MethodGet, "/api/upload"},
-		{http.MethodGet, "/uploads/sample.png"},
-		{http.MethodGet, "/uploads/"},
-		{http.MethodGet, "/api/giphy/search?q=test"},
-		{http.MethodGet, "/api/giphy/trending"},
+	// Every HTTP method on every deleted route must 404. The /uploads/foo/bar.png
+	// case covers the old nested-file serving shape, /api and /uploads bare
+	// paths cover the guard edge cases (filepath.Clean strips trailing slashes).
+	retiredPaths := []string{
+		"/api/upload",
+		"/api/giphy/search",
+		"/api/giphy/trending",
+		"/uploads/sample.png",
+		"/uploads/",
+		"/uploads/foo/bar.png",
+		"/api",
+		"/uploads",
 	}
-	for _, tt := range retired {
-		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
-			req, err := http.NewRequest(tt.method, "http://"+ts.addr+tt.path, nil)
-			if err != nil {
-				t.Fatalf("failed to create request: %v", err)
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				t.Fatalf("request failed: %v", err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusNotFound {
-				t.Errorf("expected 404 for %s %s, got %d", tt.method, tt.path, resp.StatusCode)
-			}
-		})
+	methods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete}
+	for _, p := range retiredPaths {
+		for _, m := range methods {
+			t.Run(m+" "+p, func(t *testing.T) {
+				req, err := http.NewRequest(m, "http://"+ts.addr+p, nil)
+				if err != nil {
+					t.Fatalf("failed to create request: %v", err)
+				}
+				resp, err := client.Do(req)
+				if err != nil {
+					t.Fatalf("request failed: %v", err)
+				}
+				defer resp.Body.Close()
+				if resp.StatusCode != http.StatusNotFound {
+					t.Errorf("expected 404 for %s %s, got %d", m, p, resp.StatusCode)
+				}
+			})
+		}
 	}
+
+	// Query parameters must not resurrect a deleted route.
+	t.Run("GET /api/giphy/search with query params is 404", func(t *testing.T) {
+		resp, err := client.Get("http://" + ts.addr + "/api/giphy/search?q=test&limit=5&offset=2&type=sticker")
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404 for /api/giphy/search with query params, got %d", resp.StatusCode)
+		}
+	})
 
 	// Retained emoji routes must still be registered: wrong method on a
 	// registered route yields 405, not the 404 of a deleted route.
@@ -451,6 +468,71 @@ func TestRetiredRoutesReturn404(t *testing.T) {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusNotFound {
 			t.Errorf("expected 404 for GET /uploads/emojis/x.png (route registered, file missing), got %d", resp.StatusCode)
+		}
+	})
+}
+
+// TestEmojiServeThroughServer verifies the retained emoji chain still works
+// end-to-end through the full server stack, and that the retired /uploads/
+// route cannot read emoji files.
+func TestEmojiServeThroughServer(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tokendancechat-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	frontendDir := filepath.Join(tmpDir, "frontend")
+	if err := os.MkdirAll(frontendDir, 0755); err != nil {
+		t.Fatalf("failed to create frontend dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(frontendDir, "index.html"), []byte("ok"), 0644); err != nil {
+		t.Fatalf("failed to write index.html: %v", err)
+	}
+
+	ts := startTestServer(t, filepath.Join(tmpDir, "chat.db"), frontendDir)
+	defer ts.Close()
+
+	// Seed an emoji file into the server's emojis dir (dataDir = tmpDir).
+	emojiDir := filepath.Join(tmpDir, "uploads", "emojis")
+	if err := os.MkdirAll(emojiDir, 0755); err != nil {
+		t.Fatalf("failed to create emojis dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(emojiDir, "spark.png"), []byte("emoji-png-bytes"), 0644); err != nil {
+		t.Fatalf("failed to write emoji file: %v", err)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	t.Run("GET /uploads/emojis/spark.png serves the file", func(t *testing.T) {
+		resp, err := client.Get("http://" + ts.addr + "/uploads/emojis/spark.png")
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 serving emoji, got %d", resp.StatusCode)
+		}
+		if ct := resp.Header.Get("Content-Type"); ct != "image/png" {
+			t.Errorf("expected image/png content type, got %q", ct)
+		}
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("failed to read response body: %v", err)
+		}
+		if string(body) != "emoji-png-bytes" {
+			t.Errorf("expected emoji bytes, got %q", string(body))
+		}
+	})
+
+	t.Run("retired /uploads/ route cannot read emoji files", func(t *testing.T) {
+		resp, err := client.Get("http://" + ts.addr + "/uploads/spark.png")
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404 for /uploads/spark.png (retired route), got %d", resp.StatusCode)
 		}
 	})
 }
