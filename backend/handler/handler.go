@@ -235,13 +235,6 @@ func (h *Handler) pruneLinkPreviewCache() {
 	}
 }
 
-// SetMediaStore replaces the default local upload storage.
-func (h *Handler) SetMediaStore(store MediaStore) {
-	if store != nil {
-		h.mediaStore = store
-	}
-}
-
 // writeJSONError writes a consistent JSON error response.
 func writeJSONError(w http.ResponseWriter, status int, msg, code, requestID string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -607,65 +600,12 @@ func (h *Handler) LinkPreview(w http.ResponseWriter, r *http.Request) {
 
 // --- Media Uploads ---
 
-const maxUploadSize = 50 << 20       // 50 MB
 const maxEmojiUploadSize = 128 << 10 // 128 KB
 const maxLinkPreviewCacheSize = 1000
-
-// validImageExts are the allowed image extensions for normal chat uploads.
-var validImageExts = map[string]bool{
-	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
-}
 
 // validEmojiExts are the allowed image extensions for custom emojis.
 var validEmojiExts = map[string]bool{
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true,
-}
-
-// UploadImage handles POST /api/upload (multipart form, image only, max 50MB).
-func (h *Handler) UploadImage(w http.ResponseWriter, r *http.Request) {
-	requestID := requestIDFromContext(r.Context())
-	if r.Method != http.MethodPost {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
-		return
-	}
-	if _, ok := h.requireSession(w, r); !ok {
-		return
-	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
-
-	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "file too large (max 50MB)", "FILE_TOO_LARGE", requestID)
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "missing file field", "MISSING_FILE", requestID)
-		return
-	}
-	defer file.Close()
-
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if !validImageExts[ext] {
-		writeJSONError(w, http.StatusBadRequest, "unsupported file type (allowed: png, jpg, gif, webp)", "INVALID_FILE_TYPE", requestID)
-		return
-	}
-
-	filename := uuid.New().String() + ext
-	contentType := contentTypeForFilename(filename)
-
-	if err := h.mediaStore.Save(r.Context(), filename, contentType, file); err != nil {
-		log.Printf("image upload: failed to save %s: %v", filename, err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to save file", "SERVER_ERROR", requestID)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"url":      "/uploads/" + filename,
-		"filename": filename,
-	})
 }
 
 // UploadEmoji handles POST /api/emoji/upload (multipart form, image only, max 128KB).
@@ -716,35 +656,6 @@ func (h *Handler) UploadEmoji(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ServeUpload handles GET /uploads/{filename}.
-func (h *Handler) ServeUpload(w http.ResponseWriter, r *http.Request) {
-	trimmed := strings.TrimPrefix(r.URL.Path, "/uploads/")
-	if strings.Contains(trimmed, "/") || strings.Contains(trimmed, "\\") {
-		http.NotFound(w, r)
-		return
-	}
-	filename := filepath.Base(trimmed)
-	if filename == "." || filename == "/" || filename == "" {
-		http.NotFound(w, r)
-		return
-	}
-
-	media, err := h.mediaStore.Open(r.Context(), filename)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	defer media.Body.Close()
-
-	if media.ContentType != "" {
-		w.Header().Set("Content-Type", media.ContentType)
-	}
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	if _, err := io.Copy(w, media.Body); err != nil {
-		log.Printf("failed to stream upload %s: %v", filename, err)
-	}
-}
-
 // ServeEmoji handles GET /uploads/emojis/{filename}
 func (h *Handler) ServeEmoji(w http.ResponseWriter, r *http.Request) {
 	trimmed := strings.TrimPrefix(r.URL.Path, "/uploads/emojis/")
@@ -769,186 +680,6 @@ func (h *Handler) ServeEmoji(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, media.Body); err != nil {
 		log.Printf("failed to stream emoji %s: %v", filename, err)
 	}
-}
-
-// --- GIPHY Proxy ---
-
-// giphyAPIKey is loaded once from environment.
-var giphyAPIKey = func() string {
-	if k := os.Getenv("CHAT_GIPHY_API_KEY"); k != "" {
-		return k
-	}
-	return "dc6zaTOxFJmzC" // GIPHY public beta key for development
-}()
-
-// giphyResponse mirrors the GIPHY API response shape we expose to the client.
-type giphyResponse struct {
-	Data       []giphyItem     `json:"data"`
-	Pagination giphyPagination `json:"pagination"`
-}
-
-type giphyItem struct {
-	ID         string `json:"id"`
-	URL        string `json:"url"`
-	PreviewURL string `json:"preview_url"`
-	Title      string `json:"title"`
-}
-
-type giphyPagination struct {
-	TotalCount int `json:"total_count"`
-	Count      int `json:"count"`
-	Offset     int `json:"offset"`
-}
-
-// giphyAPIRaw mirrors the upstream GIPHY JSON for decoding.
-type giphyAPIRaw struct {
-	Data []struct {
-		ID     string `json:"id"`
-		Images struct {
-			FixedHeight      giphyImage `json:"fixed_height"`
-			FixedHeightSmall giphyImage `json:"fixed_height_small"`
-		} `json:"images"`
-		Title string `json:"title"`
-	} `json:"data"`
-	Pagination struct {
-		TotalCount int `json:"total_count"`
-		Count      int `json:"count"`
-		Offset     int `json:"offset"`
-	} `json:"pagination"`
-}
-
-type giphyImage struct {
-	URL    string `json:"url"`
-	Width  string `json:"width"`
-	Height string `json:"height"`
-}
-
-// fetchGiphy proxies a request to the GIPHY API and returns a unified response.
-func (h *Handler) fetchGiphy(w http.ResponseWriter, r *http.Request, endpoint string, query url.Values) {
-	requestID := requestIDFromContext(r.Context())
-
-	query.Set("api_key", giphyAPIKey)
-	apiURL := fmt.Sprintf("https://api.giphy.com/v1/%s?%s", endpoint, query.Encode())
-
-	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to create request", "UPSTREAM_ERROR", requestID)
-		return
-	}
-
-	client := &http.Client{Timeout: 8 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("giphy upstream error: %v", err)
-		writeJSONError(w, http.StatusBadGateway, "giphy upstream unavailable", "UPSTREAM_ERROR", requestID)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("giphy upstream returned %d", resp.StatusCode)
-		writeJSONError(w, http.StatusBadGateway, "giphy upstream error", "UPSTREAM_ERROR", requestID)
-		return
-	}
-
-	var raw giphyAPIRaw
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		log.Printf("giphy decode error: %v", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to decode giphy response", "UPSTREAM_ERROR", requestID)
-		return
-	}
-
-	// Map to our client-facing shape.
-	result := giphyResponse{
-		Pagination: giphyPagination{
-			TotalCount: raw.Pagination.TotalCount,
-			Count:      raw.Pagination.Count,
-			Offset:     raw.Pagination.Offset,
-		},
-	}
-	for _, item := range raw.Data {
-		result.Data = append(result.Data, giphyItem{
-			ID:         item.ID,
-			URL:        item.Images.FixedHeight.URL,
-			PreviewURL: item.Images.FixedHeightSmall.URL,
-			Title:      item.Title,
-		})
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-// GiphySearch handles GET /api/giphy/search?q=...&limit=20&offset=0&type=gif|sticker.
-func (h *Handler) GiphySearch(w http.ResponseWriter, r *http.Request) {
-	requestID := requestIDFromContext(r.Context())
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
-		return
-	}
-
-	q := r.URL.Query().Get("q")
-	if q == "" {
-		writeJSONError(w, http.StatusBadRequest, "q parameter is required", "MISSING_QUERY", requestID)
-		return
-	}
-
-	mediaType := r.URL.Query().Get("type")
-	if mediaType == "" {
-		mediaType = "gif"
-	}
-
-	endpoint := "gifs/search"
-	if mediaType == "sticker" {
-		endpoint = "stickers/search"
-	}
-
-	params := url.Values{}
-	params.Set("q", q)
-	if limit := r.URL.Query().Get("limit"); limit != "" {
-		params.Set("limit", limit)
-	} else {
-		params.Set("limit", "20")
-	}
-	if offset := r.URL.Query().Get("offset"); offset != "" {
-		params.Set("offset", offset)
-	}
-
-	h.fetchGiphy(w, r, endpoint, params)
-}
-
-// GiphyTrending handles GET /api/giphy/trending?limit=20&offset=0&type=gif|sticker.
-func (h *Handler) GiphyTrending(w http.ResponseWriter, r *http.Request) {
-	requestID := requestIDFromContext(r.Context())
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
-		return
-	}
-
-	mediaType := r.URL.Query().Get("type")
-	if mediaType == "" {
-		mediaType = "gif"
-	}
-
-	endpoint := "gifs/trending"
-	if mediaType == "sticker" {
-		endpoint = "stickers/trending"
-	}
-
-	params := url.Values{}
-	if limit := r.URL.Query().Get("limit"); limit != "" {
-		params.Set("limit", limit)
-	} else {
-		params.Set("limit", "20")
-	}
-	if offset := r.URL.Query().Get("offset"); offset != "" {
-		params.Set("offset", offset)
-	}
-
-	h.fetchGiphy(w, r, endpoint, params)
 }
 
 // isPrivateHost checks if a hostname resolves to a private/internal IP address.
