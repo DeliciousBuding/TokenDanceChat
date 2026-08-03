@@ -1,6 +1,19 @@
-# PROGRESS.md — PR-0 合同收口（执行者进度账本）
+# PROGRESS.md — PR-0 合同收口 / PR-1 普通上传退休（执行者进度账本）
 
 最后更新：2026-08-03
+
+## 任务 2（PR-1：普通上传退休）
+
+- 目标：普通上传/Giphy 从代码、配置、测试、文档彻底消失；被删路由必须真 404（修 SPA fallback 吞 API 404）；WriteTimeout 120s→30s；emoji 链路一行不删。
+- 开工基线：`go test ./... -count=1` 5 包全绿，988 个测试函数（-v 计数），与 PR-0 一致。
+- 顺序：main.go → handler.go → media.go → 测试清理 → 路由合同测试 → 配置与文档 → 反向验证（红→绿）→ 全量验收。
+- 决策记录（偏差与理由）：
+  1. emoji 测试 TestUploadEmojiStoresViaMediaStore / TestServeEmojiReadsViaMediaStore 原用 NewWebDAVMediaStore 当接口测试替身；WebDAV 删除后（验收 grep 硬要求 NewWebDAVMediaStore 零命中）测试无法编译。按「合同一致 > 功能删净 > 改动最小」，保留测试名与全部断言语义，测试替身改用 LocalMediaStore（t.TempDir()），字节/Content-Type/url 前缀断言逐一保留。
+  2. TestMediaStoreRejectsTraversalKeys（领导点名保留）内含 S3 断言段；S3MediaStore 删除后该段无法编译，仅删 S3 段，Local 段原样保留。
+  3. media_test.go 220 行起实际是「WebDAV/S3 段 + cleanMediaKey 段」：删 WebDAV/S3 段（~220-922），cleanMediaKey 测试（~924-1054）保留（cleanMediaKey 属保留清单，且被 LocalMediaStore 使用）。
+  4. SPA fallback 守卫按任务书 `strings.HasPrefix(cleanPath, "/api/")`/`"/uploads/"` 写法在 Windows 上有洞：filepath.Clean 在 Windows 把斜杠转反斜杠且剥尾斜杠（"/uploads/" → `\uploads`），守卫会漏 → 验收假绿。改用对 r.URL.Path（原始 URL 路径，恒为正斜杠）判断：`p == "/api" || HasPrefix(p, "/api/") || p == "/uploads" || HasPrefix(p, "/uploads/")`，语义与任务书一致且覆盖 /uploads/ 尾斜杠与裸 /api 情形。
+  5. capability-matrix.md 仅改目标两行（状态列 + 该行 HTTP 列「仍注册」表述改为「已删除，404」）及说明段 37/39 中直接描述这两个能力的句子——留「仍注册」会与代码事实矛盾（矩阵自称唯一事实来源）；其余行/段落一字未动。
+- 进度（每处一个 commit，见提交序列）。
 
 ## 任务 0：基线（2026-08-03 实测）
 
@@ -57,3 +70,19 @@
 - agenthub-validation.md:81「附件 picker 的本地 agent 专用语义」在「明确不迁移」列（负向表述，仍准确）→ 保留；:83「附件/图片预览」在「已迁移/对齐」列（正向失实）→ 删除该短语。
 - store.go welcome-3：任务书「/me 仍存在才保留」→ /me 无处理代码，故移除 `/me`、`:smile:`；「↑ 编辑上一条消息」经验证为真（ChatInput ArrowUp 逻辑），保留改写为独立提示，维持 4 条 seed 结构。
 - BLOCKED.md 只记待裁决事实，不自行扩大代码改动范围。
+
+## 任务 2 验收（管理者补录，2026-08-03 12:15）
+
+| 命令 | 结果 |
+|---|---|
+| `cd backend && go test ./... -count=1` | 5 包全 ok |
+| `go test . -run TestRetiredRoutesReturn404 -count=1 -v` | PASS（全方法×路径矩阵） |
+| 反向验证（临时禁用 SPA 404 守卫） | 红：`FAIL GET /api/upload: expected 404, got 200` → 恢复后绿 PASS |
+| `grep -rn "UploadImage\|GiphySearch\|GiphyTrending\|CHAT_MEDIA\|CHAT_GIPHY\|NewS3MediaStore\|NewWebDAVMediaStore\|maxUploadSize\|fetchGiphy" backend/ docker-compose.yml .env.example README.md` | 零命中 |
+| emoji 链路 | `UploadEmoji`/`ServeEmoji` 4 处引用仍在；`TestEmojiServeThroughServer` 通过 |
+| `cd frontend && npx tsc --noEmit` | 0 错误 |
+| `cd frontend && npm test` | 658 passed，skipped 0 |
+| `cd frontend && npm run build` | 成功（index-C40gUqtE.js） |
+| `git status` | 干净（仅 PROGRESS/BLOCKED 待提交） |
+
+**测试数裁决（管理者拍板）**：`go test ./... -v` 计数 974 < 任务书基线 988。原因：任务书同时要求「删 UploadImage/ServeUpload/S3/WebDAV/Giphy 测试」与「测试数 ≥ 基线」——二者必然冲突（删功能必删其测试）。减少的 ~15 个全部来自被删功能测试；新增 `TestRetiredRoutesReturn404`（全方法×路径矩阵）+ `TestEmojiServeThroughServer` 已补回合同覆盖。判为符合任务意图（防作弊针对的是「偷偷删测试假装完成」，本处删除与功能删除一一对应），非违规。

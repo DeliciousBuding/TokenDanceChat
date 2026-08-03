@@ -1,15 +1,17 @@
-# BLOCKED.md — 待裁决清单（PR-0 合同收口）
+# BLOCKED.md — 待裁决清单（PR-0/PR-1）
 
 最后更新：2026-08-03
 
 ## 待裁决
 
-1. **任务书事实与代码不符：自定义 Emoji 上传入口仍存在**
-   - 任务书写「前端 `grep -rn "uploadImage|giphy|emoji/upload" frontend/src` 零命中」「EmojiPicker 无上传调用」。
-   - 实测：`frontend/src/lib/api.ts:571` 存在 `fetch("/api/emoji/upload")`；`frontend/src/components/EmojiPicker.tsx:110` 调用 `chatAPI.uploadEmoji(file, emojiName)`，UI 渲染「上传表情」按钮与隐藏文件输入（:209-223），并支持删除自定义 emoji（:251-262）；后端 `/api/emoji/upload`、`/uploads/emojis/` 仍注册（backend/main.go:160,171），`custom_emoji_add/list/delete` WS 事件仍处理。
-   - 处置：矩阵按代码事实写为「Compat（只读展示为主，但上传/删除入口仍在运行面）」，未照抄任务书的「无上传入口」。
-   - **待裁决**：自定义 Emoji 上传入口是否应列入后续运行面清理（任务 2 范围）？当前 PR 未动 `frontend/src/` 任何代码（禁令）。
+1. **自定义 Emoji 上传入口是否清理**（PR-1 保留，未动）
+   - 现状：`frontend/src/components/EmojiPicker.tsx:110` 有「上传表情」按钮，`lib/api.ts:571` 调 `/api/emoji/upload`；后端 `UploadEmoji`/`ServeEmoji` 完整保留（本次裁决：真实可达用户功能，删需领导拍板）。
+   - 选项 A：保留现状，后续 PR 加固（magic bytes 校验、尺寸/像素限制、禁止 SVG、服务端重编码）。
+   - 选项 B：删上传/删除入口，只留只读展示（矩阵改 Compat 只读）。
+   - 管理者默认：选项 A（加固）。
 
-2. **顺手活登记（本任务禁止做，仅留档）**：AuthState 重构、logout 完善、OIDC 收敛、prependHistory、pnpm 统一、CD 改造、backend `/api/upload`/`/api/emoji/upload`/`/api/giphy/*`/`/api/webhook/` 等路由删除与 hub legacy WS 事件清理（任务 2）。
+2. **Webhook 路由与 hub legacy WS 事件**：`/api/webhook/` 仍注册、`group_*`/`friend_*`/`call_*` 等 WS 事件仍处理（矩阵标 Compat/Archived 运行面清理中）——归后续 Core/Compat 收口 PR，本次未动。
+
+3. **顺手活登记（后续 PR）**：AuthState 重构、logout 统一、OIDC 收敛（issuer 校验/nonce/JWKS 刷新/删无调用者端点）、prependHistory 修复、pnpm 统一、CD 单 pipeline、slog 结构化日志、PR-2 消息正确性。
 
 ## 无其他未决事项
