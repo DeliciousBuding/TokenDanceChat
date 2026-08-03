@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -183,7 +182,6 @@ func TestProtectedRESTRequiresSession(t *testing.T) {
 	}{
 		{name: "search", method: http.MethodGet, path: "/api/search?q=hello", handler: h.Search},
 		{name: "export", method: http.MethodGet, path: "/api/export?conversation=public", handler: h.ExportMessages},
-		{name: "upload image", method: http.MethodPost, path: "/api/upload", handler: h.UploadImage},
 		{name: "upload emoji", method: http.MethodPost, path: "/api/emoji/upload", handler: h.UploadEmoji},
 		{name: "invite generate", method: http.MethodPost, path: "/api/invite/generate", body: strings.NewReader(`{"username":"alice"}`), handler: h.InviteGenerate},
 		{name: "invite list", method: http.MethodGet, path: "/api/invite/list?username=alice", handler: h.InviteList},
@@ -936,106 +934,11 @@ func TestWebSocketFullFlow(t *testing.T) {
 	}
 }
 
-func TestUploadImageStoresViaMediaStore(t *testing.T) {
-	var storedPath string
-	var storedContentType string
-	var storedBody []byte
-
-	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPut:
-			storedPath = r.URL.Path
-			storedContentType = r.Header.Get("Content-Type")
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Fatalf("failed to read PUT body: %v", err)
-			}
-			storedBody = body
-			w.WriteHeader(http.StatusCreated)
-		default:
-			t.Fatalf("unexpected method %s", r.Method)
-		}
-	}))
-	defer webdav.Close()
-
-	h := newTestHandler()
-	h.mediaStore = NewWebDAVMediaStore(webdav.URL, "", "")
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("file", "photo.png")
-	if err != nil {
-		t.Fatalf("failed to create form file: %v", err)
-	}
-	if _, err := part.Write([]byte("png-bytes")); err != nil {
-		t.Fatalf("failed to write test upload: %v", err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatalf("failed to close multipart writer: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	authorizeTestRequest(t, h, req, "alice")
-	w := httptest.NewRecorder()
-
-	h.UploadImage(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.StatusCode)
-	}
-	if path.Dir(storedPath) != "/uploads" {
-		t.Fatalf("expected WebDAV upload under /uploads, got %s", storedPath)
-	}
-	if !strings.HasSuffix(storedPath, ".png") {
-		t.Fatalf("expected generated .png filename, got %s", storedPath)
-	}
-	if storedContentType != "image/png" {
-		t.Fatalf("expected image/png content type, got %s", storedContentType)
-	}
-	if string(storedBody) != "png-bytes" {
-		t.Fatalf("expected uploaded bytes to be stored, got %q", string(storedBody))
-	}
-
-	var payload map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		t.Fatalf("failed to decode upload response: %v", err)
-	}
-	if !strings.HasPrefix(payload["url"], "/uploads/") {
-		t.Fatalf("expected same-origin upload URL, got %q", payload["url"])
-	}
-	if payload["filename"] == "" {
-		t.Fatal("expected generated filename in response")
-	}
-}
-
 func TestUploadEmojiStoresViaMediaStore(t *testing.T) {
-	var storedPath string
-	var storedContentType string
-	var storedBody []byte
-
-	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPut:
-			storedPath = r.URL.Path
-			storedContentType = r.Header.Get("Content-Type")
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Fatalf("failed to read PUT body: %v", err)
-			}
-			storedBody = body
-			w.WriteHeader(http.StatusCreated)
-		default:
-			t.Fatalf("unexpected method %s", r.Method)
-		}
-	}))
-	defer webdav.Close()
-
+	dir := t.TempDir()
 	h := newTestHandler()
-	h.mediaStore = NewWebDAVMediaStore(webdav.URL, "", "")
+	h.uploadsDir = dir
+	h.mediaStore = NewLocalMediaStore(dir)
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -1063,18 +966,6 @@ func TestUploadEmojiStoresViaMediaStore(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode)
 	}
-	if path.Dir(storedPath) != "/uploads/emojis" {
-		t.Fatalf("expected emoji upload under /uploads/emojis, got %s", storedPath)
-	}
-	if !strings.HasSuffix(storedPath, ".webp") {
-		t.Fatalf("expected generated .webp filename, got %s", storedPath)
-	}
-	if storedContentType != "image/webp" {
-		t.Fatalf("expected image/webp content type, got %s", storedContentType)
-	}
-	if string(storedBody) != "emoji-bytes" {
-		t.Fatalf("expected uploaded emoji bytes to be stored, got %q", string(storedBody))
-	}
 
 	var payload map[string]string
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
@@ -1086,64 +977,33 @@ func TestUploadEmojiStoresViaMediaStore(t *testing.T) {
 	if payload["filename"] == "" {
 		t.Fatal("expected generated emoji filename in response")
 	}
-}
 
-func TestServeUploadReadsViaMediaStore(t *testing.T) {
-	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Fatalf("unexpected method %s", r.Method)
-		}
-		if r.URL.Path != "/uploads/sample.webp" {
-			t.Fatalf("expected /uploads/sample.webp, got %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "image/webp")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("webp-bytes"))
-	}))
-	defer webdav.Close()
-
-	h := newTestHandler()
-	h.mediaStore = NewWebDAVMediaStore(webdav.URL, "", "")
-
-	req := httptest.NewRequest(http.MethodGet, "/uploads/sample.webp", nil)
-	w := httptest.NewRecorder()
-
-	h.ServeUpload(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.StatusCode)
-	}
-	if ct := resp.Header.Get("Content-Type"); ct != "image/webp" {
-		t.Fatalf("expected image/webp content type, got %s", ct)
-	}
-	body, err := io.ReadAll(resp.Body)
+	// Verify the bytes round-trip through the media store under emojis/.
+	media, err := h.mediaStore.Open(context.Background(), "emojis/"+payload["filename"])
 	if err != nil {
-		t.Fatalf("failed to read response body: %v", err)
+		t.Fatalf("failed to open stored emoji: %v", err)
 	}
-	if string(body) != "webp-bytes" {
-		t.Fatalf("expected media bytes, got %q", string(body))
+	defer media.Body.Close()
+	storedBody, err := io.ReadAll(media.Body)
+	if err != nil {
+		t.Fatalf("failed to read stored emoji: %v", err)
+	}
+	if string(storedBody) != "emoji-bytes" {
+		t.Fatalf("expected uploaded emoji bytes to be stored, got %q", string(storedBody))
+	}
+	if media.ContentType != "image/webp" {
+		t.Fatalf("expected image/webp content type, got %s", media.ContentType)
 	}
 }
 
 func TestServeEmojiReadsViaMediaStore(t *testing.T) {
-	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Fatalf("unexpected method %s", r.Method)
-		}
-		if r.URL.Path != "/uploads/emojis/spark.gif" {
-			t.Fatalf("expected /uploads/emojis/spark.gif, got %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "image/gif")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("gif-bytes"))
-	}))
-	defer webdav.Close()
-
+	dir := t.TempDir()
 	h := newTestHandler()
-	h.mediaStore = NewWebDAVMediaStore(webdav.URL, "", "")
+	h.uploadsDir = dir
+	h.mediaStore = NewLocalMediaStore(dir)
+	if err := h.mediaStore.Save(context.Background(), "emojis/spark.gif", "image/gif", strings.NewReader("gif-bytes")); err != nil {
+		t.Fatalf("failed to save emoji: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/uploads/emojis/spark.gif", nil)
 	w := httptest.NewRecorder()
@@ -1168,111 +1028,10 @@ func TestServeEmojiReadsViaMediaStore(t *testing.T) {
 	}
 }
 
-func TestS3MediaStoreSaveAndOpen(t *testing.T) {
-	var putSeen bool
-	var getSeen bool
-	var storedBody []byte
-	var storedContentType string
-
-	s3 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/media-bucket/chat-media/sample.png" {
-			t.Fatalf("expected S3 path /media-bucket/chat-media/sample.png, got %s", r.URL.Path)
-		}
-		auth := r.Header.Get("Authorization")
-		if !strings.HasPrefix(auth, "AWS4-HMAC-SHA256 Credential=test-access/") {
-			t.Fatalf("expected SigV4 Authorization header, got %q", auth)
-		}
-		if r.Header.Get("X-Amz-Date") == "" {
-			t.Fatal("expected X-Amz-Date header")
-		}
-		if r.Header.Get("X-Amz-Security-Token") != "session-token" {
-			t.Fatalf("expected session token header, got %q", r.Header.Get("X-Amz-Security-Token"))
-		}
-
-		switch r.Method {
-		case http.MethodPut:
-			putSeen = true
-			if got, want := r.Header.Get("X-Amz-Content-Sha256"), sha256Hex([]byte("png-bytes")); got != want {
-				t.Fatalf("expected PUT payload hash %s, got %s", want, got)
-			}
-			storedContentType = r.Header.Get("Content-Type")
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Fatalf("failed to read PUT body: %v", err)
-			}
-			storedBody = body
-			w.WriteHeader(http.StatusCreated)
-		case http.MethodGet:
-			getSeen = true
-			if got, want := r.Header.Get("X-Amz-Content-Sha256"), sha256Hex(nil); got != want {
-				t.Fatalf("expected GET payload hash %s, got %s", want, got)
-			}
-			w.Header().Set("Content-Type", storedContentType)
-			w.WriteHeader(http.StatusOK)
-			w.Write(storedBody)
-		default:
-			t.Fatalf("unexpected method %s", r.Method)
-		}
-	}))
-	defer s3.Close()
-
-	store, err := NewS3MediaStore(S3MediaStoreConfig{
-		Endpoint:        s3.URL,
-		Region:          "auto",
-		Bucket:          "media-bucket",
-		AccessKeyID:     "test-access",
-		SecretAccessKey: "test-secret",
-		SessionToken:    "session-token",
-		Prefix:          "chat-media",
-		UsePathStyle:    true,
-	})
-	if err != nil {
-		t.Fatalf("failed to create S3 media store: %v", err)
-	}
-
-	if err := store.Save(context.Background(), "sample.png", "image/png", strings.NewReader("png-bytes")); err != nil {
-		t.Fatalf("Save failed: %v", err)
-	}
-	media, err := store.Open(context.Background(), "sample.png")
-	if err != nil {
-		t.Fatalf("Open failed: %v", err)
-	}
-	defer media.Body.Close()
-
-	body, err := io.ReadAll(media.Body)
-	if err != nil {
-		t.Fatalf("failed to read stored body: %v", err)
-	}
-	if string(body) != "png-bytes" {
-		t.Fatalf("expected stored png bytes, got %q", string(body))
-	}
-	if media.ContentType != "image/png" {
-		t.Fatalf("expected image/png content type, got %s", media.ContentType)
-	}
-	if !putSeen || !getSeen {
-		t.Fatalf("expected both PUT and GET to be called, put=%t get=%t", putSeen, getSeen)
-	}
-}
-
 func TestMediaStoreRejectsTraversalKeys(t *testing.T) {
 	local := NewLocalMediaStore(t.TempDir())
 	if err := local.Save(context.Background(), "../escape.png", "image/png", strings.NewReader("x")); err == nil {
 		t.Fatal("expected local media store to reject traversal key")
-	}
-
-	s3, err := NewS3MediaStore(S3MediaStoreConfig{
-		Endpoint:        "https://s3.example.test",
-		Region:          "auto",
-		Bucket:          "media-bucket",
-		AccessKeyID:     "test-access",
-		SecretAccessKey: "test-secret",
-		UsePathStyle:    true,
-	})
-	if err != nil {
-		t.Fatalf("failed to create S3 media store: %v", err)
-	}
-	if err := s3.Save(context.Background(), "emojis/../escape.png", "image/png", strings.NewReader("x")); err == nil {
-		t.Fatal("expected S3 media store to reject traversal key")
 	}
 }
 
@@ -1384,85 +1143,6 @@ func TestCSPHeaders(t *testing.T) {
 				t.Errorf("CSP missing directive: %s", directive)
 			}
 		}
-	}
-}
-
-// TestUploadRejectsInvalidFileType verifies that uploading a file with an
-// unsupported extension (e.g. .exe) returns HTTP 400.
-func TestUploadRejectsInvalidFileType(t *testing.T) {
-	h := newTestHandler()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("file", "malware.exe")
-	if err != nil {
-		t.Fatalf("failed to create form file: %v", err)
-	}
-	if _, err := part.Write([]byte("evil payload")); err != nil {
-		t.Fatalf("failed to write test payload: %v", err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatalf("failed to close multipart writer: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	authorizeTestRequest(t, h, req, "alice")
-	w := httptest.NewRecorder()
-
-	h.UploadImage(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected status 400 for .exe upload, got %d", resp.StatusCode)
-	}
-
-	var payload map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-	if payload["code"] != "INVALID_FILE_TYPE" {
-		t.Errorf("expected code INVALID_FILE_TYPE, got %q", payload["code"])
-	}
-}
-
-// TestUploadRejectsMissingFileField verifies that POST without a "file" form
-// field returns HTTP 400.
-func TestUploadRejectsMissingFileField(t *testing.T) {
-	h := newTestHandler()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	// Write a non-file field instead.
-	if err := writer.WriteField("username", "testuser"); err != nil {
-		t.Fatalf("failed to write field: %v", err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatalf("failed to close multipart writer: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	authorizeTestRequest(t, h, req, "alice")
-	w := httptest.NewRecorder()
-
-	h.UploadImage(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected status 400 for missing file field, got %d", resp.StatusCode)
-	}
-
-	var payload map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-	if payload["code"] != "MISSING_FILE" {
-		t.Errorf("expected code MISSING_FILE, got %q", payload["code"])
 	}
 }
 
@@ -1811,7 +1491,7 @@ func TestExportMessagesText(t *testing.T) {
 }
 
 // failingMediaStore is a MediaStore that returns os.ErrNotExist from Open,
-// used to test ServeUpload/ServeEmoji not-found paths without real files.
+// used to test ServeEmoji not-found paths without real files.
 type failingMediaStore struct{}
 
 func (f *failingMediaStore) Save(ctx context.Context, filename, contentType string, body io.Reader) error {
@@ -1820,48 +1500,6 @@ func (f *failingMediaStore) Save(ctx context.Context, filename, contentType stri
 
 func (f *failingMediaStore) Open(ctx context.Context, filename string) (*StoredMedia, error) {
 	return nil, os.ErrNotExist
-}
-
-// --- UploadImage edge cases ---
-
-func TestUploadImageWrongMethod(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/upload", nil)
-	w := httptest.NewRecorder()
-	h.UploadImage(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405 for GET /api/upload, got %d", w.Code)
-	}
-}
-
-// --- ServeUpload edge cases ---
-
-func TestServeUploadRootPath(t *testing.T) {
-	h := newTestHandler()
-	h.mediaStore = &failingMediaStore{}
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-	h.ServeUpload(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404 for /, got %d", w.Code)
-	}
-}
-
-func TestServeUploadNonexistentFile(t *testing.T) {
-	h := newTestHandler()
-	h.mediaStore = &failingMediaStore{}
-
-	req := httptest.NewRequest(http.MethodGet, "/uploads/nonexistent.png", nil)
-	w := httptest.NewRecorder()
-	h.ServeUpload(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404 for nonexistent file, got %d", w.Code)
-	}
 }
 
 // --- LinkPreview edge cases ---
@@ -1911,44 +1549,6 @@ func TestLinkPreviewWrongMethod(t *testing.T) {
 
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected 405 for POST /api/link-preview, got %d", w.Code)
-	}
-}
-
-// --- Giphy edge cases ---
-
-func TestGiphySearchMissingQuery(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/giphy/search", nil)
-	w := httptest.NewRecorder()
-	h.GiphySearch(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for missing q, got %d", w.Code)
-	}
-}
-
-func TestGiphySearchWrongMethod(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodPost, "/api/giphy/search", nil)
-	w := httptest.NewRecorder()
-	h.GiphySearch(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405 for POST /api/giphy/search, got %d", w.Code)
-	}
-}
-
-func TestGiphyTrendingWrongMethod(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodPost, "/api/giphy/trending", nil)
-	w := httptest.NewRecorder()
-	h.GiphyTrending(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405 for POST /api/giphy/trending, got %d", w.Code)
 	}
 }
 
@@ -3257,65 +2857,6 @@ func TestHealthCheckWrongMethod(t *testing.T) {
 	}
 }
 
-// TestServeUploadPathTraversal verifies that GET /uploads/../something
-// returns 404 (path traversal is neutralized by filepath.Base).
-func TestServeUploadPathTraversal(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodGet, "/uploads/../something", nil)
-	w := httptest.NewRecorder()
-	h.ServeUpload(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404 for path traversal /uploads/../something, got %d", w.Code)
-	}
-}
-
-// --- Giphy edge case: empty type defaults to gif ---
-
-// TestGiphySearchEmptyTypeDefaultsToGif verifies that when the type query
-// parameter is omitted from GET /api/giphy/search, the handler defaults to
-// "gif" and passes validation (reaches fetchGiphy rather than returning 400).
-func TestGiphySearchEmptyTypeDefaultsToGif(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/giphy/search?q=cat", nil)
-	w := httptest.NewRecorder()
-	h.GiphySearch(w, req)
-
-	// Should pass validation — no MISSING_QUERY error. The upstream Giphy
-	// call may succeed (200) or fail (502), but must not be a 4xx from our
-	// handler's input validation.
-	if w.Code == http.StatusBadRequest {
-		t.Errorf("expected giphy search with q param to pass validation, got 400: %s", w.Body.String())
-	}
-	if w.Code == http.StatusMethodNotAllowed {
-		t.Errorf("expected giphy search to pass method check, got 405")
-	}
-}
-
-// --- Giphy edge case: trending with sticker type ---
-
-// TestGiphyTrendingStickerType verifies that GET /api/giphy/trending?type=sticker
-// passes validation and maps to the stickers/trending endpoint.
-func TestGiphyTrendingStickerType(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/giphy/trending?type=sticker", nil)
-	w := httptest.NewRecorder()
-	h.GiphyTrending(w, req)
-
-	// type=sticker is valid and maps to stickers/trending endpoint internally.
-	// The upstream Giphy call may succeed (200) or fail (502), but must not be
-	// a 4xx from handler input validation.
-	if w.Code == http.StatusBadRequest {
-		t.Errorf("expected giphy trending with type=sticker to pass validation, got 400: %s", w.Body.String())
-	}
-	if w.Code == http.StatusMethodNotAllowed {
-		t.Errorf("expected giphy trending to pass method check, got 405")
-	}
-}
-
 // --- ExportMessages edge case: very large limit capped at 10000 ---
 
 // mockStoreExportCapture captures the limit argument passed to ExportMessages.
@@ -3469,42 +3010,6 @@ func TestLinkPreviewHTTPURLRejected(t *testing.T) {
 	}
 	if body["code"] != "INVALID_URL" {
 		t.Errorf("expected code INVALID_URL, got %q", body["code"])
-	}
-}
-
-// --- ServeUpload edge case: empty / dot filename path ---
-
-// TestServeUploadDotPath verifies that a URL path resolving to "." (no filename)
-// returns 404 Not Found.
-func TestServeUploadDotPath(t *testing.T) {
-	h := newTestHandler()
-	h.mediaStore = &failingMediaStore{}
-
-	// /uploads/. → filepath.Base returns "." → 404
-	req := httptest.NewRequest(http.MethodGet, "/uploads/.", nil)
-	w := httptest.NewRecorder()
-	h.ServeUpload(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404 for /uploads/., got %d", w.Code)
-	}
-}
-
-// TestServeUploadDoubleSlashPath verifies that a URL path with double slashes
-// (empty segment) still resolves safely (filepath.Base collapses it).
-func TestServeUploadDoubleSlashPath(t *testing.T) {
-	h := newTestHandler()
-	h.mediaStore = &failingMediaStore{}
-
-	// /uploads// → double slash resolves to empty segment; filepath.Base
-	// returns "." on some platforms or the preceding segment on others.
-	// Either way the handler should 404.
-	req := httptest.NewRequest(http.MethodGet, "/uploads//", nil)
-	w := httptest.NewRecorder()
-	h.ServeUpload(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404 for /uploads//, got %d", w.Code)
 	}
 }
 
@@ -4392,127 +3897,6 @@ func TestGroupRemoveMember(t *testing.T) {
 	}
 	if aliceLeave.Group != "TempGroup" {
 		t.Errorf("alice leave group = %q, want 'TempGroup'", aliceLeave.Group)
-	}
-}
-
-// =============================================================================
-// File upload integration tests
-// =============================================================================
-
-// TestUploadFile verifies that POST /api/upload with a valid multipart file
-// returns 200 and JSON with url/filename.
-func TestUploadFile(t *testing.T) {
-	dir := t.TempDir()
-	h := newTestHandler()
-	h.uploadsDir = dir
-	h.mediaStore = NewLocalMediaStore(dir)
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	part, _ := writer.CreateFormFile("file", "test.png")
-	part.Write([]byte("fake-png-data"))
-	writer.Close()
-
-	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	authorizeTestRequest(t, h, req, "alice")
-	w := httptest.NewRecorder()
-
-	h.UploadImage(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.StatusCode)
-	}
-
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("failed to decode JSON: %v", err)
-	}
-	if result["url"] == nil || result["url"] == "" {
-		t.Error("expected non-empty url in response")
-	}
-	if result["filename"] == nil || result["filename"] == "" {
-		t.Error("expected non-empty filename in response")
-	}
-}
-
-// TestUploadFileNoFile verifies that POST /api/upload without a file field
-// returns 400 with MISSING_FILE.
-func TestUploadFileNoFile(t *testing.T) {
-	h := newTestHandler()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	// Write a non-file field only.
-	writer.WriteField("other", "value")
-	writer.Close()
-
-	req := httptest.NewRequest(http.MethodPost, "/api/upload", body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	authorizeTestRequest(t, h, req, "alice")
-	w := httptest.NewRecorder()
-
-	h.UploadImage(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", resp.StatusCode)
-	}
-
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-	if result["code"] != "MISSING_FILE" {
-		t.Errorf("expected code MISSING_FILE, got %v", result["code"])
-	}
-}
-
-// TestUploadFileTooLarge verifies that POST /api/upload with a body exceeding
-// maxUploadSize (50MB) returns 400 with FILE_TOO_LARGE.
-func TestUploadFileTooLarge(t *testing.T) {
-	h := newTestHandler()
-
-	pr, pw := io.Pipe()
-	writer := multipart.NewWriter(pw)
-
-	go func() {
-		defer pw.Close()
-		part, err := writer.CreateFormFile("file", "large.bin")
-		if err != nil {
-			return
-		}
-		// Write more than 50 MB of data (1 MB chunks x 51).
-		chunk := bytes.Repeat([]byte("x"), 1024*1024)
-		for i := 0; i < 51; i++ {
-			if _, err := part.Write(chunk); err != nil {
-				return // pipe closed, max limit reached
-			}
-		}
-		writer.Close()
-	}()
-
-	req := httptest.NewRequest(http.MethodPost, "/api/upload", pr)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	authorizeTestRequest(t, h, req, "alice")
-	w := httptest.NewRecorder()
-
-	h.UploadImage(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected status 400 for too-large file, got %d", resp.StatusCode)
-	}
-
-	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-	if result["code"] != "FILE_TOO_LARGE" {
-		t.Errorf("expected code FILE_TOO_LARGE, got %v", result["code"])
 	}
 }
 

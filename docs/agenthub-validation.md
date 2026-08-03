@@ -32,7 +32,7 @@ TokenDanceChat 聚焦于该系统中聊天渲染、Agent 入口和 Hub 侧。它
 | Agent 能否像 IM 参与者一样自然？ | TokenBot 与 PicoClaw 通过公共协议 mention/前缀和轻量 assistant workbench 暴露给用户，不恢复真人私聊或复杂联系人系统；PicoClaw gateway 缺失时由 Hub 侧回退到 LLM，而不是向用户显示未配置错误。 |
 | 外部系统能否安全进入 Hub 会话？ | webhook 曾用于验证外部入口、一次性高熵密钥、脱敏列表、加盐 HMAC 密钥哈希以及 constant-time HTTP 入口校验；当前前端主界面不暴露 webhook 管理。 |
 | 类型化 Hub 角色数据能否驱动客户端管理员 UX？ | `group_info.group_members` 属于历史群组压力测试证据；当前主 UI 不展示群组管理员或 Webhook 控制项。 |
-| Hub 媒体能否在不改变聊天界面的情况下外置存储？ | `backend/handler` 保持同源 `/uploads/...` URL，同时在本地磁盘、WebDAV 与 S3 兼容对象存储之间切换，适配生产环境 S3 部署；前端永远不会收到 bucket URL 或存储凭据。 |
+| Hub 媒体能否在不改变聊天界面的情况下外置存储？ | 普通上传已退休，`MediaStore` 不再作为有效 AgentHub spike；能力状态见 [docs/capability-matrix.md](./capability-matrix.md)。 |
 | 哪些功能属于产品打磨，哪些是平台原语？ | 当前前端保留公共房间、TokenBot、PicoClaw、基础消息渲染、输入框、reaction、编辑、线程和搜索；聊天文件夹、通话房间、GIF/sticker、定时发送、转发和 webhook 管理归档为历史压力测试。 |
 
 ## 与 AgentHub 的关系
@@ -55,7 +55,7 @@ TokenDanceChat 主要验证第二层与第三层。它不替代 AgentHub 的 Des
 | `group_info.group_members` 角色标准化 | Hub 群组角色事件契约，用于 owner/admin UI 门控 |
 | Agent 提及与 assistant workbench | AgentHub P1 IM Collaboration 实验 |
 | Webhook 创建/列举/删除及哈希入口验证 | 历史 Hub 外部入口与群组管理员安全契约，当前不在前端主合同 |
-| `MediaStore` local/WebDAV/S3 抽象 | Hub 部署与租户媒体存储 spike |
+| `MediaStore` local/WebDAV/S3 抽象 | 普通上传/emoji 媒体存储已退休，不再作为有效 spike；见 [docs/capability-matrix.md](./capability-matrix.md) |
 | Docker/单二进制部署 | Hub 部署 spike，非完整 Desktop P0 流程 |
 
 ## 当前前端合同
@@ -67,7 +67,7 @@ TokenDanceChat 主要验证第二层与第三层。它不替代 AgentHub 的 Des
 - PicoClaw；
 - compact assistant context strip、TokenBot/PicoClaw segmented switch 和 Ask 按钮；
 - AgentHub v4 对齐的消息渲染、聊天区和输入框；
-- 基础消息操作：回复、复制、编辑、删除、reaction、线程、搜索和上传。
+- 基础消息操作：回复、复制、编辑、删除、reaction、线程和搜索。
 
 不要把联系人添加、真人私聊、群组、语音/视频、GIF picker、定时发送、转发、webhook 管理或 Open WebUI 的 `Knowledge` / `Tools` / `Prompts` 假工具芯片重新接回主界面，除非先更新 `ROADMAP.md` 并补足视觉/E2E 证据。
 
@@ -80,7 +80,7 @@ TokenDanceChat 主要验证第二层与第三层。它不替代 AgentHub 的 Des
 | AgentHub `app/shared/src/workbench/TranscriptView.tsx` | transcript region、ordered block list、date divider、keyboard/context-menu friendly block 结构。 | AgentHub Desktop 的工具调用、diff、approval、run-session 专用 block 不进入公共聊天室。 |
 | AgentHub `app/shared/src/workbench/UnifiedComposer.tsx` | 单一 bottom composer、Enter 发送、受控 textarea、发送按钮反馈。 | Desktop 工作目录、审批模式、附件 picker 的本地 agent 专用语义。 |
 | AgentHub shared `MessageBubble` | row/end alignment、meta/content/action 分离、loading/error 可达性思路。 | Desktop 运行日志和工具输出样式。 |
-| Open WebUI `MessageInput.svelte` at latest checked HEAD `02dc3e689ceac915a870b373318b99c029ddf603` | bottom composer、附件/图片预览、Markdown 输入、发送中的 generating/submitting 反馈。 | 工具服务器、语音/通话、模型库、知识库、复杂队列、多会话侧栏和 Open WebUI 管理面。 |
+| Open WebUI `MessageInput.svelte` at latest checked HEAD `02dc3e689ceac915a870b373318b99c029ddf603` | bottom composer、Markdown 输入、发送中的 generating/submitting 反馈。 | 工具服务器、语音/通话、模型库、知识库、复杂队列、多会话侧栏和 Open WebUI 管理面。 |
 | Open WebUI `Messages.svelte` / `Messages/Markdown.svelte` | AI chat 的消息流密度、Markdown-first 渲染和滚动恢复思路。 | WebUI 的多模型响应、citation/knowledge/tool 扩展面板。 |
 
 2026-06-09 的 `ChatInput` submitting 状态就是按这个边界补齐：发送后按钮显示短暂 spinner 并阻止重复发送，但不增加旧 rich IM 功能。同日 AI workbench 也按这个边界收紧为 assistant context、TokenBot/PicoClaw segmented switch 和 Ask 按钮，明确不展示 Open WebUI 知识库、工具或 prompt 管理面。

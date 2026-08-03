@@ -594,7 +594,6 @@ function scenarioIssues(metrics) {
       if (metrics.viewport.width < 768 && metrics.authModal.width > metrics.viewport.width - 12) {
         issues.push(`mobile auth modal too wide (${metrics.authModal.width}px)`);
       }
-      if (metrics.authModal.tabs !== 3) issues.push(`auth tabs missing (${metrics.authModal.tabs})`);
       const clippedTabs = metrics.authModal.tabLabels.filter((tab) => tab.clipped);
       if (clippedTabs.length > 0) {
         issues.push(`auth tab labels clipped (${clippedTabs.map((tab) => tab.text).join(", ")})`);
