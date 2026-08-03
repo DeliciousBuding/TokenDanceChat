@@ -3,14 +3,13 @@ import { Loader2, X, ArrowUp } from "lucide-react";
 import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
-import { chatAPI, type ChatMessage, type TypingContext } from "@/lib/api";
+import { chatAPI, type TypingContext } from "@/lib/api";
 import { mentionableAssistants, type AssistantDefinition, type AssistantModel } from "@/lib/assistantRegistry";
 import { AssistantIcon } from "./AssistantIcon";
 
 interface ChatInputProps {
   onSend: (content: string) => void;
   disabled?: boolean;
-  replyTo?: ChatMessage | null;
   assistantContext?: {
     assistant: AssistantDefinition;
     model: AssistantModel;
@@ -22,11 +21,10 @@ const INPUT_MAX_HEIGHT = 120;
 export function ChatInput({
   onSend,
   disabled,
-  replyTo,
   assistantContext = null,
 }: ChatInputProps) {
   const { t } = useTranslation();
-  const { onlineUsers, username, setReplyTo, connected } = useChatStore();
+  const { onlineUsers, username, setReplyTo, connected, replyTo } = useChatStore();
   const [content, setContent] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const draftStorageKey = "tdchat-draft-public";
@@ -344,6 +342,8 @@ export function ChatInput({
           if (m.to) continue;
           setContent(m.content);
           setEditingMessageId(m.id);
+          // Edit mode cancels reply.
+          setReplyTo(null);
           requestAnimationFrame(() => {
             const ta = textareaRef.current;
             if (ta) {
