@@ -44,7 +44,7 @@ AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/�
 
 ## 功能 Features
 
-> 完整能力清单与各能力状态（Core / Experiment / Compat / Archived）以 [docs/capability-matrix.md](./docs/capability-matrix.md) 为唯一事实来源，以下仅列当前主界面在用的核心能力。文件/图片等上传能力已退休（后端 `/api/upload` 等路由仍在清理中，见能力矩阵），composer 不再提供附件/图片入口。
+> 完整能力清单与各能力状态（Core / Experiment / Compat / Archived）以 [docs/capability-matrix.md](./docs/capability-matrix.md) 为唯一事实来源，以下仅列当前主界面在用的核心能力。文件/图片等上传能力已退休（后端 `/api/upload` 等路由已删除，返回 404），composer 不再提供附件/图片入口。
 
 ### 核心聊天 Core Chat
 - 公共聊天室
