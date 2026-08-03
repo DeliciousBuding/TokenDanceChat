@@ -1,7 +1,9 @@
 import { create } from "zustand";
 import type { ChatMessage, UserStatus, CustomEmoji, PollData } from "@/lib/api";
+import { mergeMessageWindow } from "@/stores/mergeMessageWindow";
 
 const MESSAGE_CAP = 500;
+const HISTORY_CAP = 1000;
 
 function getLSLastReadKey(username: string): string {
   return `tokendance:lastReadTimestamps:${username}`;
@@ -58,6 +60,7 @@ interface ChatState {
 
   // Messages
   messages: ChatMessage[];
+  messageWindowRevision: number;
   historyLoaded: boolean;
   // Lookup maps for O(1) reaction and read receipt updates (avoid O(n) array copies)
   reactionsByMessageId: Record<string, Record<string, string[]>>;
@@ -196,6 +199,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   oidcAccessToken: null,
   oidcRefreshToken: null,
   messages: [],
+  messageWindowRevision: 0,
   historyLoaded: false,
   reactionsByMessageId: {},
   readByMessageId: {},
@@ -236,39 +240,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       // Filter out messages from blocked users.
       if (state.blockedUsers.includes(message.username)) return state;
-      // Deduplicate optimistic messages: if server echo matches an optimistic
-      // message (same content + username within 5s), replace the temp ID.
-      const isOptimistic = message.id.startsWith("optimistic_");
-      const messages = [...state.messages];
-      if (!isOptimistic) {
-        if (message.client_message_id) {
-          const optimisticIndex = messages.findIndex((m) => m.id === message.client_message_id);
-          if (optimisticIndex >= 0) {
-            messages[optimisticIndex] = { ...message, reactions: messages[optimisticIndex].reactions };
-            return { ...state, messages };
-          }
-        }
-        for (let i = messages.length - 1; i >= Math.max(0, messages.length - 5); i--) {
-          const m = messages[i];
-          if (
-            m.id.startsWith("optimistic_") &&
-            m.username === message.username &&
-            m.content === message.content &&
-            Math.abs(m.timestamp - message.timestamp) < 5000
-          ) {
-            // Replace optimistic with real message (keep real ID + timestamp).
-            messages[i] = { ...message, reactions: m.reactions };
-            return { ...state, messages };
-          }
-        }
-        if (messages.some((m) => m.id === message.id)) {
-          return state;
-        }
-      }
-      messages.push(message);
-      if (messages.length > MESSAGE_CAP) {
-        messages.splice(0, messages.length - MESSAGE_CAP);
-      }
+
+      const result = mergeMessageWindow(state.messages, [message], "append", MESSAGE_CAP);
 
       // Current frontend contract has one public room. Keep a public preview
       // only; legacy DM/group message fields remain backend compatibility data.
@@ -283,44 +256,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
         state.lastPreviews.public = { content, timestamp: message.timestamp, sender: message.username };
       }
 
-      return { messages };
+      return { messages: result.messages, messageWindowRevision: result.revision };
     }),
   deleteMessage: (id) =>
     set((state) => ({
       messages: state.messages.filter((m) => m.id !== id),
     })),
   addSystemMessage: (content, timestamp) =>
-    set((state) => ({
-      messages: [
-        ...state.messages,
-        {
-          id: `sys-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
-          username: "system",
-          content,
-          timestamp,
-        },
-      ],
-    })),
+    set((state) => {
+      const systemMsg: ChatMessage = {
+        id: `sys-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
+        username: "system",
+        content,
+        timestamp,
+      };
+      const result = mergeMessageWindow(state.messages, [systemMsg], "append", MESSAGE_CAP);
+      return { messages: result.messages, messageWindowRevision: result.revision };
+    }),
   setHistory: (incoming) =>
     set((state) => {
-      const messages = [...state.messages];
-      const existingIDs = new Set(messages.map((m) => m.id));
-      const newMessages: ChatMessage[] = [];
-      for (const incomingMessage of incoming) {
-        if (existingIDs.has(incomingMessage.id)) continue;
-        if (incomingMessage.client_message_id) {
-          const optimisticIndex = messages.findIndex((m) => m.id === incomingMessage.client_message_id);
-          if (optimisticIndex >= 0) {
-            messages[optimisticIndex] = { ...incomingMessage, reactions: messages[optimisticIndex].reactions };
-            existingIDs.add(incomingMessage.id);
-            continue;
-          }
-        }
-        newMessages.push(incomingMessage);
-        existingIDs.add(incomingMessage.id);
-      }
+      const result = mergeMessageWindow(state.messages, incoming, "append", MESSAGE_CAP);
       // Populate only the public preview from history messages.
-      for (const m of newMessages) {
+      for (const m of incoming) {
         if (m.deleted || m.username === "system" || !m.content) continue;
         let content = m.content;
         if (content.length > 50) {
@@ -332,21 +289,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
         state.lastPreviews.public = { content, timestamp: m.timestamp, sender: m.username };
       }
       return {
-        messages: [...messages, ...newMessages],
+        messages: result.messages,
+        messageWindowRevision: result.revision,
         historyLoaded: true,
       };
     }),
   prependHistory: (incoming) =>
     set((state) => {
-      const existingIDs = new Set(state.messages.map((m) => m.id));
-      const newMessages = incoming.filter((m) => !existingIDs.has(m.id));
-      if (newMessages.length === 0) return state;
-      const merged = [...newMessages, ...state.messages];
-      // Cap total messages at 1000 to prevent unbounded growth from pagination.
-      if (merged.length > 1000) {
-        merged.length = 1000;
+      const result = mergeMessageWindow(state.messages, incoming, "prepend", HISTORY_CAP);
+      // Fire event when no more history can be loaded (all duplicates or window full).
+      if (result.addedCount === 0) {
+        window.dispatchEvent(new CustomEvent("tdchat:no-more-history"));
       }
-      return { messages: merged };
+      return { messages: result.messages, messageWindowRevision: result.revision };
     }),
   setOnlineUsers: (onlineUsers) => set({ onlineUsers }),
   setUserStatusList: (userStatusList) => set({ userStatusList }),
@@ -536,6 +491,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       oidcAccessToken: null,
       oidcRefreshToken: null,
       messages: [],
+      messageWindowRevision: 0,
       historyLoaded: false,
       reactionsByMessageId: {},
       readByMessageId: {},

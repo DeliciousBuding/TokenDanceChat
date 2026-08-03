@@ -84,6 +84,7 @@ export function MessageTranscript({
   const { t } = useTranslation();
   const {
     messages,
+    messageWindowRevision,
     username,
     historyLoaded,
     typingUsers,
@@ -207,12 +208,14 @@ export function MessageTranscript({
 
   // Restore scroll position after older messages load and DOM updates.
   // useLayoutEffect runs synchronously after DOM commits, preventing races with live messages.
+  // Depends on messageWindowRevision (monotonic counter) rather than
+  // effectiveMessages.length — when cap is exceeded and prepend+append cancel
+  // out, length stays the same but revision bumps, so scroll restoration fires.
   useLayoutEffect(() => {
     if (pendingScrollRestore.current && containerRef.current) {
       // Guard against race condition: if a new live message arrives at the
-      // bottom while waiting for older history, effectiveMessages.length
-      // changes but the first message ID stays the same. Skip the scroll
-      // restore until older messages are actually prepended.
+      // bottom while waiting for older history, the first message ID stays
+      // the same. Skip the scroll restore until older messages are actually prepended.
       const currentFirstId = effectiveMessages[0]?.id ?? "";
       if (currentFirstId === firstMessageIdBeforeLoad.current && firstMessageIdBeforeLoad.current !== "") {
         return;
@@ -223,7 +226,7 @@ export function MessageTranscript({
       firstMessageIdBeforeLoad.current = "";
       setLoadingOlder(false);
     }
-  }, [effectiveMessages.length]);
+  }, [messageWindowRevision, effectiveMessages.length]);
 
   const visibleMessages = useMemo(() => {
     if (showAllMessages || effectiveMessages.length <= MAX_VISIBLE_MESSAGES) {

@@ -82,12 +82,15 @@ function renderChatInput(props?: {
   replyTo?: ChatMessage | null;
 }) {
   const onSend = props?.onSend ?? vi.fn();
+  // Set reply state in the store instead of passing a prop.
+  if (props?.replyTo !== undefined) {
+    useChatStore.getState().setReplyTo(props.replyTo);
+  }
   const result = render(
     <I18nProvider>
       <ChatInput
         onSend={onSend}
         disabled={props?.disabled ?? false}
-        replyTo={props?.replyTo ?? null}
       />
     </I18nProvider>,
   );
@@ -696,7 +699,7 @@ describe("ChatInput", () => {
       expect(textarea.value).toBe("");
     });
 
-    it("同时有 replyTo 和编辑态时优先显示回复指示器", () => {
+    it("进入编辑时取消 reply", () => {
       const messages = [
         { id: "m1", username: "testuser", content: "my message", timestamp: 1000 },
       ];
@@ -716,12 +719,16 @@ describe("ChatInput", () => {
       renderChatInput({ replyTo });
       const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
 
+      // Reply indicator should be visible before ArrowUp
+      expect(screen.getByText("alice")).toBeTruthy();
+
+      // ArrowUp enters edit mode, which cancels reply
       fireEvent.keyDown(textarea, { key: "ArrowUp" });
 
-      // Reply indicator should be visible (priority over editing)
-      expect(screen.getByText("alice")).toBeTruthy();
-      // Editing indicator should NOT appear
-      expect(screen.queryByText("编辑消息")).toBeNull();
+      // Reply indicator should be gone (cleared by edit mode)
+      expect(screen.queryByText("alice")).toBeNull();
+      // Editing indicator should appear
+      expect(screen.getByText("编辑消息")).toBeTruthy();
     });
   });
 
