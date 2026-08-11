@@ -264,12 +264,26 @@ describe("chatStore", () => {
       useChatStore.getState().addMessage({
         id: "1", username: "U", content: "x", timestamp: 1,
       });
-      const msgsBefore = useChatStore.getState().messages;
+      const msgsBefore = useChatStore.getState().messages.length;
       // Prepend same message (no new IDs)
       useChatStore.getState().prependHistory([
         { id: "1", username: "U", content: "x", timestamp: 1 },
       ]);
-      expect(useChatStore.getState().messages).toBe(msgsBefore);
+      expect(useChatStore.getState().messages.length).toBe(msgsBefore);
+      expect(useChatStore.getState().messages[0].id).toBe("1");
+    });
+
+    it("appends live messages after prepend", () => {
+      useChatStore.getState().addMessage({ id: "a", username: "U", content: "a", timestamp: 100 });
+      useChatStore.getState().addMessage({ id: "b", username: "U", content: "b", timestamp: 200 });
+      useChatStore.getState().prependHistory([
+        { id: "old-1", username: "Archive", content: "history", timestamp: -100 },
+      ]);
+      expect(useChatStore.getState().messages.length).toBe(3);
+      // New live message should appear at the end after prepend.
+      useChatStore.getState().addMessage({ id: "c", username: "U", content: "c", timestamp: 300 });
+      expect(useChatStore.getState().messages.length).toBe(4);
+      expect(useChatStore.getState().messages[3].id).toBe("c");
     });
   });
 
