@@ -2,6 +2,7 @@ import { useState, useCallback, type FormEvent, type KeyboardEvent } from "react
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useTranslation } from "@/i18n/context";
 import { registerUser } from "@/lib/api";
+import { TurnstileWidget } from "@/components/Turnstile";
 
 interface RegisterScreenProps {
   onBack: () => void;
@@ -19,6 +20,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const handleRegister = useCallback(
     async (e?: FormEvent) => {
@@ -65,7 +67,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
       setLoading(true);
 
       try {
-        const result = await registerUser(trimmedUsername, password, trimmedInvite);
+        const result = await registerUser(trimmedUsername, password, trimmedInvite, turnstileToken);
         if (result.success) {
           localStorage.setItem("tokendance:auth", "true");
           onSuccess(result.username);
@@ -88,7 +90,7 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
         setLoading(false);
       }
     },
-    [username, password, confirmPassword, inviteCode, onSuccess, t],
+    [username, password, confirmPassword, inviteCode, turnstileToken, onSuccess, t],
   );
 
   const handleKeyDown = useCallback(
@@ -234,6 +236,8 @@ export function RegisterScreen({ onBack, onSuccess, onSwitchToLogin }: RegisterS
               {error}
             </p>
           )}
+
+          <TurnstileWidget onTokenChange={setTurnstileToken} />
 
           <button
             type="submit"

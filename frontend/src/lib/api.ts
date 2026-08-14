@@ -726,11 +726,11 @@ export interface InviteCode {
   created_at: number;
 }
 
-export async function registerUser(username: string, password: string, inviteCode: string): Promise<RegisterResponse> {
+export async function registerUser(username: string, password: string, inviteCode: string, turnstileToken?: string | null): Promise<RegisterResponse> {
   const resp = await fetch("/api/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password, invite_code: inviteCode }),
+    body: JSON.stringify({ username, password, invite_code: inviteCode, cf_turnstile_response: turnstileToken ?? "" }),
   });
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({ error: "Registration failed" }));
@@ -739,11 +739,11 @@ export async function registerUser(username: string, password: string, inviteCod
   return await resp.json() as RegisterResponse;
 }
 
-export async function loginUser(username: string, password: string): Promise<LoginResponse> {
+export async function loginUser(username: string, password: string, turnstileToken?: string | null): Promise<LoginResponse> {
   const resp = await fetch("/api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, cf_turnstile_response: turnstileToken ?? "" }),
   });
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({ error: "Login failed" }));

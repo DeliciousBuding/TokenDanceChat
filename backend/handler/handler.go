@@ -48,6 +48,9 @@ type Handler struct {
 	oidcStates       *OIDCStateStore
 	oidcTokens       *OIDCTokenStore
 	oidcJWKS         *oidcJWKSCache
+
+	// turnstile verifies Cloudflare Turnstile tokens on credential endpoints.
+	turnstile *turnstileVerifier
 }
 
 // linkPreviewResult stores cached OpenGraph data for a URL.
@@ -93,6 +96,7 @@ func New(h *hub.Hub, s hub.Store, uploadsDir string) *Handler {
 		mediaStore:       NewLocalMediaStore(uploadsDir),
 		linkPreviewCache: make(map[string]linkPreviewResult),
 		sessionSecret:    loadSessionSecret(),
+		turnstile:        loadTurnstileVerifier(),
 	}
 	if h != nil {
 		h.SetSessionTokenVerifier(handler)
@@ -280,8 +284,9 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("X-XSS-Protection", "0")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		// CSP: 'self' covers same-origin ws/wss; https: for user uploads and previews
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: https:; font-src 'self'; base-uri 'self'; form-action 'self'")
+		// CSP: 'self' covers same-origin ws/wss; https: for user uploads and
+		// previews; challenges.cloudflare.com for the Turnstile widget.
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://challenges.cloudflare.com ws: wss:; img-src 'self' data: https:; font-src 'self'; base-uri 'self'; form-action 'self'; frame-src https://challenges.cloudflare.com")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -876,9 +881,10 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Username   string `json:"username"`
-		Password   string `json:"password"`
-		InviteCode string `json:"invite_code"`
+		Username       string `json:"username"`
+		Password       string `json:"password"`
+		InviteCode     string `json:"invite_code"`
+		TurnstileToken string `json:"cf_turnstile_response"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid JSON body", "INVALID_JSON", requestID)
@@ -888,6 +894,12 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	username := strings.TrimSpace(body.Username)
 	password := body.Password
 	inviteCode := strings.TrimSpace(body.InviteCode)
+
+	if err := h.verifyTurnstile(r, body.TurnstileToken); err != nil {
+		log.Printf("register: turnstile rejected: %v", err)
+		writeJSONError(w, http.StatusForbidden, "bot verification failed", "TURNSTILE_FAILED", requestID)
+		return
+	}
 
 	if !hub.ValidateUsername(username) {
 		writeJSONError(w, http.StatusBadRequest, "invalid username: 1-20 chars, letters, digits, underscore, or Chinese", "INVALID_USERNAME", requestID)
@@ -960,8 +972,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username       string `json:"username"`
+		Password       string `json:"password"`
+		TurnstileToken string `json:"cf_turnstile_response"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid JSON body", "INVALID_JSON", requestID)
@@ -973,6 +986,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	if username == "" || password == "" {
 		writeJSONError(w, http.StatusBadRequest, "username and password are required", "MISSING_FIELDS", requestID)
+		return
+	}
+
+	if err := h.verifyTurnstile(r, body.TurnstileToken); err != nil {
+		log.Printf("login: turnstile rejected: %v", err)
+		writeJSONError(w, http.StatusForbidden, "bot verification failed", "TURNSTILE_FAILED", requestID)
 		return
 	}
 

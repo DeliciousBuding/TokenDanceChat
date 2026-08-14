@@ -111,7 +111,7 @@ describe("LoginScreen", () => {
     fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: "登录" }));
     await waitFor(() => {
-      expect(mockLoginUser).toHaveBeenCalledWith("testuser", "password123");
+      expect(mockLoginUser).toHaveBeenCalledWith("testuser", "password123", null);
     });
   });
 

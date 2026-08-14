@@ -2,6 +2,7 @@ import { useState, useCallback, type FormEvent, type KeyboardEvent } from "react
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useTranslation } from "@/i18n/context";
 import { loginUser, ChatError, ErrorCode } from "@/lib/api";
+import { TurnstileWidget } from "@/components/Turnstile";
 
 interface LoginScreenProps {
   onBack: () => void;
@@ -16,6 +17,7 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const handleLogin = useCallback(
     async (e?: FormEvent) => {
@@ -36,7 +38,7 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
       setLoading(true);
 
       try {
-        const result = await loginUser(trimmedUsername, password);
+        const result = await loginUser(trimmedUsername, password, turnstileToken);
         if (result.success) {
           localStorage.setItem("tokendance:auth", "true");
           onSuccess(result.username);
@@ -54,7 +56,7 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
         setLoading(false);
       }
     },
-    [username, password, onSuccess, t],
+    [username, password, turnstileToken, onSuccess, t],
   );
 
   const handleKeyDown = useCallback(
@@ -146,6 +148,8 @@ export function LoginScreen({ onBack, onSuccess, onSwitchToRegister }: LoginScre
               {error}
             </p>
           )}
+
+          <TurnstileWidget onTokenChange={setTurnstileToken} />
 
           <button
             type="submit"
