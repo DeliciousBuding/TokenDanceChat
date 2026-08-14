@@ -1,6 +1,7 @@
 User-agent: *
 Allow: /
 Disallow: /offline.html
+Content-Signal: ai-train=yes, search=yes, ai-input=yes
 
 # AI crawlers — allowed for GEO (Generative Engine Optimization)
 User-agent: GPTBot

@@ -90,6 +90,7 @@ describe("registerUser", () => {
       username,
       password,
       invite_code: inviteCode,
+      cf_turnstile_response: "",
     });
   });
 
@@ -146,7 +147,7 @@ describe("loginUser", () => {
     const [url, init] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/login");
     expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual({ username, password });
+    expect(JSON.parse(init.body)).toEqual({ username, password, cf_turnstile_response: "" });
   });
 
   it("resolves with LoginResponse on success", async () => {
