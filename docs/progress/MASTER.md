@@ -1,7 +1,7 @@
 # MASTER.md — TokenDanceChat UIUX/清理/单 agent 改造
 
 最后更新：2026-08-30
-状态：进行中
+状态：已收官并部署生产（镜像 sha 60c61c2，commit 1699110）
 
 ## 目标（领导原话收口）
 
@@ -58,3 +58,25 @@ git diff --check
 
 - 不做 backend 大重构（F9 只切旧第二 Agent 工作区）；不改 OIDC/Turnstile 逻辑；不动部署形态。
 - 每 lane 完成后主 agent 亲自复跑暗卷再收。
+
+## 收官记录（2026-08-30）
+
+- 验收全绿：go test 5 包 / vitest 627 / tsc / build / visual-acceptance 10 场景 / 生产冒烟 TokenBot 15s 流式回复。
+- 生产：模型 deepseek-v4-flash-vision-exp 生效，`/api/config` 契约正确，容器 healthy。
+- 迟到分析报告的增量修复：`.env.local.example` gitignore 白名单 + OIDC issuer 刷新、CHAT-SR-014 死行号引用清除（commit 1699110）。
+
+## 后续 backlog（分析 lane 产出，本轮未做）
+
+| 优先 | 项 | 说明 |
+|---|---|---|
+| P1 | 遗留 IM 协议切除（后端 Batch B） | WS dispatch ~60 个死 case + hub/store 对应方法 + 15/23 张表 + ~13k 行 legacy 测试；大规模删除需管理员批准 |
+| P1 | AdminStats 管理员角色校验（Batch D） | 现任意登录用户可读 /api/admin/stats（CHAT-SR-018 Open） |
+| P1 | Hub 级 bot 记忆跨房间/跨用户共享 | `handleBotResponse` 取 Hub 单例 memory，上下文会串人，潜在信息泄漏 |
+| P2 | 消息列表虚拟化 | 500 条 × ReactMarkdown 全量渲染，大列表必卡（MessageTranscript） |
+| P2 | 双 contextMenu 去重 | MessageBubble 与 MessageTranscript 两套右键菜单实现 |
+| P2 | 通知权限改用户手势触发 | useWebSocket 挂载即 requestPermission，Chrome 会静默拒绝 |
+| P2 | webhook 限流或删除 | 无 rate limit + 公共房间无群组背书（CHAT-SR-020 Open） |
+| P3 | HubCommand 死命令面（Batch C） | ExecuteHubCommand/SendDM/RequestHistory/RequestOnlineUsers/processScheduledMessages 仅测试引用 |
+| P3 | 前端杂项 | class-variance-authority 未用依赖、chatStore DM/group 遗留字段、@lobehub/icons 仅 1 处 |
+| P3 | shouldTrigger 50% 问句抢答 | 公共房间可能刷屏，需产品拍板保留与否 |
+| P3 | 25 个 Dependabot 依赖漏洞 | 6 high，pre-existing 依赖面，待专项升级 |
