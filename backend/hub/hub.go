@@ -347,8 +347,8 @@ type Message struct {
 	Emojis    []CustomEmoji `json:"emojis,omitempty"`
 }
 
-// HubCommand PicoClaw 可向 Hub 发送的命令类型。
-// 用于 PicoClaw 通过 WebSocket 双向通道查询 Hub 状态或执行操作。
+// HubCommand 可向 Hub 发送的命令类型。
+// 用于通过 WebSocket 双向通道查询 Hub 状态或执行操作。
 type HubCommand struct {
 	Type    string         `json:"type"`              // 命令类型：online_users, history, send_dm
 	RoomID  string         `json:"room_id,omitempty"` // 房间 ID
@@ -406,7 +406,7 @@ type Hub struct {
 	llmClient *llm.Client
 	memory    *llm.Memory
 	botName   string
-	agentName string
+	llmCfg    *llm.Config
 
 	// typingRateLimit tracks the last time a typing broadcast was sent per username.
 	typingRateLimit map[string]time.Time
@@ -453,15 +453,11 @@ type Hub struct {
 	mu sync.RWMutex
 }
 
-// New creates a new Hub with the given store. llmCfg, botName and agentName are
-// optional. Both TokenBot and the agent use the LLM adapter.
-func New(store Store, llmCfg *llm.Config, botName string, agentNames ...string) *Hub {
+// New creates a new Hub with the given store. llmCfg and botName are optional.
+// The single bot (TokenBot) uses the LLM adapter.
+func New(store Store, llmCfg *llm.Config, botName string) *Hub {
 	var llmClient *llm.Client
 	var mem *llm.Memory
-	agentName := "PicoClaw"
-	if len(agentNames) > 0 && agentNames[0] != "" {
-		agentName = agentNames[0]
-	}
 
 	if llmCfg != nil {
 		llmClient = llm.New(*llmCfg)
@@ -482,7 +478,7 @@ func New(store Store, llmCfg *llm.Config, botName string, agentNames ...string) 
 		llmClient:       llmClient,
 		memory:          mem,
 		botName:         botName,
-		agentName:       agentName,
+		llmCfg:          llmCfg,
 		typingRateLimit: make(map[string]time.Time),
 		friends:         make(map[string]map[string]bool),
 		groups:          make(map[string]*Group),
@@ -636,16 +632,6 @@ func (h *Hub) Run() {
 			h.lastSeenMu.Unlock()
 
 			log.Printf("client registered: %s (total: %d)", client.username, len(h.clients))
-
-			// PicoClaw proactive greeting — send a welcome DM after a short delay.
-			if agentName := h.AgentName(); agentName != "" && client.username != agentName {
-				username := client.username
-				go func() {
-					time.Sleep(2 * time.Second)
-					greeting := fmt.Sprintf("你好 @%s！我是 PicoClaw，你的 AI 助手。有什么可以帮你的？", username)
-					h.SendAssistantMessageToRoom(agentName, greeting, "dm:"+username)
-				}()
-			}
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -806,9 +792,17 @@ func (h *Hub) BotName() string {
 	return h.botName
 }
 
-// AgentName returns the configured agent username, or empty string if disabled.
-func (h *Hub) AgentName() string {
-	return h.agentName
+// LLMModel returns the configured LLM model name, or empty string if not set.
+func (h *Hub) LLMModel() string {
+	if h.llmCfg != nil {
+		return h.llmCfg.Model
+	}
+	return ""
+}
+
+// LLMEnabled reports whether an LLM adapter is configured with an API key.
+func (h *Hub) LLMEnabled() bool {
+	return h.llmCfg != nil && h.llmCfg.APIKey != ""
 }
 
 // LLMClient returns the legacy LLM client, or nil if not configured.
@@ -1651,7 +1645,7 @@ func (h *Hub) RequestHistory(roomID string, limit int, before int64) HubCommandR
 }
 
 // SendDM 以指定身份发送私信给目标用户。
-// fromUsername: 发送者标识（通常为 PicoClaw 代理名）。
+// fromUsername: 发送者标识（通常为 bot 名）。
 // toUsername: 接收者用户名。
 // content: 私信内容。
 func (h *Hub) SendDM(fromUsername, toUsername, content string) HubCommandResponse {
@@ -1720,7 +1714,7 @@ func (h *Hub) ExecuteHubCommand(cmd HubCommand) HubCommandResponse {
 	case "history":
 		return h.RequestHistory(cmd.RoomID, cmd.Limit, cmd.Before)
 	case "send_dm":
-		fromUsername := h.AgentName() // 默认使用 Agent 代理名
+		fromUsername := h.BotName() // 默认使用 bot 名
 		if cmd.Params != nil {
 			if from, ok := cmd.Params["from"].(string); ok && from != "" {
 				fromUsername = from

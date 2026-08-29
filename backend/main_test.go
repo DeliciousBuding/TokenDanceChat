@@ -233,7 +233,7 @@ func TestParseEnvBool(t *testing.T) {
 	}
 }
 
-// TestWriteAgentsMD verifies AGENTS.md is written with correct bot and agent names.
+// TestWriteAgentsMD verifies AGENTS.md is written with correct bot name.
 func TestWriteAgentsMD(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "tokendancechat-test-*")
 	if err != nil {
@@ -241,7 +241,7 @@ func TestWriteAgentsMD(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	err = writeAgentsMD(tmpDir, "MyBot", "MyAgent")
+	err = writeAgentsMD(tmpDir, "MyBot")
 	if err != nil {
 		t.Fatalf("writeAgentsMD() error: %v", err)
 	}
@@ -255,16 +255,13 @@ func TestWriteAgentsMD(t *testing.T) {
 	if !strings.Contains(s, "MyBot") {
 		t.Errorf("AGENTS.md should contain 'MyBot', got: %s", s)
 	}
-	if !strings.Contains(s, "MyAgent") {
-		t.Errorf("AGENTS.md should contain 'MyAgent', got: %s", s)
-	}
 	if !strings.Contains(s, "TokenDanceChat") {
 		t.Errorf("AGENTS.md should contain 'TokenDanceChat', got: %s", s)
 	}
 }
 
-// TestServerEnvBotName verifies Server picks up CHAT_BOT_NAME and CHAT_AGENT_NAME
-// from the environment and writes them to AGENTS.md.
+// TestServerEnvBotName verifies Server picks up CHAT_BOT_NAME from the
+// environment and writes it to AGENTS.md.
 func TestServerEnvBotName(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "tokendancechat-test-*")
 	if err != nil {
@@ -281,7 +278,6 @@ func TestServerEnvBotName(t *testing.T) {
 	}
 
 	t.Setenv("CHAT_BOT_NAME", "CustomBot")
-	t.Setenv("CHAT_AGENT_NAME", "CustomAgent")
 
 	ts := startTestServer(t, filepath.Join(tmpDir, "chat.db"), frontendDir)
 	defer ts.Close()
@@ -294,13 +290,10 @@ func TestServerEnvBotName(t *testing.T) {
 	if !strings.Contains(s, "CustomBot") {
 		t.Errorf("AGENTS.md should contain 'CustomBot', got: %s", s)
 	}
-	if !strings.Contains(s, "CustomAgent") {
-		t.Errorf("AGENTS.md should contain 'CustomAgent', got: %s", s)
-	}
 }
 
-// TestServerDefaultBotName verifies Server uses default bot/agent names when
-// environment variables are not set.
+// TestServerDefaultBotName verifies Server uses the default bot name when the
+// environment variable is not set.
 func TestServerDefaultBotName(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "tokendancechat-test-*")
 	if err != nil {
@@ -326,9 +319,6 @@ func TestServerDefaultBotName(t *testing.T) {
 	s := string(content)
 	if !strings.Contains(s, "TokenBot") {
 		t.Errorf("AGENTS.md should contain default 'TokenBot', got: %s", s)
-	}
-	if !strings.Contains(s, "PicoClaw") {
-		t.Errorf("AGENTS.md should contain default 'PicoClaw', got: %s", s)
 	}
 }
 

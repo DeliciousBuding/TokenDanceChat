@@ -39,3 +39,9 @@ services:
       CHAT_OIDC_CLIENT_ID: ${CHAT_OIDC_CLIENT_ID:-}
       CHAT_OIDC_CLIENT_SECRET: ${CHAT_OIDC_CLIENT_SECRET:-}
       CHAT_OIDC_REDIRECT_URI: ${CHAT_OIDC_REDIRECT_URI:-http://localhost:8080/api/oidc/callback}
+      # Single assistant (TokenBot) LLM adapter.
+      CHAT_BOT_NAME: ${CHAT_BOT_NAME:-TokenBot}
+      CHAT_LLM_PROVIDER: ${CHAT_LLM_PROVIDER:-}
+      CHAT_LLM_BASE_URL: ${CHAT_LLM_BASE_URL:-}
+      CHAT_LLM_MODEL: ${CHAT_LLM_MODEL:-}
+      CHAT_LLM_API_KEY: ${CHAT_LLM_API_KEY:-}

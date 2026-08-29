@@ -953,7 +953,6 @@ func TestAssistantMentionTarget(t *testing.T) {
 		name      string
 		content   string
 		wantToken bool
-		wantAgent bool
 	}{
 		{
 			name:      "token bot mention routes to LLM bot only",
@@ -961,35 +960,25 @@ func TestAssistantMentionTarget(t *testing.T) {
 			wantToken: true,
 		},
 		{
-			name:      "pico claw mention routes to agent only",
-			content:   "@PicoClaw 帮我看看",
-			wantAgent: true,
-		},
-		{
 			name:      "legacy bot alias routes to token bot",
 			content:   "@bot ping",
 			wantToken: true,
 		},
 		{
-			name:    "regular user mention does not trigger assistants",
+			name:    "regular user mention does not trigger assistant",
 			content: "@alice ping",
 		},
 		{
-			name:      "both assistants can be requested explicitly",
-			content:   "@TokenBot 总结一下，@PicoClaw 执行一下",
-			wantToken: true,
-			wantAgent: true,
+			name:    "non-bot mention does not trigger assistant",
+			content: "@randomuser 帮我看看",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := assistantMentionTarget(tc.content, "TokenBot", "PicoClaw")
+			got := assistantMentionTarget(tc.content, "TokenBot")
 			if got.TokenBot != tc.wantToken {
 				t.Fatalf("TokenBot target = %v, want %v", got.TokenBot, tc.wantToken)
-			}
-			if got.Agent != tc.wantAgent {
-				t.Fatalf("Agent target = %v, want %v", got.Agent, tc.wantAgent)
 			}
 		})
 	}
@@ -1203,7 +1192,7 @@ func TestBotCooldown(t *testing.T) {
 func TestOperatorPrecedenceFix(t *testing.T) {
 	// Verify the fix:？should NOT bypass !targets.TokenBot gate.
 	// Content containing only "？" (no "?") should only trigger if TokenBot is not already targeted.
-	targets := assistantMentionTarget("测试？", "TokenBot", "PicoClaw")
+	targets := assistantMentionTarget("测试？", "TokenBot")
 	// TokenBot may or may not trigger (50% random), but the key point is that
 	// the function does not panic and the precedence is correct:
 	// "？" is only checked when !targets.TokenBot is true.
@@ -1259,20 +1248,6 @@ func TestSanitizeBotContent(t *testing.T) {
 	result := sanitizeBotContent("<div>Hello</div>")
 	if !strings.Contains(result, "<div>") {
 		t.Error("sanitizeBotContent should preserve HTML tags, but they were stripped")
-	}
-}
-
-func TestPicoClawContentSizeLimit(t *testing.T) {
-	// This test verifies the conceptual enforcement:
-	// maxPicoClawContent = 10000 runes in main.go's ProactiveCallback.
-	const maxPicoClawContent = 10000
-
-	content := string(make([]rune, maxPicoClawContent+500))
-	if len([]rune(content)) > maxPicoClawContent {
-		content = string([]rune(content)[:maxPicoClawContent])
-	}
-	if len([]rune(content)) != maxPicoClawContent {
-		t.Errorf("expected truncated content to be %d runes, got %d", maxPicoClawContent, len([]rune(content)))
 	}
 }
 
@@ -2012,7 +1987,7 @@ func TestIsReservedUsername(t *testing.T) {
 
 func TestExecuteHubCommand(t *testing.T) {
 	ms := &mockStore{}
-	h := New(ms, nil, "", "TestAgent")
+	h := New(ms, nil, "TestBot")
 
 	t.Run("online_users", func(t *testing.T) {
 		resp := h.ExecuteHubCommand(HubCommand{Type: "online_users"})
@@ -2183,7 +2158,6 @@ func TestAssistantMentionTargetKeywordTriggers(t *testing.T) {
 		name      string
 		content   string
 		wantToken bool
-		wantAgent bool
 	}{
 		{
 			name:      "keyword help triggers TokenBot",
@@ -2206,63 +2180,15 @@ func TestAssistantMentionTargetKeywordTriggers(t *testing.T) {
 			wantToken: true,
 		},
 		{
-			name:      "keyword 任务 triggers PicoClaw",
-			content:   "创建一个任务",
-			wantAgent: true,
-		},
-		{
-			name:      "keyword 分析 triggers PicoClaw",
-			content:   "分析一下这个问题",
-			wantAgent: true,
-		},
-		{
-			name:      "keyword 帮我 triggers PicoClaw",
-			content:   "帮我写一段代码",
-			wantAgent: true,
-		},
-		{
-			name:      "keyword summarize triggers PicoClaw",
-			content:   "summarize this document",
-			wantAgent: true,
-		},
-		{
-			name:      "keyword translate triggers PicoClaw",
-			content:   "translate to Chinese",
-			wantAgent: true,
-		},
-		{
-			name:      "keyword search triggers PicoClaw",
-			content:   "search for information",
-			wantAgent: true,
-		},
-		{
-			name:      "keyword generate triggers PicoClaw",
-			content:   "generate a report",
-			wantAgent: true,
-		},
-		{
-			name:      "keyword write triggers PicoClaw",
-			content:   "write a poem",
-			wantAgent: true,
-		},
-		{
-			name:      "keyword code triggers PicoClaw",
-			content:   "write some code",
-			wantAgent: true,
-		},
-		{
 			name:    "no trigger words at all",
 			content: "hello how are you today",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := assistantMentionTarget(tc.content, "TokenBot", "PicoClaw")
+			got := assistantMentionTarget(tc.content, "TokenBot")
 			if got.TokenBot != tc.wantToken {
 				t.Errorf("TokenBot target = %v, want %v (content=%q)", got.TokenBot, tc.wantToken, tc.content)
-			}
-			if got.Agent != tc.wantAgent {
-				t.Errorf("Agent target = %v, want %v (content=%q)", got.Agent, tc.wantAgent, tc.content)
 			}
 		})
 	}
@@ -2385,20 +2311,6 @@ func TestIsAssistantAlias(t *testing.T) {
 			mention:   "",
 			canonical: "TokenBot",
 			expected:  false,
-		},
-		{
-			name:      "pico claw alias",
-			mention:   "picoclaw",
-			canonical: "PicoClaw",
-			aliases:   []string{"claw", "picoclaw"},
-			expected:  true,
-		},
-		{
-			name:      "claw alias for pico",
-			mention:   "claw",
-			canonical: "PicoClaw",
-			aliases:   []string{"claw"},
-			expected:  true,
 		},
 		{
 			name:      "partial substring does not match",
@@ -3240,6 +3152,26 @@ func TestHandleChatMessageScopesRoomFanout(t *testing.T) {
 	case payload := <-bob.send:
 		t.Fatalf("bob is in room-2 and should not receive room-1 payload: %s", string(payload))
 	default:
+	}
+}
+
+// TestHandleChatMessageRoundTripsReplyToID verifies that replying to a message
+// in the public room persists the reply_to_id (it was previously hardcoded to
+// empty, dropping reply context on fetch).
+func TestHandleChatMessageRoundTripsReplyToID(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, "")
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: "room-1"}
+	alice.handleChatMessage(Message{Content: "reply to message", ReplyToID: "orig-msg-1"})
+
+	msgs := ms.GetMessages(100, 0)
+	if len(msgs) == 0 {
+		t.Fatal("expected message to be persisted")
+	}
+	last := msgs[len(msgs)-1]
+	if last.ReplyToID != "orig-msg-1" {
+		t.Errorf("persisted ReplyToID = %q, want %q", last.ReplyToID, "orig-msg-1")
 	}
 }
 
@@ -4291,85 +4223,58 @@ func TestAssistantMentionTargetEdgeCases(t *testing.T) {
 		name      string
 		content   string
 		botName   string
-		agentName string
 		wantToken bool
-		wantAgent bool
 	}{
 		{
 			name:    "empty content returns no targets",
 			content: "",
-			botName: "TokenBot", agentName: "PicoClaw",
+			botName: "TokenBot",
 		},
 		{
-			name:    "no bot or agent configured with no mention returns no targets",
+			name:    "no bot configured with no mention returns no targets",
 			content: "hello world",
-			botName: "", agentName: "",
+			botName: "",
 		},
 		{
 			name:    "only bot configured no trigger returns no targets",
 			content: "hello world",
-			botName: "TokenBot", agentName: "",
-		},
-		{
-			name:    "only agent configured no trigger returns no targets",
-			content: "hello world",
-			botName: "", agentName: "PicoClaw",
+			botName: "TokenBot",
 		},
 		{
 			name:    "alias tokenbot detected even when bot not configured",
 			content: "@TokenBot help",
-			botName: "", agentName: "PicoClaw",
+			botName: "",
 			// assistantMentionTarget detects mentions via aliases regardless of
 			// configuration; the caller (handleChatMessage) gates on config.
 			wantToken: true,
 		},
 		{
-			name:    "alias picoclaw detected even when agent not configured",
-			content: "@PicoClaw analyze this",
-			botName: "TokenBot", agentName: "",
-			// isAssistantAlias("PicoClaw", "", "claw", "picoclaw") → alias "picoclaw" matches.
-			// No "help"/"bot"/"帮助"/"机器人" keyword in content → TokenBot not triggered.
-			wantAgent: true,
-		},
-		{
-			name:    "both configured both empty names mention targets not set",
-			content: "@TokenBot @PicoClaw help",
-			botName: "", agentName: "",
-			// Aliases still match through isAssistantAlias alias lists.
-			wantToken: true,
-			wantAgent: true,
+			name:    "non-bot mention does not trigger the bot",
+			content: "@randomuser analyze this",
+			botName: "TokenBot",
+			// A mention that does not match any bot alias and carries no TokenBot
+			// keyword or question mark produces no target.
 		},
 		{
 			name:    "question with no bot configured does not trigger TokenBot keyword",
 			content: "can you help?",
-			botName: "", agentName: "",
+			botName: "",
 			// Keyword and question triggers are guarded by botName != "".
 			wantToken: false,
 		},
 		{
-			name:    "question with no agent configured does not trigger Agent keyword",
-			content: "帮我写代码?",
-			botName: "", agentName: "",
-			// Agent keyword triggers are guarded by agentName != "".
-			wantAgent: false,
-		},
-		{
 			name:    "empty config with plain text returns no targets",
 			content: "good morning everyone",
-			botName: "", agentName: "",
+			botName: "",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := assistantMentionTarget(tc.content, tc.botName, tc.agentName)
+			got := assistantMentionTarget(tc.content, tc.botName)
 			if got.TokenBot != tc.wantToken {
-				t.Errorf("TokenBot target = %v, want %v (content=%q, bot=%q, agent=%q)",
-					got.TokenBot, tc.wantToken, tc.content, tc.botName, tc.agentName)
-			}
-			if got.Agent != tc.wantAgent {
-				t.Errorf("Agent target = %v, want %v (content=%q, bot=%q, agent=%q)",
-					got.Agent, tc.wantAgent, tc.content, tc.botName, tc.agentName)
+				t.Errorf("TokenBot target = %v, want %v (content=%q, bot=%q)",
+					got.TokenBot, tc.wantToken, tc.content, tc.botName)
 			}
 		})
 	}

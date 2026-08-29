@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestChatOpenAIUsesReasoningContentFallback(t *testing.T) {
+func TestChatOpenAIEmptyContentDoesNotFallbackToReasoning(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
@@ -41,12 +41,12 @@ func TestChatOpenAIUsesReasoningContentFallback(t *testing.T) {
 		BaseURL:  server.URL,
 	})
 
-	got, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
-	if err != nil {
-		t.Fatalf("Chat returned error: %v", err)
+	_, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
+	if err == nil {
+		t.Fatal("expected an error when reply content is empty, regardless of reasoning_content")
 	}
-	if got != "可以，我来处理。" {
-		t.Fatalf("Chat returned %q, want reasoning content fallback", got)
+	if !strings.Contains(err.Error(), "empty message content") {
+		t.Errorf("error should mention empty message content, got: %v", err)
 	}
 }
 
@@ -1114,7 +1114,7 @@ func TestChatStreamNon200Status(t *testing.T) {
 	}
 }
 
-func TestChatEmptyContentFallbackToReasoning(t *testing.T) {
+func TestChatEmptyContentReasoningOnlyReturnsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -1137,12 +1137,15 @@ func TestChatEmptyContentFallbackToReasoning(t *testing.T) {
 		BaseURL:  server.URL,
 	})
 
-	got, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
-	if err != nil {
-		t.Fatalf("Chat returned error: %v", err)
+	userMsg, err := client.Chat(context.Background(), client.systemPrompt, []Message{{Role: "user", Content: "ping"}})
+	if err == nil {
+		t.Fatal("expected error when content is empty even if reasoning_content is present, got nil")
 	}
-	if got != "step-by-step reasoning result" {
-		t.Errorf("Chat returned %q, want reasoning_content fallback", got)
+	if !strings.Contains(err.Error(), "empty message content") {
+		t.Errorf("error should mention empty message content, got: %v", err)
+	}
+	if !strings.Contains(userMsg, "empty response") {
+		t.Errorf("user message should mention empty response, got: %q", userMsg)
 	}
 }
 

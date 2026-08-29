@@ -283,9 +283,6 @@ func (c *Client) chatOpenAI(ctx context.Context, systemPrompt string, messages [
 	}
 
 	content := result.Choices[0].Message.Content
-	if content == "" {
-		content = result.Choices[0].Message.ReasoningContent
-	}
 	if strings.TrimSpace(content) == "" {
 		return "Sorry, I received an empty response.", fmt.Errorf("openai: empty message content")
 	}

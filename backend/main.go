@@ -31,10 +31,6 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 	if botName == "" {
 		botName = "TokenBot"
 	}
-	agentName := os.Getenv("CHAT_AGENT_NAME")
-	if agentName == "" {
-		agentName = "PicoClaw"
-	}
 
 	var llmCfg *llm.Config
 	provider := os.Getenv("CHAT_LLM_PROVIDER")
@@ -62,7 +58,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 		}
 	}
 
-	h := hub.New(st, llmCfg, botName, agentName)
+	h := hub.New(st, llmCfg, botName)
 	h.LoadPersistedState()
 
 	// Set up bot memory persistence if LLM is configured and path is set.
@@ -81,7 +77,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 
 	// Set up AGENTS.md and MEMORY.md in the data directory.
 	dataDir := filepath.Dir(dbPath)
-	if err := writeAgentsMD(dataDir, botName, agentName); err != nil {
+	if err := writeAgentsMD(dataDir, botName); err != nil {
 		log.Printf("warn: failed to write AGENTS.md: %v", err)
 	} else {
 		log.Printf("AGENTS.md written to %s", dataDir)
@@ -128,6 +124,7 @@ func Server(dbPath, frontendDist, addr string) (*http.Server, *store.Store, *hub
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", hdlr.HealthCheck)
+	mux.HandleFunc("/api/config", hdlr.ConfigHandler)
 	mux.HandleFunc("/api/messages", hdlr.GetMessages)
 	mux.HandleFunc("/api/users/online", hdlr.GetOnlineUsers)
 	mux.HandleFunc("/api/stats", hdlr.Stats)
@@ -228,13 +225,12 @@ func parseEnvBool(value string) bool {
 }
 
 // writeAgentsMD writes the AGENTS.md file with bot rules and system prompt.
-func writeAgentsMD(dataDir, botName, agentName string) error {
+func writeAgentsMD(dataDir, botName string) error {
 	content := fmt.Sprintf(`# AGENTS.md
 
 ## System Prompt
-TokenDanceChat has two assistant identities:
+TokenDanceChat has one assistant identity:
 - %s: normal chat bot backed by the LLM adapter.
-- %s: Agent workflow bot backed by the LLM adapter.
 
 Speak Chinese by default. Be concise and friendly.
 
@@ -242,15 +238,13 @@ Speak Chinese by default. Be concise and friendly.
 - No offensive content
 - No roleplaying
 - Identify yourself as %s when responding as the normal bot
-- Identify yourself as %s when responding as the Agent workflow bot
 - When mentioning users, use @username format
 - Be helpful, concise, and friendly
 
 ## Identity
 Bot name: %s
-Agent name: %s
 This file is auto-generated from config on server startup.
-`, botName, agentName, botName, agentName, botName, agentName)
+`, botName, botName, botName)
 
 	agentsPath := filepath.Join(dataDir, "AGENTS.md")
 	return os.WriteFile(agentsPath, []byte(content), 0644)
@@ -258,6 +252,7 @@ This file is auto-generated from config on server startup.
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	loadEnvFiles()
 	log.Println("starting TokenDanceChat backend...")
 
 	dbPath := filepath.Join("..", "data", "chat.db")

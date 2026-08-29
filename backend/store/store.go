@@ -265,7 +265,7 @@ func (s *Store) seedWelcomeMessages() error {
 		{"welcome-1", "👋 欢迎来到 TokenDanceChat！这是 AgentHub 技术栈的实时聊天验证 Demo。", 0},
 		{"welcome-2", "你可以在这里体验：Markdown 消息渲染、表情反应、全文搜索、消息编辑与删除、@TokenBot AI 助手等功能。", 1000},
 		{"welcome-3", "试试在输入框按 ↑ 键编辑上一条消息。", 2000},
-		{"welcome-4", "在输入框 @TokenBot 或 @PicoClaw 可以召唤 AI 助手，试试和它们聊聊吧。", 3000},
+		{"welcome-4", "在输入框 @TokenBot 可以召唤 AI 助手，试试和它聊聊吧。", 3000},
 	}
 
 	for _, seed := range seeds {

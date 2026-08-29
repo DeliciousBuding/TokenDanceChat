@@ -57,10 +57,9 @@ type Client struct {
 	// current room
 	currentRoomID string
 	roomMu        sync.RWMutex
-	// Assistant concurrency guards are independent so a single public message
-	// can mention TokenBot and PicoClaw without one suppressing the other.
+	// Assistant concurrency guard so a single public message can only trigger
+	// one bot reply at a time.
 	tokenBotResponding atomic.Bool
-	picoClawResponding atomic.Bool
 }
 
 // getCurrentRoomID returns the client's current room ID with read locking.
@@ -547,7 +546,7 @@ func (c *Client) handleChatMessage(msg Message) {
 	currentRoom := c.getCurrentRoomID()
 
 	// Save to store.
-	storedMsg, err := c.hub.store.InsertMessage(c.username, content, "", currentRoom, "", "", msg.ThreadID)
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID, currentRoom, "", "", msg.ThreadID)
 	if err != nil {
 		log.Printf("failed to insert message: %v", err)
 		errMsg, _ := json.Marshal(Message{
@@ -594,7 +593,7 @@ func (c *Client) handleChatMessage(msg Message) {
 		c.hub.BroadcastToRoom(allNotify, currentRoom)
 	} else {
 		for _, mention := range parseMentions(content) {
-			if mention == c.username || mention == c.hub.BotName() || mention == c.hub.AgentName() {
+			if mention == c.username || mention == c.hub.BotName() {
 				continue
 			}
 			notifyMsg, _ := json.Marshal(Message{
@@ -614,8 +613,8 @@ func (c *Client) handleChatMessage(msg Message) {
 		mem.Add(llm.Message{Role: "user", Content: content, Username: c.username})
 	}
 
-	// Check for @mentions and route TokenBot and PicoClaw independently.
-	targets := assistantMentionTarget(content, c.hub.BotName(), c.hub.AgentName())
+	// Check for @mentions and route the single bot (TokenBot).
+	targets := assistantMentionTarget(content, c.hub.BotName())
 	if targets.TokenBot && c.username != c.hub.BotName() && c.hub.LLMClient() != nil {
 		if !c.hub.CheckBotCooldown("bot:" + c.username) {
 			// Within 30s per-user cooldown, silently skip.
@@ -636,29 +635,6 @@ func (c *Client) handleChatMessage(msg Message) {
 			RoomID:   currentRoom,
 		})
 		c.hub.BroadcastToRoom(systemMsg, currentRoom)
-	}
-	if targets.Agent && c.username != c.hub.AgentName() {
-		if c.hub.LLMClient() != nil {
-			if !c.hub.CheckBotCooldown("agent:" + c.username) {
-				// Within cooldown, silently skip.
-			} else if c.picoClawResponding.CompareAndSwap(false, true) {
-				go func() {
-					defer c.picoClawResponding.Store(false)
-					ctxPC, cancelPC := context.WithTimeout(context.Background(), 60*time.Second)
-					defer cancelPC()
-					c.handleAgentResponsePicoClaw(ctxPC, content, currentRoom)
-				}()
-			}
-		} else {
-			// Agent mentioned but LLM not configured — send error feedback
-			systemMsg, _ := json.Marshal(Message{
-				Type:     "system",
-				Username: "system",
-				Content:  c.hub.AgentName() + " is not configured on this server.",
-				RoomID:   currentRoom,
-			})
-			c.hub.BroadcastToRoom(systemMsg, currentRoom)
-		}
 	}
 }
 
@@ -841,21 +817,17 @@ func containsAllMention(content string) bool {
 
 type assistantMentionTargets struct {
 	TokenBot bool
-	Agent    bool
 }
 
-func assistantMentionTarget(content, botName, agentName string) assistantMentionTargets {
+func assistantMentionTarget(content, botName string) assistantMentionTargets {
 	targets := assistantMentionTargets{}
 	for _, mention := range parseMentions(content) {
 		if isAssistantAlias(mention, botName, "bot", "tokenbot", "webuichat", "webuibot", "webui") {
 			targets.TokenBot = true
 		}
-		if isAssistantAlias(mention, agentName, "claw", "picoclaw") {
-			targets.Agent = true
-		}
 	}
 	// Auto-reply: respond to messages that clearly seek a response even
-	// without an explicit @mention.  Intent signals in priority order:
+	// without an explicit @mention. Intent signals in priority order:
 	if !targets.TokenBot && botName != "" {
 		lower := strings.ToLower(content)
 		// Keyword trigger — always reply
@@ -869,28 +841,6 @@ func assistantMentionTarget(content, botName, agentName string) assistantMention
 		if !targets.TokenBot && (strings.Contains(content, "?") || strings.Contains(content, "？")) {
 			if shouldTrigger(50) {
 				targets.TokenBot = true
-			}
-		}
-	}
-	if !targets.Agent && agentName != "" {
-		// PicoClaw keyword triggers — respond to task/agent-related intent
-		lower := strings.ToLower(content)
-		for _, kw := range []string{
-			"agent", "claw", "picoclaw", "pico",
-			"task", "workflow", "工作流", "任务",
-			"分析", "analyze", "执行", "execute", "帮我", "help me",
-			"总结", "summarize", "翻译", "translate", "搜索", "search",
-			"生成", "generate", "写", "write", "代码", "code",
-		} {
-			if strings.Contains(lower, kw) {
-				targets.Agent = true
-				break
-			}
-		}
-		// Question trigger — 50% chance (independent coin flip)
-		if !targets.Agent && (strings.Contains(content, "?") || strings.Contains(content, "？")) {
-			if shouldTrigger(50) {
-				targets.Agent = true
 			}
 		}
 	}
@@ -1187,7 +1137,7 @@ func (c *Client) handleGroupMessage(msg Message) {
 		}
 	} else {
 		for _, mention := range parseMentions(content) {
-			if mention == c.username || mention == c.hub.BotName() || mention == c.hub.AgentName() {
+			if mention == c.username || mention == c.hub.BotName() {
 				continue
 			}
 			notifyMsg, _ := json.Marshal(Message{
@@ -2063,47 +2013,6 @@ func (c *Client) handleBotResponse(ctx context.Context, userContent, roomID stri
 	// Update memory with the bot response.
 	if mem := c.hub.Memory(); mem != nil {
 		mem.Add(llm.Message{Role: "assistant", Content: response, Username: c.hub.BotName()})
-	}
-}
-
-// handleAgentResponsePicoClaw handles the PicoClaw agent response directly via LLM API.
-func (c *Client) handleAgentResponsePicoClaw(ctx context.Context, userContent, roomID string) {
-	agentName := c.hub.AgentName()
-	username := c.username
-
-	c.hub.BroadcastTyping(agentName, "typing_start", "", "")
-	var messages []llm.Message
-	if mem := c.hub.Memory(); mem != nil {
-		messages = mem.GetMessages()
-	}
-	systemPrompt := "你是 PicoClaw，运行在 TokenDanceChat 平台上的智能助手。" +
-		"你的回复应简洁、专业、有帮助，类似飞书/企业 IM 机器人的风格。" +
-		"你可以：回答用户问题、参与群聊讨论、提供技术建议、搜索和总结信息。" +
-		"回复时使用中文，保持礼貌和友好。不知道答案时诚实说明。"
-	client := c.hub.LLMClient()
-
-	var fullResponse strings.Builder
-	err := client.ChatStream(ctx, systemPrompt, messages, func(chunk string) error {
-		fullResponse.WriteString(chunk)
-		c.hub.BroadcastStreamChunkToRoom(agentName, chunk, false, roomID)
-		return nil
-	})
-	if err != nil {
-		log.Printf("PicoClaw LLM error: %v", err)
-	}
-
-	response := fullResponse.String()
-	response = sanitizeBotContent(response)
-	if response == "" {
-		response = "PicoClaw 正在思考中，请稍后再试。"
-	}
-	c.hub.BroadcastStreamChunkToRoom(agentName, "", true, roomID)
-	c.hub.SendAssistantMessageToRoom(agentName, response, roomID)
-	c.hub.BroadcastTyping(agentName, "typing_stop", "", "")
-
-	if mem := c.hub.Memory(); mem != nil {
-		mem.Add(llm.Message{Role: "user", Content: userContent, Username: username})
-		mem.Add(llm.Message{Role: "assistant", Content: response, Username: agentName})
 	}
 }
 
