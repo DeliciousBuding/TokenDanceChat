@@ -35,6 +35,13 @@ vi.mock("@/lib/sound", () => ({
   playReactionSound: vi.fn(),
 }));
 
+// Server config is fetched from /api/config. This suite tests guest auto-join
+// behavior, not config loading, so stub the hook to avoid an extra fetch that
+// would otherwise trip the mockFetch assertions below.
+vi.mock("@/hooks/useServerConfig", () => ({
+  useServerConfig: () => null,
+}));
+
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
 

@@ -308,7 +308,6 @@ test.describe("WebSocket reconnect", () => {
 
       const sidebar = page.getByRole("complementary", { name: "公共聊天" });
       await expect(sidebar.getByRole("button", { name: /公共聊天|Public Chat/ })).toBeVisible({ timeout: 10000 });
-      await expect(sidebar.getByRole("button", { name: /PicoClaw/ })).toBeVisible({ timeout: 10000 });
       await expect(sidebar.getByText(/在线用户|Online Users|好友|Friends|群组|Groups|私信|Direct Messages|DM/)).toHaveCount(0);
     });
   });

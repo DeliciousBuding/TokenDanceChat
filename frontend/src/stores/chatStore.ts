@@ -141,7 +141,7 @@ interface ChatState {
   clearOidcAuth: () => void;
   addMessage: (message: ChatMessage) => void;
   deleteMessage: (id: string) => void;
-  addSystemMessage: (content: string, timestamp: number) => void;
+  addSystemMessage: (content: string, timestamp: number, dedupeKey?: string) => void;
   setHistory: (messages: ChatMessage[]) => void;
   prependHistory: (messages: ChatMessage[]) => void;
   setOnlineUsers: (users: string[]) => void;
@@ -262,13 +262,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       messages: state.messages.filter((m) => m.id !== id),
     })),
-  addSystemMessage: (content, timestamp) =>
+  addSystemMessage: (content, timestamp, dedupeKey) =>
     set((state) => {
+      // Coalescing rules for system lines (reconnect loops, repeated joins):
+      // - Same dedupeKey as the last line → update that line in place.
+      // - Identical consecutive system text → just bump its timestamp.
+      const last = state.messages[state.messages.length - 1];
+      if (last && last.username === "system") {
+        if (dedupeKey && last.dedupeKey === dedupeKey) {
+          const msgs = state.messages.slice(0, -1);
+          msgs.push({ ...last, content, timestamp });
+          return { messages: msgs, messageWindowRevision: state.messageWindowRevision + 1 };
+        }
+        if (last.content === content) {
+          const msgs = state.messages.slice(0, -1);
+          msgs.push({ ...last, timestamp });
+          return { messages: msgs, messageWindowRevision: state.messageWindowRevision + 1 };
+        }
+      }
       const systemMsg: ChatMessage = {
         id: `sys-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
         username: "system",
         content,
         timestamp,
+        dedupeKey,
       };
       const result = mergeMessageWindow(state.messages, [systemMsg], "append", MESSAGE_CAP);
       return { messages: result.messages, messageWindowRevision: result.revision };

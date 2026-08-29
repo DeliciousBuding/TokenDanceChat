@@ -246,10 +246,14 @@ export function useWebSocket() {
         if (online) {
           setOnlineUsers(online);
         }
-        addSystemMessage(
-          i18nSys("system.userJoined", { username }),
-          timestamp || Date.now(),
-        );
+        // Skip self-join announcements: they fire on every (re)connect and are
+        // pure noise for the local user.
+        if (username && username !== useChatStore.getState().username) {
+          addSystemMessage(
+            i18nSys("system.userJoined", { username }),
+            timestamp || Date.now(),
+          );
+        }
       }),
     );
 
@@ -260,10 +264,12 @@ export function useWebSocket() {
         if (online) {
           setOnlineUsers(online);
         }
-        addSystemMessage(
-          i18nSys("system.userLeft", { username }),
-          timestamp || Date.now(),
-        );
+        if (username && username !== useChatStore.getState().username) {
+          addSystemMessage(
+            i18nSys("system.userLeft", { username }),
+            timestamp || Date.now(),
+          );
+        }
       }),
     );
 
@@ -384,7 +390,8 @@ export function useWebSocket() {
       }),
     );
 
-    // Connection lost / reconnecting
+    // Connection lost / reconnecting — keyed so flap storms collapse into one
+    // line that flips between "reconnecting" and "reconnected" in place.
     unsubs.push(
       chatAPI.on("reconnecting", (msg: WSMessage) => {
         const { attempt } = msg as { type: string; attempt: number };
@@ -392,6 +399,7 @@ export function useWebSocket() {
         addSystemMessage(
           i18nSys("system.reconnecting", { attempt: String(attempt + 1) }),
           Date.now(),
+          "reconnect",
         );
       }),
     );
@@ -399,7 +407,7 @@ export function useWebSocket() {
     unsubs.push(
       chatAPI.on("reconnected", () => {
         useChatStore.getState().setConnected(true);
-        addSystemMessage(i18nSys("system.reconnected"), Date.now());
+        addSystemMessage(i18nSys("system.reconnected"), Date.now(), "reconnect");
       }),
     );
 

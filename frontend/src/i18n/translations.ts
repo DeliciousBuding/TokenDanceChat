@@ -27,6 +27,8 @@ export interface TranslationDict {
     inviteCode: string;
     registerButton: string;
     loginButton: string;
+    loginOrRegister: string;
+    guestUpgradeHint: string;
     haveAccount: string;
     noAccount: string;
     guestLogin: string;
@@ -70,6 +72,7 @@ export interface TranslationDict {
     aiAssistants: string;
     closeSidebar: string;
     connecting: string;
+    guestMode: string;
   };
   transcript: {
     loading: string;
@@ -89,15 +92,12 @@ export interface TranslationDict {
   };
   input: {
     placeholder: string;
+    assistantPlaceholder: string;
     replyTo: string;
     characters: string;
-    pastedImage: string;
-    sendImage: string;
     escapeToCancel: string;
     cancel: string;
     save: string;
-    fileTooLarge: string;
-    uploadFailed: string;
     editingMessage: string;
   };
   message: {
@@ -174,6 +174,7 @@ export interface TranslationDict {
     search: string;
     recent: string;
     noResults: string;
+    openPicker: string;
     smileys: string;
     gestures: string;
     hearts: string;
@@ -286,7 +287,7 @@ export interface TranslationDict {
 const zhCN: TranslationDict = {
   join: {
     title: "TokenDance Chat",
-    subtitle: "公共聊天室 · AI 助手 @TokenBot @PicoClaw 在线陪伴",
+    subtitle: "公共聊天室 · AI 助手 @TokenBot 在线陪伴",
     placeholder: "你的用户名...",
     buttonJoin: "加入聊天",
     buttonConnecting: "连接中...",
@@ -310,6 +311,8 @@ const zhCN: TranslationDict = {
     inviteCode: "邀请码",
     registerButton: "注册",
     loginButton: "登录",
+    loginOrRegister: "登录 / 注册",
+    guestUpgradeHint: "游客身份，登录后保留昵称与消息",
     haveAccount: "已有账号？去登录",
     noAccount: "还没有账号？去注册",
     guestLogin: "返回游客模式",
@@ -353,6 +356,7 @@ const zhCN: TranslationDict = {
     aiAssistants: "AI 助手",
     closeSidebar: "关闭侧边栏",
     connecting: "连接中...",
+    guestMode: "游客模式",
   },
   transcript: {
     loading: "加载消息中...",
@@ -372,15 +376,12 @@ const zhCN: TranslationDict = {
   },
   input: {
     placeholder: "输入消息... (Shift+Enter 换行)",
+    assistantPlaceholder: "发消息给 {{name}}...",
     replyTo: "回复",
     characters: "{{current}}/{{max}}",
-    pastedImage: "已粘贴图片",
-    sendImage: "发送图片",
     escapeToCancel: "按 Esc 取消",
     cancel: "取消",
     save: "保存",
-    fileTooLarge: "文件过大（最大 50MB）",
-    uploadFailed: "上传失败",
     editingMessage: "编辑消息",
   },
   message: {
@@ -457,6 +458,7 @@ const zhCN: TranslationDict = {
     search: "搜索表情...",
     recent: "最近使用",
     noResults: "未找到表情",
+    openPicker: "插入表情",
     smileys: "表情",
     gestures: "手势",
     hearts: "爱心",
@@ -571,7 +573,7 @@ const zhCN: TranslationDict = {
 const enUS: TranslationDict = {
   join: {
     title: "TokenDance Chat",
-    subtitle: "Public chat · AI assistants @TokenBot @PicoClaw at your service",
+    subtitle: "Public chat · AI assistant @TokenBot at your service",
     placeholder: "Your username...",
     buttonJoin: "Join Chat",
     buttonConnecting: "Connecting...",
@@ -596,6 +598,8 @@ const enUS: TranslationDict = {
     inviteCode: "Invite Code",
     registerButton: "Register",
     loginButton: "Login",
+    loginOrRegister: "Log in / Sign up",
+    guestUpgradeHint: "Guest mode — log in to keep your name and messages",
     haveAccount: "Already have an account? Log in",
     noAccount: "Don't have an account? Register",
     guestLogin: "Back to Guest Mode",
@@ -639,6 +643,7 @@ const enUS: TranslationDict = {
     aiAssistants: "AI Assistants",
     closeSidebar: "Close sidebar",
     connecting: "Connecting...",
+    guestMode: "Guest mode",
   },
   transcript: {
     loading: "Loading messages...",
@@ -658,15 +663,12 @@ const enUS: TranslationDict = {
   },
   input: {
     placeholder: "Type a message... (Shift+Enter for new line)",
+    assistantPlaceholder: "Message {{name}}...",
     replyTo: "Reply to",
     characters: "{{current}}/{{max}}",
-    pastedImage: "Pasted image",
-    sendImage: "Send image",
     escapeToCancel: "Escape to cancel",
     cancel: "Cancel",
     save: "Save",
-    fileTooLarge: "File too large (max 50MB)",
-    uploadFailed: "Upload failed",
     editingMessage: "Edit message",
   },
   message: {
@@ -743,6 +745,7 @@ const enUS: TranslationDict = {
     search: "Search emoji...",
     recent: "Recent",
     noResults: "No emojis found",
+    openPicker: "Insert emoji",
     smileys: "Smileys",
     gestures: "Gestures",
     hearts: "Hearts",

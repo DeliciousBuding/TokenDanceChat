@@ -58,6 +58,7 @@ vi.mock("@/lib/api", () => {
       deleteMessage: vi.fn(),
       exportChat: vi.fn().mockResolvedValue(new Blob(["[]"], { type: "application/json" })),
       fetchLinkPreview: vi.fn(),
+      fetchServerConfig: vi.fn().mockResolvedValue(null),
     },
     ChatError: class ChatError extends Error {
       code: string;
@@ -143,12 +144,11 @@ describe("ChatLayout lightweight chat contract", () => {
     });
   });
 
-  it("renders only public room plus TokenBot and PicoClaw entries", () => {
+  it("renders only public room plus TokenBot entry", () => {
     renderChatLayout();
 
     expect(screen.getAllByText("公共聊天").length).toBeGreaterThan(0);
     expect(screen.getByText("TokenBot")).toBeTruthy();
-    expect(screen.getByText("PicoClaw")).toBeTruthy();
 
     expect(screen.queryByText("好友")).toBeNull();
     expect(screen.queryByText("群组")).toBeNull();
@@ -173,26 +173,15 @@ describe("ChatLayout lightweight chat contract", () => {
     fireEvent.click(screen.getByText("TokenBot"));
 
     expect(screen.getAllByText("TokenBot").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("@TokenBot").length).toBeGreaterThan(0);
+    const contextChip = document.querySelector("[data-visual='composer-ai-context']");
+    expect(contextChip).toBeTruthy();
+    expect(contextChip?.textContent).toContain("TokenBot");
     expect(document.querySelector("[data-visual='ai-chat-workbench']")).toBeNull();
 
     typeAndSend("总结一下");
 
     expect(wsMocks.sendMessage).toHaveBeenCalledWith("@TokenBot 总结一下");
     expect(useChatStore.getState().currentChat).toEqual({ type: "public" });
-  });
-
-  it("selects PicoClaw context and prefixes outgoing messages", () => {
-    renderChatLayout();
-    fireEvent.click(screen.getByText("PicoClaw"));
-
-    expect(screen.getAllByText("PicoClaw").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("@PicoClaw").length).toBeGreaterThan(0);
-    expect(document.querySelector("[data-visual='ai-chat-workbench']")).toBeNull();
-
-    typeAndSend("执行任务");
-
-    expect(wsMocks.sendMessage).toHaveBeenCalledWith("@PicoClaw 执行任务");
   });
 
   it("keeps plain public sends unprefixed", () => {

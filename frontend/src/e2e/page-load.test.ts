@@ -22,7 +22,6 @@ test.describe("页面加载", () => {
     await expect(page.getByRole("heading", { name: "公共聊天" }).first()).toBeVisible();
     await expect(page.getByText("TokenDanceChat").first()).toBeVisible();
     await expect(page.getByText("TokenBot").first()).toBeVisible();
-    await expect(page.getByText("PicoClaw").first()).toBeVisible();
     await waitForLightChatReady(page);
 
     await expect(page.getByText(/好友|Friends/)).toHaveCount(0);
@@ -41,7 +40,6 @@ test.describe("页面加载", () => {
 
     await expect(page.getByRole("button", { name: /Public Chat/ }).first()).toBeVisible();
     await expect(page.getByText("TokenBot").first()).toBeVisible();
-    await expect(page.getByText("PicoClaw").first()).toBeVisible();
     await waitForLightChatReady(page);
     await expect(page.getByRole("button", { name: /Join Chat|Join as Guest/ })).toHaveCount(0);
   });
@@ -72,7 +70,7 @@ test.describe("自动 guest 聊天（需要后端）", () => {
     await page.locator("[data-visual='light-chat-sidebar']").getByRole("button", { name: /TokenBot/ }).click();
 
     await expect(page.locator("[data-visual='ai-chat-workbench']")).toHaveCount(0);
-    await expect(page.locator("[data-visual='composer-ai-context']")).toContainText("@TokenBot");
+    await expect(page.locator("[data-visual='composer-ai-context']")).toContainText("TokenBot");
     await expect(page.locator("[data-visual='composer-textarea']")).toBeEnabled();
   });
 });

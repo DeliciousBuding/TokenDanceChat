@@ -15,6 +15,7 @@
   --bg-6: #8e8e93;
   --bg-hover: #e8e8ed;
   --bg-active: #d8d8de;
+  --bg-elevated: #ffffff;
 
   /* Glass surfaces */
   --surface-glass: rgba(255, 255, 255, 0.72);
@@ -64,6 +65,7 @@
   --e-2: 0 4px 16px rgba(0, 0, 0, 0.07);
   --e-3: 0 12px 40px rgba(0, 0, 0, 0.11);
   --e-4: 0 24px 60px rgba(0, 0, 0, 0.16);
+  --shadow-color: #000000;
   --shadow-sm: var(--e-1);
   --shadow-md: var(--e-2);
   --shadow-lg: var(--e-3);
@@ -122,6 +124,7 @@
   --td-moss: var(--success);
   --td-danger: var(--danger);
   --td-warning: var(--warning);
+  --td-amber: var(--warning);
   --td-focus: var(--ring);
   --td-radius-control: var(--radius-control);
   --td-radius-panel: var(--radius-panel);
@@ -204,6 +207,7 @@
   --bg-6: #9a9aa4;
   --bg-hover: rgba(255, 255, 255, 0.055);
   --bg-active: rgba(255, 255, 255, 0.095);
+  --bg-elevated: #2e2e38;
 
   /* Glass surfaces — macOS panel feel */
   --surface-glass: rgba(36, 36, 45, 0.72);
@@ -803,7 +807,7 @@
   width: min(100%, 820px);
   min-height: 56px;
   margin: 0 auto;
-  padding: 8px 102px 8px 58px;
+  padding: 8px 64px 8px 8px;
   border: 1px solid var(--border-base);
   border-radius: var(--radius-panel);
   background: var(--surface);
@@ -829,23 +833,6 @@
   box-shadow: var(--shadow-hairline);
   backdrop-filter: blur(14px) saturate(150%);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
-}
-
-.td-chat-composer-body::before {
-  position: absolute;
-  top: 50%;
-  left: 16px;
-  display: flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  transform: translateY(-50%);
-  border-radius: 999px;
-  background: var(--primary-light);
-  color: var(--accent);
-  content: '+';
-  font: 400 20px/1 var(--td-font);
 }
 
 .td-chat-composer-body:focus-within {
@@ -969,7 +956,7 @@
 }
 
 .td-chat-drawer {
-  background: color-mix(in srgb, var(--chat-shell-bg) 74%, var(--chat-stream-card-bg));
+  background: color-mix(in srgb, var(--chat-shell-bg) 96%, var(--chat-stream-card-bg));
   border-left-color: var(--border-glass);
   box-shadow: -18px 0 42px color-mix(in srgb, var(--shadow-color) 10%, transparent), var(--shadow-hairline);
 }

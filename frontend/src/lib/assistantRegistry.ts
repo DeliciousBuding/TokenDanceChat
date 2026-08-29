@@ -1,4 +1,4 @@
-export type AssistantKind = "bot" | "agent";
+export type AssistantKind = "bot";
 export type AssistantStatus = "online" | "available" | "disabled";
 
 export interface AssistantModel {
@@ -6,9 +6,8 @@ export interface AssistantModel {
   name: string;
   provider: string;
   providerName: string;
-  protocol: "openai" | "anthropic" | "pico";
+  protocol: "openai" | "anthropic";
   icon: string;
-  context: string;
 }
 
 export interface AssistantDefinition {
@@ -19,67 +18,23 @@ export interface AssistantDefinition {
   kind: AssistantKind;
   aliases: string[];
   mention: string;
-  backendMention?: string;
   model: AssistantModel;
   status: AssistantStatus;
 }
 
-export const modelCatalog: AssistantModel[] = [
-  {
-    id: "deepseek-v4-flash",
-    name: "DeepSeek V4 Flash",
-    provider: "deepseek",
-    providerName: "DeepSeek",
-    protocol: "openai",
-    icon: "deepseek",
-    context: "1M",
-  },
-  {
-    id: "picoclaw-deepseek-v4-flash",
-    name: "PicoClaw + DeepSeek V4 Flash",
-    provider: "deepseek",
-    providerName: "DeepSeek",
-    protocol: "pico",
-    icon: "deepseek",
-    context: "1M",
-  },
-  {
-    id: "qwen3.6-plus",
-    name: "Qwen 3.6 Plus",
-    provider: "qwen",
-    providerName: "Qwen",
-    protocol: "openai",
-    icon: "qwen",
-    context: "1M",
-  },
-  {
-    id: "kimi-k2.6",
-    name: "Kimi K2.6",
-    provider: "kimi",
-    providerName: "Moonshot",
-    protocol: "openai",
-    icon: "kimi",
-    context: "262K",
-  },
-  {
-    id: "glm-5.1",
-    name: "GLM 5.1",
-    provider: "zhipu",
-    providerName: "Zhipu",
-    protocol: "openai",
-    icon: "zhipu",
-    context: "200K",
-  },
-  {
-    id: "minimax-m2.7",
-    name: "MiniMax M2.7",
-    provider: "minimax",
-    providerName: "MiniMax",
-    protocol: "openai",
-    icon: "minimax",
-    context: "204K",
-  },
-];
+/**
+ * Single-agent registry: TokenBot is the only assistant. The display model is a
+ * static fallback; the real model name comes from GET /api/config at runtime
+ * (backend CHAT_LLM_MODEL is the single source of truth).
+ */
+export const defaultModel: AssistantModel = {
+  id: "deepseek-v4-flash-vision-exp",
+  name: "DeepSeek V4 Flash Vision",
+  provider: "deepseek",
+  providerName: "DeepSeek",
+  protocol: "openai",
+  icon: "deepseek",
+};
 
 export const assistants: AssistantDefinition[] = [
   {
@@ -88,23 +43,14 @@ export const assistants: AssistantDefinition[] = [
     label: "Bot",
     description: "公共聊天 AI 助手，适合问答、总结和日常 AI 聊天。",
     kind: "bot",
-    aliases: ["bot", "tokenbot", "webuichat", "webuibot", "webui"],
+    aliases: ["bot", "tokenbot"],
     mention: "@TokenBot",
-    model: modelCatalog[0],
-    status: "online",
-  },
-  {
-    id: "picoclaw",
-    name: "PicoClaw",
-    label: "Agent",
-    description: "工作流 Agent，适合执行任务、工具调用和多步操作。",
-    kind: "agent",
-    aliases: ["claw", "picoclaw"],
-    mention: "@PicoClaw",
-    model: modelCatalog[1],
+    model: defaultModel,
     status: "online",
   },
 ];
+
+export const tokenBot = assistants[0];
 
 export const mentionableAssistants = assistants.map((assistant) => ({
   name: assistant.name,
@@ -112,18 +58,19 @@ export const mentionableAssistants = assistants.map((assistant) => ({
   aliases: assistant.aliases,
 }));
 
-const lobeIconNames: Record<string, string> = {
-  deepseek: "deepseek",
-  qwen: "qwen",
-  kimi: "kimi",
-  zhipu: "zhipu",
-  minimax: "minimax",
-  openai: "openai",
-  anthropic: "anthropic",
+/** Pretty names for known model IDs served by the gateway. */
+const modelDisplayNames: Record<string, string> = {
+  "deepseek-v4-flash": "DeepSeek V4 Flash",
+  "deepseek-v4-flash-vision-exp": "DeepSeek V4 Flash Vision",
+  "deepseek-v4-pro": "DeepSeek V4 Pro",
+  "glm-5.1": "GLM 5.1",
+  "glm-4-flash": "GLM 4 Flash",
+  "kimi-k2.6": "Kimi K2.6",
+  "minimax-m2.7": "MiniMax M2.7",
+  "qwen3.7-plus": "Qwen 3.7 Plus",
 };
 
-export function getLobeIconURL(icon: string, variant: "color" | "avatar" = "color"): string {
-  const name = lobeIconNames[icon] ?? icon.toLowerCase();
-  return `https://unpkg.com/@lobehub/icons-static-svg@latest/icons/${name}-${variant}.svg`;
+/** Human label for a backend model id; falls back to the raw id. */
+export function modelDisplayName(modelId: string): string {
+  return modelDisplayNames[modelId] ?? modelId;
 }
-

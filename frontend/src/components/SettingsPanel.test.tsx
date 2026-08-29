@@ -76,7 +76,13 @@ describe("SettingsPanel", () => {
     expect(screen.getByText("暂无静音的对话")).toBeTruthy();
   });
 
-  it("renders show preview section header", () => {
+  it("hides show preview section header when no preferences are set", () => {
+    render(<SettingsPanel onClose={onClose} />);
+    expect(screen.queryByText("消息预览")).toBeNull();
+  });
+
+  it("renders show preview section header when a preference is set", () => {
+    storeState.notificationPrefs = { public: { mutedUntil: 0, showPreview: true } };
     render(<SettingsPanel onClose={onClose} />);
     expect(screen.getByText("消息预览")).toBeTruthy();
   });

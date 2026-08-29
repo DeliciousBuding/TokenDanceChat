@@ -10,7 +10,6 @@ const mockModel: AssistantModel = {
   providerName: "DeepSeek",
   protocol: "openai",
   icon: "deepseek",
-  context: "1M",
 };
 
 const mockUnknownModel: AssistantModel = {
@@ -20,7 +19,6 @@ const mockUnknownModel: AssistantModel = {
   providerName: "Unknown",
   protocol: "openai",
   icon: "unknown_provider",
-  context: "1M",
 };
 
 const botWithoutIcon: AssistantDefinition = {
@@ -33,13 +31,6 @@ const botWithoutIcon: AssistantDefinition = {
   mention: "@TestBot",
   model: { ...mockModel, icon: "" },
   status: "online",
-};
-
-const agentWithoutIcon: AssistantDefinition = {
-  ...botWithoutIcon,
-  id: "testagent",
-  name: "TestAgent",
-  kind: "agent" as const,
 };
 
 describe("AssistantIcon", () => {
@@ -76,11 +67,6 @@ describe("AssistantIcon", () => {
       expect(document.querySelector("svg")).toBeTruthy(); // lucide icon
     });
 
-    it("agent 类型没有 icon 时显示 Workflow 图标作为 fallback", () => {
-      const { container } = render(<AssistantIcon assistant={agentWithoutIcon} size="md" />);
-      expect(container.querySelector("svg")).toBeTruthy();
-    });
-
     it("bot 类型没有 icon 时显示 Bot 图标作为 fallback", () => {
       const { container } = render(<AssistantIcon assistant={botWithoutIcon} size="md" />);
       expect(container.querySelector("svg")).toBeTruthy();
@@ -93,7 +79,7 @@ describe("AssistantIcon", () => {
 
     it("未知 provider 显示 lucide fallback 而非 SVG", () => {
       render(<AssistantIcon model={mockUnknownModel} size="md" />);
-      // Unknown provider: falls back to lucide Bot/Workflow icon
+      // Unknown provider: falls back to lucide Bot icon
       expect(document.querySelector("svg")).toBeTruthy();
     });
   });

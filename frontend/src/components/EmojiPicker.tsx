@@ -148,6 +148,7 @@ export const EmojiPicker = memo(function EmojiPicker({
 
   return (
     <div
+      data-visual="emoji-picker"
       className="fixed inset-0 z-[200] flex items-center justify-center"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); onClose(); } }}

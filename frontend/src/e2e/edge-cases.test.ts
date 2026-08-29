@@ -225,7 +225,6 @@ test.describe("Edge Cases", () => {
       await expect(sidebar.getByText(/Webhook|传入 Webhook/)).toHaveCount(0);
       await expect(sidebar.getByRole("button", { name: /公共聊天|Public Chat/ })).toBeVisible();
       await expect(sidebar.getByRole("button", { name: /TokenBot/ })).toBeVisible();
-      await expect(sidebar.getByRole("button", { name: /PicoClaw/ })).toBeVisible();
     });
 
     test("public room remains stable after another guest disconnects", async ({

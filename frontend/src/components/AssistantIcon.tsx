@@ -1,4 +1,4 @@
-import { Bot, Workflow } from "lucide-react";
+import { Bot } from "lucide-react";
 import { DeepSeek, Qwen, Kimi, Zhipu, Minimax, OpenAI, Anthropic } from "@lobehub/icons";
 import { cn } from "@/lib/utils";
 import { type AssistantDefinition, type AssistantModel } from "@/lib/assistantRegistry";
@@ -52,7 +52,6 @@ export function AssistantIcon({ assistant, model, size = "md", className }: Assi
     );
   }
 
-  const Icn = assistant?.kind === "agent" ? Workflow : Bot;
   return (
     <span
       className={cn(
@@ -61,7 +60,7 @@ export function AssistantIcon({ assistant, model, size = "md", className }: Assi
         className,
       )}
     >
-      <Icn className={innerSizeClass[size]} />
+      <Bot className={innerSizeClass[size]} />
     </span>
   );
 }

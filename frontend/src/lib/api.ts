@@ -38,6 +38,8 @@ export interface ChatMessage {
   poll?: PollData;
   thread_id?: string;
   mention_all?: boolean;
+  /** Client-only: coalescing key for local system messages (never sent to server). */
+  dedupeKey?: string;
 }
 
 export interface WSChatMessage extends WSMessage {
@@ -134,6 +136,14 @@ export interface LinkPreviewData {
   image: string;
   url: string;
   site_name?: string;
+}
+
+/** Public server configuration exposed by GET /api/config (no secrets). */
+export interface ServerConfig {
+  bot_name: string;
+  model: string;
+  llm_enabled: boolean;
+  oidc_enabled: boolean;
 }
 
 // Search types
@@ -558,6 +568,16 @@ class ChatAPI {
       const resp = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
       if (!resp.ok) return null;
       return await resp.json() as LinkPreviewData;
+    } catch {
+      return null;
+    }
+  }
+
+  async fetchServerConfig(): Promise<ServerConfig | null> {
+    try {
+      const resp = await fetch("/api/config", { redirect: "manual" });
+      if (!resp.ok) return null;
+      return await resp.json() as ServerConfig;
     } catch {
       return null;
     }

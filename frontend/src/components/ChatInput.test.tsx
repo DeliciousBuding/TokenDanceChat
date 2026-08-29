@@ -108,7 +108,7 @@ describe("ChatInput", () => {
     useChatStore.setState({
       username: "testuser",
       connected: true,
-      onlineUsers: ["testuser", "alice", "bob", "TokenBot", "PicoClaw"],
+      onlineUsers: ["testuser", "alice", "bob", "TokenBot"],
       currentChat: { type: "public" },
       replyTo: null,
     });
@@ -307,9 +307,8 @@ describe("ChatInput", () => {
       fireEvent.change(textarea, { target: { value: "@" } });
       Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
 
-      // TokenBot and PicoClaw from mentionableAssistants should be visible
+      // TokenBot from mentionableAssistants should be visible
       expect(screen.getByText("TokenBot")).toBeTruthy();
-      expect(screen.getByText("PicoClaw")).toBeTruthy();
     });
 
     it("@后输入部分关键字过滤 mention 列表", () => {
@@ -319,9 +318,8 @@ describe("ChatInput", () => {
       fireEvent.change(textarea, { target: { value: "@Tok" } });
       Object.defineProperty(textarea, "selectionStart", { value: 4, writable: true });
 
-      // Should show TokenBot but not PicoClaw
+      // Should show TokenBot
       expect(screen.getByText("TokenBot")).toBeTruthy();
-      expect(screen.queryByText("PicoClaw")).toBeNull();
     });
 
     it("点击 mention 项插入 @name", () => {
@@ -389,7 +387,6 @@ describe("ChatInput", () => {
       Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
 
       expect(screen.getByText("Bot")).toBeTruthy();
-      expect(screen.getByText("Agent")).toBeTruthy();
     });
   });
 
@@ -742,9 +739,8 @@ describe("ChatInput", () => {
       fireEvent.change(textarea, { target: { value: "@" } });
       Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
 
-      // TokenBot and PicoClaw (assistants) should appear
+      // TokenBot (assistant) should appear
       expect(screen.getByText("TokenBot")).toBeTruthy();
-      expect(screen.getByText("PicoClaw")).toBeTruthy();
       expect(screen.getByText("all")).toBeTruthy();
     });
   });

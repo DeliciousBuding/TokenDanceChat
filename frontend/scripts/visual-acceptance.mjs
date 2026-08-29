@@ -119,7 +119,7 @@ async function dismissAuthModal(page) {
 async function visibleSeedMessageCount(page) {
   return await page.evaluate(() =>
     Array.from(document.querySelectorAll("[id^='msg-'] .markdown-body")).filter((el) =>
-      /AgentHub v4 transcript|TokenBot 只保留统一命名|AI 工作区继续复用公共聊天室消息流|composer 对齐 AgentHub Desktop|PicoClaw 私聊入口|长消息渲染检查/.test(el.textContent || ""),
+      /AgentHub v4 transcript|TokenBot 只保留统一命名|AI 工作区继续复用公共聊天室消息流|composer 对齐 AgentHub Desktop|只保留 TokenBot 单助手入口|长消息渲染检查/.test(el.textContent || ""),
     ).length,
   );
 }
@@ -137,7 +137,7 @@ async function seedChat(browser) {
   await sendMessage(actorB.page, "TokenBot 只保留统一命名，历史别名只作为不可见兼容映射。");
   await sendMessage(actorA.page, "@TokenBot 视觉验收：AI 工作区继续复用公共聊天室消息流，不恢复独立私聊和复杂联系人。");
   await sendMessage(actorB.page, "@TokenBot composer 对齐 AgentHub Desktop：轻量输入、浅色气泡、低阴影和稳定高度。");
-  await sendMessage(actorA.page, "PicoClaw 私聊入口保留为轻量 AI 工作区，不恢复复杂联系人或通话入口。");
+  await sendMessage(actorA.page, "@TokenBot 视觉验收：公共聊天室只保留 TokenBot 单助手入口，不恢复复杂联系人或通话入口。");
   await sendMessage(
     actorB.page,
     "长消息渲染检查：这条消息用于确认桌面和移动端的气泡宽度、换行、metadata、hover 菜单和 composer 不会互相挤压，聊天流仍然保持紧凑可读。",

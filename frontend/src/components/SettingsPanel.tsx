@@ -153,43 +153,47 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           </div>
 
           {/* Unmuted conversations with preview toggle */}
-          <h3 className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-2 mt-5 px-1">
-            {t("settings.showPreview")}
-          </h3>
+          {entries.some((k) => !isMuted(k) && notificationPrefs[k]) && (
+            <>
+              <h3 className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-2 mt-5 px-1">
+                {t("settings.showPreview")}
+              </h3>
 
-          <div className="space-y-1">
-            {entries
-              .filter((k) => !isMuted(k))
-              .slice(0, 20)
-              .map((key) => {
-                const showPreview = getShowPreview(key);
-                const pref = notificationPrefs[key];
-                // Only show if user has explicitly set this pref
-                if (!pref) return null;
-                return (
-                  <div
-                    key={key}
-                    className="td-chat-list-row flex items-center gap-3 px-3 py-2 text-sm"
-                  >
-                    <Bell className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0" />
-                    <span className="flex-1 text-xs text-foreground truncate">
-                      {resolveName(key)}
-                    </span>
-                    <button
-                      onClick={() => handleTogglePreview(key)}
-                      className="td-chat-header-action flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground/50 hover:text-foreground transition-colors"
-                      title={showPreview ? t("settings.previewOn") : t("settings.previewOff")}
-                    >
-                      {showPreview ? (
-                        <Eye className="h-3.5 w-3.5" />
-                      ) : (
-                        <EyeOff className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-          </div>
+              <div className="space-y-1">
+                {entries
+                  .filter((k) => !isMuted(k))
+                  .slice(0, 20)
+                  .map((key) => {
+                    const showPreview = getShowPreview(key);
+                    const pref = notificationPrefs[key];
+                    // Only show if user has explicitly set this pref
+                    if (!pref) return null;
+                    return (
+                      <div
+                        key={key}
+                        className="td-chat-list-row flex items-center gap-3 px-3 py-2 text-sm"
+                      >
+                        <Bell className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0" />
+                        <span className="flex-1 text-xs text-foreground truncate">
+                          {resolveName(key)}
+                        </span>
+                        <button
+                          onClick={() => handleTogglePreview(key)}
+                          className="td-chat-header-action flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground/50 hover:text-foreground transition-colors"
+                          title={showPreview ? t("settings.previewOn") : t("settings.previewOff")}
+                        >
+                          {showPreview ? (
+                            <Eye className="h-3.5 w-3.5" />
+                          ) : (
+                            <EyeOff className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -1,7 +1,8 @@
-import { Bot, DoorOpen, Hash, LogOut, Settings, X } from "lucide-react";
+import { Bot, DoorOpen, Hash, LogIn, LogOut, Settings, X } from "lucide-react";
 import { AssistantIcon } from "@/components/AssistantIcon";
+import { useServerConfig } from "@/hooks/useServerConfig";
 import { useTranslation } from "@/i18n/context";
-import { assistants } from "@/lib/assistantRegistry";
+import { assistants, modelDisplayName } from "@/lib/assistantRegistry";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chatStore";
 
@@ -25,11 +26,13 @@ export function LightChatSidebar({
   onDisconnect,
 }: LightChatSidebarProps) {
   const { t } = useTranslation();
-  const { connected, username, isGuest } = useChatStore();
+  const { connected, username, isGuest, setShowAuthModal } = useChatStore();
+  const serverConfig = useServerConfig();
+  const modelLabel = modelDisplayName(serverConfig?.model || assistants[0].model.id);
   const displayName = username || t("join.buttonJoin");
   const statusText = connected
     ? isGuest
-      ? t("join.buttonGuest")
+      ? t("sidebar.guestMode")
       : t("sidebar.online")
     : t("sidebar.connecting");
 
@@ -66,7 +69,7 @@ export function LightChatSidebar({
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-4 scrollbar-thin">
         <section aria-label={t("sidebar.publicChat")}>
-          <SectionLabel>{t("sidebar.publicChat")}</SectionLabel>
+          <SectionLabel icon={<Hash className="h-3 w-3" />}>{t("sidebar.publicChat")}</SectionLabel>
           <SpaceButton
             active={activeSpace === "public"}
             icon={<Hash className="h-4 w-4" />}
@@ -77,7 +80,7 @@ export function LightChatSidebar({
         </section>
 
         <section aria-label={t("sidebar.aiAssistants")}>
-          <SectionLabel>{t("sidebar.aiAssistants")}</SectionLabel>
+          <SectionLabel icon={<Bot className="h-3 w-3" />}>{t("sidebar.aiAssistants")}</SectionLabel>
           <div className="space-y-1.5">
             {assistants.map((assistant) => (
               <SpaceButton
@@ -85,7 +88,7 @@ export function LightChatSidebar({
                 active={activeSpace === assistant.id || (activeSpace !== "public" && activeAssistantId === assistant.id)}
                 icon={<AssistantIcon assistant={assistant} size="sm" />}
                 title={assistant.name}
-                subtitle={`${assistant.label} · ${assistant.model.name}`}
+                subtitle={`${assistant.label} · ${modelLabel}`}
                 onClick={() => onSelectSpace(assistant.id)}
               />
             ))}
@@ -110,6 +113,17 @@ export function LightChatSidebar({
             </p>
           </div>
         </div>
+        {isGuest && (
+          <button
+            type="button"
+            onClick={() => setShowAuthModal(true)}
+            className="mb-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent)]/10 px-3 text-[12px] font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/18"
+            title={t("auth.guestUpgradeHint")}
+          >
+            <LogIn className="h-4 w-4" />
+            {t("auth.loginOrRegister")}
+          </button>
+        )}
         <div className="grid grid-cols-2 gap-1.5">
           <button
             type="button"
@@ -133,10 +147,10 @@ export function LightChatSidebar({
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="mb-1.5 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-normal text-[var(--text-tertiary)]">
-      <Bot className="h-3 w-3" />
+      {icon}
       {children}
     </div>
   );

@@ -1,18 +1,21 @@
 import { useState, useRef, useCallback, useEffect, useMemo, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from "react";
-import { Loader2, X, ArrowUp } from "lucide-react";
+import { Loader2, Smile, X, ArrowUp } from "lucide-react";
 import { cn, hashString } from "@/lib/utils";
 import { useTranslation } from "@/i18n/context";
 import { useChatStore } from "@/stores/chatStore";
 import { chatAPI, type TypingContext } from "@/lib/api";
-import { mentionableAssistants, type AssistantDefinition, type AssistantModel } from "@/lib/assistantRegistry";
+import { mentionableAssistants, type AssistantDefinition } from "@/lib/assistantRegistry";
 import { AssistantIcon } from "./AssistantIcon";
+import { lazy, Suspense } from "react";
+
+const EmojiPicker = lazy(() => import("@/components/EmojiPicker").then((m) => ({ default: m.EmojiPicker })));
 
 interface ChatInputProps {
   onSend: (content: string) => void;
   disabled?: boolean;
   assistantContext?: {
     assistant: AssistantDefinition;
-    model: AssistantModel;
+    modelLabel: string;
   } | null;
 }
 
@@ -73,6 +76,16 @@ export function ChatInput({
   const [mentionActive, setMentionActive] = useState(false);
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionRef = useRef<HTMLDivElement>(null);
+
+  // Emoji picker state
+  const [emojiOpen, setEmojiOpen] = useState(false);
+
+  // Close the picker on the global close signal (Escape from ChatLayout).
+  useEffect(() => {
+    const handler = () => setEmojiOpen(false);
+    window.addEventListener("tdchat:close-emoji-picker", handler);
+    return () => window.removeEventListener("tdchat:close-emoji-picker", handler);
+  }, []);
 
   // Compute the current @mention query from cursor position.
   const mentionQuery = useMemo(() => {
@@ -139,6 +152,24 @@ export function ChatInput({
   useEffect(() => {
     adjustHeight();
   }, [content, adjustHeight]);
+
+  // Insert an emoji (or :custom_emoji: code) at the cursor position.
+  const insertEmoji = useCallback(
+    (emoji: string) => {
+      const textarea = textareaRef.current;
+      const start = textarea ? textarea.selectionStart : content.length;
+      const end = textarea ? textarea.selectionEnd : content.length;
+      const next = content.slice(0, start) + emoji + content.slice(end);
+      setContent(next);
+      const pos = start + emoji.length;
+      requestAnimationFrame(() => {
+        textarea?.focus();
+        textarea?.setSelectionRange(pos, pos);
+        adjustHeight();
+      });
+    },
+    [content, adjustHeight],
+  );
 
   // Compute typing context from current chat
   const typingContext = useMemo((): TypingContext => {
@@ -383,10 +414,11 @@ export function ChatInput({
 
   const hasContent = content.trim().length > 0;
 
-  // Determine placeholder based on chat context.
+  // Determine placeholder based on chat context. Keep it short so it never
+  // wraps on narrow mobile viewports.
   const placeholder = useMemo(() => {
     if (assistantContext) {
-      return `${assistantContext.assistant.mention} ${assistantContext.model.name}`;
+      return t("input.assistantPlaceholder", { name: assistantContext.assistant.name });
     }
     return t("input.placeholder");
   }, [assistantContext, t]);
@@ -450,17 +482,38 @@ export function ChatInput({
               <span className="min-w-0 truncate text-[11px] font-semibold text-[var(--text-primary)]">
                 {assistantContext.assistant.name}
               </span>
-              <span className="hidden min-w-0 truncate text-[10px] text-[var(--text-tertiary)] sm:inline">
-                {assistantContext.model.context}
-              </span>
-              <span className="rounded-[var(--radius-control)] border border-[var(--accent)]/20 px-2 py-0.5 text-[10px] font-medium text-[var(--accent)]">
-                {assistantContext.assistant.mention}
+              <span className="min-w-0 truncate text-[10px] text-[var(--text-tertiary)]">
+                {assistantContext.modelLabel}
               </span>
             </div>
           )}
 
+          {/* ── Emoji button ── */}
+          <button
+            type="button"
+            onClick={() => setEmojiOpen((open) => !open)}
+            aria-label={t("emoji.openPicker")}
+            aria-expanded={emojiOpen}
+            data-visual="composer-emoji-button"
+            className={cn(
+              "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors",
+              emojiOpen
+                ? "bg-[var(--accent)]/12 text-[var(--accent)]"
+                : "text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]",
+            )}
+          >
+            <Smile className="h-5 w-5" />
+          </button>
+
           {/* ── Textarea ── */}
           <div className="relative">
+            {/* Emoji picker (self-renders as centered modal) */}
+            {emojiOpen && (
+              <Suspense fallback={null}>
+                <EmojiPicker onSelect={insertEmoji} onClose={() => setEmojiOpen(false)} />
+              </Suspense>
+            )}
+
             {/* @mention autocomplete dropdown */}
             {mentionActive && (
               <div
@@ -513,9 +566,8 @@ export function ChatInput({
               placeholder={placeholder}
               rows={1}
               maxLength={2000}
-              disabled={disabled}
               aria-label={placeholder}
-              className="td-chat-composer-field block w-full resize-none overflow-y-hidden bg-transparent border-none shadow-none outline-none text-[15px] leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] disabled:opacity-50"
+              className="td-chat-composer-field block w-full resize-none overflow-y-hidden bg-transparent border-none shadow-none outline-none text-[15px] leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)]"
               style={{ scrollbarWidth: "thin", height: INPUT_MIN_HEIGHT, minHeight: INPUT_MIN_HEIGHT, maxHeight: INPUT_MAX_HEIGHT }}
             />
           </div>

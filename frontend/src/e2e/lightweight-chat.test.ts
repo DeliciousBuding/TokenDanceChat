@@ -7,7 +7,6 @@ test.describe("lightweight chat surface", () => {
     await expect(page.getByText("TokenDanceChat")).toBeVisible();
     await expect(page.getByRole("button", { name: /Public Chat|公共聊天/ }).first()).toBeVisible();
     await expect(page.getByText("TokenBot").first()).toBeVisible();
-    await expect(page.getByText("PicoClaw").first()).toBeVisible();
 
     const text = `codex guest send ${Date.now()}`;
     const composer = page.getByRole("textbox");
@@ -39,21 +38,13 @@ test.describe("lightweight chat surface", () => {
     await expect(page.locator("[data-visual='assistant-switch']")).toHaveCount(0);
     const composerContext = page.locator("[data-visual='composer-ai-context']");
     await expect(composerContext).toBeVisible();
-    await expect(composerContext.getByText("@TokenBot")).toBeVisible();
+    await expect(composerContext.getByText("TokenBot")).toBeVisible();
     await expect(page.getByText(/Knowledge|Tools|Prompts/)).toHaveCount(0);
     const tokenBotText = `tokenbot route ${Date.now()}`;
     await composer.fill(tokenBotText);
     await page.locator("[data-visual='composer-send']").click();
     await expect(page.getByText(tokenBotText).first()).toBeVisible({ timeout: 15000 });
     await expect(page.getByText(/@TokenBot/).last()).toBeVisible({ timeout: 15000 });
-
-    await sidebar.getByRole("button", { name: /PicoClaw/ }).click();
-    await expect(composerContext.getByText("@PicoClaw")).toBeVisible();
-    const picoClawText = `picoclaw route ${Date.now()}`;
-    await composer.fill(picoClawText);
-    await page.locator("[data-visual='composer-send']").click();
-    await expect(page.getByText(picoClawText).first()).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText(/@PicoClaw/).last()).toBeVisible({ timeout: 15000 });
   });
 
   test("mobile sidebar and composer stay compact", async ({ page }) => {
@@ -63,11 +54,10 @@ test.describe("lightweight chat surface", () => {
     await page.getByLabel(/Open sidebar|打开侧边栏/).click();
     await expect(page.locator("[data-visual='light-chat-sidebar']")).toBeVisible();
     await expect(page.getByText("TokenBot").first()).toBeVisible();
-    await expect(page.getByText("PicoClaw").first()).toBeVisible();
 
     await page.locator("[data-visual='light-chat-sidebar']").getByRole("button", { name: /TokenBot/ }).click();
     await expect(page.locator("[data-visual='ai-chat-workbench']")).toHaveCount(0);
-    await expect(page.locator("[data-visual='composer-ai-context']")).toContainText("@TokenBot");
+    await expect(page.locator("[data-visual='composer-ai-context']")).toContainText("TokenBot");
     await expect(page.locator("[data-visual='composer-card']")).toBeVisible();
     await expect(page.getByRole("button", { name: /录制语音|Record voice/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /定时发送消息|Schedule Message/ })).toHaveCount(0);

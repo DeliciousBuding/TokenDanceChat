@@ -23,25 +23,25 @@ import { SearchBar } from "./SearchBar";
 import { SettingsPanel } from "./SettingsPanel";
 import { ThemeToggle, applyTheme, cycleOrder, getStoredTheme, STORAGE_KEY as THEME_STORAGE_KEY } from "./ThemeToggle";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useServerConfig } from "@/hooks/useServerConfig";
 import { useTranslation } from "@/i18n/context";
 import type { Language } from "@/i18n/translations";
 import { chatAPI } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
-import { assistants, modelCatalog } from "@/lib/assistantRegistry";
+import { assistants, modelDisplayName, tokenBot } from "@/lib/assistantRegistry";
 import { cn } from "@/lib/utils";
 import { useChatStore, type LegacyChatInput } from "@/stores/chatStore";
 
 const ImageLightbox = lazy(() => import("@/components/ImageLightbox").then((m) => ({ default: m.ImageLightbox })));
 const ThreadPanel = lazy(() => import("@/components/ThreadPanel").then((m) => ({ default: m.ThreadPanel })));
 
-const defaultAssistant = assistants[0];
+const defaultAssistant = tokenBot;
 
 export function ChatLayout() {
   const { t, lang, setLang } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeSpace, setActiveSpace] = useState<ChatSpace>("public");
   const [assistantId, setAssistantId] = useState(defaultAssistant.id);
-  const [modelId, setModelId] = useState(defaultAssistant.model.id);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [threadParent, setThreadParent] = useState<ChatMessage | null>(null);
   const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
@@ -79,11 +79,11 @@ export function ChatLayout() {
     () => assistants.find((assistant) => assistant.id === assistantId) ?? defaultAssistant,
     [assistantId],
   );
-  const activeModel = useMemo(
-    () => modelCatalog.find((model) => model.id === modelId) ?? activeAssistant.model,
-    [activeAssistant.model, modelId],
-  );
   const assistantMode = activeSpace !== "public";
+
+  // Real model name comes from the backend (CHAT_LLM_MODEL) via /api/config;
+  // fall back to the static registry display name when unavailable.
+  const serverConfig = useServerConfig();
 
   useEffect(() => {
     if (currentChat.type !== "public") {
@@ -153,6 +153,7 @@ export function ChatLayout() {
           event.preventDefault();
           setReplyTo(null);
         }
+        setSettingsOpen(false);
         setThreadParent(null);
         setThreadMessages([]);
         window.dispatchEvent(new CustomEvent("tdchat:exit-select-mode"));
@@ -223,8 +224,6 @@ export function ChatLayout() {
       setCurrentChat({ type: "public" });
       if (space !== "public") {
         setAssistantId(space);
-        const nextAssistant = assistants.find((assistant) => assistant.id === space);
-        if (nextAssistant) setModelId(nextAssistant.model.id);
       }
       setSidebarOpen(false);
     },
@@ -298,8 +297,9 @@ export function ChatLayout() {
   }, [setReplyTo]);
 
   const headerTitle = assistantMode ? activeAssistant.name : t("chat.roomName");
+  const modelLabel = modelDisplayName(serverConfig?.model || activeAssistant.model.id);
   const headerSubtitle = assistantMode
-    ? `${activeAssistant.label} · ${activeModel.name} · ${activeModel.context}`
+    ? `${activeAssistant.label} · ${modelLabel}`
     : t("chat.subtitle");
 
   const reconnectLabel = reconnectFailed
@@ -608,7 +608,7 @@ export function ChatLayout() {
             <ChatInput
               onSend={sendHandler}
               disabled={unauthenticated || !connected}
-              assistantContext={assistantMode ? { assistant: activeAssistant, model: activeModel } : null}
+              assistantContext={assistantMode ? { assistant: activeAssistant, modelLabel } : null}
             />
           </ErrorBoundary>
         </div>
