@@ -20,6 +20,7 @@ data/
 .env.local
 .env.*
 !.env.example
+!.env.local.example
 *.local
 
 # Local handoff / private operations notes
