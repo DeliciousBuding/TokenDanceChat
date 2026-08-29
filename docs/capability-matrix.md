@@ -1,6 +1,6 @@
 # 能力矩阵 Capability Matrix
 
-> **本矩阵是仓库唯一的能力事实来源。** 每行描述当前可调用运行面（UI/HTTP/WS/数据写入），而非目标状态。最后更新：2026-08-03。
+> **本矩阵是仓库唯一的能力事实来源。** 每行描述当前可调用运行面（UI/HTTP/WS/数据写入），而非目标状态。最后更新：2026-08-30。
 
 ## 状态定义
 
@@ -22,7 +22,7 @@
 | 消息编辑/删除 | Core | 有（消息气泡编辑/删除菜单） | 无 | 有（message_edit、message_delete） | 有 | 有 | 是 |
 | 引用回复/线程 | Core | 有（回复预览、ThreadPanel） | 无 | 有（thread_messages） | 有 | 有 | 是 |
 | 消息搜索 | Core | 有（搜索栏入口） | 有（/api/search） | 无 | 无 | 有 | 是 |
-| Agent mention（@TokenBot / @PicoClaw） | Core | 有（侧栏入口 + 输入框 mention） | 有（LLM 代理走后端） | 有（流式回复持久化） | 有 | 有 | 是 |
+| Agent mention（@TokenBot） | Core | 有（侧栏入口 + 输入框 mention） | 有（LLM 代理走后端） | 有（流式回复持久化） | 有 | 有 | 是 |
 | OIDC 登录（TokenDance ID） | Core | 有（OIDC 登录按钮） | 有（/api/oidc/*，按 CHAT_OIDC_ENABLED 注册） | 有（join 携带 OIDC access token） | 有 | — | 是（受开关控制） |
 | 游客身份 | Experiment | 有（未登录自动 guest 加入） | 无 | 有（join 不带 token） | 有 | 有 | 是 |
 | 本地注册/登录 | Experiment | 有（AuthModal 注册/登录） | 有（/api/register、/api/login） | 有（join 携带 session_token） | 有 | 有 | 是 |
@@ -40,6 +40,7 @@
 
 ## 说明
 
+- **2026-08-30：收敛为 TokenBot 单 agent**：旧第二 Agent 工作区入口移除，`@TokenBot` 为唯一 assistant；`GET /api/config` 暴露 bot 名、模型与 LLM 启用状态，前端不再有假模型选择器。
 - **普通文件上传已退休**：前端入口已删；后端路由已删除（2026-08-03），请求返回 404；历史上传文件不再可访问。
 - **自定义 Emoji 当前为活动状态**：EmojiPicker 展示 customEmojis、保留上传/删除入口、调用 `/api/emoji/upload`。后续需裁决：保留加固（Core）或退休（Archived）。
 - **Webhook 仍是有效风险**：`/api/webhook/` 路由与写入路径仍存在，不能因 UI 隐藏视为关闭。相关安全 Issue（#15/#16）在写入路径删除前不得关闭。

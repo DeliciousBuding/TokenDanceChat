@@ -26,7 +26,7 @@
 - **WebSocket Origin 验证加强**: `ws.go` 的 `CheckOrigin` 现在验证同源请求，并通过 `CHAT_ALLOWED_ORIGINS` 配置额外允许的完整 origin。
 - **CSP 头双重覆盖**: 前端 `index.html` 的 `<meta http-equiv="Content-Security-Policy">` 标签 + 后端 `SecurityHeadersMiddleware` 双保险。经浏览器 DevTools 和生产构建验证，CSP 头正确传递。
 - **PDF iframe sandbox 加固**: `FileMessage.tsx` 中 PDF 预览 iframe 的 sandbox 属性从 `"allow-scripts allow-same-origin"` 收紧为 `"allow-scripts"`，防止 sandbox 逃逸。
-- **PicoClaw 超时保护**: LLM 调用路径新增 60s `context.WithTimeout`，防止 goroutine 泄漏。
+- **Bot 超时保护**: LLM 调用路径新增 60s `context.WithTimeout`，防止 goroutine 泄漏。
 - **Session kick-off 机制**: 同名用户重新登录时，旧连接发送 "kicked" 消息并关闭，新连接接入。消除 "username already taken" 竞态，防止会话劫持。
 - **WS rate limit 调整**: `wsMaxPerWindow` 从 5 提升至 50（每 10 秒），支持并行 E2E 测试 worker 同时接入并防御重连风暴。
 - **WebSocket 重连加固**: `api.ts` 中重连逻辑在创建新连接前显式调用 `ws.close()` 并清空旧 handler 集合（`handlers.clear()` 移除），防止重连后事件处理器重复触发和旧连接资源泄漏。
@@ -275,4 +275,4 @@
 | 密码哈希强度不足 | 已修复 -- bcrypt cost 12 | 已修复 |
 | Auth 无 rate limit | 已修复 -- 5次/分钟/IP | 已修复 |
 | PDF sandbox 不安全 | 已修复 | 已修复 |
-| PicoClaw 无超时 | 已修复 -- 60s context timeout | 已修复 |
+| Bot/LLM 调用无超时 | 已修复 -- 60s context timeout | 已修复 |

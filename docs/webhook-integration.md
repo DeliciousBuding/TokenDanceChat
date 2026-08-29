@@ -208,7 +208,7 @@ go test ./handler -run "TestWebhookHandler(VerifiesHashedSecret|RejectsQuerySecr
 
 当前前端轻量主合同不暴露群组或 webhook 管理面板，因此不再维护
 `GroupInfoPanel` / `webhook-ingress` 浏览器测试。前端回归以公共房间、
-TokenBot、PicoClaw、消息渲染和 composer 为准；webhook 只保留后端安全
+TokenBot、消息渲染和 composer 为准；webhook 只保留后端安全
 兼容测试。
 
 更广泛的门禁：

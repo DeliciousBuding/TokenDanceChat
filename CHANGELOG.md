@@ -2,6 +2,20 @@
 
 > **累计**: 25+ commits, 35+ features/fixes, 5 skills (verify, pm-audit, deploy, cross-review, i18n-scan)
 
+## Unreleased (2026-08-30)
+
+### Removed
+- PicoClaw：移除旧第二 Agent 工作区，收敛为 TokenBot 单 agent。
+
+### Added
+- `GET /api/config`（无鉴权）：返回 `{"bot_name","model","llm_enabled","oidc_enabled"}`，前端据此展示真实模型名。
+- 后端启动自动加载 `.env.local` 再 `.env`（OS 环境变量优先，文件只补缺）；`docker-compose.yml` 补传 `CHAT_LLM_PROVIDER`/`CHAT_LLM_BASE_URL`/`CHAT_LLM_MODEL`/`CHAT_LLM_API_KEY`/`CHAT_BOT_NAME`。
+
+### Fixed
+- 设置抽屉背景过透明导致的明暗主题显示问题。
+- 移动端 composer placeholder 换行撑高。
+- composer 左侧假「+」按钮（CSS 伪元素，无功能）已删除。
+
 ## v0.2.11 (2026-05-24)
 
 - 测试扩展至 747 tests / 49 files, coverage 51.86% lines。

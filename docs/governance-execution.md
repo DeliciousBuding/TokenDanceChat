@@ -2,7 +2,7 @@
 
 最后更新：2026-06-09
 
-This file maps TokenDance system governance into TokenDanceChat execution items. TokenDanceChat is the AgentHub lightweight realtime/IM proving ground, not a separate long-term identity or platform product. The current frontend contract is public room + TokenBot + PicoClaw; historical rich IM code remains backend compatibility unless explicitly re-scoped.
+This file maps TokenDance system governance into TokenDanceChat execution items. TokenDanceChat is the AgentHub lightweight realtime/IM proving ground, not a separate long-term identity or platform product. The current frontend contract is public room + a single TokenBot assistant; historical rich IM code remains backend compatibility unless explicitly re-scoped.
 
 ## Root Inputs
 

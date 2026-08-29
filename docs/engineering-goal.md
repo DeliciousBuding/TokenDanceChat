@@ -4,7 +4,7 @@
 
 ## 当前目标
 
-将 TokenDanceChat 推进为 AgentHub 的轻量 Hub/IM 验证面，同时保持其作为 Demo 可生产运行。当前前端产品合同只包含公共聊天室、TokenBot 和 PicoClaw；早期 rich IM 能力仅作为历史压力测试与后端兼容存在。
+将 TokenDanceChat 推进为 AgentHub 的轻量 Hub/IM 验证面，同时保持其作为 Demo 可生产运行。当前前端产品合同只包含公共聊天室与 TokenBot 单 agent；早期 rich IM 能力仅作为历史压力测试与后端兼容存在。
 
 这意味着：
 
@@ -20,7 +20,7 @@
    TokenDanceChat 验证 AgentHub 的 IM Collaboration 与 Hub Network 层。它不应演化为独立产品架构。
 
 2. **可玩 Demo 次之**
-   应用应保持公共房间、TokenBot 和 PicoClaw 的核心体验稳定。DM、群组、通话、GIF、转发、定时发送、webhook 管理等旧能力已经完成压力测试，不再进入当前前端主合同。
+   应用应保持公共房间与 TokenBot 单 agent 的核心体验稳定。DM、群组、通话、GIF、转发、定时发送、webhook 管理等旧能力已经完成压力测试，不再进入当前前端主合同。
 
 3. **类型化 realtime 协议**
    新增 realtime 功能应通过显式 WebSocket 消息类型、类型化前端 API helper 以及 store 方法流转。避免隐藏的 ad hoc 事件数据。
@@ -44,7 +44,7 @@
 | P0 | 架构/文档对齐 | 使未来 AgentHub 迁移工作有据可依，防止 TokenDanceChat 偏离为无关聊天产品。 |
 | P0 | 协议与 store 加固 | WebSocket 与 SQLite 契约是 AgentHub 可复用的主要证据。 |
 | P0 | 验证基线 | 一个无法测试或稳定构建的 Demo 对 AgentHub 而言是弱证据。 |
-| P1 | Agent 入口体验 | 通过 TokenBot/PicoClaw 的 mention 和 assistant workbench 验证 AgentHub 的 IM Collaboration 前提。 |
+| P1 | Agent 入口体验 | 通过 TokenBot 单 agent 的 mention 和 assistant workbench 验证 AgentHub 的 IM Collaboration 前提。 |
 | P1 | 历史 rich IM 兼容 | 旧群组、webhook、通话、角色及通知只作为后端兼容、安全回归或迁移证据维护。 |
 | P1 | 前端状态与组件清理 | 大文件 UI 对 spike 可接受，但已验证的模式应更易于迁移至 AgentHub。 |
 | P2 | Demo 打磨 | 使 Demo 更可信时有用；不验证平台假设时次要。 |
@@ -52,7 +52,7 @@
 ## 当前高价值后续步骤
 
 1. 持续让消息渲染、聊天区和输入框对齐 AgentHub Desktop/Web v4 的 transcript/composer 设计系统。
-2. 保持公共房间、TokenBot、PicoClaw 的发送、刷新持久化、移动端布局和无旧入口 E2E 覆盖。
+2. 保持公共房间与 TokenBot 单 agent 的发送、刷新持久化、移动端布局和无旧入口 E2E 覆盖。
 3. 将 `MessageBubble.tsx` 与 `ChatInput.tsx` 的剩余历史逻辑按测试保护逐步拆小，但不恢复旧 rich IM UI。
 4. 每当某功能验证了可复用原语——尤其是 WebSocket 事件、store 接口与 Agent UX——即添加 AgentHub 映射说明。
 5. 每个里程碑后保持 `AGENTS.md`、README、ROADMAP 与 `docs/agenthub-validation.md` 同步。

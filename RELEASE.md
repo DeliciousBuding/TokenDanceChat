@@ -25,5 +25,5 @@ GitHub Actions publishes `ghcr.io/tokendancelab/tokendance-chat` with `latest`, 
 
 - [ ] `/api/health` 返回 `{"status":"ok"}`
 - [ ] WebSocket 连接 + 消息收发正常
-- [ ] `@TokenBot` 和 `@PicoClaw` 正常回复
+- [ ] `@TokenBot` 正常回复
 - [ ] 前端页面无 JS 错误（打开浏览器控制台检查）

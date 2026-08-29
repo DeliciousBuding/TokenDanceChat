@@ -17,9 +17,9 @@
 
 ## Public Packaging
 
-TokenDanceChat is packaged as both a playable chat demo and the AgentHub IM proving ground. The current public product contract is intentionally narrow: one public room plus TokenBot and PicoClaw assistant workspaces. Public entry files live in `frontend/public/robots.txt`, `frontend/public/sitemap.xml`, and `frontend/public/llms.txt`; update them with README/site metadata when routes, product wording, PWA behavior, or TokenDance ID login semantics change.
+TokenDanceChat is packaged as both a playable chat demo and the AgentHub IM proving ground. The current public product contract is intentionally narrow: one public room plus a single `TokenBot` assistant workspace. Public entry files live in `frontend/public/robots.txt`, `frontend/public/sitemap.xml`, and `frontend/public/llms.txt`; update them with README/site metadata when routes, product wording, PWA behavior, or TokenDance ID login semantics change.
 
-Brand assets use the TokenDance organization logo package from `../logo/products/tokendance/`. PWA, favicon, auth modal, and crawler surfaces should reference `frontend/public/tokendance-*` assets. `frontend/scripts/generate-icons.mjs` only keeps legacy `icon-192.png` and `icon-512.png` in sync for old browser/PWA caches; new code should not reference those names.
+Brand assets live in `frontend/public/` as `tokendance-*` files. PWA, favicon, auth modal, and crawler surfaces should reference those in-repo assets. `frontend/scripts/generate-icons.mjs` only keeps legacy `icon-192.png` and `icon-512.png` in sync for old browser/PWA caches; new code should not reference those names.
 
 The frontend already exposes PWA and zh/en i18n surfaces. New shared UI work should use the `--td-*` compatibility aliases in `frontend/src/index.css` where possible, while preserving the chat-specific macOS blue accent until visual QA says otherwise.
 
@@ -34,7 +34,7 @@ AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/�
 - Go Hub Server + WebSocket typed events 是否能承载公共消息、presence、reactions、编辑、线程与 AI 流式回复；
 - SQLite + FTS5 是否足够支撑早期 Hub 持久化和搜索；
 - React 19 + Zustand + Vite 的客户端状态模型能否跑通轻量但完整的聊天工作台；
-- Agent 是否能以 TokenBot / PicoClaw 工作区、@mention 和流式回复的形态自然嵌入 IM；
+- Agent 是否能以 TokenBot 单 agent、@mention 和流式回复的形态自然嵌入 IM；
 - TokenDance ID OIDC 登录能否作为统一身份入口自然接入 IM Demo；
 - 哪些能力是 AgentHub 可复用的平台原语，哪些旧复杂 IM 能力应留在底层兼容或历史记录中。
 
@@ -56,12 +56,10 @@ AgentHub 的目标是 IM 形态的多 Agent 协作平台：用户像在飞书/�
 - 输入状态指示（类似 Telegram typing preview）
 
 ### AI Bots & Agent
-- **TokenBot** — @mention 触发 LLM 对话（流式 SSE）
-- **PicoClaw** — Agent 工作区（`@PicoClaw` 触发，LLM 直接响应）
-- 多模型支持：DeepSeek V4 Pro/Flash · GLM 5.1 · Qwen 3.6 Plus · Kimi K2.6 · MiniMax M2.7
+- **TokenBot** — 单 agent，`@TokenBot` 触发 LLM 对话（流式 SSE）
+- 模型由服务端 `CHAT_LLM_MODEL` 配置；前端通过 `GET /api/config` 展示真实模型名，前端不假设模型列表
 - Anthropic Messages API + OpenAI Chat Completions 双协议
 - Bot 对话记忆持久化
-- LobeHub 厂商图标
 
 ### UI/UX
 - 暗色/亮色/跟随系统主题
@@ -145,12 +143,14 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 | `CHAT_ADDR` | `:8080` | 监听地址 |
 | `CHAT_DB_PATH` | `data/chat.db` | SQLite 路径 |
 | `CHAT_FRONTEND_DIR` | `frontend/dist` | 前端静态文件 |
-| `CHAT_LLM_BASE_URL` | — | LLM API 地址 |
-| `CHAT_LLM_MODEL` | — | 模型名 |
+| `CHAT_LLM_BASE_URL` | — | LLM API 地址（如 `https://api.deepseek.com`） |
+| `CHAT_LLM_MODEL` | — | 模型名（如 `deepseek-v4-pro`）；由服务端配置，前端经 `/api/config` 展示 |
 | `CHAT_LLM_API_KEY` | — | API 密钥 |
-| `CHAT_LLM_PROVIDER` | `openai` | LLM 协议 (openai / anthropic) |
+| `CHAT_LLM_PROVIDER` | `openai` | LLM 协议（openai / anthropic）；须设置以启用 bot，留空则 bot 不工作 |
+| `CHAT_LLM_MAX_TOKENS` | `8192` | 单次回复最大 token |
+| `CHAT_LLM_MEMORY_SIZE` | `20` | bot 记忆保留消息条数 |
+| `CHAT_LLM_MEMORY_PATH` | — | bot 记忆持久化文件（可选） |
 | `CHAT_BOT_NAME` | `TokenBot` | Bot 名称 |
-| `CHAT_AGENT_NAME` | `PicoClaw` | Agent 名称 |
 | `CHAT_ALLOWED_ORIGINS` | — | 允许的跨源 CORS/WebSocket browser origins，必须包含 scheme；示例：`https://chat.example.com,https://*.example.com`，`*` 不会放行跨源请求 |
 | `CHAT_TRUSTED_PROXY_CIDRS` | — | 可信反代 IP/CIDR；只有这些来源的 `X-Forwarded-For` / `X-Real-IP` 会用于 REST、OIDC、auth、WS 限流 |
 | `CHAT_SESSION_SECRET` | — | 应用 `session_token` HMAC 签名 secret；生产/共享环境必须稳定配置；`docker compose` 部署会强制要求该值 |
@@ -211,7 +211,15 @@ TokenDanceChat/
 
 ## 部署 Deploy
 
-通用部署流程见 [deploy.md](./deploy.md)。项目级 Agent 接手规则见 [AGENTS.md](./AGENTS.md)，持续目标和当前增量见 [ROADMAP.md](./ROADMAP.md)。
+使用 Docker Compose（`docker-compose.yml`）：
+
+```bash
+cp .env.example .env        # 按需填写 CHAT_SESSION_SECRET / CHAT_LLM_* / OIDC
+docker compose up -d --build
+# → http://localhost:8080
+```
+
+项目级 Agent 接手规则见 [AGENTS.md](./AGENTS.md)，发布检查清单见 [RELEASE.md](./RELEASE.md)，持续目标和当前增量见 [ROADMAP.md](./ROADMAP.md)。生产部署须在 `.env` 中提供 `CHAT_SESSION_SECRET`，并显式配置 `CHAT_LLM_*` 以启用 TokenBot。
 
 ---
 
@@ -232,7 +240,7 @@ TokenDanceChat/
 | [docs/visual-acceptance.md](./docs/visual-acceptance.md) | 前端截图、多模态审美和视觉验收标准 |
 | [ROADMAP.md](./ROADMAP.md) | 持续目标账本、当前增量、验证记录 |
 | [AGENTS.md](./AGENTS.md) | 项目级 Agent 接手规则、架构地图、验证命令 |
-| [deploy.md](./deploy.md) | 通用部署流程 |
+| [RELEASE.md](./RELEASE.md) | 发布/部署检查清单 |
 | [SECURITY.md](./SECURITY.md) | 安全审计报告 |
 | [CHANGELOG.md](./CHANGELOG.md) | 变更日志 |
 | [docs/research-deeix-lobehub.md](./docs/research-deeix-lobehub.md) | DEEIX-Chat + LobeHub Icons 调研 |

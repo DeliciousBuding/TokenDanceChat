@@ -1,21 +1,81 @@
-# AGENTS.md
+# TokenDanceChat — 项目 Agent 交接 SSOT
 
-## System Prompt
-TokenDanceChat has two assistant identities:
-- TokenBot: normal chat bot backed by the LLM adapter.
-- PicoClaw: Agent workflow bot backed by PicoClaw.
+> 本文件是项目级 Agent 交接的唯一事实来源（SSOT）：接手 TokenDanceChat 的 agent 先读本文件。
+> 运行时 bot system prompt 由后端启动时生成到 `data/AGENTS.md`（见 `backend/main.go` 的 `writeAgentsMD`），不要与本文件混淆，也不要引用本文件作为 bot 的系统提示词。
 
-Speak Chinese by default. Be concise and friendly.
+最后更新：2026-08-30
 
-## Rules
-- No offensive content
-- No roleplaying
-- Identify yourself as TokenBot when responding as the normal bot
-- Identify yourself as PicoClaw when responding as the Agent workflow bot
-- When mentioning users, use @username format
-- Be helpful, concise, and friendly
+## 项目定位
 
-## Identity
-Bot name: TokenBot
-Agent name: PicoClaw
-This file is auto-generated from config on server startup.
+TokenDanceChat 是 [AgentHub](https://github.com/TokenDanceLab/AgentHub) 的技术验证项目 + 轻量公共聊天室 Demo，公开开源仓 `github.com/TokenDanceLab/TokenDanceChat`。它不是独立的产品线，验证目标：
+
+- Go Hub Server + WebSocket typed events 承载公共消息、presence、reactions、编辑、线程与 AI 流式回复；
+- SQLite（modernc.org/sqlite，pure Go）+ FTS5 支撑早期 Hub 持久化与全文搜索；
+- React 19 + Zustand + Vite 的客户端状态模型跑通轻量聊天工作台；
+- 公共协议 mention 能否让 AI 以 IM 参与者的形态自然嵌入；
+- TokenDance ID OIDC 作为统一身份入口接入 IM。
+
+完整验证边界见 `docs/agenthub-validation.md`；能力状态与退役清单以 `docs/capability-matrix.md` 为唯一事实来源。
+
+## 技术栈
+
+| 层 | 技术 |
+|---|---|
+| 前端 | React 19 · Vite 6 · Tailwind CSS 4 · Zustand 5 |
+| 后端 | Go 1.25 · gorilla/websocket · net/http |
+| 数据库 | SQLite（pure Go）+ FTS5 |
+| 实时协议 | WebSocket typed events |
+| LLM | Anthropic Messages API + OpenAI Chat Completions |
+| 部署 | Docker · Nginx |
+
+## 目录地图
+
+```
+backend/            # Go 后端
+  handler/          # HTTP + WS handler + OIDC client + GET /api/config
+  hub/              # 聊天核心（client / room / broadcast）
+  store/            # SQLite + FTS5
+  llm/              # LLM adapter（Anthropic + OpenAI）
+  main.go           # 入口：配置读取、路由注册、writeAgentsMD
+frontend/
+  src/components/   # UI 组件（MessageTranscript / MessageBubble / ChatInput / Sidebar…）
+  src/stores/       # Zustand 状态
+  src/hooks/        # 自定义 Hooks
+  src/lib/          # 工具 + API 客户端 + Registry
+  src/i18n/         # 国际化
+  public/           # 静态资源 + PWA（robots.txt / sitemap.xml / llms.txt）
+docs/               # 文档（验证边界 / 能力矩阵 / 视觉验收 / 安全）
+scripts/            # 构建/部署脚本
+nginx/              # Nginx 配置
+```
+
+## 当前产品合同
+
+收敛为**公共聊天室 + TokenBot 单 agent**：
+
+- 公共聊天室：消息渲染、编辑/删除/引用回复、reaction、搜索、线程、无限滚动、输入状态。
+- TokenBot：单 bot，`@TokenBot` 触发，LLM 流式（SSE）回复；模型由服务端 `CHAT_LLM_MODEL` 配置，前端通过 `GET /api/config` 展示真实模型名，前端不假设模型列表。
+- 其它历史 IM 能力（DM、群组、语音/视频、GIF、定时发送、转发、webhook 管理、普通文件上传）已退役，不再接入当前前端主界面；后端残留路由/事件属运行面清理中。若要恢复，必须先更新 `ROADMAP.md` 并补足视觉/E2E 证据。
+
+## 验证命令
+
+```bash
+# 后端
+cd backend && go build ./... && go test ./...
+
+# 前端
+cd frontend && npx tsc --noEmit && npm test && npm run build
+```
+
+提交前再跑 `git diff --check`。每次有意义的前端打磨须用真实浏览器截图验收（视觉验收流程见 `docs/visual-acceptance.md`）。
+
+## 安全约定
+
+- secret 不进仓：`.env*`、`.env.local` 均被 `.gitignore` 忽略，示例值只在 `.env.example`。
+- 公开文档不出现服务器 IP、内部端口、SSH、凭据或生产数据。
+- 敏感配置一律走环境变量；`CHAT_SESSION_SECRET`、`CHAT_LLM_API_KEY`、OIDC client secret 必须在部署环境提供。
+
+## 文档习惯
+
+- 相对时间写绝对日期；文档引用 AGENTS 规则时写主题名或文件路径，不写编号式引用。
+- 完成一个里程碑后请运行 `neat-freak` 知识卫生收口。

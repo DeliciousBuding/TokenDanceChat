@@ -5,7 +5,7 @@ TokenDanceChat 是 AgentHub 的技术验证项目与轻量公共聊天室 Demo�
 ## 产品方向
 
 - 主基调：明亮、克制的企业聊天 UI，对齐 AgentHub Desktop/Web v4 的 transcript、composer、低阴影和受控圆角。
-- 交互手感：Telegram 级的输入框人机工程、可读的消息流、充足的移动端点击目标；当前主合同只保留公共聊天室、TokenBot 和 PicoClaw。
+- 交互手感：Telegram 级的输入框人机工程、可读的消息流、充足的移动端点击目标；当前主合同只保留公共聊天室 + TokenBot 单 agent。
 - 材质方向：light-first 的克制液态玻璃只作为真实 UI 面板和控件材料使用，不做装饰性玻璃拟态。
 - 避免营销式 Hero 布局、装饰性卡片以及空洞的装饰空间。
 - 控件优先使用 lucide 图标；文字标签仅保留给需要明确语义的命令。
@@ -44,7 +44,7 @@ TokenDanceChat 是 AgentHub 的技术验证项目与轻量公共聊天室 Demo�
 - 输入框上方可见消息数；
 - Composer 卡片宽高、16px 圆角、移动端高度占比、textarea 宽度、发送控件可见性；
 - AgentHub transcript block 数、气泡方向覆盖、气泡最大宽度比例；
-- TokenBot/PicoClaw 工作区可见性、composer assistant context 和 AI workflow chip 数；
+- TokenBot 工作区可见性、composer assistant context 和 AI workflow chip 数；
 - 桌面/移动侧边栏宽度、旧 IM 入口/旧命名可见文本数量；
 - 设置抽屉桌面/移动尺寸、右对齐、内容区域可见性和抽屉内低于 44x44 的控件数；
 - 认证弹窗桌面/移动尺寸、视口内 fit、tab 数量、tab label 裁剪情况、内容区域可见性、错误态可见性和弹窗内低于 44x44 的控件数（仅当认证入口发生可见改动时采集）；
@@ -96,7 +96,7 @@ npm run visual:acceptance
 - AgentHub Desktop chatview 对齐：消息区沿用 transcript/list/block 中心列；自发消息使用浅 TokenDance Blue token surface、细边框、深色正文和低阴影，不再使用深蓝实心高饱和气泡；own message stack 改为内容自适应宽度，短消息不再被固定 72% 宽容器撑出前置空白。
 - Composer 收敛为 AgentHub `UnifiedComposer` 式单行 62px capsule，主视觉只保留 `+`、textarea、图片/文件附件图标和发送按钮；旧 Markdown 格式化、emoji、slash command、preview 和隐藏 toolbar 逻辑已从 `ChatInput` 删除。
 - 桌面 light/dark 1440x900：composer body 820x62px，radius 16px，textarea 658x44px，可见 7 个 transcript blocks，`oldLabels=0`，无水平溢出。
-- 桌面 TokenBot 1440x900：AI workbench 可见，TokenBot/PicoClaw segmented switch 可见，composer context 可见，composer body 820x62px，radius 16px，7 个 transcript blocks，`oldLabels=0`。
+- 桌面 TokenBot 1440x900：AI workbench 可见，assistant switch 可见，composer context 可见，composer body 820x62px，radius 16px，7 个 transcript blocks，`oldLabels=0`。
 - 平板 768x1024：composer body 724x62px，textarea 562x44px，可见 9 个 transcript blocks，`oldLabels=0`。
 - 移动 light/dark 390x844：composer body 346x62px，radius 16px，textarea 184x44px，公共房间和 TokenBot 场景 `oldLabels=0`。
 - 设置抽屉：desktop 384x900px、mobile 384x844px，右对齐、内容可见。
@@ -106,10 +106,10 @@ npm run visual:acceptance
 继续收口验收：
 
 - 输出目录：`C:\Users\Ding\AppData\Local\Temp\tdchat-visual-2026-06-09T12-09-35-053Z`
-- 变更：移除 TokenBot/PicoClaw 模式的独立顶部 AI workbench；助手选择保留在侧栏，当前助手只在 header 标题和 composer context 中低噪呈现，消息区不再被额外工作台向下顶开。
+- 变更：移除 bot 模式的独立顶部 AI workbench；助手选择保留在侧栏，当前助手只在 header 标题和 composer context 中低噪呈现，消息区不再被额外工作台向下顶开。
 - 桌面 TokenBot 1440x900：聊天区从 header 后直接开始，`ai=false`，composer body 820x62px，radius 16px，textarea 658x44px，7 个 transcript blocks，`oldLabels=0`。
 - 移动 TokenBot 390x844：移除 107px 顶部 AI workbench 后，聊天区从 y=61 开始，composer body 346x62px，radius 16px，textarea 184x44px，6 个 transcript blocks，`oldLabels=0`。
-- E2E 补充：`lightweight-chat.test.ts` 现在覆盖 TokenBot/PicoClaw 模式下输入普通文本后自动带 `@TokenBot` / `@PicoClaw` 上屏，避免只验证 context 可见但实际发送路径失效。
+- E2E 补充：`lightweight-chat.test.ts` 现在覆盖 bot 模式下输入普通文本后自动带 `@TokenBot` 上屏，避免只验证 context 可见但实际发送路径失效。
 
 上一轮通过的截图验收：
 
@@ -117,25 +117,24 @@ npm run visual:acceptance
 - 基线：由 Go 后端在 `http://127.0.0.1:18180` 托管最新生产构建，使用临时干净 SQLite 数据库。
 - 场景：十张截图，含 desktop/mobile light/dark、TokenBot desktop/mobile、mobile sidebar、desktop/mobile settings drawer。
 - 桌面 light/dark 1440x900：composer body 820x104px，radius 16px，textarea 748x44px，可见 transcript blocks，`oldLabels=0`，无水平溢出。
-- 桌面 TokenBot 1440x900：AI workbench 可见，TokenBot/PicoClaw segmented switch 可见，composer context 可见，composer body 820x104px，radius 16px，`oldLabels=0`。
+- 桌面 TokenBot 1440x900：AI workbench 可见，assistant switch 可见，composer context 可见，composer body 820x104px，radius 16px，`oldLabels=0`。
 - 平板 768x1024：composer body 724x104px，textarea 652x44px，可见 transcript blocks，`oldLabels=0`。
 - 移动 light/dark 390x844：composer body 346x104px，radius 16px，textarea 274x44px，公共房间和 TokenBot 场景 `oldLabels=0`。
 - 设置抽屉：desktop 384x900px、mobile 384x844px，右对齐、内容可见。
-- 截图审阅确认：当前主界面只出现公共聊天室、TokenBot、PicoClaw；无复杂联系人、群组、语音/视频、GIF、定时发送、转发或 webhook 管理入口。
+- 截图审阅确认：当前主界面只出现公共聊天室、TokenBot；无复杂联系人、群组、语音/视频、GIF、定时发送、转发或 webhook 管理入口。
 - 输入反馈补充：发送按钮具备 `data-submitting` / `composer-submit-state` 状态，由 `ChatInput.test.tsx` 覆盖 500ms 防双发窗口，`lightweight-chat.test.ts` 覆盖真实浏览器提交态；视觉验收继续门控 composer 尺寸、圆角、旧入口扫描和移动端可用性。
 - 命名补充：旧 `@webuibot` 输入仅作为不可见兼容别名，运行态必须渲染为 `@TokenBot`，并保持 WebUI 旧名 DOM 可见计数为 0。
-- AI 工作区补充：保留 compact assistant context strip、TokenBot/PicoClaw 切换和 Ask 按钮；`Knowledge` / `Tools` / `Prompts` 不属于当前轻量合同，视觉脚本会把这些可见标签视为失败。
+- AI 工作区补充：保留 compact assistant context strip 和 Ask 按钮；`Knowledge` / `Tools` / `Prompts` 不属于当前轻量合同，视觉脚本会把这些可见标签视为失败。
 
 生产 smoke：
 
 - 目标：`https://chat.tokendancelab.com`
-- 镜像：当前运行容器文件系统已 overlay 并 commit 为 `tokendancechat:codex-20260609-own-right-align`；`docker inspect .Config.Image` 仍显示基础镜像 `tokendancechat:codex-20260609-picoclaw-fallback`。
+- 镜像：当前运行容器文件系统已 overlay 并 commit 为 `tokendancechat:codex-20260609-own-right-align`；`docker inspect .Config.Image` 仍显示基础镜像 `tokendancechat:codex-20260609-bot-fallback`。
 - 资源：公网首页加载 `/assets/index-BK_YVSvU.js`。
-- E2E：公开域名 `lightweight-chat.test.ts` 2/2 通过，`page-load.test.ts` 4/4 通过，合计 6/6；更新后的 `lightweight-chat.test.ts` 已覆盖 `composer-submit-state`、TokenBot/PicoClaw prefixed sends 和旧 `@webuibot` -> `@TokenBot` 归一。
+- E2E：公开域名 `lightweight-chat.test.ts` 2/2 通过，`page-load.test.ts` 4/4 通过，合计 6/6；更新后的 `lightweight-chat.test.ts` 已覆盖 `composer-submit-state`、bot prefixed sends 和旧 `@webuibot` -> `@TokenBot` 归一。
 - 自发消息几何：公网 1440px Playwright 探针 `bubbleToRegionRight=36`、`blockToRegionRight=20`，确认自己消息不再落在中间列；本地 390px 移动端探针 `scrollWidth=390`、`bubbleToRegionRight=30`。
 - DOM 探针：`WebUIChat`、`WebUIBot`、`webuichat`、`webuibot`、`Friends`、`Groups`、`DM`、`Direct Message`、`Voice Call`、`Video Call`、`Schedule Message`、`Webhook`、`好友`、`群组`、`私信`、`语音通话`、`视频通话`、`定时发送` 可见计数均为 0。
 - 发送可见性：公网 Playwright 探针自发消息 `visibleMs=30`，发送按钮 submitting 状态 `submitSeen=1`，未复现约 5s 延迟。
-- PicoClaw 探针：公网 strict probe 输出 `C:\Users\Ding\AppData\Local\Temp\tdchat-picoclaw-prod-2026-06-09`，`selfMs=1039`、`picoAfterSend=true`、`notConfiguredAfterSend=false`，确认缺少 PicoClaw gateway 时会走 LLM fallback 而不是返回未配置提示。
 - 健康检查边界：容器内 `/api/health` 返回 ok；公网 `/api/health` 受当前 nginx OAuth2 保护层约束，会 302 到 TokenDanceID，因此生产 health 证据以容器/source 检查为准。
 
 ## 2026-05-23 验收
@@ -150,7 +149,7 @@ npm run visual:acceptance
 - 平板 light 768x1024：textarea 456x48px，移动端标题宽度 580px，输入框 130px，4 条可见种子消息，`smallControls=0`，无水平溢出，无控制台错误。
 - 移动端 light/dark 390x844：标题宽度 202px 且 `公共聊天` 未被截断，消息字号 13.5px，折叠态输入框 textarea 208x66px，输入框 87px，4 条可见种子消息，`smallControls=0`，无水平溢出，无控制台错误。
 - 移动端 light 含格式工具栏：textarea 208x66px，输入框 144px，4 条可见种子消息，`smallControls=0`，无水平溢出，无控制台错误。
-- 截图审阅确认当时桌面核心聊天、群组管理面板及移动端输入框保持可读且稳定；当前主界面验收以公共房间、TokenBot、PicoClaw 为准。
+- 截图审阅确认当时桌面核心聊天、群组管理面板及移动端输入框保持可读且稳定；当前主界面验收以公共房间、TokenBot 单 agent 为准。
 
 截图验收捕获了实际实现问题：
 
