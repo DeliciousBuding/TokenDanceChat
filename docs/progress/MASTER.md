@@ -1,7 +1,7 @@
 # MASTER.md — TokenDanceChat UIUX/清理/单 agent 改造
 
 最后更新：2026-08-31
-状态：Wave2 收官（公共聊天室 / 私聊 TokenBot 分离），待部署（commit 29c0e6a）
+状态：Wave2 收官并已部署生产（2026-08-31，镜像 sha 39f5409）；部署主机迁移（gz2→jp1）由运维流另行推进，本仓不涉
 
 ## 目标（领导原话收口）
 
@@ -73,24 +73,12 @@ git diff --check
 - **UIUX**：composer IME/转义/草稿暂存/粘贴提示、占位符单行、头像列 32px 对齐、气泡全宽对齐、删并行右键菜单、侧边栏「公共聊天 / 私人助手」分栏。
 - 全验收绿：backend go test、frontend vitest 627、tsc、build、e2e、visual-acceptance 10 场景（零 issues）。
 
-## 已完成的 backlog（Wave2 清掉）
-
-- ❌ P1 遗留 IM 协议切除（Batch B）→ 已完成（~10k 行，含 AdminStats 路由删除）
-- ❌ P2 双 contextMenu 去重 → 已完成
-- ❌ P1 AdminStats 无鉴权 → 已删除路由
-
 ## 后续 backlog（剩余未做）
 
 | 优先 | 项 | 说明 |
 |---|---|---|
-| P1 | 遗留 IM 协议切除（后端 Batch B） | WS dispatch ~60 个死 case + hub/store 对应方法 + 15/23 张表 + ~13k 行 legacy 测试；大规模删除需管理员批准 |
-| P1 | AdminStats 管理员角色校验（Batch D） | 现任意登录用户可读 /api/admin/stats（CHAT-SR-018 Open） |
-| P1 | Hub 级 bot 记忆跨房间/跨用户共享 | `handleBotResponse` 取 Hub 单例 memory，上下文会串人，潜在信息泄漏 |
+| P1 | Hub 级 bot 记忆跨房间/跨用户共享 | `handleBotResponse`/`handlePrivateBotResponse` 取 Hub 单例 memory，公共与私聊上下文可能串人；应按用户/会话作用域拆分 |
 | P2 | 消息列表虚拟化 | 500 条 × ReactMarkdown 全量渲染，大列表必卡（MessageTranscript） |
-| P2 | 双 contextMenu 去重 | MessageBubble 与 MessageTranscript 两套右键菜单实现 |
 | P2 | 通知权限改用户手势触发 | useWebSocket 挂载即 requestPermission，Chrome 会静默拒绝 |
-| P2 | webhook 限流或删除 | 无 rate limit + 公共房间无群组背书（CHAT-SR-020 Open） |
-| P3 | HubCommand 死命令面（Batch C） | ExecuteHubCommand/SendDM/RequestHistory/RequestOnlineUsers/processScheduledMessages 仅测试引用 |
 | P3 | 前端杂项 | class-variance-authority 未用依赖、chatStore DM/group 遗留字段、@lobehub/icons 仅 1 处 |
-| P3 | shouldTrigger 50% 问句抢答 | 公共房间可能刷屏，需产品拍板保留与否 |
 | P3 | 25 个 Dependabot 依赖漏洞 | 6 high，pre-existing 依赖面，待专项升级 |

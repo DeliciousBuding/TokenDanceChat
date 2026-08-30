@@ -2,6 +2,21 @@
 
 > **累计**: 25+ commits, 35+ features/fixes, 5 skills (verify, pm-audit, deploy, cross-review, i18n-scan)
 
+## Unreleased (2026-08-31)
+
+### Removed
+- 遗留 IM 运行面切除：DM/群组、Webhook（`/api/webhook/` 404）、语音/视频通话、定时消息、转发、聊天文件夹的 WS handler 与路由（约 10k 行）；`/api/admin/stats` 路由删除。
+- bot 关键词/概率抢答移除，仅响应 `@TokenBot` mention。
+
+### Added
+- 私人助手 1:1：侧栏选 TokenBot 进入独立私聊视图；`to=BotName` 走私聊通道（不广播、只回发起者），历史经 `GET /api/messages?to=`（鉴权、按请求者作用域）加载；公共与私聊消息流互不可见。
+- 游客身份持久化：localStorage 复用同一 guest 名，不再每次访问随机生成。
+
+### Fixed
+- 客户端断连时私聊流式单发的 `send on closed channel` panic（`SendToClient` 成员校验 + goroutine recover）。
+- Service Worker 缓存 `tdchat-v8`，返回用户 purge 旧 bundle。
+- 消息卡片全宽对齐（头像列 32px 固定、分组/非分组左缘一致）；删并行死右键菜单；composer 单行占位符、真实"发送" aria-label、IME 防误发、Esc 级联取消、编辑草稿暂存、粘贴文件提示。
+
 ## Unreleased (2026-08-30)
 
 ### Removed

@@ -3,7 +3,7 @@
 > 本文件是项目级 Agent 交接的唯一事实来源（SSOT）：接手 TokenDanceChat 的 agent 先读本文件。
 > 运行时 bot system prompt 由后端启动时生成到 `data/AGENTS.md`（见 `backend/main.go` 的 `writeAgentsMD`），不要与本文件混淆，也不要引用本文件作为 bot 的系统提示词。
 
-最后更新：2026-08-30
+最后更新：2026-08-31
 
 ## 项目定位
 
@@ -51,11 +51,12 @@ nginx/              # Nginx 配置
 
 ## 当前产品合同
 
-收敛为**公共聊天室 + TokenBot 单 agent**：
+收敛为**公共聊天室 + TokenBot 单 agent（双会话形态）**：
 
-- 公共聊天室：消息渲染、编辑/删除/引用回复、reaction、搜索、线程、无限滚动、输入状态。
-- TokenBot：单 bot，`@TokenBot` 触发，LLM 流式（SSE）回复；模型由服务端 `CHAT_LLM_MODEL` 配置，前端通过 `GET /api/config` 展示真实模型名，前端不假设模型列表。
-- 其它历史 IM 能力（DM、群组、语音/视频、GIF、定时发送、转发、webhook 管理、普通文件上传）已退役，不再接入当前前端主界面；后端残留路由/事件属运行面清理中。若要恢复，必须先更新 `ROADMAP.md` 并补足视觉/E2E 证据。
+- 公共聊天室：消息渲染、编辑/删除/引用回复、reaction、搜索、线程、无限滚动、输入状态；`@TokenBot` mention 触发 bot 在房间内公开流式回复。
+- 私人助手 1:1：侧边栏选 TokenBot 进入独立私聊视图；消息 `to=BotName` 走私聊通道（后端不广播、只回发起者，`Message.Private`），历史经 `GET /api/messages?to=`（鉴权、按请求者作用域）加载。公共与私聊消息流互不可见。
+- TokenBot：单 bot，LLM 流式回复；模型由服务端 `CHAT_LLM_MODEL` 配置，前端通过 `GET /api/config` 展示真实模型名，前端不假设模型列表。
+- 其它历史 IM 能力（DM、群组、语音/视频、GIF、定时发送、转发、webhook 管理、普通文件上传、文件夹）已于 2026-08-31 从后端运行面删除（Archived）。若要恢复，必须先更新 `ROADMAP.md` 并补足视觉/E2E 证据。
 
 ## 验证命令
 

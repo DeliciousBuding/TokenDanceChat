@@ -17,7 +17,7 @@
 
 ## Public Packaging
 
-TokenDanceChat is packaged as both a playable chat demo and the AgentHub IM proving ground. The current public product contract is intentionally narrow: one public room plus a single `TokenBot` assistant workspace. Public entry files live in `frontend/public/robots.txt`, `frontend/public/sitemap.xml`, and `frontend/public/llms.txt`; update them with README/site metadata when routes, product wording, PWA behavior, or TokenDance ID login semantics change.
+TokenDanceChat is packaged as both a playable chat demo and the AgentHub IM proving ground. The current public product contract is intentionally narrow: one public room plus a single `TokenBot` assistant, which can be chatted with either by `@TokenBot` mention in the public room or in a private 1:1 assistant workspace whose messages never leak into the public room. Public entry files live in `frontend/public/robots.txt`, `frontend/public/sitemap.xml`, and `frontend/public/llms.txt`; update them with README/site metadata when routes, product wording, PWA behavior, or TokenDance ID login semantics change.
 
 Brand assets live in `frontend/public/` as `tokendance-*` files. PWA, favicon, auth modal, and crawler surfaces should reference those in-repo assets. `frontend/scripts/generate-icons.mjs` only keeps legacy `icon-192.png` and `icon-512.png` in sync for old browser/PWA caches; new code should not reference those names.
 
@@ -132,7 +132,7 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancecha
 → {"type":"block","username":"spammer"}
 ```
 
-底层后端仍保留部分历史协议兼容，便于迁移旧数据和安全回归；不要把 DM、群组、好友、转发、通话、定时消息或 webhook 管理重新接回当前前端主界面，除非先更新 ROADMAP 中的轻量聊天合同。
+历史 IM 协议（DM、群组、好友、转发、通话、定时消息、webhook 管理、普通文件上传）已从后端运行面删除并退役；当前前端主界面只有公共聊天室与 TokenBot 私聊/mention 两种会话形态。若要恢复任何历史能力，先更新 ROADMAP 中的轻量聊天合同并补足视觉/E2E 证据。
 
 ---
 
