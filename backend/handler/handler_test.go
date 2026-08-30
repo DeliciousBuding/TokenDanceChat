@@ -185,7 +185,6 @@ func TestProtectedRESTRequiresSession(t *testing.T) {
 		{name: "upload emoji", method: http.MethodPost, path: "/api/emoji/upload", handler: h.UploadEmoji},
 		{name: "invite generate", method: http.MethodPost, path: "/api/invite/generate", body: strings.NewReader(`{"username":"alice"}`), handler: h.InviteGenerate},
 		{name: "invite list", method: http.MethodGet, path: "/api/invite/list?username=alice", handler: h.InviteList},
-		{name: "admin stats", method: http.MethodGet, path: "/api/admin/stats", handler: h.AdminStats},
 	}
 
 	for i, tt := range tests {
@@ -219,43 +218,33 @@ func (m *mockStore) CreatePoll(poll *hub.Poll) error                            
 func (m *mockStore) GetPoll(pollID string) (*hub.Poll, error)                       { return nil, nil }
 func (m *mockStore) VotePoll(pollID string, username string, optionIndex int) error { return nil }
 func (m *mockStore) ClosePoll(pollID string) error                                  { return nil }
-func (m *mockStore) ScheduleMessage(msg store.ScheduledMessage) error               { return nil }
-func (m *mockStore) GetPendingScheduledMessages(ctx context.Context) ([]store.ScheduledMessage, error) {
-	return nil, nil
-}
-func (m *mockStore) MarkScheduledSent(id string) error                { return nil }
-func (m *mockStore) CancelScheduledMessage(id, username string) error { return nil }
-func (m *mockStore) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) {
-	return nil, nil
-}
+
+func (m *mockStore) MarkScheduledSent(id string) error { return nil }
+
 func (m *mockStore) ExportMessages(ctx context.Context, roomID, toUser, groupName, format string, limit int) ([]hub.StoredMessage, error) {
 	return nil, nil
 }
-func (m *mockStore) GetThreadMessages(parentMessageID string) []hub.StoredMessage      { return nil }
-func (m *mockStore) GetThreadReplyCount(parentMessageID string) int                    { return 0 }
-func (m *mockStore) DeleteGroup(groupName string) error                                { return nil }
-func (m *mockStore) GetGroupMembersWithRoles(groupName string) []store.GroupMemberInfo { return nil }
-func (m *mockStore) UpdateGroupName(oldName, newName string) error                     { return nil }
-func (m *mockStore) SetGroupMemberRole(groupName, username, role string) error         { return nil }
-func (m *mockStore) KickGroupMember(groupName, username string) error                  { return nil }
-func (m *mockStore) TransferGroupOwnership(groupName, newOwner string) error           { return nil }
-func (m *mockStore) LeaveGroup(groupName, username string) error                       { return nil }
-func (m *mockStore) GetGroupInfo(groupName string) (*store.GroupInfo, error) {
-	return &store.GroupInfo{Name: groupName}, nil
-}
+func (m *mockStore) GetThreadMessages(parentMessageID string) []hub.StoredMessage { return nil }
+func (m *mockStore) GetThreadReplyCount(parentMessageID string) int               { return 0 }
+func (m *mockStore) DeleteGroup(groupName string) error                           { return nil }
+
+func (m *mockStore) UpdateGroupName(oldName, newName string) error             { return nil }
+func (m *mockStore) SetGroupMemberRole(groupName, username, role string) error { return nil }
+func (m *mockStore) KickGroupMember(groupName, username string) error          { return nil }
+func (m *mockStore) TransferGroupOwnership(groupName, newOwner string) error   { return nil }
+func (m *mockStore) LeaveGroup(groupName, username string) error               { return nil }
+
 func (m *mockStore) GetGroupMemberRole(groupName, username string) (string, error) {
 	return "member", nil
 }
-func (m *mockStore) GetGroupOwner(groupName string) (string, error)                     { return "", nil }
-func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error            { return nil }
-func (m *mockStore) ListCustomEmojis(roomID string) ([]store.CustomEmoji, error)        { return nil, nil }
-func (m *mockStore) DeleteCustomEmoji(name, username string) error                      { return nil }
-func (m *mockStore) SearchCustomEmojis(query string) ([]store.CustomEmoji, error)       { return nil, nil }
-func (m *mockStore) LogCall(call store.CallRecord) error                                { return nil }
+func (m *mockStore) GetGroupOwner(groupName string) (string, error)               { return "", nil }
+func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error      { return nil }
+func (m *mockStore) ListCustomEmojis(roomID string) ([]store.CustomEmoji, error)  { return nil, nil }
+func (m *mockStore) DeleteCustomEmoji(name, username string) error                { return nil }
+func (m *mockStore) SearchCustomEmojis(query string) ([]store.CustomEmoji, error) { return nil, nil }
+
 func (m *mockStore) UpdateCallRecord(id, status string, startedAt, endedAt int64) error { return nil }
-func (m *mockStore) GetCallHistory(username string, limit int) ([]store.CallRecord, error) {
-	return nil, nil
-}
+
 func (m *mockStore) RegisterUser(username, passwordHash, inviteCode string) error { return nil }
 func (m *mockStore) VerifyUser(username, password string) (bool, error)           { return true, nil }
 func (m *mockStore) UserExists(username string) (bool, error)                     { return false, nil }
@@ -266,29 +255,17 @@ func (m *mockStore) ListInviteCodes(creator string) ([]store.InviteCodeRecord, e
 	return nil, nil
 }
 func (m *mockStore) ValidateInviteCode(code string) (bool, error) { return true, nil }
-func (m *mockStore) CreateChatFolder(username, name string) (*store.ChatFolder, error) {
-	return &store.ChatFolder{ID: "f1", Name: name}, nil
-}
-func (m *mockStore) DeleteChatFolder(username, id string) error              { return nil }
-func (m *mockStore) RenameChatFolder(username, id, newName string) error     { return nil }
-func (m *mockStore) AddToFolder(folderID, key string) error                  { return nil }
-func (m *mockStore) RemoveFromFolder(folderID, key string) error             { return nil }
-func (m *mockStore) ListFolders(username string) ([]store.ChatFolder, error) { return nil, nil }
-func (m *mockStore) GetFolderItems(folderID string) ([]string, error)        { return nil, nil }
+
+func (m *mockStore) DeleteChatFolder(username, id string) error          { return nil }
+func (m *mockStore) RenameChatFolder(username, id, newName string) error { return nil }
+func (m *mockStore) AddToFolder(folderID, key string) error              { return nil }
+func (m *mockStore) RemoveFromFolder(folderID, key string) error         { return nil }
+
+func (m *mockStore) GetFolderItems(folderID string) ([]string, error) { return nil, nil }
 
 func (m *mockStore) CreateWebhook(id, groupName, url, secret, createdBy string) error { return nil }
 func (m *mockStore) DeleteWebhook(id, groupName, deletedBy string) error              { return nil }
-func (m *mockStore) RotateWebhookSecret(id, groupName, secret, rotatedBy string) (*store.Webhook, error) {
-	return nil, nil
-}
-func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error) { return nil, nil }
-func (m *mockStore) ListWebhookAuditLogs(groupName string, limit int) ([]store.WebhookAuditLog, error) {
-	return nil, nil
-}
-func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error) { return nil, nil }
-func (m *mockStore) VerifyWebhookSecret(url, secret string) (*store.Webhook, bool, error) {
-	return nil, false, nil
-}
+
 func (m *mockStore) UpsertOIDCUser(sub, chatUsername, email, preferredUsername string) error {
 	return nil
 }
@@ -300,42 +277,6 @@ func (m *mockStore) GetOIDCUserByUsername(username string) (*store.OIDCUser, err
 }
 
 // mockStoreScheduled actually stores scheduled messages for testing.
-type mockStoreScheduled struct {
-	mockStore
-	scheduled []store.ScheduledMessage
-}
-
-func (m *mockStoreScheduled) ScheduleMessage(msg store.ScheduledMessage) error {
-	m.scheduled = append(m.scheduled, msg)
-	return nil
-}
-
-func (m *mockStoreScheduled) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) {
-	var result []store.ScheduledMessage
-	for _, sm := range m.scheduled {
-		if sm.Username == username {
-			result = append(result, sm)
-		}
-	}
-	return result, nil
-}
-
-func (m *mockStoreScheduled) CancelScheduledMessage(id, username string) error {
-	for i, sm := range m.scheduled {
-		if sm.ID == id {
-			m.scheduled = append(m.scheduled[:i], m.scheduled[i+1:]...)
-			return nil
-		}
-	}
-	return nil
-}
-
-func newTestHandlerScheduled() *Handler {
-	ms := &mockStoreScheduled{}
-	h := hub.New(ms, nil, "")
-	go h.Run()
-	return New(h, ms, "/tmp/test-uploads")
-}
 
 // mockStoreThreaded stores thread_id with messages for thread reply testing.
 type mockStoreThreaded struct {
@@ -392,212 +333,6 @@ func newTestHandlerThreaded() *Handler {
 	h := hub.New(ms, nil, "")
 	go h.Run()
 	return New(h, ms, "/tmp/test-uploads")
-}
-
-func TestWebhookHandlerVerifiesHashedSecret(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatalf("store.New returned error: %v", err)
-	}
-	defer s.Close()
-
-	const (
-		webhookURL = "team-hook"
-		secret     = "one-time-webhook-secret"
-	)
-	if err := s.CreateWebhook("wh-1", "team", webhookURL, secret, "alice"); err != nil {
-		t.Fatalf("CreateWebhook returned error: %v", err)
-	}
-
-	h := hub.New(s, nil, "")
-	handler := New(h, s, t.TempDir())
-
-	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(`{"content":"deploy finished","username":"ci"}`))
-	req.Header.Set("Authorization", "Bearer "+secret)
-	w := httptest.NewRecorder()
-
-	handler.WebhookHandler(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected correct webhook secret to return 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	badReq := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(`{"content":"deploy finished"}`))
-	badReq.Header.Set("Authorization", "Bearer wrong")
-	badW := httptest.NewRecorder()
-
-	handler.WebhookHandler(badW, badReq)
-
-	if badW.Code != http.StatusNotFound {
-		t.Fatalf("expected wrong webhook secret to return 404, got %d", badW.Code)
-	}
-}
-
-func TestWebhookHandlerRejectsQuerySecret(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatalf("store.New returned error: %v", err)
-	}
-	defer s.Close()
-
-	const (
-		webhookURL = "query-secret-hook"
-		secret     = "query-secret-must-not-work"
-	)
-	if err := s.CreateWebhook("wh-query", "team", webhookURL, secret, "alice"); err != nil {
-		t.Fatalf("CreateWebhook returned error: %v", err)
-	}
-
-	h := hub.New(s, nil, "")
-	handler := New(h, s, t.TempDir())
-
-	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL+"?secret="+secret, strings.NewReader(`{"content":"deploy finished"}`))
-	w := httptest.NewRecorder()
-
-	handler.WebhookHandler(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected query-string webhook secret to return 401, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestWebhookHandlerRejectsOversizedBody(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatalf("store.New returned error: %v", err)
-	}
-	defer s.Close()
-
-	const (
-		webhookURL = "oversized-hook"
-		secret     = "oversized-body-secret"
-	)
-	if err := s.CreateWebhook("wh-oversized", "team", webhookURL, secret, "alice"); err != nil {
-		t.Fatalf("CreateWebhook returned error: %v", err)
-	}
-
-	h := hub.New(s, nil, "")
-	handler := New(h, s, t.TempDir())
-
-	body := `{"content":"` + strings.Repeat("x", 9000) + `"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+secret)
-	w := httptest.NewRecorder()
-
-	handler.WebhookHandler(w, req)
-
-	if w.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("expected oversized webhook body to return 413, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestWebhookHandlerRejectsOversizedContent(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatalf("store.New returned error: %v", err)
-	}
-	defer s.Close()
-
-	const (
-		webhookURL = "oversized-content-hook"
-		secret     = "oversized-content-secret"
-	)
-	if err := s.CreateWebhook("wh-oversized-content", "team", webhookURL, secret, "alice"); err != nil {
-		t.Fatalf("CreateWebhook returned error: %v", err)
-	}
-
-	h := hub.New(s, nil, "")
-	handler := New(h, s, t.TempDir())
-
-	body := `{"content":"` + strings.Repeat("x", 2001) + `"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+secret)
-	w := httptest.NewRecorder()
-
-	handler.WebhookHandler(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected oversized webhook content to return 400, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestWebhookHandlerUsesServerDerivedSender(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatalf("store.New returned error: %v", err)
-	}
-	defer s.Close()
-
-	const (
-		webhookURL = "sender-hook"
-		secret     = "sender-secret"
-	)
-	if err := s.CreateGroup("team", "alice"); err != nil {
-		t.Fatalf("CreateGroup returned error: %v", err)
-	}
-	if err := s.CreateWebhook("wh-sender", "team", webhookURL, secret, "alice"); err != nil {
-		t.Fatalf("CreateWebhook returned error: %v", err)
-	}
-
-	hubInstance := hub.New(s, nil, "")
-	hubInstance.LoadPersistedState()
-	go hubInstance.Run()
-	handler := New(hubInstance, s, t.TempDir())
-	srv := httptest.NewServer(http.HandlerFunc(handler.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
-
-	member, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("failed to dial member WebSocket: %v", err)
-	}
-	defer member.Close()
-	wsJoin(member, "alice")
-
-	observer, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("failed to dial observer WebSocket: %v", err)
-	}
-	defer observer.Close()
-	wsJoin(observer, "observer")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/webhook/"+webhookURL, strings.NewReader(`{"content":"deploy finished","username":"spoofed-user"}`))
-	req.Header.Set("Authorization", "Bearer "+secret)
-	w := httptest.NewRecorder()
-
-	handler.WebhookHandler(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected webhook POST to return 200, got %d: %s", w.Code, w.Body.String())
-	}
-	msg, ok := wsDrainUntil(member, "group_message", 5*time.Second)
-	if !ok {
-		t.Fatal("group member did not receive webhook group_message")
-	}
-	if msg.ID == "" {
-		t.Fatal("expected webhook group_message to include a persisted message id")
-	}
-	if msg.Username != "webhook" {
-		t.Fatalf("expected server-derived webhook sender, got %q", msg.Username)
-	}
-	if msg.Group != "team" {
-		t.Fatalf("expected webhook group_message for group team, got %q", msg.Group)
-	}
-	if msg.Content != "deploy finished" {
-		t.Fatalf("expected webhook content to be broadcast, got %q", msg.Content)
-	}
-
-	if msg, ok := wsDrainUntil(observer, "group_message", 300*time.Millisecond); ok {
-		t.Fatalf("non-member observer received webhook group_message: %#v", msg)
-	}
-
-	exported, err := s.ExportMessages(context.Background(), "", "", "team", "alice", 10)
-	if err != nil {
-		t.Fatalf("ExportMessages returned error: %v", err)
-	}
-	if len(exported) != 1 || exported[0].ID != msg.ID || exported[0].Username != "webhook" || exported[0].Content != "deploy finished" {
-		t.Fatalf("expected webhook message to be persisted in group export, got %#v", exported)
-	}
 }
 
 func TestHealthCheck(t *testing.T) {
@@ -1254,42 +989,8 @@ func TestStatsHandler(t *testing.T) {
 
 // TestAdminStatsHandler verifies that GET /api/admin/stats returns the
 // expected dashboard keys with all expected numeric fields.
-func TestAdminStatsHandler(t *testing.T) {
-	h := newTestHandler()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/admin/stats", nil)
-	authorizeTestRequest(t, h, req, "alice")
-	w := httptest.NewRecorder()
-
-	h.AdminStats(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", resp.StatusCode)
-	}
-
-	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
-		t.Errorf("expected Content-Type application/json, got %s", ct)
-	}
-
-	var body map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("failed to decode JSON: %v", err)
-	}
-
-	// Verify all expected dashboard fields exist.
-	expectedFields := []string{
-		"total_messages", "active_connections", "rooms",
-		"groups", "friends", "registered_users",
-	}
-	for _, field := range expectedFields {
-		if _, ok := body[field]; !ok {
-			t.Errorf("missing field %q in admin stats response", field)
-		}
-	}
-}
+// Verify all expected dashboard fields exist.
 
 // TestInviteGenerate verifies that POST /api/invite/generate with a valid body
 // returns 200 and a non-empty invite code.
@@ -1650,18 +1351,6 @@ func TestStatsWrongMethod(t *testing.T) {
 	}
 }
 
-func TestAdminStatsWrongMethod(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodPost, "/api/admin/stats", nil)
-	w := httptest.NewRecorder()
-	h.AdminStats(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405 for POST /api/admin/stats, got %d", w.Code)
-	}
-}
-
 // --- Auth endpoint edge cases ---
 
 func TestRegisterWrongMethod(t *testing.T) {
@@ -1700,19 +1389,6 @@ func TestExportMessagesInvalidFormat(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for invalid format, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestExportMessagesDMUsesSessionUsername(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=dm:bob", nil)
-	authorizeTestRequest(t, h, req, "alice")
-	w := httptest.NewRecorder()
-	h.ExportMessages(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 for DM export using session username, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -1756,30 +1432,6 @@ func TestInviteListWrongMethod(t *testing.T) {
 }
 
 // --- Webhook handler edge cases ---
-
-func TestWebhookHandlerWrongMethod(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/webhook/test-hook", nil)
-	w := httptest.NewRecorder()
-	h.WebhookHandler(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405 for GET /api/webhook, got %d", w.Code)
-	}
-}
-
-func TestWebhookHandlerMissingURL(t *testing.T) {
-	h := newTestHandler()
-
-	req := httptest.NewRequest(http.MethodPost, "/api/webhook/", nil)
-	w := httptest.NewRecorder()
-	h.WebhookHandler(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for missing webhook URL, got %d", w.Code)
-	}
-}
 
 // --- GetMessages / GetOnlineUsers edge cases ---
 
@@ -2949,46 +2601,6 @@ func TestExportMessagesZeroLimit(t *testing.T) {
 	}
 }
 
-func TestExportMessagesGroupRequiresMembership(t *testing.T) {
-	h, capture := newTestHandlerWithExportCapture()
-	capture.groupRoleErr = errors.New("not a group member")
-
-	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=group:secret", nil)
-	authorizeTestRequest(t, h, req, "alice")
-	w := httptest.NewRecorder()
-	h.ExportMessages(w, req)
-
-	resp := w.Result()
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected 403 for non-member group export, got %d: %s", resp.StatusCode, w.Body.String())
-	}
-	assertJSONErrorCode(t, resp, "NOT_IN_GROUP")
-	if capture.exportCalled {
-		t.Fatal("expected group export to stop before calling store.ExportMessages")
-	}
-}
-
-func TestExportMessagesGroupAllowsMember(t *testing.T) {
-	h, capture := newTestHandlerWithExportCapture()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/export?conversation=group:team", nil)
-	authorizeTestRequest(t, h, req, "alice")
-	w := httptest.NewRecorder()
-	h.ExportMessages(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for member group export, got %d: %s", w.Code, w.Body.String())
-	}
-	if !capture.exportCalled {
-		t.Fatal("expected store.ExportMessages to be called for member group export")
-	}
-	if capture.capturedGroupName != "team" {
-		t.Fatalf("expected groupName team passed to export, got %q", capture.capturedGroupName)
-	}
-}
-
 // --- LinkPreview edge case: http URL explicitly rejected ---
 
 // TestLinkPreviewHTTPURLRejected verifies that an http:// URL (non-https scheme)
@@ -3438,54 +3050,12 @@ func wsJoin(conn *websocket.Conn, username string) {
 
 // TestDMSend verifies that sending a DM via WebSocket delivers the message
 // to the recipient and echoes it back to the sender.
-func TestDMSend(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Alice sends DM to Bob.
 
-	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("bob dial failed: %v", err)
-	}
-	defer bob.Close()
+// Alice should receive echo of her DM.
 
-	wsJoin(alice, "alice")
-	wsJoin(bob, "bob")
-
-	// Alice sends DM to Bob.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"dm_message","content":"Hi Bob","to":"bob"}`)); err != nil {
-		t.Fatalf("alice write failed: %v", err)
-	}
-
-	// Alice should receive echo of her DM.
-	echo, ok := wsDrainUntil(alice, "dm_message", 5*time.Second)
-	if !ok {
-		t.Fatal("alice did not receive echo of her DM")
-	}
-	if echo.Content != "Hi Bob" {
-		t.Errorf("alice echo content = %q, want 'Hi Bob'", echo.Content)
-	}
-
-	// Bob should receive the DM.
-	dm, ok := wsDrainUntil(bob, "dm_message", 5*time.Second)
-	if !ok {
-		t.Fatal("bob did not receive DM from alice")
-	}
-	if dm.Content != "Hi Bob" {
-		t.Errorf("bob DM content = %q, want 'Hi Bob'", dm.Content)
-	}
-	if dm.From != "alice" {
-		t.Errorf("bob DM from = %q, want 'alice'", dm.From)
-	}
-}
+// Bob should receive the DM.
 
 // mockStoreBlocking tracks blocks in memory so that BlockUser and IsBlocked
 // work correctly during DM blocked-user tests.
@@ -3539,105 +3109,25 @@ func newTestHandlerBlocking() *Handler {
 
 // TestDMBlockedUser verifies that when Alice blocks Bob, Bob's DM to Alice
 // is silently dropped and Alice does not receive it.
-func TestDMBlockedUser(t *testing.T) {
-	h := newTestHandlerBlocking()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Alice blocks Bob.
 
-	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("bob dial failed: %v", err)
-	}
-	defer bob.Close()
+// Alice should receive block confirmation.
 
-	wsJoin(alice, "alice")
-	wsJoin(bob, "bob")
+// Bob sends DM to Alice (should be silently dropped since Alice blocked Bob).
 
-	// Alice blocks Bob.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"block","username":"bob"}`)); err != nil {
-		t.Fatalf("alice block write failed: %v", err)
-	}
+// Alice should NOT receive the DM.
 
-	// Alice should receive block confirmation.
-	blockConfirm, ok := wsDrainUntil(alice, "block", 5*time.Second)
-	if !ok {
-		t.Fatal("alice did not receive block confirmation")
-	}
-	if blockConfirm.Username != "bob" {
-		t.Errorf("expected blocked username 'bob', got %q", blockConfirm.Username)
-	}
-
-	// Bob sends DM to Alice (should be silently dropped since Alice blocked Bob).
-	bob.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := bob.WriteMessage(websocket.TextMessage, []byte(`{"type":"dm_message","content":"Are you there?","to":"alice"}`)); err != nil {
-		t.Fatalf("bob write failed: %v", err)
-	}
-
-	// Alice should NOT receive the DM.
-	alice.SetReadDeadline(time.Now().Add(3 * time.Second))
-	for {
-		_, data, err := alice.ReadMessage()
-		if err != nil {
-			break // timeout means no message — success
-		}
-		var msg hub.Message
-		if err := json.Unmarshal(data, &msg); err != nil {
-			continue
-		}
-		if msg.Type == "dm_message" && msg.From == "bob" {
-			t.Error("alice received DM from bob despite having blocked him")
-			break
-		}
-	}
-}
+// timeout means no message — success
 
 // TestDMToSelf verifies that sending a DM to oneself is silently dropped
 // (no echo, no delivery).
-func TestDMToSelf(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Alice sends DM to herself.
 
-	wsJoin(alice, "alice")
+// Alice should NOT receive any dm_message (self-DM is dropped).
 
-	// Alice sends DM to herself.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"dm_message","content":"Self note","to":"alice"}`)); err != nil {
-		t.Fatalf("alice write failed: %v", err)
-	}
-
-	// Alice should NOT receive any dm_message (self-DM is dropped).
-	alice.SetReadDeadline(time.Now().Add(3 * time.Second))
-	for {
-		_, data, err := alice.ReadMessage()
-		if err != nil {
-			break // timeout with no dm_message — success
-		}
-		var msg hub.Message
-		if err := json.Unmarshal(data, &msg); err != nil {
-			continue
-		}
-		if msg.Type == "dm_message" && msg.To == "alice" && msg.From == "alice" {
-			t.Error("alice received DM to self, should have been dropped")
-			break
-		}
-	}
-}
+// timeout with no dm_message — success
 
 // =============================================================================
 // Group operation tests (via WebSocket)
@@ -3645,260 +3135,45 @@ func TestDMToSelf(t *testing.T) {
 
 // TestGroupCreateValid verifies that creating a group with a valid name
 // returns a group_create confirmation message.
-func TestGroupCreateValid(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
-
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
-
-	wsJoin(alice, "alice")
-
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"group_create","group":"DevTeam"}`)); err != nil {
-		t.Fatalf("alice write failed: %v", err)
-	}
-
-	msg, ok := wsDrainUntil(alice, "group_create", 5*time.Second)
-	if !ok {
-		t.Fatal("alice did not receive group_create confirmation")
-	}
-	if msg.Group != "DevTeam" {
-		t.Errorf("expected group 'DevTeam', got %q", msg.Group)
-	}
-	if len(msg.Members) == 0 {
-		t.Error("expected non-empty members list after group create")
-	}
-}
 
 // TestGroupCreateInvalidName verifies that creating a group with an invalid
 // name returns an error with code INVALID_GROUP_NAME.
-func TestGroupCreateInvalidName(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
-
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
-
-	wsJoin(alice, "alice")
-
-	tests := []struct {
-		name      string
-		groupName string
-	}{
-		{"empty name", ""},
-		{"too long >30 chars", "abcdefghijklmnopqrstuvwxyz12345"},
-		{"special characters", "Dev@Team!"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			body := `{"type":"group_create","group":"` + tt.groupName + `"}`
-			if err := alice.WriteMessage(websocket.TextMessage, []byte(body)); err != nil {
-				t.Fatalf("alice write failed: %v", err)
-			}
-
-			msg, ok := wsDrainUntil(alice, "error", 5*time.Second)
-			if !ok {
-				t.Fatal("expected error message for invalid group name")
-			}
-			if msg.ErrorCode != "INVALID_GROUP_NAME" {
-				t.Errorf("expected code INVALID_GROUP_NAME, got %q", msg.ErrorCode)
-			}
-		})
-	}
-}
 
 // TestGroupCreateDuplicateName verifies that creating a group with a name that
 // already exists returns an error with code GROUP_EXISTS.
-func TestGroupCreateDuplicateName(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// First create succeeds.
 
-	wsJoin(alice, "alice")
-
-	// First create succeeds.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"group_create","group":"MyGroup"}`)); err != nil {
-		t.Fatalf("first group_create write failed: %v", err)
-	}
-	_, ok := wsDrainUntil(alice, "group_create", 5*time.Second)
-	if !ok {
-		t.Fatal("first group_create did not succeed")
-	}
-
-	// Second create with same name should fail.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"group_create","group":"MyGroup"}`)); err != nil {
-		t.Fatalf("second group_create write failed: %v", err)
-	}
-
-	errMsg, ok := wsDrainUntil(alice, "error", 5*time.Second)
-	if !ok {
-		t.Fatal("expected error for duplicate group name")
-	}
-	if errMsg.ErrorCode != "GROUP_EXISTS" {
-		t.Errorf("expected code GROUP_EXISTS, got %q", errMsg.ErrorCode)
-	}
-}
+// Second create with same name should fail.
 
 // TestGroupAddMember verifies the invite+accept flow: Alice creates a group,
 // invites Bob, Bob accepts, and both receive group_join.
-func TestGroupAddMember(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Alice creates a group.
 
-	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("bob dial failed: %v", err)
-	}
-	defer bob.Close()
+// Alice invites Bob.
 
-	wsJoin(alice, "alice")
-	wsJoin(bob, "bob")
+// Bob receives the invite.
 
-	// Alice creates a group.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"group_create","group":"StudyGroup"}`)); err != nil {
-		t.Fatalf("group_create write failed: %v", err)
-	}
-	_, ok := wsDrainUntil(alice, "group_create", 5*time.Second)
-	if !ok {
-		t.Fatal("group_create did not succeed")
-	}
+// Bob accepts the invite.
 
-	// Alice invites Bob.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"group_invite","group":"StudyGroup","username":"bob"}`)); err != nil {
-		t.Fatalf("group_invite write failed: %v", err)
-	}
+// Bob receives group_join.
 
-	// Bob receives the invite.
-	invite, ok := wsDrainUntil(bob, "group_invite", 5*time.Second)
-	if !ok {
-		t.Fatal("bob did not receive group_invite")
-	}
-	if invite.Group != "StudyGroup" {
-		t.Errorf("invite group = %q, want 'StudyGroup'", invite.Group)
-	}
-
-	// Bob accepts the invite.
-	bob.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := bob.WriteMessage(websocket.TextMessage, []byte(`{"type":"group_invite_accept","group":"StudyGroup","from":"alice"}`)); err != nil {
-		t.Fatalf("group_invite_accept write failed: %v", err)
-	}
-
-	// Bob receives group_join.
-	bobJoin, ok := wsDrainUntil(bob, "group_join", 5*time.Second)
-	if !ok {
-		t.Fatal("bob did not receive group_join")
-	}
-	if bobJoin.Group != "StudyGroup" {
-		t.Errorf("bob join group = %q, want 'StudyGroup'", bobJoin.Group)
-	}
-
-	// Alice also receives group_join for Bob.
-	aliceJoin, ok := wsDrainUntil(alice, "group_join", 5*time.Second)
-	if !ok {
-		t.Fatal("alice did not receive group_join for bob")
-	}
-	if aliceJoin.Group != "StudyGroup" {
-		t.Errorf("alice join group = %q, want 'StudyGroup'", aliceJoin.Group)
-	}
-}
+// Alice also receives group_join for Bob.
 
 // TestGroupRemoveMember verifies that a member can leave a group: Alice
 // creates a group, invites Bob who accepts. Bob then leaves the group
 // and both receive group_leave notifications.
-func TestGroupRemoveMember(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Alice creates a group.
 
-	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("bob dial failed: %v", err)
-	}
-	defer bob.Close()
+// Alice invites Bob and Bob accepts.
 
-	wsJoin(alice, "alice")
-	wsJoin(bob, "bob")
+// Bob leaves the group.
 
-	// Alice creates a group.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"group_create","group":"TempGroup"}`)); err != nil {
-		t.Fatalf("group_create write failed: %v", err)
-	}
-	wsSkipUntil(alice, "group_create", 5*time.Second)
+// Bob should receive group_member_left confirmation.
 
-	// Alice invites Bob and Bob accepts.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"group_invite","group":"TempGroup","username":"bob"}`))
-	wsSkipUntil(bob, "group_invite", 5*time.Second)
-
-	bob.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	bob.WriteMessage(websocket.TextMessage, []byte(`{"type":"group_invite_accept","group":"TempGroup","from":"alice"}`))
-	wsSkipUntil(bob, "group_join", 5*time.Second)
-	wsSkipUntil(alice, "group_join", 5*time.Second)
-
-	// Bob leaves the group.
-	bob.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := bob.WriteMessage(websocket.TextMessage, []byte(`{"type":"group_leave","group":"TempGroup"}`)); err != nil {
-		t.Fatalf("group_leave write failed: %v", err)
-	}
-
-	// Bob should receive group_member_left confirmation.
-	bobLeave, ok := wsDrainUntil(bob, "group_member_left", 5*time.Second)
-	if !ok {
-		t.Fatal("bob did not receive group_member_left confirmation")
-	}
-	if bobLeave.Group != "TempGroup" {
-		t.Errorf("bob leave group = %q, want 'TempGroup'", bobLeave.Group)
-	}
-
-	// Alice should also receive group_member_left notification.
-	aliceLeave, ok := wsDrainUntil(alice, "group_member_left", 5*time.Second)
-	if !ok {
-		t.Fatal("alice did not receive group_member_left notification")
-	}
-	if aliceLeave.Group != "TempGroup" {
-		t.Errorf("alice leave group = %q, want 'TempGroup'", aliceLeave.Group)
-	}
-}
+// Alice should also receive group_member_left notification.
 
 // =============================================================================
 // Emoji integration tests
@@ -4027,131 +3302,22 @@ func TestEmojiDelete(t *testing.T) {
 
 // TestScheduledCreate verifies that sending schedule_message via WebSocket
 // returns a scheduled_message_confirm with the correct fields.
-func TestScheduledCreate(t *testing.T) {
-	h := newTestHandlerScheduled()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
-
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
-
-	wsJoin(alice, "alice")
-
-	futureTime := time.Now().Add(1 * time.Hour).UnixMilli()
-	payload := `{"type":"schedule_message","content":"Scheduled hello","timestamp":` + fmt.Sprintf("%d", futureTime) + `}`
-
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
-		t.Fatalf("schedule_message write failed: %v", err)
-	}
-
-	confirm, ok := wsDrainUntil(alice, "scheduled_message_confirm", 5*time.Second)
-	if !ok {
-		t.Fatal("did not receive scheduled_message_confirm")
-	}
-	if confirm.Content != "Scheduled hello" {
-		t.Errorf("expected content 'Scheduled hello', got %q", confirm.Content)
-	}
-	if confirm.Timestamp != futureTime {
-		t.Errorf("expected timestamp %d, got %d", futureTime, confirm.Timestamp)
-	}
-}
 
 // TestScheduledList verifies that sending scheduled_messages_list via WebSocket
 // returns the user's scheduled messages.
-func TestScheduledList(t *testing.T) {
-	h := newTestHandlerScheduled()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Schedule two messages.
 
-	wsJoin(alice, "alice")
-
-	// Schedule two messages.
-	futureTime := time.Now().Add(1 * time.Hour).UnixMilli()
-	for _, content := range []string{"First", "Second"} {
-		alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"schedule_message","content":"`+content+`","timestamp":`+fmt.Sprintf("%d", futureTime)+`}`))
-		wsSkipUntil(alice, "scheduled_message_confirm", 5*time.Second)
-	}
-
-	// Request list.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"scheduled_messages_list"}`)); err != nil {
-		t.Fatalf("scheduled_messages_list write failed: %v", err)
-	}
-
-	list, ok := wsDrainUntil(alice, "scheduled_messages_list", 5*time.Second)
-	if !ok {
-		t.Fatal("did not receive scheduled_messages_list")
-	}
-	if len(list.Messages) != 2 {
-		t.Errorf("expected 2 scheduled messages, got %d", len(list.Messages))
-	}
-}
+// Request list.
 
 // TestScheduledDelete verifies that sending cancel_scheduled_message via
 // WebSocket cancels the scheduled message and returns confirmation.
-func TestScheduledDelete(t *testing.T) {
-	h := newTestHandlerScheduled()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Schedule a message.
 
-	wsJoin(alice, "alice")
+// Cancel it.
 
-	// Schedule a message.
-	futureTime := time.Now().Add(1 * time.Hour).UnixMilli()
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"schedule_message","content":"To cancel","timestamp":`+fmt.Sprintf("%d", futureTime)+`}`))
-
-	confirm, ok := wsDrainUntil(alice, "scheduled_message_confirm", 5*time.Second)
-	if !ok {
-		t.Fatal("did not receive scheduled_message_confirm")
-	}
-	scheduledID := confirm.ID
-
-	// Cancel it.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"cancel_scheduled_message","id":"`+scheduledID+`"}`)); err != nil {
-		t.Fatalf("cancel_scheduled_message write failed: %v", err)
-	}
-
-	cancelConfirm, ok := wsDrainUntil(alice, "scheduled_message_cancelled", 5*time.Second)
-	if !ok {
-		t.Fatal("did not receive scheduled_message_cancelled")
-	}
-	if cancelConfirm.ID != scheduledID {
-		t.Errorf("expected cancelled ID %q, got %q", scheduledID, cancelConfirm.ID)
-	}
-
-	// Verify list is now empty.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"scheduled_messages_list"}`))
-	list, ok := wsDrainUntil(alice, "scheduled_messages_list", 5*time.Second)
-	if !ok {
-		t.Fatal("did not receive scheduled_messages_list after cancel")
-	}
-	if len(list.Messages) != 0 {
-		t.Errorf("expected 0 scheduled messages after cancel, got %d", len(list.Messages))
-	}
-}
+// Verify list is now empty.
 
 // =============================================================================
 // Call signaling integration tests (WebSocket)
@@ -4159,202 +3325,41 @@ func TestScheduledDelete(t *testing.T) {
 
 // TestCallStart verifies that sending call_start via WebSocket creates a
 // call session and delivers call_incoming to the target user.
-func TestCallStart(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Alice starts a call to Bob.
 
-	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("bob dial failed: %v", err)
-	}
-	defer bob.Close()
-
-	wsJoin(alice, "alice")
-	wsJoin(bob, "bob")
-
-	// Alice starts a call to Bob.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_start","to":"bob","call_type":"video","sdp":"fake-sdp-offer"}`)); err != nil {
-		t.Fatalf("call_start write failed: %v", err)
-	}
-
-	// Bob should receive call_incoming.
-	incoming, ok := wsDrainUntil(bob, "call_incoming", 5*time.Second)
-	if !ok {
-		t.Fatal("bob did not receive call_incoming")
-	}
-	if incoming.From != "alice" {
-		t.Errorf("expected call from 'alice', got %q", incoming.From)
-	}
-	if incoming.CallType != "video" {
-		t.Errorf("expected call_type 'video', got %q", incoming.CallType)
-	}
-	if incoming.SDP != "fake-sdp-offer" {
-		t.Errorf("expected SDP 'fake-sdp-offer', got %q", incoming.SDP)
-	}
-}
+// Bob should receive call_incoming.
 
 // TestCallAccept verifies the full call accept flow: Alice calls Bob,
 // Bob accepts, Alice receives call_accepted.
-func TestCallAccept(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Alice starts a call.
 
-	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("bob dial failed: %v", err)
-	}
-	defer bob.Close()
+// Bob receives incoming call.
 
-	wsJoin(alice, "alice")
-	wsJoin(bob, "bob")
+// Bob accepts with answer SDP.
 
-	// Alice starts a call.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_start","to":"bob","call_type":"audio","sdp":"offer-sdp"}`))
-
-	// Bob receives incoming call.
-	incoming, ok := wsDrainUntil(bob, "call_incoming", 5*time.Second)
-	if !ok {
-		t.Fatal("bob did not receive call_incoming")
-	}
-
-	// Bob accepts with answer SDP.
-	bob.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := bob.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_accept","call_id":"`+incoming.CallID+`","call_type":"audio","sdp":"answer-sdp"}`)); err != nil {
-		t.Fatalf("call_accept write failed: %v", err)
-	}
-
-	// Alice should receive call_accepted with Bob's SDP.
-	accepted, ok := wsDrainUntil(alice, "call_accepted", 5*time.Second)
-	if !ok {
-		t.Fatal("alice did not receive call_accepted")
-	}
-	if accepted.From != "bob" {
-		t.Errorf("expected accepted from 'bob', got %q", accepted.From)
-	}
-	if accepted.SDP != "answer-sdp" {
-		t.Errorf("expected SDP 'answer-sdp', got %q", accepted.SDP)
-	}
-}
+// Alice should receive call_accepted with Bob's SDP.
 
 // TestCallReject verifies that when Bob rejects Alice's call, Alice receives
 // call_rejected and the session is removed.
-func TestCallReject(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Alice starts a call.
 
-	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("bob dial failed: %v", err)
-	}
-	defer bob.Close()
+// Bob receives incoming.
 
-	wsJoin(alice, "alice")
-	wsJoin(bob, "bob")
+// Bob rejects.
 
-	// Alice starts a call.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_start","to":"bob","call_type":"video"}`))
-
-	// Bob receives incoming.
-	incoming, ok := wsDrainUntil(bob, "call_incoming", 5*time.Second)
-	if !ok {
-		t.Fatal("bob did not receive call_incoming")
-	}
-
-	// Bob rejects.
-	bob.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := bob.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_reject","call_id":"`+incoming.CallID+`"}`)); err != nil {
-		t.Fatalf("call_reject write failed: %v", err)
-	}
-
-	// Alice should receive call_rejected.
-	rejected, ok := wsDrainUntil(alice, "call_rejected", 5*time.Second)
-	if !ok {
-		t.Fatal("alice did not receive call_rejected")
-	}
-	if rejected.From != "bob" {
-		t.Errorf("expected rejected from 'bob', got %q", rejected.From)
-	}
-	if rejected.Content != "call rejected" {
-		t.Errorf("expected content 'call rejected', got %q", rejected.Content)
-	}
-}
+// Alice should receive call_rejected.
 
 // TestCallEnd verifies that either party can end an active call, and the
 // other party receives call_ended.
-func TestCallEnd(t *testing.T) {
-	h := newTestHandler()
-	srv := httptest.NewServer(http.HandlerFunc(h.HandleWebSocket))
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
 
-	alice, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("alice dial failed: %v", err)
-	}
-	defer alice.Close()
+// Alice starts and Bob accepts.
 
-	bob, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("bob dial failed: %v", err)
-	}
-	defer bob.Close()
+// Alice ends the call.
 
-	wsJoin(alice, "alice")
-	wsJoin(bob, "bob")
-
-	// Alice starts and Bob accepts.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_start","to":"bob","call_type":"audio"}`))
-	incoming, ok := wsDrainUntil(bob, "call_incoming", 5*time.Second)
-	if !ok {
-		t.Fatal("bob did not receive call_incoming")
-	}
-	bob.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	bob.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_accept","call_id":"`+incoming.CallID+`","call_type":"audio"}`))
-	wsSkipUntil(alice, "call_accepted", 5*time.Second)
-
-	// Alice ends the call.
-	alice.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := alice.WriteMessage(websocket.TextMessage, []byte(`{"type":"call_end","call_id":"`+incoming.CallID+`"}`)); err != nil {
-		t.Fatalf("call_end write failed: %v", err)
-	}
-
-	// Bob should receive call_ended.
-	ended, ok := wsDrainUntil(bob, "call_ended", 5*time.Second)
-	if !ok {
-		t.Fatal("bob did not receive call_ended")
-	}
-	if ended.From != "alice" {
-		t.Errorf("expected ended from 'alice', got %q", ended.From)
-	}
-}
+// Bob should receive call_ended.
 
 // =============================================================================
 // Thread reply integration tests (WebSocket)

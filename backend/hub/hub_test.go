@@ -24,9 +24,6 @@ type mockStore struct {
 	messages     []StoredMessage
 	rooms        []StoredRoom
 	groupRoles   map[string]string
-	webhooks     []store.Webhook
-	webhookByID  map[string]store.Webhook
-	auditLogs    []store.WebhookAuditLog
 	customEmojis []store.CustomEmoji
 	oidcUsers    map[string]*store.OIDCUser
 	users        map[string]bool
@@ -307,39 +304,21 @@ func (m *mockStore) GetNotificationPrefs(username, key string) (int64, bool, err
 func (m *mockStore) ListNotificationPrefs(username string) []store.NotificationPref { return nil }
 func (m *mockStore) GetThreadMessages(parentMessageID string) []StoredMessage       { return nil }
 func (m *mockStore) GetThreadReplyCount(parentMessageID string) int                 { return 0 }
-func (m *mockStore) ScheduleMessage(msg store.ScheduledMessage) error               { return nil }
-func (m *mockStore) GetPendingScheduledMessages(ctx context.Context) ([]store.ScheduledMessage, error) {
-	return nil, nil
-}
+
 func (m *mockStore) MarkScheduledSent(id string) error                { return nil }
 func (m *mockStore) CancelScheduledMessage(id, username string) error { return nil }
-func (m *mockStore) GetUserScheduledMessages(username string) ([]store.ScheduledMessage, error) {
-	return nil, nil
-}
+
 func (m *mockStore) ExportMessages(ctx context.Context, roomID, toUser, groupName, format string, limit int) ([]StoredMessage, error) {
 	return nil, nil
 }
-func (m *mockStore) DeleteGroup(groupName string) error                                { return nil }
-func (m *mockStore) GetGroupMembersWithRoles(groupName string) []store.GroupMemberInfo { return nil }
-func (m *mockStore) UpdateGroupName(oldName, newName string) error                     { return nil }
-func (m *mockStore) SetGroupMemberRole(groupName, username, role string) error         { return nil }
-func (m *mockStore) KickGroupMember(groupName, username string) error                  { return nil }
-func (m *mockStore) TransferGroupOwnership(groupName, newOwner string) error           { return nil }
-func (m *mockStore) LeaveGroup(groupName, username string) error                       { return nil }
-func (m *mockStore) GetGroupInfo(groupName string) (*store.GroupInfo, error) {
-	return &store.GroupInfo{Name: groupName}, nil
-}
-func (m *mockStore) GetGroupMemberRole(groupName, username string) (string, error) {
-	if m.groupRoles != nil {
-		if role := m.groupRoles[groupName+":"+username]; role != "" {
-			return role, nil
-		}
-		if role := m.groupRoles[username]; role != "" {
-			return role, nil
-		}
-	}
-	return "member", nil
-}
+func (m *mockStore) DeleteGroup(groupName string) error { return nil }
+
+func (m *mockStore) UpdateGroupName(oldName, newName string) error             { return nil }
+func (m *mockStore) SetGroupMemberRole(groupName, username, role string) error { return nil }
+func (m *mockStore) KickGroupMember(groupName, username string) error          { return nil }
+func (m *mockStore) TransferGroupOwnership(groupName, newOwner string) error   { return nil }
+func (m *mockStore) LeaveGroup(groupName, username string) error               { return nil }
+
 func (m *mockStore) GetGroupOwner(groupName string) (string, error) { return "", nil }
 func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error {
 	m.customEmojis = append(m.customEmojis, store.CustomEmoji{
@@ -351,13 +330,11 @@ func (m *mockStore) AddCustomEmoji(name, url, uploader, roomID string) error {
 func (m *mockStore) ListCustomEmojis(roomID string) ([]store.CustomEmoji, error) {
 	return m.customEmojis, nil
 }
-func (m *mockStore) DeleteCustomEmoji(name, username string) error                      { return nil }
-func (m *mockStore) SearchCustomEmojis(query string) ([]store.CustomEmoji, error)       { return nil, nil }
-func (m *mockStore) LogCall(call store.CallRecord) error                                { return nil }
+func (m *mockStore) DeleteCustomEmoji(name, username string) error                { return nil }
+func (m *mockStore) SearchCustomEmojis(query string) ([]store.CustomEmoji, error) { return nil, nil }
+
 func (m *mockStore) UpdateCallRecord(id, status string, startedAt, endedAt int64) error { return nil }
-func (m *mockStore) GetCallHistory(username string, limit int) ([]store.CallRecord, error) {
-	return nil, nil
-}
+
 func (m *mockStore) RegisterUser(username, passwordHash, inviteCode string) error { return nil }
 func (m *mockStore) VerifyUser(username, password string) (bool, error)           { return true, nil }
 func (m *mockStore) UserExists(username string) (bool, error) {
@@ -373,102 +350,6 @@ func (m *mockStore) ListInviteCodes(creator string) ([]store.InviteCodeRecord, e
 	return nil, nil
 }
 func (m *mockStore) ValidateInviteCode(code string) (bool, error) { return true, nil }
-func (m *mockStore) CreateChatFolder(username, name string) (*ChatFolder, error) {
-	return &ChatFolder{ID: "f1", Name: name}, nil
-}
-func (m *mockStore) DeleteChatFolder(username, id string) error          { return nil }
-func (m *mockStore) RenameChatFolder(username, id, newName string) error { return nil }
-func (m *mockStore) AddToFolder(folderID, key string) error              { return nil }
-func (m *mockStore) RemoveFromFolder(folderID, key string) error         { return nil }
-func (m *mockStore) ListFolders(username string) ([]ChatFolder, error)   { return nil, nil }
-func (m *mockStore) GetFolderItems(folderID string) ([]string, error)    { return nil, nil }
-
-func (m *mockStore) CreateWebhook(id, groupName, url, secret, createdBy string) error {
-	w := store.Webhook{
-		ID:        id,
-		GroupName: groupName,
-		URL:       url,
-		Secret:    secret,
-		CreatedBy: createdBy,
-		CreatedAt: time.Now().UnixMilli(),
-	}
-	m.webhooks = append(m.webhooks, w)
-	if m.webhookByID == nil {
-		m.webhookByID = make(map[string]store.Webhook)
-	}
-	m.webhookByID[id] = w
-	return nil
-}
-func (m *mockStore) DeleteWebhook(id, groupName, deletedBy string) error {
-	next := m.webhooks[:0]
-	for _, w := range m.webhooks {
-		if w.ID == id && w.GroupName == groupName {
-			m.auditLogs = append(m.auditLogs, store.WebhookAuditLog{
-				ID: "audit-delete-" + id, WebhookID: id, GroupName: groupName,
-				Action: "deleted", Actor: deletedBy, CreatedAt: time.Now().UnixMilli(),
-				Metadata: `{"url":"` + w.URL + `"}`,
-			})
-			if m.webhookByID != nil {
-				delete(m.webhookByID, id)
-			}
-			continue
-		}
-		next = append(next, w)
-	}
-	m.webhooks = next
-	return nil
-}
-func (m *mockStore) RotateWebhookSecret(id, groupName, secret, rotatedBy string) (*store.Webhook, error) {
-	for i, w := range m.webhooks {
-		if w.ID == id && w.GroupName == groupName {
-			w.Secret = secret
-			w.RotatedAt = time.Now().UnixMilli()
-			w.RotatedBy = rotatedBy
-			m.webhooks[i] = w
-			if m.webhookByID == nil {
-				m.webhookByID = make(map[string]store.Webhook)
-			}
-			m.webhookByID[id] = w
-			m.auditLogs = append(m.auditLogs, store.WebhookAuditLog{
-				ID: "audit-rotate-" + id, WebhookID: id, GroupName: groupName,
-				Action: "rotated", Actor: rotatedBy, CreatedAt: w.RotatedAt,
-				Metadata: `{"url":"` + w.URL + `"}`,
-			})
-			return &w, nil
-		}
-	}
-	return nil, nil
-}
-func (m *mockStore) ListWebhooks(groupName string) ([]store.Webhook, error) {
-	if len(m.webhooks) == 0 {
-		return nil, nil
-	}
-	result := make([]store.Webhook, 0, len(m.webhooks))
-	for _, w := range m.webhooks {
-		if w.GroupName == groupName {
-			result = append(result, w)
-		}
-	}
-	return result, nil
-}
-func (m *mockStore) ListWebhookAuditLogs(groupName string, limit int) ([]store.WebhookAuditLog, error) {
-	result := make([]store.WebhookAuditLog, 0, len(m.auditLogs))
-	for _, item := range m.auditLogs {
-		if item.GroupName == groupName {
-			result = append(result, item)
-		}
-	}
-	return result, nil
-}
-func (m *mockStore) GetWebhookByURL(url string) (*store.Webhook, error) { return nil, nil }
-func (m *mockStore) VerifyWebhookSecret(url, secret string) (*store.Webhook, bool, error) {
-	for _, w := range m.webhooks {
-		if w.URL == url {
-			return &w, w.Secret == secret, nil
-		}
-	}
-	return nil, false, nil
-}
 
 func (m *mockStore) UpsertOIDCUser(sub, chatUsername, email, preferredUsername string) error {
 	if m.oidcUsers == nil {
@@ -667,255 +548,6 @@ func TestNew(t *testing.T) {
 	}
 	if h.StartTime.IsZero() {
 		t.Error("expected non-zero StartTime")
-	}
-}
-
-func TestWebhookCreateReturnsSecretToCreator(t *testing.T) {
-	ms := &mockStore{groupRoles: map[string]string{"alice": "admin"}}
-	h := New(ms, nil, "")
-	client := &Client{
-		hub:      h,
-		send:     make(chan []byte, 1),
-		username: "alice",
-	}
-
-	client.handleWebhookCreate(Message{Group: "team"})
-
-	var got Message
-	select {
-	case payload := <-client.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("failed to decode webhook_create response: %v", err)
-		}
-	default:
-		t.Fatal("expected webhook_created response")
-	}
-	if got.Type != "webhook_created" {
-		t.Fatalf("response type = %q, want webhook_created", got.Type)
-	}
-	if got.Group != "team" {
-		t.Fatalf("group = %q, want team", got.Group)
-	}
-	if got.ID == "" {
-		t.Fatal("expected webhook id")
-	}
-	if got.Content == "" {
-		t.Fatal("expected webhook URL in content")
-	}
-	if got.Secret == "" {
-		t.Fatal("expected one-time webhook secret in response")
-	}
-	if len(got.Secret) < 32 {
-		t.Fatalf("webhook secret length = %d, want at least 32 characters", len(got.Secret))
-	}
-}
-
-func TestWebhookListDoesNotExposeSecrets(t *testing.T) {
-	ms := &mockStore{
-		groupRoles: map[string]string{"alice": "admin"},
-		webhooks: []store.Webhook{
-			{
-				ID:        "wh-1",
-				GroupName: "team",
-				URL:       "wh-1-url",
-				Secret:    "secret-value",
-				CreatedBy: "alice",
-				CreatedAt: 12345,
-			},
-		},
-	}
-	h := New(ms, nil, "")
-	client := &Client{
-		hub:      h,
-		send:     make(chan []byte, 1),
-		username: "alice",
-	}
-
-	client.handleWebhookList(Message{Group: "team"})
-
-	var raw map[string]interface{}
-	select {
-	case payload := <-client.send:
-		if err := json.Unmarshal(payload, &raw); err != nil {
-			t.Fatalf("failed to decode webhook_list response: %v", err)
-		}
-	default:
-		t.Fatal("expected webhook_list response")
-	}
-	if raw["type"] != "webhook_list" {
-		t.Fatalf("response type = %v, want webhook_list", raw["type"])
-	}
-	encoded, err := json.Marshal(raw["webhooks"])
-	if err != nil {
-		t.Fatalf("failed to encode webhooks payload: %v", err)
-	}
-	if strings.Contains(string(encoded), "secret-value") || strings.Contains(string(encoded), "Secret") || strings.Contains(string(encoded), "secret") {
-		t.Fatalf("webhook_list leaked secret data: %s", string(encoded))
-	}
-	if !strings.Contains(string(encoded), "wh-1-url") {
-		t.Fatalf("webhook_list omitted public URL: %s", string(encoded))
-	}
-}
-
-func TestWebhookListRequiresGroupAdmin(t *testing.T) {
-	ms := &mockStore{
-		groupRoles: map[string]string{"alice": "member"},
-		webhooks: []store.Webhook{
-			{
-				ID:        "wh-1",
-				GroupName: "team",
-				URL:       "wh-1-url",
-				Secret:    "secret-value",
-				CreatedBy: "owner",
-				CreatedAt: 12345,
-			},
-		},
-	}
-	h := New(ms, nil, "")
-	client := &Client{
-		hub:      h,
-		send:     make(chan []byte, 1),
-		username: "alice",
-	}
-
-	client.handleWebhookList(Message{Group: "team"})
-
-	select {
-	case payload := <-client.send:
-		t.Fatalf("expected no webhook_list response for non-admin, got %s", string(payload))
-	default:
-	}
-}
-
-func TestWebhookRotateReturnsSecretAndMetadataToAdmin(t *testing.T) {
-	ms := &mockStore{
-		groupRoles: map[string]string{"alice": "admin"},
-		webhooks: []store.Webhook{
-			{
-				ID:        "wh-1",
-				GroupName: "team",
-				URL:       "wh-1-url",
-				Secret:    "old-secret",
-				CreatedBy: "owner",
-				CreatedAt: 12345,
-			},
-		},
-	}
-	h := New(ms, nil, "")
-	client := &Client{
-		hub:      h,
-		send:     make(chan []byte, 1),
-		username: "alice",
-	}
-
-	client.handleWebhookRotate(Message{Group: "team", ID: "wh-1"})
-
-	var got Message
-	select {
-	case payload := <-client.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("failed to decode webhook_rotate response: %v", err)
-		}
-	default:
-		t.Fatal("expected webhook_rotated response")
-	}
-	if got.Type != "webhook_rotated" {
-		t.Fatalf("response type = %q, want webhook_rotated", got.Type)
-	}
-	if got.ID != "wh-1" || got.Group != "team" || got.Content != "wh-1-url" {
-		t.Fatalf("unexpected rotate response: %+v", got)
-	}
-	if got.Secret == "" || len(got.Secret) < 32 {
-		t.Fatalf("expected one-time rotated secret, got %q", got.Secret)
-	}
-	if got.RotatedBy != "alice" || got.RotatedAt == 0 {
-		t.Fatalf("missing rotation metadata: %+v", got)
-	}
-	if ms.webhooks[0].Secret == "old-secret" {
-		t.Fatal("mock webhook secret was not rotated")
-	}
-}
-
-func TestWebhookRotateRequiresGroupAdmin(t *testing.T) {
-	ms := &mockStore{
-		groupRoles: map[string]string{"alice": "member"},
-		webhooks: []store.Webhook{
-			{ID: "wh-1", GroupName: "team", URL: "wh-1-url", Secret: "old-secret"},
-		},
-	}
-	h := New(ms, nil, "")
-	client := &Client{
-		hub:      h,
-		send:     make(chan []byte, 1),
-		username: "alice",
-	}
-
-	client.handleWebhookRotate(Message{Group: "team", ID: "wh-1"})
-
-	select {
-	case payload := <-client.send:
-		t.Fatalf("expected no webhook_rotated response for non-admin, got %s", string(payload))
-	default:
-	}
-	if ms.webhooks[0].Secret != "old-secret" {
-		t.Fatal("non-admin rotated webhook secret")
-	}
-}
-
-func TestWebhookAuditListRedactsMetadataAndRequiresGroupAdmin(t *testing.T) {
-	ms := &mockStore{
-		groupRoles: map[string]string{"alice": "admin", "mallory": "member"},
-		auditLogs: []store.WebhookAuditLog{
-			{
-				ID: "audit-1", WebhookID: "wh-1", GroupName: "team",
-				Action: "rotated", Actor: "alice", CreatedAt: 12345,
-				Metadata: `{"secret":"secret-value","hash":"whsec_sha256:abc"}`,
-			},
-		},
-	}
-	h := New(ms, nil, "")
-	admin := &Client{
-		hub:      h,
-		send:     make(chan []byte, 1),
-		username: "alice",
-	}
-
-	admin.handleWebhookAuditList(Message{Group: "team"})
-
-	var raw map[string]interface{}
-	select {
-	case payload := <-admin.send:
-		if err := json.Unmarshal(payload, &raw); err != nil {
-			t.Fatalf("failed to decode webhook_audit_list response: %v", err)
-		}
-	default:
-		t.Fatal("expected webhook_audit_list response")
-	}
-	if raw["type"] != "webhook_audit_list" {
-		t.Fatalf("response type = %v, want webhook_audit_list", raw["type"])
-	}
-	encoded, err := json.Marshal(raw["audit_logs"])
-	if err != nil {
-		t.Fatalf("failed to encode audit payload: %v", err)
-	}
-	payload := string(encoded)
-	if strings.Contains(payload, "secret-value") || strings.Contains(payload, "whsec_sha256:") || strings.Contains(payload, "metadata") {
-		t.Fatalf("webhook_audit_list leaked sensitive metadata: %s", payload)
-	}
-	if !strings.Contains(payload, "rotated") || !strings.Contains(payload, "alice") {
-		t.Fatalf("webhook_audit_list omitted safe audit fields: %s", payload)
-	}
-
-	member := &Client{
-		hub:      h,
-		send:     make(chan []byte, 1),
-		username: "mallory",
-	}
-	member.handleWebhookAuditList(Message{Group: "team"})
-	select {
-	case payload := <-member.send:
-		t.Fatalf("expected no webhook_audit_list response for non-admin, got %s", string(payload))
-	default:
 	}
 }
 
@@ -1363,114 +995,21 @@ func TestHandleTypingGuards(t *testing.T) {
 	}
 }
 
-func TestHandleFriendRequest(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
+// Self-request: should be silently ignored.
 
-	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+// Already friends: should receive ALREADY_FRIENDS error.
 
-	// Self-request: should be silently ignored.
-	c.handleFriendRequest(Message{To: "alice"})
-	select {
-	case msg := <-c.send:
-		t.Fatalf("expected no response for self-request, got %s", string(msg))
-	default:
-	}
+// Valid request to a new user: no error to sender (target notified via SendToUser if online).
 
-	// Already friends: should receive ALREADY_FRIENDS error.
-	h.AddFriend("alice", "bob")
-	c.handleFriendRequest(Message{To: "bob"})
-	var got Message
-	select {
-	case payload := <-c.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("failed to decode error: %v", err)
-		}
-	default:
-		t.Fatal("expected ALREADY_FRIENDS error response")
-	}
-	if got.Type != "error" || got.ErrorCode != "ALREADY_FRIENDS" {
-		t.Fatalf("expected ALREADY_FRIENDS error, got type=%q code=%q", got.Type, got.ErrorCode)
-	}
-	if got.Content != "already friends with bob" {
-		t.Fatalf("unexpected error content: %q", got.Content)
-	}
+// Empty username guard.
 
-	// Valid request to a new user: no error to sender (target notified via SendToUser if online).
-	freshClient := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
-	freshClient.handleFriendRequest(Message{To: "charlie"})
-	select {
-	case msg := <-freshClient.send:
-		t.Fatalf("expected no message to sender for valid friend_request, got %s", string(msg))
-	default:
-	}
-}
+// Valid accept: self receives updated friend_list.
 
-func TestHandleFriendAccept(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
+// Empty username guard.
 
-	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+// Empty From: handler returns early.
 
-	// Empty username guard.
-	anon := &Client{hub: h, send: make(chan []byte, 1)}
-	anon.handleFriendAccept(Message{From: "bob"})
-	select {
-	case msg := <-anon.send:
-		t.Fatalf("expected no response for empty username, got %s", string(msg))
-	default:
-	}
-
-	// Valid accept: self receives updated friend_list.
-	c.handleFriendAccept(Message{From: "bob"})
-
-	var got Message
-	select {
-	case payload := <-c.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("failed to decode: %v", err)
-		}
-	default:
-		t.Fatal("expected friend_list response after accept")
-	}
-	if got.Type != "friend_list" {
-		t.Fatalf("expected friend_list, got %q", got.Type)
-	}
-	if !h.IsFriend("alice", "bob") {
-		t.Error("expected alice and bob to be friends after accept")
-	}
-}
-
-func TestHandleFriendReject(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-
-	// Empty username guard.
-	c := &Client{hub: h, send: make(chan []byte, 1)}
-	c.handleFriendReject(Message{From: "bob"})
-	select {
-	case msg := <-c.send:
-		t.Fatalf("expected no response for empty username, got %s", string(msg))
-	default:
-	}
-
-	// Empty From: handler returns early.
-	c.username = "alice"
-	c.handleFriendReject(Message{From: ""})
-	select {
-	case msg := <-c.send:
-		t.Fatalf("expected no response for empty From, got %s", string(msg))
-	default:
-	}
-
-	// Valid reject: sends friend_reject to requester (silent if offline).
-	c.handleFriendReject(Message{From: "bob"})
-	select {
-	case msg := <-c.send:
-		t.Fatalf("expected no response to rejecter, got %s", string(msg))
-	default:
-	}
-}
+// Valid reject: sends friend_reject to requester (silent if offline).
 
 func TestHandleBlock(t *testing.T) {
 	ms := &mockStore{}
@@ -1524,74 +1063,11 @@ func TestHandleBlock(t *testing.T) {
 	}
 }
 
-func TestHandleRoomCreateAndList(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
+// Invalid room name: should get INVALID_ROOM_NAME error.
 
-	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
+// Valid room create: should get room_create confirmation with room ID.
 
-	// Invalid room name: should get INVALID_ROOM_NAME error.
-	c.handleRoomCreate(Message{Group: ""})
-	var got Message
-	select {
-	case payload := <-c.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("failed to decode invalid room error: %v", err)
-		}
-	default:
-		t.Fatal("expected INVALID_ROOM_NAME error")
-	}
-	if got.Type != "error" || got.ErrorCode != "INVALID_ROOM_NAME" {
-		t.Fatalf("expected INVALID_ROOM_NAME error, got type=%q code=%q", got.Type, got.ErrorCode)
-	}
-
-	// Valid room create: should get room_create confirmation with room ID.
-	c2 := &Client{hub: h, username: "bob", send: make(chan []byte, 1)}
-	c2.handleRoomCreate(Message{Group: "test-room"})
-	select {
-	case payload := <-c2.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("failed to decode room_create response: %v", err)
-		}
-	default:
-		t.Fatal("expected room_create confirmation")
-	}
-	if got.Type != "room_create" {
-		t.Fatalf("expected room_create, got %q", got.Type)
-	}
-	if got.Group != "test-room" {
-		t.Fatalf("expected room name test-room, got %q", got.Group)
-	}
-	if got.RoomID == "" {
-		t.Fatal("expected non-empty room ID")
-	}
-
-	// Room list: should include the newly created room.
-	c3 := &Client{hub: h, username: "charlie", send: make(chan []byte, 1)}
-	c3.handleRoomList()
-	select {
-	case payload := <-c3.send:
-		var listMsg Message
-		if err := json.Unmarshal(payload, &listMsg); err != nil {
-			t.Fatalf("failed to decode room_list: %v", err)
-		}
-		if listMsg.Type != "room_list" {
-			t.Fatalf("expected room_list, got %q", listMsg.Type)
-		}
-		found := false
-		for _, r := range listMsg.Rooms {
-			if r.Name == "test-room" {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Fatal("expected test-room in room list")
-		}
-	default:
-		t.Fatal("expected room_list response")
-	}
-}
+// Room list: should include the newly created room.
 
 func TestHandlePinMessage(t *testing.T) {
 	ms := &mockStore{}
@@ -1707,129 +1183,25 @@ func TestHandleUnpinMessage(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 }
 
-func TestHandleMuteAndUnmuteConversation(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-	go h.Run()
-	defer h.Stop()
+// Mute a conversation.
 
-	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
-	h.register <- c
-	time.Sleep(10 * time.Millisecond)
+// Unmute — reuse the same client to avoid duplicate-username kick.
 
-	// Mute a conversation.
-	c.handleMuteConversation(Message{Key: "dm:bob"})
+// Guard: empty username returns early.
 
-	var got Message
-	select {
-	case payload := <-c.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("failed to decode muted_conversations: %v", err)
-		}
-	default:
-		t.Fatal("expected muted_conversations response after mute")
-	}
-	if got.Type != "muted_conversations" {
-		t.Fatalf("expected muted_conversations, got %q", got.Type)
-	}
+// Guard: empty key returns early.
 
-	// Unmute — reuse the same client to avoid duplicate-username kick.
-	c.handleUnmuteConversation(Message{Key: "dm:bob"})
-	select {
-	case payload := <-c.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("failed to decode muted_conversations after unmute: %v", err)
-		}
-	default:
-		t.Fatal("expected muted_conversations response after unmute")
-	}
-	if got.Type != "muted_conversations" {
-		t.Fatalf("expected muted_conversations, got %q", got.Type)
-	}
+// Cleanup.
 
-	// Guard: empty username returns early.
-	anon := &Client{hub: h, send: make(chan []byte, 1)}
-	anon.handleMuteConversation(Message{Key: "dm:bob"})
-	select {
-	case msg := <-anon.send:
-		t.Fatalf("expected no response for empty username, got %s", string(msg))
-	default:
-	}
+// Archive a conversation.
 
-	// Guard: empty key returns early.
-	c.handleMuteConversation(Message{Key: ""})
-	select {
-	case msg := <-c.send:
-		t.Fatalf("expected no response for empty key, got %s", string(msg))
-	default:
-	}
+// Unarchive — reuse the same client.
 
-	// Cleanup.
-	h.unregister <- c
-	time.Sleep(10 * time.Millisecond)
-}
+// Guard: empty username returns early.
 
-func TestHandleArchiveAndUnarchiveConversation(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-	go h.Run()
-	defer h.Stop()
+// Guard: empty key returns early.
 
-	c := &Client{hub: h, username: "alice", send: make(chan []byte, 1)}
-	h.register <- c
-	time.Sleep(10 * time.Millisecond)
-
-	// Archive a conversation.
-	c.handleArchiveConversation(Message{Key: "dm:bob"})
-
-	var got Message
-	select {
-	case payload := <-c.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("failed to decode archived_conversations: %v", err)
-		}
-	default:
-		t.Fatal("expected archived_conversations response after archive")
-	}
-	if got.Type != "archived_conversations" {
-		t.Fatalf("expected archived_conversations, got %q", got.Type)
-	}
-
-	// Unarchive — reuse the same client.
-	c.handleUnarchiveConversation(Message{Key: "dm:bob"})
-	select {
-	case payload := <-c.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("failed to decode archived_conversations after unarchive: %v", err)
-		}
-	default:
-		t.Fatal("expected archived_conversations response after unarchive")
-	}
-	if got.Type != "archived_conversations" {
-		t.Fatalf("expected archived_conversations, got %q", got.Type)
-	}
-
-	// Guard: empty username returns early.
-	anon := &Client{hub: h, send: make(chan []byte, 1)}
-	anon.handleArchiveConversation(Message{Key: "dm:bob"})
-	select {
-	case msg := <-anon.send:
-		t.Fatalf("expected no response for empty username, got %s", string(msg))
-	default:
-	}
-
-	// Guard: empty key returns early.
-	c.handleArchiveConversation(Message{Key: ""})
-	select {
-	case msg := <-c.send:
-		t.Fatalf("expected no response for empty key, got %s", string(msg))
-	default:
-	}
-
-	// Cleanup.
-	h.unregister <- c
-	time.Sleep(10 * time.Millisecond)
-}
+// Cleanup.
 
 func TestHandleCustomEmojiAddAndList(t *testing.T) {
 	ms := &mockStore{}
@@ -1908,37 +1280,9 @@ func TestHandleCustomEmojiAddAndList(t *testing.T) {
 	}
 }
 
-func TestValidateGroupName(t *testing.T) {
-	tests := []struct {
-		name      string
-		groupName string
-		valid     bool
-	}{
-		// Valid cases.
-		{name: "simple english", groupName: "developers", valid: true},
-		{name: "with hyphens", groupName: "dev-team", valid: true},
-		{name: "with spaces", groupName: "Dev Team", valid: true},
-		{name: "chinese", groupName: "开发团队", valid: true},
-		{name: "mixed cn and en", groupName: "Dev开发_Group", valid: true},
-		{name: "single char", groupName: "a", valid: true},
-		{name: "exactly 30 chars", groupName: "123456789012345678901234567890", valid: true},
+// Valid cases.
 
-		// Invalid cases.
-		{name: "empty", groupName: "", valid: false},
-		{name: "31 chars too long", groupName: "1234567890123456789012345678901", valid: false},
-		{name: "special char @", groupName: "dev@team", valid: false},
-		{name: "special char #", groupName: "dev#team", valid: false},
-		{name: "emoji", groupName: "team\xf0\x9f\x98\x80", valid: false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := ValidateGroupName(tc.groupName)
-			if result != tc.valid {
-				t.Errorf("ValidateGroupName(%q) = %v, want %v", tc.groupName, result, tc.valid)
-			}
-		})
-	}
-}
+// Invalid cases.
 
 func TestIsReservedUsername(t *testing.T) {
 	tests := []struct {
@@ -1983,116 +1327,6 @@ func TestIsReservedUsername(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestExecuteHubCommand(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "TestBot")
-
-	t.Run("online_users", func(t *testing.T) {
-		resp := h.ExecuteHubCommand(HubCommand{Type: "online_users"})
-		if !resp.Success {
-			t.Error("expected success for online_users")
-		}
-		if resp.Type != "online_users" {
-			t.Errorf("type = %q, want online_users", resp.Type)
-		}
-		online, ok := resp.Data["online"].([]string)
-		if !ok {
-			t.Fatal("expected online to be []string in data")
-		}
-		if len(online) != 0 {
-			t.Errorf("expected 0 online users initially, got %d", len(online))
-		}
-		count, ok := resp.Data["count"].(int)
-		if !ok || count != 0 {
-			t.Errorf("expected count=0, got count=%v", resp.Data["count"])
-		}
-	})
-
-	t.Run("history", func(t *testing.T) {
-		ms.messages = append(ms.messages, StoredMessage{
-			ID: "msg-1", Username: "alice", Content: "hello", Timestamp: 1000,
-		})
-		resp := h.ExecuteHubCommand(HubCommand{Type: "history", Limit: 10})
-		if !resp.Success {
-			t.Error("expected success for history command")
-		}
-		if resp.Type != "history" {
-			t.Errorf("type = %q, want history", resp.Type)
-		}
-	})
-
-	t.Run("history with room_id", func(t *testing.T) {
-		resp := h.ExecuteHubCommand(HubCommand{
-			Type:   "history",
-			RoomID: "room-1",
-			Limit:  5,
-		})
-		if !resp.Success {
-			t.Error("expected success for history with room_id")
-		}
-		if resp.Data["room_id"] != "room-1" {
-			t.Errorf("room_id = %v, want room-1", resp.Data["room_id"])
-		}
-	})
-
-	t.Run("history limit cap", func(t *testing.T) {
-		resp := h.ExecuteHubCommand(HubCommand{Type: "history", Limit: 500})
-		if !resp.Success {
-			t.Error("expected success even with excessive limit")
-		}
-	})
-
-	t.Run("send_dm", func(t *testing.T) {
-		resp := h.ExecuteHubCommand(HubCommand{
-			Type:    "send_dm",
-			ToUser:  "alice",
-			Content: "hello from test agent",
-		})
-		if !resp.Success {
-			t.Errorf("expected success for send_dm, got error: %s", resp.Error)
-		}
-		if resp.Type != "send_dm" {
-			t.Errorf("type = %q, want send_dm", resp.Type)
-		}
-	})
-
-	t.Run("send_dm with custom from param", func(t *testing.T) {
-		resp := h.ExecuteHubCommand(HubCommand{
-			Type:    "send_dm",
-			ToUser:  "bob",
-			Content: "custom sender message",
-			Params:  map[string]any{"from": "CustomBot"},
-		})
-		if !resp.Success {
-			t.Errorf("expected success with custom from, got error: %s", resp.Error)
-		}
-	})
-
-	t.Run("send_dm empty content", func(t *testing.T) {
-		resp := h.ExecuteHubCommand(HubCommand{
-			Type:    "send_dm",
-			ToUser:  "alice",
-			Content: "",
-		})
-		if resp.Success {
-			t.Error("expected failure for send_dm with empty content")
-		}
-	})
-
-	t.Run("unknown command", func(t *testing.T) {
-		resp := h.ExecuteHubCommand(HubCommand{Type: "invalid_cmd"})
-		if resp.Success {
-			t.Error("expected failure for unknown command")
-		}
-		if resp.Type != "invalid_cmd" {
-			t.Errorf("type = %q, want invalid_cmd", resp.Type)
-		}
-		if resp.Error == "" {
-			t.Error("expected non-empty error message for unknown command")
-		}
-	})
 }
 
 func TestParseMentions(t *testing.T) {
@@ -2148,47 +1382,6 @@ func TestContainsAllMention(t *testing.T) {
 			result := containsAllMention(tc.content)
 			if result != tc.expected {
 				t.Errorf("containsAllMention(%q) = %v, want %v", tc.content, result, tc.expected)
-			}
-		})
-	}
-}
-
-func TestAssistantMentionTargetKeywordTriggers(t *testing.T) {
-	tests := []struct {
-		name      string
-		content   string
-		wantToken bool
-	}{
-		{
-			name:      "keyword help triggers TokenBot",
-			content:   "I need help",
-			wantToken: true,
-		},
-		{
-			name:      "keyword 帮助 triggers TokenBot",
-			content:   "我需要帮助",
-			wantToken: true,
-		},
-		{
-			name:      "keyword bot triggers TokenBot",
-			content:   "is bot working",
-			wantToken: true,
-		},
-		{
-			name:      "keyword 机器人 triggers TokenBot",
-			content:   "机器人你好",
-			wantToken: true,
-		},
-		{
-			name:    "no trigger words at all",
-			content: "hello how are you today",
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := assistantMentionTarget(tc.content, "TokenBot")
-			if got.TokenBot != tc.wantToken {
-				t.Errorf("TokenBot target = %v, want %v (content=%q)", got.TokenBot, tc.wantToken, tc.content)
 			}
 		})
 	}
@@ -2435,101 +1628,15 @@ func TestIsUsernameTaken_CaseSensitivity(t *testing.T) {
 
 // --- Friend system tests ---
 
-func TestIsFriend(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
+// Non-existent user.
 
-	// Non-existent user.
-	if h.IsFriend("alice", "bob") {
-		t.Error("expected IsFriend to return false for non-existent users")
-	}
+// Add friend and verify.
 
-	// Add friend and verify.
-	h.AddFriend("alice", "bob")
-	if !h.IsFriend("alice", "bob") {
-		t.Error("expected alice-bob to be friends after AddFriend")
-	}
-	if !h.IsFriend("bob", "alice") {
-		t.Error("expected bob-alice to be friends (bidirectional)")
-	}
+// Unrelated users.
 
-	// Unrelated users.
-	if h.IsFriend("alice", "charlie") {
-		t.Error("expected alice-charlie to NOT be friends")
-	}
-}
+// Removing non-existent friend should not panic.
 
-func TestAddFriend_Bidirectional(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-
-	h.AddFriend("alice", "bob")
-
-	if !h.IsFriend("alice", "bob") {
-		t.Error("expected AddFriend to create alice->bob")
-	}
-	if !h.IsFriend("bob", "alice") {
-		t.Error("expected AddFriend to create bob->alice (bidirectional)")
-	}
-
-	friends := h.GetFriends("alice")
-	if len(friends) != 1 || friends[0] != "bob" {
-		t.Fatalf("expected alice friends = [bob], got %v", friends)
-	}
-
-	friends2 := h.GetFriends("bob")
-	if len(friends2) != 1 || friends2[0] != "alice" {
-		t.Fatalf("expected bob friends = [alice], got %v", friends2)
-	}
-}
-
-func TestRemoveFriend_Bidirectional(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-
-	h.AddFriend("alice", "bob")
-	h.AddFriend("alice", "charlie")
-
-	h.RemoveFriend("alice", "bob")
-
-	if h.IsFriend("alice", "bob") {
-		t.Error("expected alice-bob friendship removed")
-	}
-	if h.IsFriend("bob", "alice") {
-		t.Error("expected bob-alice friendship removed (bidirectional)")
-	}
-	if !h.IsFriend("alice", "charlie") {
-		t.Error("expected alice-charlie friendship to remain")
-	}
-
-	// Removing non-existent friend should not panic.
-	h.RemoveFriend("alice", "nonexistent")
-}
-
-func TestGetFriends(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-
-	// No friends initially.
-	if f := h.GetFriends("alice"); len(f) != 0 {
-		t.Fatalf("expected 0 friends for new user, got %v", f)
-	}
-
-	h.AddFriend("alice", "bob")
-	h.AddFriend("alice", "charlie")
-
-	friends := h.GetFriends("alice")
-	if len(friends) != 2 {
-		t.Fatalf("expected 2 friends, got %d", len(friends))
-	}
-	friendSet := make(map[string]bool)
-	for _, f := range friends {
-		friendSet[f] = true
-	}
-	if !friendSet["bob"] || !friendSet["charlie"] {
-		t.Errorf("expected friends bob and charlie, got %v", friends)
-	}
-}
+// No friends initially.
 
 // --- Room system tests ---
 
@@ -2623,202 +1730,47 @@ func TestInRoom(t *testing.T) {
 
 // --- Group system tests ---
 
-func TestCreateGroup(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
+// Create group succeeds.
 
-	// Create group succeeds.
-	if !h.CreateGroup("dev-team", "alice") {
-		t.Error("expected CreateGroup to return true for new group")
-	}
+// Duplicate group name is rejected.
 
-	if !h.InGroup("alice", "dev-team") {
-		t.Error("expected creator to be in group")
-	}
+// bob should NOT be in dev-team (duplicate rejected).
 
-	members := h.GroupMembers("dev-team")
-	if len(members) != 1 || members[0] != "alice" {
-		t.Fatalf("expected [alice], got %v", members)
-	}
+// Non-existent group.
 
-	// Duplicate group name is rejected.
-	if h.CreateGroup("dev-team", "bob") {
-		t.Error("expected CreateGroup to return false for duplicate name")
-	}
+// Non-existent group.
 
-	// bob should NOT be in dev-team (duplicate rejected).
-	if h.InGroup("bob", "dev-team") {
-		t.Error("expected bob to NOT be in dev-team after duplicate rejection")
-	}
-}
-
-func TestInGroup(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-
-	// Non-existent group.
-	if h.InGroup("alice", "nonexistent") {
-		t.Error("expected InGroup to return false for non-existent group")
-	}
-
-	h.CreateGroup("team", "alice")
-
-	if !h.InGroup("alice", "team") {
-		t.Error("expected InGroup to return true for member")
-	}
-	if h.InGroup("bob", "team") {
-		t.Error("expected InGroup to return false for non-member")
-	}
-}
-
-func TestGroupMembers(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-
-	// Non-existent group.
-	if members := h.GroupMembers("nonexistent"); members != nil {
-		t.Fatalf("expected nil for non-existent group, got %v", members)
-	}
-
-	h.CreateGroup("team", "alice")
-	h.AddGroupMember("team", "bob")
-	h.AddGroupMember("team", "charlie")
-
-	members := h.GroupMembers("team")
-	if len(members) != 3 {
-		t.Fatalf("expected 3 members, got %d", len(members))
-	}
-	memberSet := make(map[string]bool)
-	for _, m := range members {
-		memberSet[m] = true
-	}
-	for _, expected := range []string{"alice", "bob", "charlie"} {
-		if !memberSet[expected] {
-			t.Errorf("expected %q in group members, got %v", expected, members)
-		}
-	}
-}
-
-func TestRemoveGroupMember(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-
-	h.CreateGroup("team", "alice")
-	h.AddGroupMember("team", "bob")
-
-	h.RemoveGroupMember("team", "bob")
-
-	if h.InGroup("bob", "team") {
-		t.Error("expected bob to be removed from team")
-	}
-	if !h.InGroup("alice", "team") {
-		t.Error("expected alice to remain in team")
-	}
-
-	// Remove from non-existent group should not panic.
-	h.RemoveGroupMember("nonexistent", "alice")
-}
+// Remove from non-existent group should not panic.
 
 // --- Pending invite tests ---
 
-func TestPendingInvites(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
+// Consume on non-existent user returns false.
 
-	// Consume on non-existent user returns false.
-	if h.ConsumePendingInvite("alice", "team") {
-		t.Error("expected ConsumePendingInvite to return false for non-existent user")
-	}
+// Add invite.
 
-	// Add invite.
-	h.AddPendingInvite("alice", "team", "bob")
+// Consume returns true.
 
-	// Consume returns true.
-	if !h.ConsumePendingInvite("alice", "team") {
-		t.Error("expected ConsumePendingInvite to return true after AddPendingInvite")
-	}
+// Already consumed — returns false.
 
-	// Already consumed — returns false.
-	if h.ConsumePendingInvite("alice", "team") {
-		t.Error("expected ConsumePendingInvite to return false after invite was consumed")
-	}
+// Add another and remove via RemovePendingInvite.
 
-	// Add another and remove via RemovePendingInvite.
-	h.AddPendingInvite("alice", "team2", "bob")
-	h.RemovePendingInvite("alice", "team2")
-
-	if h.ConsumePendingInvite("alice", "team2") {
-		t.Error("expected ConsumePendingInvite to return false after RemovePendingInvite")
-	}
-
-	// Remove on non-existent should not panic.
-	h.RemovePendingInvite("nonexistent", "nonexistent")
-}
+// Remove on non-existent should not panic.
 
 // --- Call session tests ---
 
-func TestCallSessions(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
+// Get non-existent session returns nil.
 
-	// Get non-existent session returns nil.
-	if cs := h.GetCallSession("nonexistent"); cs != nil {
-		t.Error("expected nil for non-existent call session")
-	}
+// Create session.
 
-	// Create session.
-	cs := h.CreateCallSession("call-1", "alice", "bob", "video")
-	if cs == nil {
-		t.Fatal("expected non-nil CallSession")
-	}
-	if cs.ID != "call-1" || cs.Caller != "alice" || cs.Callee != "bob" {
-		t.Fatalf("unexpected session fields: %+v", cs)
-	}
-	if cs.Type != "video" || cs.Status != "ringing" {
-		t.Fatalf("expected type=video, status=ringing, got type=%q status=%q", cs.Type, cs.Status)
-	}
-	if cs.CreatedAt <= 0 {
-		t.Error("expected positive CreatedAt")
-	}
+// Get session.
 
-	// Get session.
-	retrieved := h.GetCallSession("call-1")
-	if retrieved == nil {
-		t.Fatal("expected non-nil for existing call session")
-	}
-	if retrieved.Caller != "alice" {
-		t.Fatalf("expected caller=alice, got %q", retrieved.Caller)
-	}
+// Update status.
 
-	// Update status.
-	h.UpdateCallSessionStatus("call-1", "active")
-	updated := h.GetCallSession("call-1")
-	if updated.Status != "active" {
-		t.Fatalf("expected status=active after update, got %q", updated.Status)
-	}
+// Update non-existent should not panic.
 
-	// Update non-existent should not panic.
-	h.UpdateCallSessionStatus("nonexistent", "active")
+// Remove session.
 
-	// Remove session.
-	h.RemoveCallSession("call-1")
-	if cs := h.GetCallSession("call-1"); cs != nil {
-		t.Error("expected nil after RemoveCallSession")
-	}
-
-	// Remove non-existent should not panic.
-	h.RemoveCallSession("nonexistent")
-}
-
-func TestCallSessionCreateDefaultStatus(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-
-	cs := h.CreateCallSession("call-voice", "alice", "bob", "voice")
-	if cs.Status != "ringing" {
-		t.Fatalf("expected default status=ringing, got %q", cs.Status)
-	}
-}
+// Remove non-existent should not panic.
 
 // --- SendToUser tests ---
 
@@ -2860,56 +1812,13 @@ func TestSendToUser(t *testing.T) {
 
 // --- LoadPersistedState tests ---
 
-func TestLoadPersistedState(t *testing.T) {
-	ms := &mockStore{
-		allFriends: map[string][]string{
-			"alice": {"bob", "charlie"},
-			"bob":   {"alice"},
-		},
-		allGroups: map[string][]string{
-			"dev-team": {"alice", "bob"},
-		},
-	}
-	h := New(ms, nil, "")
+// Initially empty.
 
-	// Initially empty.
-	if h.IsFriend("alice", "bob") {
-		t.Error("expected no friends before LoadPersistedState")
-	}
+// Friends should now be restored.
 
-	h.LoadPersistedState()
+// Groups should now be restored.
 
-	// Friends should now be restored.
-	if !h.IsFriend("alice", "bob") {
-		t.Error("expected alice-bob friendship restored from store")
-	}
-	if !h.IsFriend("alice", "charlie") {
-		t.Error("expected alice-charlie friendship restored from store")
-	}
-	if !h.IsFriend("bob", "alice") {
-		t.Error("expected bob-alice friendship restored from store")
-	}
-
-	// Groups should now be restored.
-	if !h.InGroup("alice", "dev-team") {
-		t.Error("expected alice in dev-team after LoadPersistedState")
-	}
-	if !h.InGroup("bob", "dev-team") {
-		t.Error("expected bob in dev-team after LoadPersistedState")
-	}
-
-	members := h.GroupMembers("dev-team")
-	if len(members) != 2 {
-		t.Fatalf("expected 2 members in dev-team, got %d", len(members))
-	}
-}
-
-func TestLoadPersistedStateNilStore(t *testing.T) {
-	h := New(nil, nil, "")
-
-	// Should not panic with nil store.
-	h.LoadPersistedState()
-}
+// Should not panic with nil store.
 
 // --- AllUserStatus tests ---
 
@@ -3533,86 +2442,27 @@ func TestBroadcastJSONIncrementsDroppedWhenChannelFull(t *testing.T) {
 
 // --- SendToGroup tests ---
 
-func TestSendToGroup(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-	go h.Run()
-	defer h.Stop()
+// Create a group and add members.
 
-	// Create a group and add members.
-	h.CreateGroup("team", "alice")
-	h.AddGroupMember("team", "bob")
-	h.AddGroupMember("team", "charlie")
+// Register clients: three group members and one non-member.
 
-	// Register clients: three group members and one non-member.
-	alice := &Client{username: "alice", send: make(chan []byte, 1)}
-	bob := &Client{username: "bob", send: make(chan []byte, 1)}
-	charlie := &Client{username: "charlie", send: make(chan []byte, 1)}
-	dave := &Client{username: "dave", send: make(chan []byte, 1)}
+// Group members should receive.
 
-	h.register <- alice
-	h.register <- bob
-	h.register <- charlie
-	h.register <- dave
-	time.Sleep(10 * time.Millisecond)
+// ok
 
-	data := []byte(`{"type":"group_msg","content":"hello team"}`)
-	h.SendToGroup("team", data)
+// Non-member dave should NOT receive.
 
-	// Group members should receive.
-	for _, c := range []*Client{alice, bob, charlie} {
-		select {
-		case <-c.send:
-			// ok
-		default:
-			t.Errorf("expected group member %s to receive group message", c.username)
-		}
-	}
+// ok
 
-	// Non-member dave should NOT receive.
-	select {
-	case msg := <-dave.send:
-		t.Fatalf("expected dave (non-group-member) NOT to receive, got %s", string(msg))
-	default:
-		// ok
-	}
+// Send to non-existent group should not panic.
 
-	// Send to non-existent group should not panic.
-	h.SendToGroup("nonexistent", data)
+// Cleanup.
 
-	// Cleanup.
-	h.unregister <- alice
-	h.unregister <- bob
-	h.unregister <- charlie
-	h.unregister <- dave
-	time.Sleep(10 * time.Millisecond)
-}
+// Register a client not in the group.
 
-func TestSendToGroupEmptyGroup(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-	go h.Run()
-	defer h.Stop()
+// Group doesn't exist — should not panic and should not deliver.
 
-	// Register a client not in the group.
-	alice := &Client{username: "alice", send: make(chan []byte, 1)}
-	h.register <- alice
-	time.Sleep(10 * time.Millisecond)
-
-	// Group doesn't exist — should not panic and should not deliver.
-	data := []byte(`{"type":"group_msg","content":"ghost"}`)
-	h.SendToGroup("ghost-group", data)
-
-	select {
-	case msg := <-alice.send:
-		t.Fatalf("expected no message for non-existent group, got %s", string(msg))
-	default:
-		// ok
-	}
-
-	h.unregister <- alice
-	time.Sleep(10 * time.Millisecond)
-}
+// ok
 
 // --- SendToAllSessions tests ---
 
@@ -3761,230 +2611,30 @@ func TestCheckBotCooldownDurations(t *testing.T) {
 
 // --- RequestOnlineUsers tests ---
 
-func TestRequestOnlineUsers(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-	go h.Run()
-	defer h.Stop()
+// Register clients.
 
-	// Register clients.
-	alice := &Client{username: "alice", send: make(chan []byte, 1)}
-	bob := &Client{username: "bob", send: make(chan []byte, 1)}
-	charlie := &Client{username: "charlie", send: make(chan []byte, 1)}
-	h.register <- alice
-	h.register <- bob
-	h.register <- charlie
-	time.Sleep(10 * time.Millisecond)
+// Verify presence of all expected users.
 
-	resp := h.RequestOnlineUsers()
-	if !resp.Success {
-		t.Error("expected success")
-	}
-	if resp.Type != "online_users" {
-		t.Errorf("type = %q, want online_users", resp.Type)
-	}
-	if resp.Error != "" {
-		t.Errorf("unexpected error: %s", resp.Error)
-	}
+// Verify time field is set.
 
-	online, ok := resp.Data["online"].([]string)
-	if !ok {
-		t.Fatal("expected online to be []string in data")
-	}
-	if len(online) != 3 {
-		t.Fatalf("expected 3 online users, got %d", len(online))
-	}
-
-	count, ok := resp.Data["count"].(int)
-	if !ok {
-		t.Fatalf("expected count to be int, got %T", resp.Data["count"])
-	}
-	if count != 3 {
-		t.Errorf("expected count=3, got %d", count)
-	}
-
-	// Verify presence of all expected users.
-	userSet := make(map[string]bool)
-	for _, u := range online {
-		userSet[u] = true
-	}
-	for _, expected := range []string{"alice", "bob", "charlie"} {
-		if !userSet[expected] {
-			t.Errorf("expected %q in online list, got %v", expected, online)
-		}
-	}
-
-	// Verify time field is set.
-	if _, ok := resp.Data["time"]; !ok {
-		t.Error("expected time field in response data")
-	}
-
-	// Cleanup.
-	h.unregister <- alice
-	h.unregister <- bob
-	h.unregister <- charlie
-	time.Sleep(10 * time.Millisecond)
-}
-
-func TestRequestOnlineUsersEmptyHub(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-
-	resp := h.RequestOnlineUsers()
-	if !resp.Success {
-		t.Error("expected success for empty hub")
-	}
-
-	online, ok := resp.Data["online"].([]string)
-	if !ok {
-		t.Fatal("expected online to be []string")
-	}
-	if len(online) != 0 {
-		t.Fatalf("expected 0 online users, got %d", len(online))
-	}
-
-	count, ok := resp.Data["count"].(int)
-	if !ok || count != 0 {
-		t.Errorf("expected count=0, got %v", resp.Data["count"])
-	}
-}
+// Cleanup.
 
 // --- RequestHistory tests ---
 
-func TestRequestHistory(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-
-	// Pre-populate test messages.
-	ms.messages = []StoredMessage{
-		{ID: "msg-1", Username: "alice", Content: "hello", Timestamp: 1000},
-		{ID: "msg-2", Username: "bob", Content: "hi there", Timestamp: 2000},
-		{ID: "msg-3", Username: "charlie", Content: "hey everyone", Timestamp: 3000},
-	}
-
-	t.Run("without roomID returns global messages", func(t *testing.T) {
-		resp := h.RequestHistory("", 50, 0)
-		if !resp.Success {
-			t.Error("expected success")
-		}
-		if resp.Type != "history" {
-			t.Errorf("type = %q, want history", resp.Type)
-		}
-		if resp.Data["room_id"] != "" {
-			t.Errorf("room_id = %v, want empty string", resp.Data["room_id"])
-		}
-		messages, ok := resp.Data["messages"].([]StoredMessage)
-		if !ok {
-			t.Fatal("expected messages in data")
-		}
-		if len(messages) != 3 {
-			t.Fatalf("expected 3 messages, got %d", len(messages))
-		}
-		count, ok := resp.Data["count"].(int)
-		if !ok || count != 3 {
-			t.Errorf("expected count=3, got %v", resp.Data["count"])
-		}
-	})
-
-	t.Run("with roomID includes room_id in response", func(t *testing.T) {
-		resp := h.RequestHistory("room-42", 10, 0)
-		if !resp.Success {
-			t.Error("expected success")
-		}
-		if resp.Data["room_id"] != "room-42" {
-			t.Errorf("room_id = %v, want room-42", resp.Data["room_id"])
-		}
-	})
-
-	t.Run("limit zero defaults to 50", func(t *testing.T) {
-		resp := h.RequestHistory("", 0, 0)
-		if !resp.Success {
-			t.Error("expected success with limit=0")
-		}
-	})
-
-	t.Run("limit exceeds 200 is capped", func(t *testing.T) {
-		resp := h.RequestHistory("", 500, 0)
-		if !resp.Success {
-			t.Error("expected success with limit=500")
-		}
-	})
-
-	t.Run("with before timestamp param", func(t *testing.T) {
-		resp := h.RequestHistory("", 10, 2500)
-		if !resp.Success {
-			t.Error("expected success with before param")
-		}
-	})
-
-	t.Run("empty store returns empty messages slice not nil", func(t *testing.T) {
-		emptyStore := &mockStore{}
-		emptyHub := New(emptyStore, nil, "")
-		resp := emptyHub.RequestHistory("", 10, 0)
-		if !resp.Success {
-			t.Error("expected success")
-		}
-		messages, ok := resp.Data["messages"].([]StoredMessage)
-		if !ok {
-			t.Fatal("expected messages in data")
-		}
-		if len(messages) != 0 {
-			t.Fatalf("expected 0 messages, got %d", len(messages))
-		}
-		if messages == nil {
-			t.Error("expected non-nil empty slice")
-		}
-	})
-
-	t.Run("negative limit defaults to 50", func(t *testing.T) {
-		resp := h.RequestHistory("", -1, 0)
-		if !resp.Success {
-			t.Error("expected success with negative limit")
-		}
-	})
-}
+// Pre-populate test messages.
 
 // --- Pure function tests for client.go (no WebSocket required) ---
 
-func TestGenerateWebhookSecret(t *testing.T) {
-	// Verify format: 32 bytes produces 43 chars of base64 raw URL encoding.
-	// RawURLEncoding means no +, /, or = characters.
+// Verify format: 32 bytes produces 43 chars of base64 raw URL encoding.
+// RawURLEncoding means no +, /, or = characters.
 
-	secrets := make(map[string]bool)
-	for i := 0; i < 20; i++ {
-		secret := generateWebhookSecret()
+// 32 bytes → 43-44 chars in base64 raw URL encoding.
 
-		if secret == "" {
-			t.Fatal("generateWebhookSecret() returned empty string")
-		}
+// Verify base64 URL alphabet: A-Z, a-z, 0-9, -, _
 
-		// 32 bytes → 43-44 chars in base64 raw URL encoding.
-		if len(secret) < 43 || len(secret) > 44 {
-			t.Errorf("generateWebhookSecret() length = %d, want 43-44 for 32 random bytes", len(secret))
-		}
+// Verify uniqueness.
 
-		// Verify base64 URL alphabet: A-Z, a-z, 0-9, -, _
-		for _, ch := range secret {
-			if !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-				(ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
-				t.Errorf("generateWebhookSecret() contains invalid base64url char: %c in %q", ch, secret)
-			}
-		}
-
-		// Verify uniqueness.
-		if secrets[secret] {
-			t.Errorf("generateWebhookSecret() produced duplicate secret: %q", secret)
-		}
-		secrets[secret] = true
-	}
-
-	// Verify no standard base64 chars leak.
-	for s := range secrets {
-		if strings.ContainsAny(s, "+/=") {
-			t.Errorf("generateWebhookSecret() contains standard base64 chars: %q", s)
-		}
-	}
-}
+// Verify no standard base64 chars leak.
 
 func TestSanitizeContentEdgeCases(t *testing.T) {
 	tests := []struct {
@@ -4099,124 +2749,16 @@ func TestSanitizeBotContentEdgeCases(t *testing.T) {
 	})
 }
 
-func TestMsgsToMessages(t *testing.T) {
-	now := time.Now().UnixMilli()
+// shouldTrigger(0) must always return false.
 
-	tests := []struct {
-		name string
-		sms  []ScheduledMessage
-	}{
-		{
-			name: "empty slice returns empty slice",
-			sms:  []ScheduledMessage{},
-		},
-		{
-			name: "single item maps fields correctly",
-			sms: []ScheduledMessage{
-				{
-					ID: "sched-1", Username: "alice", Content: "hello",
-					RoomID: "room-a", ToUser: "bob", GroupName: "team",
-					ReplyToID: "reply-to", ThreadID: "thread-1",
-					SendAt: now, CreatedAt: now - 1000,
-				},
-			},
-		},
-		{
-			name: "multiple items preserve order",
-			sms: []ScheduledMessage{
-				{ID: "s1", Username: "a", Content: "msg1", SendAt: 100},
-				{ID: "s2", Username: "b", Content: "msg2", SendAt: 200},
-				{ID: "s3", Username: "c", Content: "msg3", SendAt: 300},
-			},
-		},
-	}
+// shouldTrigger(100) must always return true.
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := msgsToMessages(tc.sms)
+// Negative percent: `percent > 0` guard makes it always false.
 
-			if result == nil && len(tc.sms) > 0 {
-				t.Fatal("msgsToMessages returned nil for non-empty input")
-			}
-			if result == nil && len(tc.sms) == 0 {
-				return
-			}
+// Borderline: percent=1 relies on nanosecond clock entropy.
+// Verify it does not panic and returns a boolean (either value is valid).
 
-			if len(result) != len(tc.sms) {
-				t.Fatalf("got %d messages, want %d", len(result), len(tc.sms))
-			}
-
-			for i, sm := range result {
-				src := tc.sms[i]
-				if sm.ID != src.ID {
-					t.Errorf("[%d] ID = %q, want %q", i, sm.ID, src.ID)
-				}
-				if sm.Username != src.Username {
-					t.Errorf("[%d] Username = %q, want %q", i, sm.Username, src.Username)
-				}
-				if sm.Content != src.Content {
-					t.Errorf("[%d] Content = %q, want %q", i, sm.Content, src.Content)
-				}
-				if sm.Timestamp != src.SendAt {
-					t.Errorf("[%d] Timestamp = %d, want SendAt=%d", i, sm.Timestamp, src.SendAt)
-				}
-				if sm.RoomID != src.RoomID {
-					t.Errorf("[%d] RoomID = %q, want %q", i, sm.RoomID, src.RoomID)
-				}
-				if sm.ToUser != src.ToUser {
-					t.Errorf("[%d] ToUser = %q, want %q", i, sm.ToUser, src.ToUser)
-				}
-				if sm.GroupName != src.GroupName {
-					t.Errorf("[%d] GroupName = %q, want %q", i, sm.GroupName, src.GroupName)
-				}
-				if sm.ReplyToID != src.ReplyToID {
-					t.Errorf("[%d] ReplyToID = %q, want %q", i, sm.ReplyToID, src.ReplyToID)
-				}
-				if sm.ThreadID != src.ThreadID {
-					t.Errorf("[%d] ThreadID = %q, want %q", i, sm.ThreadID, src.ThreadID)
-				}
-			}
-		})
-	}
-}
-
-func TestShouldTrigger(t *testing.T) {
-	// shouldTrigger(0) must always return false.
-	t.Run("percent 0 always false", func(t *testing.T) {
-		for i := 0; i < 100; i++ {
-			if shouldTrigger(0) {
-				t.Fatal("shouldTrigger(0) returned true")
-			}
-		}
-	})
-
-	// shouldTrigger(100) must always return true.
-	t.Run("percent 100 always true", func(t *testing.T) {
-		for i := 0; i < 100; i++ {
-			if !shouldTrigger(100) {
-				t.Fatal("shouldTrigger(100) returned false")
-			}
-		}
-	})
-
-	// Negative percent: `percent > 0` guard makes it always false.
-	t.Run("negative percent always false", func(t *testing.T) {
-		for i := 0; i < 100; i++ {
-			if shouldTrigger(-1) {
-				t.Fatal("shouldTrigger(-1) returned true")
-			}
-		}
-	})
-
-	// Borderline: percent=1 relies on nanosecond clock entropy.
-	// Verify it does not panic and returns a boolean (either value is valid).
-	t.Run("percent 1 does not panic", func(t *testing.T) {
-		// Call many times to exercise the modulo path.
-		for i := 0; i < 100; i++ {
-			_ = shouldTrigger(1)
-		}
-	})
-}
+// Call many times to exercise the modulo path.
 
 func TestAssistantMentionTargetEdgeCases(t *testing.T) {
 	tests := []struct {
@@ -4449,59 +2991,6 @@ func TestIsOnline(t *testing.T) {
 
 // --- BroadcastToGroup tests ---
 
-func TestBroadcastToGroup(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-	go h.Run()
-	defer h.Stop()
-
-	h.CreateGroup("team", "alice")
-	h.AddGroupMember("team", "bob")
-
-	alice := &Client{username: "alice", send: make(chan []byte, 1)}
-	bob := &Client{username: "bob", send: make(chan []byte, 1)}
-	dave := &Client{username: "dave", send: make(chan []byte, 1)}
-
-	h.register <- alice
-	h.register <- bob
-	h.register <- dave
-	time.Sleep(10 * time.Millisecond)
-
-	data := []byte(`{"type":"group_msg","content":"via BroadcastToGroup"}`)
-	h.BroadcastToGroup("team", data)
-
-	for _, c := range []*Client{alice, bob} {
-		select {
-		case received := <-c.send:
-			if string(received) != string(data) {
-				t.Errorf("%s: expected %q, got %q", c.username, string(data), string(received))
-			}
-		default:
-			t.Errorf("expected group member %s to receive via BroadcastToGroup", c.username)
-		}
-	}
-
-	select {
-	case msg := <-dave.send:
-		t.Fatalf("expected dave (non-member) NOT to receive, got %s", string(msg))
-	default:
-	}
-
-	h.SendToGroup("team", []byte(`{"via":"SendToGroup"}`))
-	for _, c := range []*Client{alice, bob} {
-		select {
-		case <-c.send:
-		default:
-			t.Errorf("expected %s to receive via SendToGroup alias", c.username)
-		}
-	}
-
-	h.unregister <- alice
-	h.unregister <- bob
-	h.unregister <- dave
-	time.Sleep(10 * time.Millisecond)
-}
-
 // --- ValidateUsername edge cases ---
 
 func TestValidateUsername_EdgeCases(t *testing.T) {
@@ -4532,37 +3021,6 @@ func TestValidateUsername_EdgeCases(t *testing.T) {
 }
 
 // --- ValidateGroupName edge cases ---
-
-func TestValidateGroupName_EdgeCases(t *testing.T) {
-	tests := []struct {
-		name      string
-		groupName string
-		valid     bool
-	}{
-		{name: "single underscore", groupName: "_", valid: true},
-		{name: "single hyphen", groupName: "-", valid: true},
-		{name: "29 chars", groupName: "12345678901234567890123456789", valid: true},
-		{name: "30 chars with hyphen", groupName: "12345678901234567890123456789-", valid: true},
-		{name: "31 chars with letter", groupName: "a123456789012345678901234567890", valid: false},
-		{name: "all allowed specials", groupName: "团队_A-B C", valid: true},
-		{name: "pure chinese within limit", groupName: "开发团队讨论组开发团队讨论组开发团队讨论组开发团队讨论组", valid: true},
-		{name: "exclamation mark", groupName: "team!chat", valid: false},
-		{name: "dollar sign", groupName: "team$chat", valid: false},
-		{name: "percent sign", groupName: "team%chat", valid: false},
-		{name: "asterisk", groupName: "team*chat", valid: false},
-		{name: "parenthesis", groupName: "team(chat)", valid: false},
-		{name: "contains newline", groupName: "team\nchat", valid: false},
-		{name: "contains tab", groupName: "team\tchat", valid: false},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := ValidateGroupName(tc.groupName)
-			if result != tc.valid {
-				t.Errorf("ValidateGroupName(%q) = %v, want %v", tc.groupName, result, tc.valid)
-			}
-		})
-	}
-}
 
 // --- IsReservedUsername edge cases ---
 
@@ -5422,104 +3880,15 @@ func TestPollVoteUpdate(t *testing.T) {
 
 // --- DM routing tests ---
 
-func TestDMDelivery(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-	go h.Run()
-	defer h.Stop()
+// Bob should receive the DM.
 
-	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
-	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10)}
-	h.register <- alice
-	h.register <- bob
-	time.Sleep(10 * time.Millisecond)
+// Alice should receive an echo.
 
-	alice.handleDMMessage(Message{To: "bob", Content: "Hello Bob!"})
+// bob is NOT registered (offline).
 
-	// Bob should receive the DM.
-	var got Message
-	select {
-	case payload := <-bob.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("decode dm_message error: %v", err)
-		}
-		if got.Type != "dm_message" {
-			t.Fatalf("expected dm_message for bob, got type=%q", got.Type)
-		}
-		if got.Username != "alice" || got.Content != "Hello Bob!" {
-			t.Fatalf("expected from=alice content='Hello Bob!', got from=%q content=%q", got.Username, got.Content)
-		}
-		if got.To != "bob" || got.From != "alice" {
-			t.Fatalf("expected to=bob from=alice, got to=%q from=%q", got.To, got.From)
-		}
-	default:
-		t.Fatal("bob should receive DM")
-	}
+// Alice should still get the echo.
 
-	// Alice should receive an echo.
-	select {
-	case payload := <-alice.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("decode dm echo error: %v", err)
-		}
-		if got.Type != "dm_message" {
-			t.Fatalf("expected dm_message echo to alice, got type=%q", got.Type)
-		}
-		if got.To != "bob" {
-			t.Fatalf("expected echo to=bob, got to=%q", got.To)
-		}
-	default:
-		t.Fatal("alice should receive DM echo")
-	}
-
-	h.unregister <- alice
-	h.unregister <- bob
-	time.Sleep(10 * time.Millisecond)
-}
-
-func TestDMOfflineRecipient(t *testing.T) {
-	ms := &mockStore{}
-	h := New(ms, nil, "")
-	go h.Run()
-	defer h.Stop()
-
-	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10)}
-	h.register <- alice
-	time.Sleep(10 * time.Millisecond)
-
-	// bob is NOT registered (offline).
-	alice.handleDMMessage(Message{To: "bob", Content: "Are you there?"})
-
-	// Alice should still get the echo.
-	var got Message
-	select {
-	case payload := <-alice.send:
-		if err := json.Unmarshal(payload, &got); err != nil {
-			t.Fatalf("decode dm echo error: %v", err)
-		}
-		if got.Type != "dm_message" {
-			t.Fatalf("expected dm_message echo, got type=%q", got.Type)
-		}
-	default:
-		t.Fatal("alice should receive DM echo even when recipient is offline")
-	}
-
-	// The DM should be persisted in store.
-	stored := ms.GetMessages(10, 0)
-	found := false
-	for _, m := range stored {
-		if m.Username == "alice" && m.Content == "Are you there?" && m.ToUser == "bob" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected DM to be persisted in store for offline recipient")
-	}
-
-	h.unregister <- alice
-	time.Sleep(10 * time.Millisecond)
-}
+// The DM should be persisted in store.
 
 // --- Broadcast fanout tests ---
 

@@ -32,22 +32,17 @@ type Poll = store.Poll
 type UserProfile = store.UserProfile
 
 // ScheduledMessage is an alias for store.ScheduledMessage.
-type ScheduledMessage = store.ScheduledMessage
 
 // CustomEmoji is an alias for store.CustomEmoji.
 type CustomEmoji = store.CustomEmoji
 
 // GroupInfo is an alias for store.GroupInfo.
-type GroupInfo = store.GroupInfo
 
 // GroupMemberInfo is an alias for store.GroupMemberInfo.
-type GroupMemberInfo = store.GroupMemberInfo
 
 // ChatFolder is an alias for store.ChatFolder.
-type ChatFolder = store.ChatFolder
 
 // ChatFolderItem is an alias for store.ChatFolderItem.
-type ChatFolderItem = store.ChatFolderItem
 
 // Store defines the interface for message persistence.
 type Store interface {
@@ -68,35 +63,6 @@ type Store interface {
 	SearchMessages(query, roomID string, limit int) ([]store.SearchResult, error)
 	SearchMessagesForUser(query, roomID, username string, limit int) ([]store.SearchResult, error)
 
-	// Friend persistence
-	AddFriend(username, friend string) error
-	RemoveFriend(username, friend string) error
-	GetFriends(username string) []string
-	GetAllFriends() map[string][]string
-
-	// Group persistence
-	CreateGroup(name, creator string) error
-	AddGroupMember(groupName, username string) error
-	RemoveGroupMember(groupName, username string) error
-	GetGroupMembers(groupName string) []string
-	GetAllGroups() map[string][]string
-
-	// Group admin
-	GetGroupMembersWithRoles(groupName string) []store.GroupMemberInfo
-	GetGroupMemberRole(groupName, username string) (string, error)
-	SetGroupMemberRole(groupName, username, role string) error
-	KickGroupMember(groupName, username string) error
-	UpdateGroupName(oldName, newName string) error
-	TransferGroupOwnership(groupName, newOwner string) error
-	LeaveGroup(groupName, username string) error
-	GetGroupInfo(groupName string) (*store.GroupInfo, error)
-	GetGroupOwner(groupName string) (string, error)
-	DeleteGroup(groupName string) error
-
-	// DM delivery tracking
-	GetUndeliveredDMs(username string, limit int) []StoredMessage
-	MarkMessagesDelivered(ids []string) error
-
 	// Message pinning
 	PinMessage(roomID, messageID, pinnedBy string) error
 
@@ -111,23 +77,6 @@ type Store interface {
 	IsBlocked(username, blocked string) bool
 	GetBlockedUsers(username string) []string
 
-	// Conversation pinning
-	PinConversation(username, key string) error
-	UnpinConversation(username, key string) error
-	ListPinnedConversations(username string) []string
-
-	// Conversation muting
-	MuteConversation(username, key string) error
-	UnmuteConversation(username, key string) error
-	ListMutedConversations(username string) []string
-	IsConversationMuted(username, key string) bool
-
-	// Conversation archiving
-	ArchiveConversation(username, key string) error
-	UnarchiveConversation(username, key string) error
-	ListArchivedConversations(username string) []string
-	IsConversationArchived(username, key string) bool
-
 	// Threaded replies
 	GetThreadMessages(parentMessageID string) []StoredMessage
 	GetThreadReplyCount(parentMessageID string) int
@@ -140,22 +89,13 @@ type Store interface {
 	// User profiles
 	UpsertUserProfile(username, displayName, avatarURL, bio, status string, lastSeen int64) error
 	GetUserProfile(username string) (*store.UserProfile, error)
-	UpdateUserStatus(username, status string) error
 	UpdateUserLastSeen(username string) error
 	GetAllUserProfiles() ([]store.UserProfile, error)
 
-	// Polls
 	CreatePoll(poll *Poll) error
 	GetPoll(pollID string) (*Poll, error)
 	VotePoll(pollID string, username string, optionIndex int) error
 	ClosePoll(pollID string) error
-
-	// Scheduled messages
-	ScheduleMessage(msg ScheduledMessage) error
-	GetPendingScheduledMessages(ctx context.Context) ([]ScheduledMessage, error)
-	MarkScheduledSent(id string) error
-	CancelScheduledMessage(id, username string) error
-	GetUserScheduledMessages(username string) ([]ScheduledMessage, error)
 
 	// Custom emojis
 	AddCustomEmoji(name, url, uploader, roomID string) error
@@ -166,11 +106,6 @@ type Store interface {
 	// Export
 	ExportMessages(ctx context.Context, roomID, toUser, groupName, username string, limit int) ([]StoredMessage, error)
 
-	// Call history
-	LogCall(call store.CallRecord) error
-	UpdateCallRecord(id, status string, startedAt, endedAt int64) error
-	GetCallHistory(username string, limit int) ([]store.CallRecord, error)
-
 	// User registration and authentication
 	RegisterUser(username, passwordHash, inviteCode string) error
 	VerifyUser(username, password string) (bool, error)
@@ -179,24 +114,6 @@ type Store interface {
 	ListInviteCodes(creator string) ([]store.InviteCodeRecord, error)
 	ValidateInviteCode(code string) (bool, error)
 
-	// Chat folders
-	CreateChatFolder(username, name string) (*ChatFolder, error)
-	DeleteChatFolder(username, id string) error
-	RenameChatFolder(username, id, newName string) error
-	AddToFolder(folderID, key string) error
-	RemoveFromFolder(folderID, key string) error
-	ListFolders(username string) ([]ChatFolder, error)
-	GetFolderItems(folderID string) ([]string, error)
-
-	// Webhooks
-	CreateWebhook(id, groupName, url, secret, createdBy string) error
-	DeleteWebhook(id, groupName, deletedBy string) error
-	RotateWebhookSecret(id, groupName, secret, rotatedBy string) (*store.Webhook, error)
-	ListWebhooks(groupName string) ([]store.Webhook, error)
-	ListWebhookAuditLogs(groupName string, limit int) ([]store.WebhookAuditLog, error)
-	GetWebhookByURL(url string) (*store.Webhook, error)
-	VerifyWebhookSecret(url, secret string) (*store.Webhook, bool, error)
-
 	// OIDC user management.
 	UpsertOIDCUser(sub, chatUsername, email, preferredUsername string) error
 	GetOIDCUserBySub(sub string) (*store.OIDCUser, error)
@@ -204,27 +121,13 @@ type Store interface {
 }
 
 // CallSession represents an active call between two users.
-type CallSession struct {
-	ID        string `json:"id"`
-	Caller    string `json:"caller"`
-	Callee    string `json:"callee"`
-	Type      string `json:"type"`   // video or voice
-	Status    string `json:"status"` // ringing, active, ended
-	CreatedAt int64  `json:"created_at"`
-}
+
+// video or voice
+// ringing, active, ended
 
 // CallRoom represents a multi-party group call room.
-type CallRoom struct {
-	ID           string   `json:"id"`
-	Participants []string `json:"participants"`
-	CreatedAt    int64    `json:"created_at"`
-}
 
 // Group represents a chat group.
-type Group struct {
-	Name    string          `json:"name"`
-	Members map[string]bool `json:"members"`
-}
 
 // UserStatus represents a user with their online/offline status.
 type UserStatus struct {
@@ -258,12 +161,6 @@ type Message struct {
 	Context string   `json:"context,omitempty"`
 	Preview string   `json:"preview,omitempty"`
 	Token   string   `json:"token,omitempty"`
-
-	// Group system
-	Group        string                  `json:"group,omitempty"`
-	Members      []string                `json:"members,omitempty"`
-	GroupMembers []store.GroupMemberInfo `json:"group_members,omitempty"`
-	Role         string                  `json:"role,omitempty"`
 
 	// Reply system
 	ReplyToID      string `json:"reply_to_id,omitempty"`
@@ -320,51 +217,13 @@ type Message struct {
 	Poll        *Poll `json:"poll,omitempty"`
 	OptionIndex int   `json:"option_index,omitempty"`
 
-	// Call signaling
-	CallID    string             `json:"call_id,omitempty"`
-	SDP       string             `json:"sdp,omitempty"`
-	CallType  string             `json:"call_type,omitempty"`
-	Candidate string             `json:"candidate,omitempty"`
-	Calls     []store.CallRecord `json:"calls,omitempty"`
-
-	// Multi-party call room
-	CallParticipants []string `json:"call_participants,omitempty"`
-
 	// @all / @everyone mention
 	MentionAll bool `json:"mention_all,omitempty"`
-
-	// Chat folders
-	Folders   interface{} `json:"folders,omitempty"`
-	Webhooks  interface{} `json:"webhooks,omitempty"`
-	AuditLogs interface{} `json:"audit_logs,omitempty"`
-	Secret    string      `json:"secret,omitempty"`
-	RotatedAt int64       `json:"rotated_at,omitempty"`
-	RotatedBy string      `json:"rotated_by,omitempty"`
 
 	// Custom emoji fields
 	EmojiName string        `json:"emoji_name,omitempty"`
 	EmojiURL  string        `json:"emoji_url,omitempty"`
 	Emojis    []CustomEmoji `json:"emojis,omitempty"`
-}
-
-// HubCommand 可向 Hub 发送的命令类型。
-// 用于通过 WebSocket 双向通道查询 Hub 状态或执行操作。
-type HubCommand struct {
-	Type    string         `json:"type"`              // 命令类型：online_users, history, send_dm
-	RoomID  string         `json:"room_id,omitempty"` // 房间 ID
-	Limit   int            `json:"limit,omitempty"`   // 分页数量
-	Before  int64          `json:"before,omitempty"`  // 分页起始时间戳
-	ToUser  string         `json:"to_user,omitempty"` // DM 目标用户
-	Content string         `json:"content,omitempty"` // DM 内容
-	Params  map[string]any `json:"params,omitempty"`  // 扩展参数
-}
-
-// HubCommandResponse Hub 命令执行结果。
-type HubCommandResponse struct {
-	Type    string         `json:"type"`            // 回显命令类型
-	Success bool           `json:"success"`         // 是否成功
-	Data    map[string]any `json:"data,omitempty"`  // 响应数据
-	Error   string         `json:"error,omitempty"` // 错误信息
 }
 
 // OIDCTokenVerifier validates an OIDC access token for a chat username.
@@ -411,18 +270,6 @@ type Hub struct {
 	// typingRateLimit tracks the last time a typing broadcast was sent per username.
 	typingRateLimit map[string]time.Time
 
-	// Friend system: username -> set of friend usernames.
-	friends   map[string]map[string]bool
-	friendsMu sync.RWMutex
-
-	// Group system: group name -> Group.
-	groups   map[string]*Group
-	groupsMu sync.RWMutex
-
-	// Pending group invites: username -> groupName -> inviter.
-	pendingInvites   map[string]map[string]string
-	pendingInvitesMu sync.RWMutex
-
 	// Last seen tracking: username -> last seen timestamp (UnixMilli).
 	lastSeen   map[string]int64
 	lastSeenMu sync.RWMutex
@@ -435,17 +282,9 @@ type Hub struct {
 	roomsMu sync.RWMutex
 
 	// botCooldown tracks the last time a bot was triggered per key.
-	// Keys use "bot:<username>" and "agent:<username>" for independent cooldowns.
+	// Keys use "bot:<username>" for the single bot cooldown.
 	botCooldown   map[string]time.Time
 	botCooldownMu sync.Mutex
-
-	// Call session tracking
-	callSessions   map[string]*CallSession
-	callSessionsMu sync.RWMutex
-
-	// Call room tracking (group calls)
-	callRooms   map[string]*CallRoom
-	callRoomsMu sync.RWMutex
 
 	done     chan struct{}
 	stopOnce sync.Once
@@ -480,14 +319,9 @@ func New(store Store, llmCfg *llm.Config, botName string) *Hub {
 		botName:         botName,
 		llmCfg:          llmCfg,
 		typingRateLimit: make(map[string]time.Time),
-		friends:         make(map[string]map[string]bool),
-		groups:          make(map[string]*Group),
-		pendingInvites:  make(map[string]map[string]string),
 		lastSeen:        make(map[string]int64),
 		rooms:           make(map[string]map[string]bool),
 		botCooldown:     make(map[string]time.Time),
-		callSessions:    make(map[string]*CallSession),
-		callRooms:       make(map[string]*CallRoom),
 		done:            make(chan struct{}),
 	}
 }
@@ -526,38 +360,12 @@ func (h *Hub) verifySessionJoinToken(username, token string) error {
 	return verifier.VerifySessionJoinToken(username, token)
 }
 
-// LoadPersistedState restores friends and groups from the store into memory.
-func (h *Hub) LoadPersistedState() {
-	if h.store == nil {
-		return
-	}
-	// Restore groups.
-	allGroups := h.store.GetAllGroups()
-	for name, members := range allGroups {
-		g := &Group{Name: name, Members: make(map[string]bool)}
-		for _, m := range members {
-			g.Members[m] = true
-		}
-		h.groupsMu.Lock()
-		h.groups[name] = g
-		h.groupsMu.Unlock()
-	}
-	// Restore friends from the friends table directly.
-	allFriends := h.store.GetAllFriends()
-	for username, friends := range allFriends {
-		h.friendsMu.Lock()
-		set := make(map[string]bool)
-		for _, f := range friends {
-			set[f] = true
-		}
-		h.friends[username] = set
-		h.friendsMu.Unlock()
-	}
+// LoadPersistedState is a no-op placeholder retained for call-site stability;
+// the single-bot chat has no persisted friend/group state to restore.
+func (h *Hub) LoadPersistedState() {}
 
-}
-
-// cleanupMaps prunes stale entries from rate-limit and pending-invite maps
-// to prevent unbounded memory growth on long-running servers.
+// cleanupMaps prunes stale entries from rate-limit maps to prevent unbounded
+// memory growth on long-running servers.
 func (h *Hub) cleanupMaps() {
 	now := time.Now()
 
@@ -578,24 +386,12 @@ func (h *Hub) cleanupMaps() {
 		}
 	}
 	h.botCooldownMu.Unlock()
-
-	// Prune pendingInvites entries whose inner map is empty.
-	h.pendingInvitesMu.Lock()
-	for k, v := range h.pendingInvites {
-		if len(v) == 0 {
-			delete(h.pendingInvites, k)
-		}
-	}
-	h.pendingInvitesMu.Unlock()
 }
 
 // Run starts the hub's event loop. It should be run in a goroutine.
 func (h *Hub) Run() {
 	syncTicker := time.NewTicker(30 * time.Second)
 	defer syncTicker.Stop()
-
-	scheduleTicker := time.NewTicker(5 * time.Second)
-	defer scheduleTicker.Stop()
 
 	for {
 		select {
@@ -720,9 +516,6 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mu.RUnlock()
-
-		case <-scheduleTicker.C:
-			h.processScheduledMessages()
 		}
 	}
 }
@@ -809,7 +602,6 @@ func (h *Hub) LLMEnabled() bool {
 func (h *Hub) LLMClient() *llm.Client {
 	return h.llmClient
 }
-
 
 // Memory returns the LLM context memory, or nil if not configured.
 func (h *Hub) Memory() *llm.Memory {
@@ -958,64 +750,16 @@ func (h *Hub) SendToUserInRoom(username, roomID string, data []byte) bool {
 }
 
 // SendToGroup sends a marshaled message to all group members who are online.
-func (h *Hub) SendToGroup(groupName string, data []byte) {
-	h.groupsMu.RLock()
-	g, ok := h.groups[groupName]
-	if !ok {
-		h.groupsMu.RUnlock()
-		return
-	}
-	// Copy member set to avoid data race with concurrent RemoveGroupMember
-	// which modifies g.Members under groupsMu.Lock().
-	members := make(map[string]bool, len(g.Members))
-	for m := range g.Members {
-		members[m] = true
-	}
-	h.groupsMu.RUnlock()
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for c := range h.clients {
-		if members[c.username] {
-			select {
-			case c.send <- data:
-			default:
-			}
-		}
-	}
-}
+// Copy member set to avoid data race with concurrent RemoveGroupMember
+// which modifies g.Members under groupsMu.Lock().
 
 // BroadcastToGroup sends a marshaled message to all group members who are online.
 // Same as SendToGroup — provided for consistency with the group admin API naming.
-func (h *Hub) BroadcastToGroup(groupName string, data []byte) {
-	h.SendToGroup(groupName, data)
-}
 
 // InGroup checks if a user is a member of a group.
-func (h *Hub) InGroup(username, groupName string) bool {
-	h.groupsMu.RLock()
-	defer h.groupsMu.RUnlock()
-	g, ok := h.groups[groupName]
-	if !ok {
-		return false
-	}
-	return g.Members[username]
-}
 
 // GroupMembers returns the list of members in a group.
-func (h *Hub) GroupMembers(groupName string) []string {
-	h.groupsMu.RLock()
-	defer h.groupsMu.RUnlock()
-	g, ok := h.groups[groupName]
-	if !ok {
-		return nil
-	}
-	members := make([]string, 0, len(g.Members))
-	for m := range g.Members {
-		members = append(members, m)
-	}
-	return members
-}
 
 // BroadcastJSON marshals a Message and sends it to the broadcast channel.
 // This is used for system messages like typing indicators that don't need store persistence.
@@ -1152,124 +896,28 @@ func ValidateUsername(username string) bool {
 var groupNameRegex = regexp.MustCompile(`^[\p{Han}a-zA-Z0-9_\- ]{1,30}$`)
 
 // ValidateGroupName checks if a group name meets requirements.
-func ValidateGroupName(name string) bool {
-	return groupNameRegex.MatchString(name)
-}
 
 // --- Friend system methods ---
 
 // IsFriend checks if two users are friends.
-func (h *Hub) IsFriend(username, friend string) bool {
-	h.friendsMu.RLock()
-	defer h.friendsMu.RUnlock()
-	set, ok := h.friends[username]
-	if !ok {
-		return false
-	}
-	return set[friend]
-}
 
 // GetFriends returns the list of friends for a username.
-func (h *Hub) GetFriends(username string) []string {
-	h.friendsMu.RLock()
-	defer h.friendsMu.RUnlock()
-	set := h.friends[username]
-	friends := make([]string, 0, len(set))
-	for f := range set {
-		friends = append(friends, f)
-	}
-	return friends
-}
 
 // AddFriend adds a bidirectional friend relationship.
-func (h *Hub) AddFriend(a, b string) {
-	h.friendsMu.Lock()
-	if h.friends[a] == nil {
-		h.friends[a] = make(map[string]bool)
-	}
-	if h.friends[b] == nil {
-		h.friends[b] = make(map[string]bool)
-	}
-	h.friends[a][b] = true
-	h.friends[b][a] = true
-	h.friendsMu.Unlock()
 
-	// Persist to store.
-	if h.store != nil {
-		h.store.AddFriend(a, b)
-		h.store.AddFriend(b, a)
-	}
-}
+// Persist to store.
 
 // RemoveFriend removes a bidirectional friend relationship.
-func (h *Hub) RemoveFriend(a, b string) {
-	h.friendsMu.Lock()
-	if h.friends[a] != nil {
-		delete(h.friends[a], b)
-	}
-	if h.friends[b] != nil {
-		delete(h.friends[b], a)
-	}
-	h.friendsMu.Unlock()
-
-	if h.store != nil {
-		h.store.RemoveFriend(a, b)
-		h.store.RemoveFriend(b, a)
-	}
-}
 
 // --- Group system methods ---
 
 // CreateGroup creates a new group with the creator as the first member.
-func (h *Hub) CreateGroup(name string, creator string) bool {
-	h.groupsMu.Lock()
-	defer h.groupsMu.Unlock()
-	if _, exists := h.groups[name]; exists {
-		return false
-	}
-	h.groups[name] = &Group{
-		Name:    name,
-		Members: map[string]bool{creator: true},
-	}
-	// Persist to store.
-	if h.store != nil {
-		h.store.CreateGroup(name, creator)
-	}
-	return true
-}
+
+// Persist to store.
 
 // AddGroupMember adds a member to a group.
-func (h *Hub) AddGroupMember(groupName, username string) bool {
-	h.groupsMu.Lock()
-	g, ok := h.groups[groupName]
-	if !ok {
-		h.groupsMu.Unlock()
-		return false
-	}
-	g.Members[username] = true
-	h.groupsMu.Unlock()
-
-	if h.store != nil {
-		h.store.AddGroupMember(groupName, username)
-	}
-	return true
-}
 
 // RemoveGroupMember removes a member from a group.
-func (h *Hub) RemoveGroupMember(groupName, username string) {
-	h.groupsMu.Lock()
-	g, ok := h.groups[groupName]
-	if !ok {
-		h.groupsMu.Unlock()
-		return
-	}
-	delete(g.Members, username)
-	h.groupsMu.Unlock()
-
-	if h.store != nil {
-		h.store.RemoveGroupMember(groupName, username)
-	}
-}
 
 // --- User blocking methods ---
 
@@ -1304,59 +952,26 @@ func (h *Hub) GetPinnedMessages(roomID string) []StoredMessage {
 }
 
 // PinConversation pins a conversation for a user.
-func (h *Hub) PinConversation(username, key string) error {
-	return h.store.PinConversation(username, key)
-}
 
 // UnpinConversation unpins a conversation for a user.
-func (h *Hub) UnpinConversation(username, key string) error {
-	return h.store.UnpinConversation(username, key)
-}
 
 // ListPinnedConversations returns the list of pinned conversation keys for a user.
-func (h *Hub) ListPinnedConversations(username string) []string {
-	return h.store.ListPinnedConversations(username)
-}
 
 // MuteConversation mutes a conversation for a user.
-func (h *Hub) MuteConversation(username, key string) error {
-	return h.store.MuteConversation(username, key)
-}
 
 // UnmuteConversation unmutes a conversation for a user.
-func (h *Hub) UnmuteConversation(username, key string) error {
-	return h.store.UnmuteConversation(username, key)
-}
 
 // ListMutedConversations returns the list of muted conversation keys for a user.
-func (h *Hub) ListMutedConversations(username string) []string {
-	return h.store.ListMutedConversations(username)
-}
 
 // IsConversationMuted checks if a conversation is muted for a user.
-func (h *Hub) IsConversationMuted(username, key string) bool {
-	return h.store.IsConversationMuted(username, key)
-}
 
 // ArchiveConversation archives a conversation for a user.
-func (h *Hub) ArchiveConversation(username, key string) error {
-	return h.store.ArchiveConversation(username, key)
-}
 
 // UnarchiveConversation unarchives a conversation for a user.
-func (h *Hub) UnarchiveConversation(username, key string) error {
-	return h.store.UnarchiveConversation(username, key)
-}
 
 // ListArchivedConversations returns the list of archived conversation keys for a user.
-func (h *Hub) ListArchivedConversations(username string) []string {
-	return h.store.ListArchivedConversations(username)
-}
 
 // IsConversationArchived checks if a conversation is archived for a user.
-func (h *Hub) IsConversationArchived(username, key string) bool {
-	return h.store.IsConversationArchived(username, key)
-}
 
 // SetNotificationPrefs upserts notification preferences for a (username, key) pair.
 func (h *Hub) SetNotificationPrefs(username, key string, mutedUntil int64, showPreview bool) error {
@@ -1492,36 +1107,10 @@ func (h *Hub) CheckBotCooldown(key string) bool {
 // --- Pending group invites ---
 
 // AddPendingInvite records a pending group invitation.
-func (h *Hub) AddPendingInvite(username, groupName, inviter string) {
-	h.pendingInvitesMu.Lock()
-	defer h.pendingInvitesMu.Unlock()
-	if h.pendingInvites[username] == nil {
-		h.pendingInvites[username] = make(map[string]string)
-	}
-	h.pendingInvites[username][groupName] = inviter
-}
 
 // ConsumePendingInvite checks and removes a pending invite, returning true if it existed.
-func (h *Hub) ConsumePendingInvite(username, groupName string) bool {
-	h.pendingInvitesMu.Lock()
-	defer h.pendingInvitesMu.Unlock()
-	m, ok := h.pendingInvites[username]
-	if !ok {
-		return false
-	}
-	_, exists := m[groupName]
-	delete(m, groupName)
-	return exists
-}
 
 // RemovePendingInvite removes a pending invite without joining.
-func (h *Hub) RemovePendingInvite(username, groupName string) {
-	h.pendingInvitesMu.Lock()
-	defer h.pendingInvitesMu.Unlock()
-	if m := h.pendingInvites[username]; m != nil {
-		delete(m, groupName)
-	}
-}
 
 // --- Room system methods ---
 
@@ -1597,305 +1186,18 @@ func (h *Hub) InRoom(roomID, username string) bool {
 // -------- Hub 查询接口 --------
 
 // RequestOnlineUsers 返回在线用户列表。
-func (h *Hub) RequestOnlineUsers() HubCommandResponse {
-	users := h.OnlineUsers()
-	data := map[string]any{
-		"online": users,
-		"count":  len(users),
-		"time":   time.Now().UnixMilli(),
-	}
-	return HubCommandResponse{
-		Type:    "online_users",
-		Success: true,
-		Data:    data,
-	}
-}
 
 // RequestHistory 返回指定房间的消息历史。
 // roomID 为空时返回全局消息。
-func (h *Hub) RequestHistory(roomID string, limit int, before int64) HubCommandResponse {
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 200 {
-		limit = 200
-	}
-
-	var messages []StoredMessage
-	if roomID != "" {
-		messages = h.store.GetRoomMessages(roomID, limit, before)
-	} else {
-		messages = h.store.GetMessages(limit, before)
-	}
-
-	if messages == nil {
-		messages = []StoredMessage{}
-	}
-
-	data := map[string]any{
-		"messages": messages,
-		"count":    len(messages),
-		"room_id":  roomID,
-	}
-	return HubCommandResponse{
-		Type:    "history",
-		Success: true,
-		Data:    data,
-	}
-}
 
 // SendDM 以指定身份发送私信给目标用户。
 // fromUsername: 发送者标识（通常为 bot 名）。
 // toUsername: 接收者用户名。
 // content: 私信内容。
-func (h *Hub) SendDM(fromUsername, toUsername, content string) HubCommandResponse {
-	if fromUsername == "" || toUsername == "" || content == "" {
-		return HubCommandResponse{
-			Type:    "send_dm",
-			Success: false,
-			Error:   "缺少必要参数：fromUsername、toUsername 或 content 为空",
-		}
-	}
 
-	// 持久化到 store。
-	storedMsg, err := h.store.InsertMessage(fromUsername, content, "", "", toUsername, "", "")
-	if err != nil {
-		log.Printf("SendDM: insert message error: %v", err)
-		return HubCommandResponse{
-			Type:    "send_dm",
-			Success: false,
-			Error:   fmt.Sprintf("持久化消息失败: %v", err),
-		}
-	}
+// 持久化到 store。
 
-	// 构建 DM 消息。
-	dmData, err := json.Marshal(Message{
-		Type:      "dm_message",
-		ID:        storedMsg.ID,
-		Username:  fromUsername,
-		Content:   content,
-		Timestamp: storedMsg.Timestamp,
-		To:        toUsername,
-		From:      fromUsername,
-	})
-	if err != nil {
-		return HubCommandResponse{
-			Type:    "send_dm",
-			Success: false,
-			Error:   fmt.Sprintf("序列化消息失败: %v", err),
-		}
-	}
-
-	// 发送给目标用户。
-	delivered := h.SendToUser(toUsername, dmData)
-	if delivered {
-		h.store.MarkMessagesDelivered([]string{storedMsg.ID})
-	}
-
-	data := map[string]any{
-		"message_id": storedMsg.ID,
-		"delivered":  delivered,
-		"to":         toUsername,
-		"timestamp":  storedMsg.Timestamp,
-	}
-	return HubCommandResponse{
-		Type:    "send_dm",
-		Success: true,
-		Data:    data,
-	}
-}
-
-// ExecuteHubCommand 执行 Hub 命令。
-// 根据 cmd.Type 分派到对应的处理方法。
-func (h *Hub) ExecuteHubCommand(cmd HubCommand) HubCommandResponse {
-	switch cmd.Type {
-	case "online_users":
-		return h.RequestOnlineUsers()
-	case "history":
-		return h.RequestHistory(cmd.RoomID, cmd.Limit, cmd.Before)
-	case "send_dm":
-		fromUsername := h.BotName() // 默认使用 bot 名
-		if cmd.Params != nil {
-			if from, ok := cmd.Params["from"].(string); ok && from != "" {
-				fromUsername = from
-			}
-		}
-		return h.SendDM(fromUsername, cmd.ToUser, cmd.Content)
-	default:
-		return HubCommandResponse{
-			Type:    cmd.Type,
-			Success: false,
-			Error:   fmt.Sprintf("未知命令类型: %s", cmd.Type),
-		}
-	}
-}
-
-// processScheduledMessages checks for pending scheduled messages and delivers them.
-func (h *Hub) processScheduledMessages() {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-
-	pending, err := h.store.GetPendingScheduledMessages(ctx)
-	if err != nil {
-		log.Printf("hub: get pending scheduled messages error: %v", err)
-		return
-	}
-
-	for _, sm := range pending {
-		// Insert as regular message using the scheduled message's timestamp.
-		storedMsg, err := h.store.InsertMessage(sm.Username, sm.Content, sm.ReplyToID, sm.RoomID, sm.ToUser, sm.GroupName, sm.ThreadID)
-		if err != nil {
-			log.Printf("hub: insert scheduled message error: %v", err)
-			continue
-		}
-
-		if err := h.store.MarkScheduledSent(sm.ID); err != nil {
-			log.Printf("hub: mark scheduled sent error: %v", err)
-		}
-
-		// Broadcast the message to appropriate recipients.
-		broadcastMsg, err := json.Marshal(Message{
-			Type:      "message",
-			ID:        storedMsg.ID,
-			Username:  storedMsg.Username,
-			Content:   storedMsg.Content,
-			Timestamp: storedMsg.Timestamp,
-			RoomID:    storedMsg.RoomID,
-			To:        storedMsg.ToUser,
-			Group:     storedMsg.GroupName,
-			ThreadID:  storedMsg.ThreadID,
-		})
-		if err != nil {
-			log.Printf("hub: marshal scheduled message error: %v", err)
-			continue
-		}
-
-		if sm.ToUser != "" {
-			// DM: send to recipient and echo to sender.
-			h.SendToAllSessions(sm.ToUser, broadcastMsg)
-			h.SendToAllSessions(sm.Username, broadcastMsg)
-			// Notify the sender their scheduled message was sent.
-			confirmMsg, _ := json.Marshal(Message{
-				Type:      "scheduled_message_sent",
-				ID:        sm.ID,
-				Content:   sm.Content,
-				Username:  sm.Username,
-				Timestamp: storedMsg.Timestamp,
-			})
-			h.SendToAllSessions(sm.Username, confirmMsg)
-		} else if sm.GroupName != "" {
-			h.SendToGroup(sm.GroupName, broadcastMsg)
-		} else if sm.RoomID != "" {
-			h.BroadcastToRoom(broadcastMsg, sm.RoomID)
-		} else {
-			select {
-			case h.broadcast <- broadcastMsg:
-			default:
-			}
-		}
-	}
-}
-
-// -------- Call session management --------
-
-// CreateCallSession creates a new call session and stores it.
-func (h *Hub) CreateCallSession(id, caller, callee, callType string) *CallSession {
-	h.callSessionsMu.Lock()
-	defer h.callSessionsMu.Unlock()
-	cs := &CallSession{
-		ID:        id,
-		Caller:    caller,
-		Callee:    callee,
-		Type:      callType,
-		Status:    "ringing",
-		CreatedAt: time.Now().UnixMilli(),
-	}
-	h.callSessions[id] = cs
-	return cs
-}
-
-// GetCallSession returns a call session by ID.
-func (h *Hub) GetCallSession(id string) *CallSession {
-	h.callSessionsMu.RLock()
-	defer h.callSessionsMu.RUnlock()
-	return h.callSessions[id]
-}
-
-// UpdateCallSessionStatus updates the status of a call session.
-func (h *Hub) UpdateCallSessionStatus(id, status string) {
-	h.callSessionsMu.Lock()
-	defer h.callSessionsMu.Unlock()
-	if cs, ok := h.callSessions[id]; ok {
-		cs.Status = status
-	}
-}
-
-// RemoveCallSession removes a call session.
-func (h *Hub) RemoveCallSession(id string) {
-	h.callSessionsMu.Lock()
-	defer h.callSessionsMu.Unlock()
-	delete(h.callSessions, id)
-}
-
-// CreateCallRoom creates a new multi-party call room.
-func (h *Hub) CreateCallRoom(id string, participants []string) *CallRoom {
-	h.callRoomsMu.Lock()
-	defer h.callRoomsMu.Unlock()
-	cr := &CallRoom{
-		ID:           id,
-		Participants: participants,
-		CreatedAt:    time.Now().UnixMilli(),
-	}
-	h.callRooms[id] = cr
-	return cr
-}
-
-// JoinCallRoom adds a user to an existing call room. Returns the room and whether
-// the user was newly added.
-func (h *Hub) JoinCallRoom(roomID, username string) (*CallRoom, bool) {
-	h.callRoomsMu.Lock()
-	defer h.callRoomsMu.Unlock()
-	cr, ok := h.callRooms[roomID]
-	if !ok {
-		return nil, false
-	}
-	for _, p := range cr.Participants {
-		if p == username {
-			return cr, false // already in room
-		}
-	}
-	cr.Participants = append(cr.Participants, username)
-	return cr, true
-}
-
-// LeaveCallRoom removes a user from a call room. Returns the remaining participants.
-func (h *Hub) LeaveCallRoom(roomID, username string) []string {
-	h.callRoomsMu.Lock()
-	defer h.callRoomsMu.Unlock()
-	cr, ok := h.callRooms[roomID]
-	if !ok {
-		return nil
-	}
-	filtered := make([]string, 0, len(cr.Participants))
-	for _, p := range cr.Participants {
-		if p != username {
-			filtered = append(filtered, p)
-		}
-	}
-	if len(filtered) == 0 {
-		delete(h.callRooms, roomID)
-		return nil
-	}
-	cr.Participants = filtered
-	return filtered
-}
-
-// GetCallRoom returns a call room by ID.
-func (h *Hub) GetCallRoom(roomID string) *CallRoom {
-	h.callRoomsMu.RLock()
-	defer h.callRoomsMu.RUnlock()
-	return h.callRooms[roomID]
-}
+// 构建 DM 消息。
 
 // Stop signals the Run loop to exit cleanly. Safe to call multiple times.
 func (h *Hub) Stop() {

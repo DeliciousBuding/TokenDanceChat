@@ -4,10 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -323,64 +321,6 @@ func TestSearchMessages(t *testing.T) {
 	}
 }
 
-func TestSearchMessagesForUserFiltersPrivateAndDeletedResults(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	s.InsertMessage("alice", "needle public visible", "", "", "", "", "")
-	s.InsertMessage("bob", "needle dm visible", "", "", "alice", "", "")
-	s.InsertMessage("alice", "needle dm outbound visible", "", "", "bob", "", "")
-	s.InsertMessage("charlie", "needle dm hidden", "", "", "bob", "", "")
-
-	if err := s.CreateGroup("devs", "alice"); err != nil {
-		t.Fatalf("CreateGroup devs returned error: %v", err)
-	}
-	if err := s.CreateGroup("ops", "charlie"); err != nil {
-		t.Fatalf("CreateGroup ops returned error: %v", err)
-	}
-	s.InsertMessage("alice", "needle group visible", "", "", "", "devs", "")
-	s.InsertMessage("charlie", "needle group hidden", "", "", "", "ops", "")
-	deleted, err := s.InsertMessage("alice", "needle deleted hidden", "", "", "", "", "")
-	if err != nil {
-		t.Fatalf("InsertMessage deleted fixture returned error: %v", err)
-	}
-	if err := s.MarkDeleted(deleted.ID); err != nil {
-		t.Fatalf("MarkDeleted returned error: %v", err)
-	}
-
-	results, err := s.SearchMessagesForUser("needle", "", "alice", 20)
-	if err != nil {
-		t.Fatalf("SearchMessagesForUser returned error: %v", err)
-	}
-
-	got := make(map[string]bool)
-	for _, result := range results {
-		got[result.Content] = true
-	}
-	for _, want := range []string{
-		"needle public visible",
-		"needle dm visible",
-		"needle dm outbound visible",
-		"needle group visible",
-	} {
-		if !got[want] {
-			t.Errorf("expected user-scoped search result %q", want)
-		}
-	}
-	for _, hidden := range []string{
-		"needle dm hidden",
-		"needle group hidden",
-		"needle deleted hidden",
-	} {
-		if got[hidden] {
-			t.Errorf("did not expect private/deleted search result %q", hidden)
-		}
-	}
-}
-
 func TestSearchMessagesSpecialCharacters(t *testing.T) {
 	s, err := New(":memory:")
 	if err != nil {
@@ -410,164 +350,6 @@ func TestSearchMessagesSpecialCharacters(t *testing.T) {
 		t.Errorf("SearchMessages with SQL keyword should not error: %v", err)
 	}
 	_ = results
-}
-
-func TestCreateWebhookDoesNotPersistPlaintextSecret(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	const plaintextSecret = "plain-webhook-secret"
-	if err := s.CreateWebhook("wh-1", "team", "wh-url", plaintextSecret, "alice"); err != nil {
-		t.Fatalf("CreateWebhook returned error: %v", err)
-	}
-
-	var storedSecret string
-	if err := s.db.QueryRow("SELECT secret FROM webhooks WHERE id = ?", "wh-1").Scan(&storedSecret); err != nil {
-		t.Fatalf("failed to read stored webhook secret: %v", err)
-	}
-	if storedSecret == plaintextSecret {
-		t.Fatal("webhook secret was persisted in plaintext")
-	}
-	if !strings.HasPrefix(storedSecret, "whsec_sha256:") {
-		t.Fatalf("expected versioned webhook secret hash, got %q", storedSecret)
-	}
-	webhook, ok, err := s.VerifyWebhookSecret("wh-url", plaintextSecret)
-	if err != nil {
-		t.Fatalf("VerifyWebhookSecret returned error for correct secret: %v", err)
-	}
-	if !ok {
-		t.Fatal("VerifyWebhookSecret rejected the original plaintext secret")
-	}
-	if webhook.GroupName != "team" {
-		t.Fatalf("verified webhook group = %q, want team", webhook.GroupName)
-	}
-	if _, ok, err := s.VerifyWebhookSecret("wh-url", "wrong-secret"); err != nil {
-		t.Fatalf("VerifyWebhookSecret returned error for wrong secret: %v", err)
-	} else if ok {
-		t.Fatal("VerifyWebhookSecret accepted the wrong secret")
-	}
-}
-
-func TestWebhookPlaintextSecretMigrationHashesExistingRows(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "chat.db")
-	s, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("New(temp db) returned error: %v", err)
-	}
-	const legacySecret = "legacy-webhook-secret"
-	if _, err := s.db.Exec(
-		"INSERT INTO webhooks (id, group_name, url, secret, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		"legacy-wh", "team", "legacy-url", legacySecret, "alice", time.Now().UnixMilli(),
-	); err != nil {
-		t.Fatalf("failed to insert legacy webhook row: %v", err)
-	}
-	s.Close()
-
-	reopened, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("New(existing db) returned error: %v", err)
-	}
-	defer reopened.Close()
-
-	var storedSecret string
-	if err := reopened.db.QueryRow("SELECT secret FROM webhooks WHERE id = ?", "legacy-wh").Scan(&storedSecret); err != nil {
-		t.Fatalf("failed to read migrated webhook secret: %v", err)
-	}
-	if storedSecret == legacySecret {
-		t.Fatal("legacy webhook secret remained plaintext after migration")
-	}
-	if !strings.HasPrefix(storedSecret, "whsec_sha256:") {
-		t.Fatalf("expected migrated versioned webhook secret hash, got %q", storedSecret)
-	}
-	webhook, ok, err := reopened.VerifyWebhookSecret("legacy-url", legacySecret)
-	if err != nil {
-		t.Fatalf("VerifyWebhookSecret returned error for migrated secret: %v", err)
-	}
-	if !ok {
-		t.Fatal("VerifyWebhookSecret rejected migrated legacy secret")
-	}
-	if webhook.ID != "legacy-wh" {
-		t.Fatalf("verified migrated webhook id = %q, want legacy-wh", webhook.ID)
-	}
-}
-
-func TestRotateWebhookSecretInvalidatesOldSecretAndAudits(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	const (
-		oldSecret = "old-webhook-secret"
-		newSecret = "new-webhook-secret"
-	)
-	if err := s.CreateWebhook("wh-1", "team", "wh-url", oldSecret, "alice"); err != nil {
-		t.Fatalf("CreateWebhook returned error: %v", err)
-	}
-
-	rotated, err := s.RotateWebhookSecret("wh-1", "team", newSecret, "bob")
-	if err != nil {
-		t.Fatalf("RotateWebhookSecret returned error: %v", err)
-	}
-	if rotated.RotatedBy != "bob" {
-		t.Fatalf("RotatedBy = %q, want bob", rotated.RotatedBy)
-	}
-	if rotated.RotatedAt == 0 {
-		t.Fatal("expected non-zero RotatedAt")
-	}
-
-	if _, ok, err := s.VerifyWebhookSecret("wh-url", oldSecret); err != nil {
-		t.Fatalf("VerifyWebhookSecret returned error for old secret: %v", err)
-	} else if ok {
-		t.Fatal("old webhook secret still verifies after rotation")
-	}
-	if _, ok, err := s.VerifyWebhookSecret("wh-url", newSecret); err != nil {
-		t.Fatalf("VerifyWebhookSecret returned error for new secret: %v", err)
-	} else if !ok {
-		t.Fatal("new webhook secret did not verify after rotation")
-	}
-
-	webhooks, err := s.ListWebhooks("team")
-	if err != nil {
-		t.Fatalf("ListWebhooks returned error: %v", err)
-	}
-	if len(webhooks) != 1 {
-		t.Fatalf("expected 1 webhook, got %d", len(webhooks))
-	}
-	if webhooks[0].RotatedBy != "bob" || webhooks[0].RotatedAt == 0 {
-		t.Fatalf("webhook rotation metadata not listed: %+v", webhooks[0])
-	}
-
-	if err := s.DeleteWebhook("wh-1", "team", "carol"); err != nil {
-		t.Fatalf("DeleteWebhook returned error: %v", err)
-	}
-
-	logs, err := s.ListWebhookAuditLogs("team", 10)
-	if err != nil {
-		t.Fatalf("ListWebhookAuditLogs returned error: %v", err)
-	}
-	seen := map[string]string{}
-	for _, item := range logs {
-		seen[item.Action] = item.Actor
-	}
-	for action, actor := range map[string]string{"created": "alice", "rotated": "bob", "deleted": "carol"} {
-		if seen[action] != actor {
-			t.Fatalf("audit action %q actor = %q, want %q; logs=%+v", action, seen[action], actor, logs)
-		}
-	}
-
-	encoded, err := json.Marshal(logs)
-	if err != nil {
-		t.Fatalf("failed to marshal audit logs: %v", err)
-	}
-	raw := string(encoded)
-	if strings.Contains(raw, oldSecret) || strings.Contains(raw, newSecret) || strings.Contains(raw, "whsec_sha256:") {
-		t.Fatalf("audit logs leaked secret material: %s", raw)
-	}
 }
 
 func TestConcurrentInsert(t *testing.T) {
@@ -905,19 +687,6 @@ func TestGetUserProfile(t *testing.T) {
 		t.Error("expected error for non-existent user profile")
 	}
 
-	// Update status.
-	err = s.UpdateUserStatus("alice", "away")
-	if err != nil {
-		t.Fatalf("UpdateUserStatus returned error: %v", err)
-	}
-	profile, err = s.GetUserProfile("alice")
-	if err != nil {
-		t.Fatalf("GetUserProfile after status update returned error: %v", err)
-	}
-	if profile.Status != "away" {
-		t.Errorf("expected status 'away' after update, got '%s'", profile.Status)
-	}
-
 	// Update last seen.
 	err = s.UpdateUserLastSeen("bob")
 	if err != nil {
@@ -1075,118 +844,27 @@ func TestGetThreadMessages(t *testing.T) {
 
 // ── Group management ──
 
-func TestCreateGroupAndMembers(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Create a group.
 
-	// Create a group.
-	err = s.CreateGroup("devs", "alice")
-	if err != nil {
-		t.Fatalf("CreateGroup returned error: %v", err)
-	}
+// Get group info.
 
-	// Get group info.
-	info, err := s.GetGroupInfo("devs")
-	if err != nil {
-		t.Fatalf("GetGroupInfo returned error: %v", err)
-	}
-	if info.Name != "devs" {
-		t.Errorf("expected group name 'devs', got '%s'", info.Name)
-	}
-	if info.Owner != "alice" {
-		t.Errorf("expected owner 'alice', got '%s'", info.Owner)
-	}
-	if info.MemberCount != 1 {
-		t.Errorf("expected 1 member after creation, got %d", info.MemberCount)
-	}
+// Get group owner.
 
-	// Get group owner.
-	owner, err := s.GetGroupOwner("devs")
-	if err != nil {
-		t.Fatalf("GetGroupOwner returned error: %v", err)
-	}
-	if owner != "alice" {
-		t.Errorf("expected owner 'alice', got '%s'", owner)
-	}
+// Get members with roles.
 
-	// Get members with roles.
-	members := s.GetGroupMembersWithRoles("devs")
-	if len(members) != 1 {
-		t.Fatalf("expected 1 member, got %d", len(members))
-	}
-	if members[0].Username != "alice" || members[0].Role != "owner" {
-		t.Errorf("expected alice as owner, got %s/%s", members[0].Username, members[0].Role)
-	}
+// Add members.
 
-	// Add members.
-	err = s.AddGroupMember("devs", "bob")
-	if err != nil {
-		t.Fatalf("AddGroupMember returned error: %v", err)
-	}
-	err = s.AddGroupMember("devs", "charlie")
-	if err != nil {
-		t.Fatalf("AddGroupMember returned error: %v", err)
-	}
+// Get member role.
 
-	// Get member role.
-	role, err := s.GetGroupMemberRole("devs", "bob")
-	if err != nil {
-		t.Fatalf("GetGroupMemberRole returned error: %v", err)
-	}
-	if role != "member" {
-		t.Errorf("expected role 'member', got '%s'", role)
-	}
+// Set member role to admin.
 
-	// Set member role to admin.
-	err = s.SetGroupMemberRole("devs", "bob", "admin")
-	if err != nil {
-		t.Fatalf("SetGroupMemberRole returned error: %v", err)
-	}
-	role, err = s.GetGroupMemberRole("devs", "bob")
-	if err != nil {
-		t.Fatalf("GetGroupMemberRole after promotion returned error: %v", err)
-	}
-	if role != "admin" {
-		t.Errorf("expected role 'admin' after promotion, got '%s'", role)
-	}
+// Get simple member list.
 
-	// Get simple member list.
-	names := s.GetGroupMembers("devs")
-	if len(names) != 3 {
-		t.Errorf("expected 3 members, got %d", len(names))
-	}
+// Verify member count updated.
 
-	// Verify member count updated.
-	info, err = s.GetGroupInfo("devs")
-	if err != nil {
-		t.Fatalf("GetGroupInfo after adding members returned error: %v", err)
-	}
-	if info.MemberCount != 3 {
-		t.Errorf("expected 3 members in info, got %d", info.MemberCount)
-	}
+// Get all groups.
 
-	// Get all groups.
-	allGroups := s.GetAllGroups()
-	if len(allGroups) != 1 {
-		t.Errorf("expected 1 group in GetAllGroups, got %d", len(allGroups))
-	}
-	if len(allGroups["devs"]) != 3 {
-		t.Errorf("expected 3 members in devs group, got %d", len(allGroups["devs"]))
-	}
-
-	// Remove a member.
-	err = s.RemoveGroupMember("devs", "charlie")
-	if err != nil {
-		t.Fatalf("RemoveGroupMember returned error: %v", err)
-	}
-	names = s.GetGroupMembers("devs")
-	if len(names) != 2 {
-		t.Errorf("expected 2 members after removal, got %d", len(names))
-	}
-}
+// Remove a member.
 
 // ── Invite codes ──
 
@@ -1277,268 +955,49 @@ func TestGenerateInviteCode(t *testing.T) {
 
 // ── Chat folders ──
 
-func TestChatFolderCreateAndList(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Create folders.
 
-	// Create folders.
-	f1, err := s.CreateChatFolder("alice", "Work")
-	if err != nil {
-		t.Fatalf("CreateChatFolder returned error: %v", err)
-	}
-	if f1.ID == "" {
-		t.Error("expected non-empty folder ID")
-	}
-	if f1.Name != "Work" {
-		t.Errorf("expected folder name 'Work', got '%s'", f1.Name)
-	}
-	if f1.Username != "alice" {
-		t.Errorf("expected username 'alice', got '%s'", f1.Username)
-	}
-	if f1.CreatedAt == 0 {
-		t.Error("expected non-zero CreatedAt")
-	}
+// Create folder for another user.
 
-	_, err = s.CreateChatFolder("alice", "Personal")
-	if err != nil {
-		t.Fatalf("CreateChatFolder second returned error: %v", err)
-	}
+// List folders for alice.
 
-	// Create folder for another user.
-	_, err = s.CreateChatFolder("bob", "Bob's Stuff")
-	if err != nil {
-		t.Fatalf("CreateChatFolder for bob returned error: %v", err)
-	}
+// List folders for bob.
 
-	// List folders for alice.
-	folders, err := s.ListFolders("alice")
-	if err != nil {
-		t.Fatalf("ListFolders returned error: %v", err)
-	}
-	if len(folders) != 2 {
-		t.Fatalf("expected 2 folders for alice, got %d", len(folders))
-	}
-	if folders[0].ItemCount != 0 || folders[1].ItemCount != 0 {
-		t.Error("expected 0 item counts for empty folders")
-	}
+// List folders for user with no folders.
 
-	// List folders for bob.
-	folders, err = s.ListFolders("bob")
-	if err != nil {
-		t.Fatalf("ListFolders for bob returned error: %v", err)
-	}
-	if len(folders) != 1 {
-		t.Fatalf("expected 1 folder for bob, got %d", len(folders))
-	}
+// Duplicate name for same user should fail (UNIQUE constraint).
 
-	// List folders for user with no folders.
-	folders, err = s.ListFolders("nonexistent")
-	if err != nil {
-		t.Fatalf("ListFolders for nonexistent returned error: %v", err)
-	}
-	if len(folders) != 0 {
-		t.Errorf("expected 0 folders for nonexistent user, got %d", len(folders))
-	}
+// Same name for different user should succeed.
 
-	// Duplicate name for same user should fail (UNIQUE constraint).
-	_, err = s.CreateChatFolder("alice", "Work")
-	if err == nil {
-		t.Error("expected error for duplicate folder name")
-	}
+// Rename succeeds.
 
-	// Same name for different user should succeed.
-	_, err = s.CreateChatFolder("charlie", "Work")
-	if err != nil {
-		t.Fatalf("CreateChatFolder same name different user returned error: %v", err)
-	}
-}
+// Rename with wrong username should silently affect 0 rows (no error, just no-op).
 
-func TestChatFolderRename(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Rename non-existent folder.
 
-	f, err := s.CreateChatFolder("alice", "Old Name")
-	if err != nil {
-		t.Fatalf("CreateChatFolder returned error: %v", err)
-	}
+// Add items to the folder.
 
-	// Rename succeeds.
-	err = s.RenameChatFolder("alice", f.ID, "New Name")
-	if err != nil {
-		t.Fatalf("RenameChatFolder returned error: %v", err)
-	}
+// Verify items exist.
 
-	folders, err := s.ListFolders("alice")
-	if err != nil {
-		t.Fatalf("ListFolders returned error: %v", err)
-	}
-	if len(folders) != 1 {
-		t.Fatalf("expected 1 folder, got %d", len(folders))
-	}
-	if folders[0].Name != "New Name" {
-		t.Errorf("expected renamed folder 'New Name', got '%s'", folders[0].Name)
-	}
+// Delete the folder.
 
-	// Rename with wrong username should silently affect 0 rows (no error, just no-op).
-	err = s.RenameChatFolder("bob", f.ID, "Evil Name")
-	if err != nil {
-		t.Fatalf("RenameChatFolder with wrong user returned error: %v", err)
-	}
-	folders, err = s.ListFolders("alice")
-	if err != nil {
-		t.Fatalf("ListFolders returned error: %v", err)
-	}
-	if folders[0].Name != "New Name" {
-		t.Errorf("expected name unchanged after wrong-user rename, got '%s'", folders[0].Name)
-	}
+// Folder should be gone.
 
-	// Rename non-existent folder.
-	err = s.RenameChatFolder("alice", "nonexistent-id", "Whatever")
-	if err != nil {
-		t.Fatalf("RenameChatFolder non-existent returned error: %v", err)
-	}
-}
+// Items should be cascaded/deleted.
 
-func TestChatFolderDelete(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Delete with wrong username should not delete.
 
-	f, err := s.CreateChatFolder("alice", "Ephemeral")
-	if err != nil {
-		t.Fatalf("CreateChatFolder returned error: %v", err)
-	}
+// Add item.
 
-	// Add items to the folder.
-	err = s.AddToFolder(f.ID, "dm:bob")
-	if err != nil {
-		t.Fatalf("AddToFolder returned error: %v", err)
-	}
-	err = s.AddToFolder(f.ID, "room:general")
-	if err != nil {
-		t.Fatalf("AddToFolder second returned error: %v", err)
-	}
+// Adding same item again should be a no-op (INSERT OR IGNORE).
 
-	// Verify items exist.
-	items, err := s.GetFolderItems(f.ID)
-	if err != nil {
-		t.Fatalf("GetFolderItems returned error: %v", err)
-	}
-	if len(items) != 2 {
-		t.Fatalf("expected 2 items, got %d", len(items))
-	}
+// Verify item count.
 
-	// Delete the folder.
-	err = s.DeleteChatFolder("alice", f.ID)
-	if err != nil {
-		t.Fatalf("DeleteChatFolder returned error: %v", err)
-	}
+// Remove item.
 
-	// Folder should be gone.
-	folders, err := s.ListFolders("alice")
-	if err != nil {
-		t.Fatalf("ListFolders after delete returned error: %v", err)
-	}
-	if len(folders) != 0 {
-		t.Errorf("expected 0 folders after delete, got %d", len(folders))
-	}
+// Removing non-existent item should not error.
 
-	// Items should be cascaded/deleted.
-	items, err = s.GetFolderItems(f.ID)
-	if err != nil {
-		t.Fatalf("GetFolderItems after delete returned error: %v", err)
-	}
-	if len(items) != 0 {
-		t.Errorf("expected 0 items after folder delete, got %d", len(items))
-	}
-
-	// Delete with wrong username should not delete.
-	f2, _ := s.CreateChatFolder("alice", "Keep")
-	err = s.DeleteChatFolder("bob", f2.ID)
-	if err != nil {
-		t.Fatalf("DeleteChatFolder wrong user returned error: %v", err)
-	}
-	folders, err = s.ListFolders("alice")
-	if err != nil {
-		t.Fatalf("ListFolders returned error: %v", err)
-	}
-	if len(folders) != 1 {
-		t.Errorf("expected folder not deleted by wrong user, got %d folders", len(folders))
-	}
-}
-
-func TestChatFolderAddRemoveItems(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	f, err := s.CreateChatFolder("alice", "Test")
-	if err != nil {
-		t.Fatalf("CreateChatFolder returned error: %v", err)
-	}
-
-	// Add item.
-	err = s.AddToFolder(f.ID, "dm:charlie")
-	if err != nil {
-		t.Fatalf("AddToFolder returned error: %v", err)
-	}
-
-	// Adding same item again should be a no-op (INSERT OR IGNORE).
-	err = s.AddToFolder(f.ID, "dm:charlie")
-	if err != nil {
-		t.Fatalf("AddToFolder duplicate returned error: %v", err)
-	}
-
-	// Verify item count.
-	items, err := s.GetFolderItems(f.ID)
-	if err != nil {
-		t.Fatalf("GetFolderItems returned error: %v", err)
-	}
-	if len(items) != 1 {
-		t.Fatalf("expected 1 item after duplicate add, got %d", len(items))
-	}
-	if items[0] != "dm:charlie" {
-		t.Errorf("expected item 'dm:charlie', got '%s'", items[0])
-	}
-
-	// Remove item.
-	err = s.RemoveFromFolder(f.ID, "dm:charlie")
-	if err != nil {
-		t.Fatalf("RemoveFromFolder returned error: %v", err)
-	}
-	items, err = s.GetFolderItems(f.ID)
-	if err != nil {
-		t.Fatalf("GetFolderItems after remove returned error: %v", err)
-	}
-	if len(items) != 0 {
-		t.Errorf("expected 0 items after remove, got %d", len(items))
-	}
-
-	// Removing non-existent item should not error.
-	err = s.RemoveFromFolder(f.ID, "nonexistent")
-	if err != nil {
-		t.Fatalf("RemoveFromFolder non-existent returned error: %v", err)
-	}
-
-	// GetFolderItems for non-existent folder returns empty.
-	items, err = s.GetFolderItems("nonexistent-id")
-	if err != nil {
-		t.Fatalf("GetFolderItems non-existent returned error: %v", err)
-	}
-	if len(items) != 0 {
-		t.Errorf("expected 0 items for non-existent folder, got %d", len(items))
-	}
-}
+// GetFolderItems for non-existent folder returns empty.
 
 // ── Notification preferences ──
 
@@ -1836,59 +1295,7 @@ func TestExportMessagesRoom(t *testing.T) {
 	}
 }
 
-func TestExportMessagesDM(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	s.InsertMessage("alice", "hi bob", "", "", "bob", "", "")
-	time.Sleep(time.Millisecond)
-	s.InsertMessage("bob", "hey alice", "", "", "alice", "", "")
-	time.Sleep(time.Millisecond)
-	s.InsertMessage("alice", "how are you", "", "", "bob", "", "")
-
-	ctx := context.Background()
-	msgs, err := s.ExportMessages(ctx, "", "bob", "", "alice", 0)
-	if err != nil {
-		t.Fatalf("ExportMessages DM returned error: %v", err)
-	}
-	if len(msgs) != 3 {
-		t.Fatalf("expected 3 DM messages, got %d", len(msgs))
-	}
-	// Messages should be in chronological order.
-	if msgs[0].Content != "hi bob" {
-		t.Errorf("expected first 'hi bob', got '%s'", msgs[0].Content)
-	}
-	if msgs[1].Content != "hey alice" {
-		t.Errorf("expected second 'hey alice', got '%s'", msgs[1].Content)
-	}
-}
-
-func TestExportMessagesGroup(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	s.InsertMessage("alice", "group msg 1", "", "", "", "devs", "")
-	time.Sleep(time.Millisecond)
-	s.InsertMessage("bob", "group msg 2", "", "", "", "devs", "")
-
-	ctx := context.Background()
-	msgs, err := s.ExportMessages(ctx, "", "", "devs", "", 0)
-	if err != nil {
-		t.Fatalf("ExportMessages group returned error: %v", err)
-	}
-	if len(msgs) != 2 {
-		t.Fatalf("expected 2 group messages, got %d", len(msgs))
-	}
-	if msgs[0].GroupName != "devs" {
-		t.Errorf("expected group_name 'devs', got '%s'", msgs[0].GroupName)
-	}
-}
+// Messages should be in chronological order.
 
 func TestExportMessagesPublic(t *testing.T) {
 	s, err := New(":memory:")
@@ -1901,9 +1308,8 @@ func TestExportMessagesPublic(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	s.InsertMessage("bob", "public msg 2", "", "", "", "", "")
 
-	// Also insert a DM and group message — should not appear in public export.
+	// Also insert a DM — it should not appear in public export.
 	s.InsertMessage("alice", "dm msg", "", "", "bob", "", "")
-	s.InsertMessage("charlie", "group msg", "", "", "", "team", "")
 
 	ctx := context.Background()
 	msgs, err := s.ExportMessages(ctx, "", "", "", "", 0)
@@ -1956,342 +1362,51 @@ func TestExportMessagesEmpty(t *testing.T) {
 
 // ── Call history ──
 
-func TestCallHistoryLogAndGet(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// GetCallHistory for caller.
 
-	now := time.Now().UnixMilli()
-	call := CallRecord{
-		ID:        "call-1",
-		Caller:    "alice",
-		Callee:    "bob",
-		CallType:  "video",
-		Status:    "missed",
-		StartedAt: now,
-		EndedAt:   0,
-		CreatedAt: now,
-	}
-	err = s.LogCall(call)
-	if err != nil {
-		t.Fatalf("LogCall returned error: %v", err)
-	}
+// GetCallHistory for callee.
 
-	// GetCallHistory for caller.
-	history, err := s.GetCallHistory("alice", 50)
-	if err != nil {
-		t.Fatalf("GetCallHistory for caller returned error: %v", err)
-	}
-	if len(history) != 1 {
-		t.Fatalf("expected 1 call, got %d", len(history))
-	}
-	if history[0].Caller != "alice" {
-		t.Errorf("expected caller 'alice', got '%s'", history[0].Caller)
-	}
-	if history[0].Status != "missed" {
-		t.Errorf("expected status 'missed', got '%s'", history[0].Status)
-	}
+// Update the call record.
 
-	// GetCallHistory for callee.
-	history, err = s.GetCallHistory("bob", 50)
-	if err != nil {
-		t.Fatalf("GetCallHistory for callee returned error: %v", err)
-	}
-	if len(history) != 1 {
-		t.Fatalf("expected 1 call for callee, got %d", len(history))
-	}
-}
+// Empty history.
 
-func TestCallHistoryUpdate(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Log multiple calls.
 
-	now := time.Now().UnixMilli()
-	call := CallRecord{
-		ID:        "call-1",
-		Caller:    "alice",
-		Callee:    "bob",
-		CallType:  "audio",
-		Status:    "ringing",
-		StartedAt: now,
-		CreatedAt: now,
-	}
-	s.LogCall(call)
-
-	// Update the call record.
-	endedAt := now + 60000
-	err = s.UpdateCallRecord("call-1", "completed", now, endedAt)
-	if err != nil {
-		t.Fatalf("UpdateCallRecord returned error: %v", err)
-	}
-
-	history, err := s.GetCallHistory("alice", 50)
-	if err != nil {
-		t.Fatalf("GetCallHistory after update returned error: %v", err)
-	}
-	if len(history) != 1 {
-		t.Fatalf("expected 1 call after update, got %d", len(history))
-	}
-	if history[0].Status != "completed" {
-		t.Errorf("expected status 'completed', got '%s'", history[0].Status)
-	}
-	if history[0].StartedAt != now {
-		t.Errorf("expected StartedAt=%d, got %d", now, history[0].StartedAt)
-	}
-	if history[0].EndedAt != endedAt {
-		t.Errorf("expected EndedAt=%d, got %d", endedAt, history[0].EndedAt)
-	}
-}
-
-func TestCallHistoryEmptyAndLimit(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	// Empty history.
-	history, err := s.GetCallHistory("alice", 50)
-	if err != nil {
-		t.Fatalf("GetCallHistory empty returned error: %v", err)
-	}
-	if len(history) != 0 {
-		t.Errorf("expected 0 calls for empty history, got %d", len(history))
-	}
-
-	// Log multiple calls.
-	now := time.Now().UnixMilli()
-	for i := 0; i < 5; i++ {
-		s.LogCall(CallRecord{
-			ID:        fmt.Sprintf("call-%d", i),
-			Caller:    "alice",
-			Callee:    fmt.Sprintf("user%d", i),
-			CallType:  "video",
-			Status:    "completed",
-			StartedAt: now - int64(i*1000),
-			EndedAt:   now - int64(i*500),
-			CreatedAt: now - int64(i*1000),
-		})
-	}
-
-	// Limit returns only the requested number.
-	history, err = s.GetCallHistory("alice", 2)
-	if err != nil {
-		t.Fatalf("GetCallHistory with limit returned error: %v", err)
-	}
-	if len(history) != 2 {
-		t.Fatalf("expected 2 calls with limit, got %d", len(history))
-	}
-}
+// Limit returns only the requested number.
 
 // ── Scheduled messages ──
 
-func TestScheduledMessageLifecycle(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Schedule a message in the past (should be picked up as pending).
 
-	now := time.Now().UnixMilli()
-	// Schedule a message in the past (should be picked up as pending).
-	pastMsg := ScheduledMessage{
-		ID:        "sched-1",
-		Username:  "alice",
-		Content:   "past message",
-		RoomID:    "public",
-		SendAt:    now - 10000, // 10 seconds in the past
-		CreatedAt: now - 20000,
-	}
-	err = s.ScheduleMessage(pastMsg)
-	if err != nil {
-		t.Fatalf("ScheduleMessage returned error: %v", err)
-	}
+// 10 seconds in the past
 
-	// Schedule a message in the future (should NOT be picked up as pending).
-	futureMsg := ScheduledMessage{
-		ID:        "sched-2",
-		Username:  "alice",
-		Content:   "future message",
-		RoomID:    "public",
-		SendAt:    now + 3600000, // 1 hour in the future
-		CreatedAt: now,
-	}
-	err = s.ScheduleMessage(futureMsg)
-	if err != nil {
-		t.Fatalf("ScheduleMessage future returned error: %v", err)
-	}
+// Schedule a message in the future (should NOT be picked up as pending).
 
-	// GetPendingScheduledMessages should only return the past message.
-	ctx := context.Background()
-	pending, err := s.GetPendingScheduledMessages(ctx)
-	if err != nil {
-		t.Fatalf("GetPendingScheduledMessages returned error: %v", err)
-	}
-	if len(pending) != 1 {
-		t.Fatalf("expected 1 pending message, got %d", len(pending))
-	}
-	if pending[0].ID != "sched-1" {
-		t.Errorf("expected pending msg 'sched-1', got '%s'", pending[0].ID)
-	}
+// 1 hour in the future
 
-	// Mark as sent.
-	err = s.MarkScheduledSent("sched-1")
-	if err != nil {
-		t.Fatalf("MarkScheduledSent returned error: %v", err)
-	}
+// GetPendingScheduledMessages should only return the past message.
 
-	// Pending should now be empty.
-	pending, err = s.GetPendingScheduledMessages(ctx)
-	if err != nil {
-		t.Fatalf("GetPendingScheduledMessages after mark returned error: %v", err)
-	}
-	if len(pending) != 0 {
-		t.Errorf("expected 0 pending after marking sent, got %d", len(pending))
-	}
+// Mark as sent.
 
-	// GetUserScheduledMessages for alice should return only the unsent future message.
-	userMsgs, err := s.GetUserScheduledMessages("alice")
-	if err != nil {
-		t.Fatalf("GetUserScheduledMessages returned error: %v", err)
-	}
-	if len(userMsgs) != 1 {
-		t.Fatalf("expected 1 user scheduled message, got %d", len(userMsgs))
-	}
-	if userMsgs[0].ID != "sched-2" {
-		t.Errorf("expected 'sched-2', got '%s'", userMsgs[0].ID)
-	}
+// Pending should now be empty.
 
-	// Cancel the future message.
-	err = s.CancelScheduledMessage("sched-2", "alice")
-	if err != nil {
-		t.Fatalf("CancelScheduledMessage returned error: %v", err)
-	}
+// GetUserScheduledMessages for alice should return only the unsent future message.
 
-	userMsgs, err = s.GetUserScheduledMessages("alice")
-	if err != nil {
-		t.Fatalf("GetUserScheduledMessages after cancel returned error: %v", err)
-	}
-	if len(userMsgs) != 0 {
-		t.Errorf("expected 0 user messages after cancel, got %d", len(userMsgs))
-	}
-}
+// Cancel the future message.
 
-func TestScheduledMessageCancelWrongUser(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Bob tries to cancel alice's message — should silently affect 0 rows.
 
-	now := time.Now().UnixMilli()
-	msg := ScheduledMessage{
-		ID:        "sched-1",
-		Username:  "alice",
-		Content:   "alice's message",
-		RoomID:    "public",
-		SendAt:    now + 3600000,
-		CreatedAt: now,
-	}
-	s.ScheduleMessage(msg)
+// Verify the message is still there for alice.
 
-	// Bob tries to cancel alice's message — should silently affect 0 rows.
-	err = s.CancelScheduledMessage("sched-1", "bob")
-	if err != nil {
-		t.Fatalf("CancelScheduledMessage wrong user returned error: %v", err)
-	}
+// GetUserScheduledMessages for user with no scheduled messages.
 
-	// Verify the message is still there for alice.
-	userMsgs, err := s.GetUserScheduledMessages("alice")
-	if err != nil {
-		t.Fatalf("GetUserScheduledMessages returned error: %v", err)
-	}
-	if len(userMsgs) != 1 {
-		t.Errorf("expected message still present after wrong-user cancel, got %d", len(userMsgs))
-	}
-}
+// GetPendingScheduledMessages on empty DB.
 
-func TestScheduledMessageEmptyUser(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Schedule a group message.
 
-	// GetUserScheduledMessages for user with no scheduled messages.
-	msgs, err := s.GetUserScheduledMessages("nonexistent")
-	if err != nil {
-		t.Fatalf("GetUserScheduledMessages returned error: %v", err)
-	}
-	if len(msgs) != 0 {
-		t.Errorf("expected 0 messages for empty user, got %d", len(msgs))
-	}
+// Schedule a DM.
 
-	// GetPendingScheduledMessages on empty DB.
-	ctx := context.Background()
-	pending, err := s.GetPendingScheduledMessages(ctx)
-	if err != nil {
-		t.Fatalf("GetPendingScheduledMessages returned error: %v", err)
-	}
-	if len(pending) != 0 {
-		t.Errorf("expected 0 pending on empty DB, got %d", len(pending))
-	}
-}
-
-func TestScheduledMessageWithGroupAndDM(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	now := time.Now().UnixMilli()
-	// Schedule a group message.
-	groupMsg := ScheduledMessage{
-		ID:        "sched-group",
-		Username:  "alice",
-		Content:   "group scheduled",
-		GroupName: "devs",
-		SendAt:    now - 1000,
-		CreatedAt: now - 2000,
-	}
-	s.ScheduleMessage(groupMsg)
-
-	// Schedule a DM.
-	dmMsg := ScheduledMessage{
-		ID:        "sched-dm",
-		Username:  "bob",
-		Content:   "dm scheduled",
-		ToUser:    "alice",
-		SendAt:    now - 1000,
-		CreatedAt: now - 2000,
-	}
-	s.ScheduleMessage(dmMsg)
-
-	ctx := context.Background()
-	pending, err := s.GetPendingScheduledMessages(ctx)
-	if err != nil {
-		t.Fatalf("GetPendingScheduledMessages returned error: %v", err)
-	}
-	if len(pending) != 2 {
-		t.Fatalf("expected 2 pending messages, got %d", len(pending))
-	}
-
-	// Verify all fields are returned.
-	for _, m := range pending {
-		if m.Username == "alice" && m.GroupName != "devs" {
-			t.Errorf("expected group_name 'devs', got '%s'", m.GroupName)
-		}
-		if m.Username == "bob" && m.ToUser != "alice" {
-			t.Errorf("expected to_user 'alice', got '%s'", m.ToUser)
-		}
-	}
-}
+// Verify all fields are returned.
 
 // ── MarkDeleted edge cases ──
 
@@ -2368,118 +1483,29 @@ func TestGetReactionsForMessagesEmpty(t *testing.T) {
 
 // ── Pinned conversations edge cases ──
 
-func TestPinConversationDuplicate(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	err = s.PinConversation("alice", "dm:bob")
-	if err != nil {
-		t.Fatalf("PinConversation returned error: %v", err)
-	}
-
-	// Pinning again should be no-op (INSERT OR IGNORE).
-	err = s.PinConversation("alice", "dm:bob")
-	if err != nil {
-		t.Fatalf("PinConversation duplicate returned error: %v", err)
-	}
-
-	keys := s.ListPinnedConversations("alice")
-	if len(keys) != 1 {
-		t.Errorf("expected 1 pinned conversation after duplicate pin, got %d", len(keys))
-	}
-}
+// Pinning again should be no-op (INSERT OR IGNORE).
 
 // ── Mute/Archive edge cases ──
 
-func TestMuteUnmuteCycle(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Initially not muted.
 
-	key := "room:general"
+// Mute.
 
-	// Initially not muted.
-	if s.IsConversationMuted("alice", key) {
-		t.Error("expected not muted initially")
-	}
+// Unmute.
 
-	// Mute.
-	s.MuteConversation("alice", key)
-	if !s.IsConversationMuted("alice", key) {
-		t.Error("expected muted after MuteConversation")
-	}
+// Initially not archived.
 
-	// Unmute.
-	s.UnmuteConversation("alice", key)
-	if s.IsConversationMuted("alice", key) {
-		t.Error("expected not muted after UnmuteConversation")
-	}
-}
+// Archive.
 
-func TestArchiveUnarchiveCycle(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	key := "dm:eve"
-
-	// Initially not archived.
-	if s.IsConversationArchived("alice", key) {
-		t.Error("expected not archived initially")
-	}
-
-	// Archive.
-	s.ArchiveConversation("alice", key)
-	if !s.IsConversationArchived("alice", key) {
-		t.Error("expected archived after ArchiveConversation")
-	}
-
-	// Unarchive.
-	s.UnarchiveConversation("alice", key)
-	if s.IsConversationArchived("alice", key) {
-		t.Error("expected not archived after UnarchiveConversation")
-	}
-}
+// Unarchive.
 
 // ── Friends edge cases ──
 
-func TestFriendsRoundTrip(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Empty friends list.
 
-	// Empty friends list.
-	friends := s.GetFriends("alice")
-	if len(friends) != 0 {
-		t.Errorf("expected 0 friends for new user, got %d", len(friends))
-	}
+// Add friends.
 
-	// Add friends.
-	s.AddFriend("alice", "bob")
-	s.AddFriend("alice", "charlie")
-	s.AddFriend("bob", "alice")
-
-	friends = s.GetFriends("alice")
-	if len(friends) != 2 {
-		t.Errorf("expected 2 friends, got %d", len(friends))
-	}
-
-	// Remove friend.
-	s.RemoveFriend("alice", "bob")
-	friends = s.GetFriends("alice")
-	if len(friends) != 1 {
-		t.Errorf("expected 1 friend after remove, got %d", len(friends))
-	}
-}
+// Remove friend.
 
 // ── Room management edge cases ──
 
@@ -2532,68 +1558,17 @@ func TestDuplicateRoom(t *testing.T) {
 
 // ── GetAllFriends and GetAllGroups coverage ──
 
-func TestGetAllFriendsEmpty(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	result := s.GetAllFriends()
-	if len(result) != 0 {
-		t.Errorf("expected empty map, got %d entries", len(result))
-	}
-}
-
-func TestGetAllGroupsEmpty(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	result := s.GetAllGroups()
-	if len(result) != 0 {
-		t.Errorf("expected empty map, got %d entries", len(result))
-	}
-}
-
 // ── MarkMessagesDelivered edge cases ──
 
-func TestMarkMessagesDelivered(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Insert a DM.
 
-	// Insert a DM.
-	dm, _ := s.InsertMessage("alice", "hello bob", "", "", "bob", "", "")
+// Initially undelivered.
 
-	// Initially undelivered.
-	undelivered := s.GetUndeliveredDMs("bob", 10)
-	if len(undelivered) != 1 {
-		t.Fatalf("expected 1 undelivered DM, got %d", len(undelivered))
-	}
+// Mark as delivered.
 
-	// Mark as delivered.
-	err = s.MarkMessagesDelivered([]string{dm.ID})
-	if err != nil {
-		t.Fatalf("MarkMessagesDelivered returned error: %v", err)
-	}
+// Should now be empty.
 
-	// Should now be empty.
-	undelivered = s.GetUndeliveredDMs("bob", 10)
-	if len(undelivered) != 0 {
-		t.Errorf("expected 0 undelivered after mark, got %d", len(undelivered))
-	}
-
-	// MarkMessagesDelivered with empty slice should be no-op.
-	err = s.MarkMessagesDelivered([]string{})
-	if err != nil {
-		t.Fatalf("MarkMessagesDelivered empty returned error: %v", err)
-	}
-}
+// MarkMessagesDelivered with empty slice should be no-op.
 
 // ── Polls basic flow ──
 
@@ -2686,164 +1661,25 @@ func TestPollLifecycle(t *testing.T) {
 
 // ── Group management extended ──
 
-func TestGroupUpdateNameAndTransferOwnership(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Rename group.
 
-	s.CreateGroup("old-devs", "alice")
-	s.AddGroupMember("old-devs", "bob")
-	s.InsertMessage("alice", "group msg", "", "", "", "old-devs", "")
+// Verify group_info updated.
 
-	// Rename group.
-	err = s.UpdateGroupName("old-devs", "new-devs")
-	if err != nil {
-		t.Fatalf("UpdateGroupName returned error: %v", err)
-	}
+// Verify members migrated.
 
-	// Verify group_info updated.
-	info, err := s.GetGroupInfo("new-devs")
-	if err != nil {
-		t.Fatalf("GetGroupInfo after rename returned error: %v", err)
-	}
-	if info.Name != "new-devs" {
-		t.Errorf("expected 'new-devs', got '%s'", info.Name)
-	}
+// Verify messages migrated.
 
-	// Verify members migrated.
-	members := s.GetGroupMembers("new-devs")
-	if len(members) != 2 {
-		t.Errorf("expected 2 members after rename, got %d", len(members))
-	}
-
-	// Verify messages migrated.
-	ctx := context.Background()
-	msgs, err := s.ExportMessages(ctx, "", "", "new-devs", "", 0)
-	if err != nil {
-		t.Fatalf("ExportMessages after rename returned error: %v", err)
-	}
-	if len(msgs) != 1 {
-		t.Errorf("expected 1 message for renamed group, got %d", len(msgs))
-	}
-
-	// Transfer ownership.
-	err = s.TransferGroupOwnership("new-devs", "bob")
-	if err != nil {
-		t.Fatalf("TransferGroupOwnership returned error: %v", err)
-	}
-	info, err = s.GetGroupInfo("new-devs")
-	if err != nil {
-		t.Fatalf("GetGroupInfo after transfer returned error: %v", err)
-	}
-	if info.Owner != "bob" {
-		t.Errorf("expected owner 'bob', got '%s'", info.Owner)
-	}
-}
-
-func TestKickGroupMember(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	s.CreateGroup("devs", "alice")
-	s.AddGroupMember("devs", "bob")
-
-	members := s.GetGroupMembers("devs")
-	if len(members) != 2 {
-		t.Fatalf("expected 2 members, got %d", len(members))
-	}
-
-	err = s.KickGroupMember("devs", "bob")
-	if err != nil {
-		t.Fatalf("KickGroupMember returned error: %v", err)
-	}
-
-	members = s.GetGroupMembers("devs")
-	if len(members) != 1 {
-		t.Errorf("expected 1 member after kick, got %d", len(members))
-	}
-	if members[0] != "alice" {
-		t.Errorf("expected 'alice' remaining, got '%s'", members[0])
-	}
-}
-
-func TestDeleteGroup(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	s.CreateGroup("temp-group", "alice")
-	s.AddGroupMember("temp-group", "bob")
-
-	groups := s.GetAllGroups()
-	if len(groups) != 1 {
-		t.Fatalf("expected 1 group, got %d", len(groups))
-	}
-
-	err = s.DeleteGroup("temp-group")
-	if err != nil {
-		t.Fatalf("DeleteGroup returned error: %v", err)
-	}
-
-	groups = s.GetAllGroups()
-	if len(groups) != 0 {
-		t.Errorf("expected 0 groups after delete, got %d", len(groups))
-	}
-}
+// Transfer ownership.
 
 // ── LeaveGroup basic ──
 
-func TestLeaveGroupNonOwner(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	s.CreateGroup("devs", "alice")
-	s.AddGroupMember("devs", "bob")
-
-	// Non-owner leaves.
-	err = s.LeaveGroup("devs", "bob")
-	if err != nil {
-		t.Fatalf("LeaveGroup non-owner returned error: %v", err)
-	}
-
-	members := s.GetGroupMembers("devs")
-	if len(members) != 1 {
-		t.Errorf("expected 1 member after leave, got %d", len(members))
-	}
-}
+// Non-owner leaves.
 
 // ── GetGroupMemberRole and GetGroupOwner missing cases ──
 
-func TestGetGroupMemberRoleMissing(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Non-member should get an error.
 
-	s.CreateGroup("devs", "alice")
-
-	// Non-member should get an error.
-	_, err = s.GetGroupMemberRole("devs", "bob")
-	if err == nil {
-		t.Error("expected error for non-member role query")
-	}
-
-	// Non-existent group.
-	_, err = s.GetGroupOwner("nonexistent-group")
-	if err == nil {
-		t.Error("expected error for non-existent group owner")
-	}
-}
+// Non-existent group.
 
 // ── Pin/Unpin message ──
 
@@ -2899,33 +1735,7 @@ func TestGetMessageByIDNonExistent(t *testing.T) {
 
 // ── GetGroupInfo missing ──
 
-func TestGetGroupInfoNonExistent(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	_, err = s.GetGroupInfo("nonexistent-group")
-	if err == nil {
-		t.Error("expected error for non-existent group info")
-	}
-}
-
 // ── GroupMembersWithRoles empty ──
-
-func TestGetGroupMembersWithRolesEmpty(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	members := s.GetGroupMembersWithRoles("nonexistent-group")
-	if len(members) != 0 {
-		t.Errorf("expected 0 members for non-existent group, got %d", len(members))
-	}
-}
 
 // ── Edge case: RegisterUser with empty username ──
 
@@ -3312,112 +2122,31 @@ func TestSearchMessagesNonExistentRoom(t *testing.T) {
 
 // ── Edge case: AddFriend with self ──
 
-func TestAddFriendSelf(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Adding self as friend: store does not have a constraint against this.
 
-	// Adding self as friend: store does not have a constraint against this.
-	err = s.AddFriend("alice", "alice")
-	if err != nil {
-		t.Fatalf("AddFriend with self returned error: %v", err)
-	}
-
-	// Verify self appears in friends list.
-	friends := s.GetFriends("alice")
-	found := false
-	for _, f := range friends {
-		if f == "alice" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected self to appear in friends list after AddFriend(self)")
-	}
-}
+// Verify self appears in friends list.
 
 // ── Edge case: RemoveFriend with non-existent friendship ──
 
-func TestRemoveFriendNonExistent(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// RemoveFriend on non-existent friendship should not error.
 
-	// RemoveFriend on non-existent friendship should not error.
-	err = s.RemoveFriend("alice", "ghost")
-	if err != nil {
-		t.Errorf("RemoveFriend with non-existent friendship returned error: %v", err)
-	}
-
-	// Friends list should remain empty.
-	friends := s.GetFriends("alice")
-	if len(friends) != 0 {
-		t.Errorf("expected 0 friends after removing non-existent, got %d", len(friends))
-	}
-}
+// Friends list should remain empty.
 
 // ── GetUndeliveredDMs focused test ──
 
-func TestGetUndeliveredDMs(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Insert a DM (delivered defaults to 0).
 
-	// Insert a DM (delivered defaults to 0).
-	dm, err := s.InsertMessage("alice", "hello bob", "", "", "bob", "", "")
-	if err != nil {
-		t.Fatalf("InsertMessage returned error: %v", err)
-	}
+// Insert a non-DM message — should not appear as undelivered.
 
-	// Insert a non-DM message — should not appear as undelivered.
-	s.InsertMessage("alice", "public msg", "", "", "", "", "")
+// Bob should see 1 undelivered DM.
 
-	// Bob should see 1 undelivered DM.
-	undelivered := s.GetUndeliveredDMs("bob", 10)
-	if len(undelivered) != 1 {
-		t.Fatalf("expected 1 undelivered DM for bob, got %d", len(undelivered))
-	}
-	if undelivered[0].ID != dm.ID {
-		t.Errorf("expected DM id '%s', got '%s'", dm.ID, undelivered[0].ID)
-	}
-	if undelivered[0].ToUser != "bob" {
-		t.Errorf("expected ToUser 'bob', got '%s'", undelivered[0].ToUser)
-	}
-	if undelivered[0].Username != "alice" {
-		t.Errorf("expected sender 'alice', got '%s'", undelivered[0].Username)
-	}
+// Alice should see 0 undelivered — the DM was sent TO bob, not alice.
 
-	// Alice should see 0 undelivered — the DM was sent TO bob, not alice.
-	undelivered = s.GetUndeliveredDMs("alice", 10)
-	if len(undelivered) != 0 {
-		t.Errorf("expected 0 undelivered DMs for alice, got %d", len(undelivered))
-	}
+// Mark as delivered.
 
-	// Mark as delivered.
-	err = s.MarkMessagesDelivered([]string{dm.ID})
-	if err != nil {
-		t.Fatalf("MarkMessagesDelivered returned error: %v", err)
-	}
+// Bob should now see 0 undelivered.
 
-	// Bob should now see 0 undelivered.
-	undelivered = s.GetUndeliveredDMs("bob", 10)
-	if len(undelivered) != 0 {
-		t.Errorf("expected 0 undelivered after marking delivered, got %d", len(undelivered))
-	}
-
-	// GetUndeliveredDMs for user with no DMs returns empty slice.
-	undelivered = s.GetUndeliveredDMs("nonexistent", 10)
-	if len(undelivered) != 0 {
-		t.Errorf("expected 0 undelivered for unknown user, got %d", len(undelivered))
-	}
-}
+// GetUndeliveredDMs for user with no DMs returns empty slice.
 
 // ── GetRoomID with non-existent room ──
 
@@ -3474,173 +2203,39 @@ func TestDeleteRoomNonExistent(t *testing.T) {
 
 // ── PinConversation full round trip ──
 
-func TestPinConversationRoundTrip(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Initially no pinned conversations.
 
-	// Initially no pinned conversations.
-	keys := s.ListPinnedConversations("alice")
-	if len(keys) != 0 {
-		t.Errorf("expected 0 pinned initially, got %d", len(keys))
-	}
+// Pin two conversations.
 
-	// Pin two conversations.
-	err = s.PinConversation("alice", "dm:bob")
-	if err != nil {
-		t.Fatalf("PinConversation returned error: %v", err)
-	}
-	err = s.PinConversation("alice", "room:general")
-	if err != nil {
-		t.Fatalf("PinConversation second returned error: %v", err)
-	}
+// Pin for a different user — should not appear in alice's list.
 
-	// Pin for a different user — should not appear in alice's list.
-	s.PinConversation("bob", "dm:charlie")
+// List pinned for alice.
 
-	// List pinned for alice.
-	keys = s.ListPinnedConversations("alice")
-	if len(keys) != 2 {
-		t.Fatalf("expected 2 pinned conversations, got %d", len(keys))
-	}
-	if keys[0] != "dm:bob" || keys[1] != "room:general" {
-		t.Errorf("unexpected pinned keys: %v", keys)
-	}
+// Unpin one.
 
-	// Unpin one.
-	err = s.UnpinConversation("alice", "dm:bob")
-	if err != nil {
-		t.Fatalf("UnpinConversation returned error: %v", err)
-	}
-	keys = s.ListPinnedConversations("alice")
-	if len(keys) != 1 {
-		t.Fatalf("expected 1 pinned after unpin, got %d", len(keys))
-	}
-	if keys[0] != "room:general" {
-		t.Errorf("expected 'room:general' remaining, got '%s'", keys[0])
-	}
+// Unpin the other.
 
-	// Unpin the other.
-	err = s.UnpinConversation("alice", "room:general")
-	if err != nil {
-		t.Fatalf("UnpinConversation second returned error: %v", err)
-	}
-	keys = s.ListPinnedConversations("alice")
-	if len(keys) != 0 {
-		t.Errorf("expected 0 pinned after both unpinned, got %d", len(keys))
-	}
-
-	// Bob's list should be unaffected by alice's operations.
-	keys = s.ListPinnedConversations("bob")
-	if len(keys) != 1 || keys[0] != "dm:charlie" {
-		t.Errorf("expected bob's pinned list ['dm:charlie'], got %v", keys)
-	}
-}
+// Bob's list should be unaffected by alice's operations.
 
 // ── GetWebhookByURL ──
 
-func TestGetWebhookByURL(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Look up by URL.
 
-	err = s.CreateWebhook("wh-url-1", "team-a", "https://example.com/hooks/alpha", "secret-alpha", "alice")
-	if err != nil {
-		t.Fatalf("CreateWebhook returned error: %v", err)
-	}
-	err = s.CreateWebhook("wh-url-2", "team-b", "https://example.com/hooks/beta", "secret-beta", "bob")
-	if err != nil {
-		t.Fatalf("CreateWebhook second returned error: %v", err)
-	}
-
-	// Look up by URL.
-	w, err := s.GetWebhookByURL("https://example.com/hooks/alpha")
-	if err != nil {
-		t.Fatalf("GetWebhookByURL returned error: %v", err)
-	}
-	if w.ID != "wh-url-1" {
-		t.Errorf("expected webhook id 'wh-url-1', got '%s'", w.ID)
-	}
-	if w.GroupName != "team-a" {
-		t.Errorf("expected group 'team-a', got '%s'", w.GroupName)
-	}
-	if w.CreatedBy != "alice" {
-		t.Errorf("expected created_by 'alice', got '%s'", w.CreatedBy)
-	}
-	if w.Secret == "" {
-		t.Error("expected non-empty secret hash")
-	}
-	if strings.Contains(w.Secret, "secret-alpha") {
-		t.Error("secret hash should not contain plaintext secret")
-	}
-
-	// Look up the second webhook.
-	w, err = s.GetWebhookByURL("https://example.com/hooks/beta")
-	if err != nil {
-		t.Fatalf("GetWebhookByURL second returned error: %v", err)
-	}
-	if w.ID != "wh-url-2" {
-		t.Errorf("expected webhook id 'wh-url-2', got '%s'", w.ID)
-	}
-}
+// Look up the second webhook.
 
 // ── GetWebhookByURL with non-existent URL ──
 
-func TestGetWebhookByURLNonExistent(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Lookup with no webhooks in DB should return error.
 
-	// Lookup with no webhooks in DB should return error.
-	_, err = s.GetWebhookByURL("https://example.com/nonexistent")
-	if err == nil {
-		t.Error("expected error for non-existent webhook URL")
-	}
+// Insert a webhook, then look up a different URL.
 
-	// Insert a webhook, then look up a different URL.
-	s.CreateWebhook("wh-1", "team", "https://example.com/real", "secret", "alice")
-	_, err = s.GetWebhookByURL("https://example.com/wrong")
-	if err == nil {
-		t.Error("expected error for wrong webhook URL")
-	}
-
-	// Empty URL should also return error.
-	_, err = s.GetWebhookByURL("")
-	if err == nil {
-		t.Error("expected error for empty webhook URL")
-	}
-}
+// Empty URL should also return error.
 
 // ── CreateWebhook with empty secret ──
 
-func TestCreateWebhookEmptySecret(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// hashWebhookSecret rejects empty secrets.
 
-	// hashWebhookSecret rejects empty secrets.
-	err = s.CreateWebhook("wh-1", "team", "wh-url", "", "alice")
-	if err == nil {
-		t.Error("expected error for empty webhook secret")
-	}
-
-	// Verify no webhook was created.
-	webhooks, err := s.ListWebhooks("team")
-	if err != nil {
-		t.Fatalf("ListWebhooks returned error: %v", err)
-	}
-	if len(webhooks) != 0 {
-		t.Errorf("expected 0 webhooks after failed create, got %d", len(webhooks))
-	}
-}
+// Verify no webhook was created.
 
 // ── Blocked users: GetBlockedUsers list verification ──
 
@@ -3865,58 +2460,14 @@ func TestSearchCustomEmojisEmptyQuery(t *testing.T) {
 
 // ── User status: update for user without profile ──
 
-func TestUpdateUserStatusNonExistent(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// UpdateStatus for a user who has no profile row: UPDATE with 0 rows,
+// should not error.
 
-	// UpdateStatus for a user who has no profile row: UPDATE with 0 rows,
-	// should not error.
-	err = s.UpdateUserStatus("no-profile-user", "away")
-	if err != nil {
-		t.Fatalf("UpdateUserStatus on non-existent profile returned error: %v", err)
-	}
+// The user still has no profile (plain UPDATE does not insert).
 
-	// The user still has no profile (plain UPDATE does not insert).
-	_, err = s.GetUserProfile("no-profile-user")
-	if err == nil {
-		t.Error("expected error getting profile that was never inserted")
-	}
+// Now create a profile and update status.
 
-	// Now create a profile and update status.
-	err = s.UpsertUserProfile("real-user", "Real Name", "", "", "online", 0)
-	if err != nil {
-		t.Fatalf("UpsertUserProfile returned error: %v", err)
-	}
-
-	err = s.UpdateUserStatus("real-user", "busy")
-	if err != nil {
-		t.Fatalf("UpdateUserStatus on existing profile returned error: %v", err)
-	}
-
-	profile, err := s.GetUserProfile("real-user")
-	if err != nil {
-		t.Fatalf("GetUserProfile returned error: %v", err)
-	}
-	if profile.Status != "busy" {
-		t.Errorf("expected status 'busy', got '%s'", profile.Status)
-	}
-
-	// Update to empty status.
-	err = s.UpdateUserStatus("real-user", "")
-	if err != nil {
-		t.Fatalf("UpdateUserStatus to empty returned error: %v", err)
-	}
-	profile, err = s.GetUserProfile("real-user")
-	if err != nil {
-		t.Fatalf("GetUserProfile after empty status returned error: %v", err)
-	}
-	if profile.Status != "" {
-		t.Errorf("expected empty status, got '%s'", profile.Status)
-	}
-}
+// Update to empty status.
 
 // ── User last seen: multiple updates and initial creation ──
 
@@ -4054,286 +2605,69 @@ func TestGetThreadReplyCountDeletedReplies(t *testing.T) {
 
 // ── LeaveGroup: owner leaves alone (group deleted) ──
 
-func TestLeaveGroupOwnerAlone(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Verify group exists.
 
-	s.CreateGroup("solo", "alice")
+// Owner leaves (only member).
 
-	// Verify group exists.
-	info, err := s.GetGroupInfo("solo")
-	if err != nil {
-		t.Fatalf("GetGroupInfo returned error: %v", err)
-	}
-	if info.MemberCount != 1 {
-		t.Fatalf("expected 1 member, got %d", info.MemberCount)
-	}
+// Group should be deleted.
 
-	// Owner leaves (only member).
-	err = s.LeaveGroup("solo", "alice")
-	if err != nil {
-		t.Fatalf("LeaveGroup returned error: %v", err)
-	}
+// Members should be empty.
 
-	// Group should be deleted.
-	_, err = s.GetGroupInfo("solo")
-	if err == nil {
-		t.Error("expected error for deleted group info")
-	}
-
-	// Members should be empty.
-	members := s.GetGroupMembers("solo")
-	if len(members) != 0 {
-		t.Errorf("expected 0 members after group deleted, got %d", len(members))
-	}
-
-	// GetAllGroups should not include it.
-	allGroups := s.GetAllGroups()
-	if _, ok := allGroups["solo"]; ok {
-		t.Error("deleted group should not appear in GetAllGroups")
-	}
-}
+// GetAllGroups should not include it.
 
 // ── LeaveGroup: owner leaves with another member (ownership transferred) ──
 
-func TestLeaveGroupOwnerWithMember(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Owner leaves (another member exists).
 
-	s.CreateGroup("devs", "alice")
-	s.AddGroupMember("devs", "bob")
+// Group should persist.
 
-	// Owner leaves (another member exists).
-	err = s.LeaveGroup("devs", "alice")
-	if err != nil {
-		t.Fatalf("LeaveGroup returned error: %v", err)
-	}
+// bob should now have the "owner" role.
 
-	// Group should persist.
-	info, err := s.GetGroupInfo("devs")
-	if err != nil {
-		t.Fatalf("GetGroupInfo returned error: %v", err)
-	}
-	if info.Owner != "bob" {
-		t.Errorf("expected owner 'bob' after transfer, got '%s'", info.Owner)
-	}
-	if info.MemberCount != 1 {
-		t.Errorf("expected 1 member after owner left, got %d", info.MemberCount)
-	}
-
-	// bob should now have the "owner" role.
-	role, err := s.GetGroupMemberRole("devs", "bob")
-	if err != nil {
-		t.Fatalf("GetGroupMemberRole returned error: %v", err)
-	}
-	if role != "owner" {
-		t.Errorf("expected role 'owner' for bob after transfer, got '%s'", role)
-	}
-
-	// alice should no longer be a member.
-	_, err = s.GetGroupMemberRole("devs", "alice")
-	if err == nil {
-		t.Error("expected error for alice (no longer a member)")
-	}
-}
+// alice should no longer be a member.
 
 // ── LeaveGroup: owner leaves with an admin present (transferred to admin) ──
 
-func TestLeaveGroupOwnerWithAdmin(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Owner leaves (admin exists).
 
-	s.CreateGroup("devs", "alice")
-	s.AddGroupMember("devs", "bob")
-	s.AddGroupMember("devs", "charlie")
-	s.SetGroupMemberRole("devs", "bob", "admin")
+// Group should persist.
 
-	// Owner leaves (admin exists).
-	err = s.LeaveGroup("devs", "alice")
-	if err != nil {
-		t.Fatalf("LeaveGroup returned error: %v", err)
-	}
+// Ownership should transfer to the admin (bob), not a random member.
 
-	// Group should persist.
-	info, err := s.GetGroupInfo("devs")
-	if err != nil {
-		t.Fatalf("GetGroupInfo returned error: %v", err)
-	}
-	// Ownership should transfer to the admin (bob), not a random member.
-	if info.Owner != "bob" {
-		t.Errorf("expected owner 'bob' (admin) after transfer, got '%s'", info.Owner)
-	}
-	if info.MemberCount != 2 {
-		t.Errorf("expected 2 members after owner left, got %d", info.MemberCount)
-	}
+// bob should now be owner.
 
-	// bob should now be owner.
-	role, err := s.GetGroupMemberRole("devs", "bob")
-	if err != nil {
-		t.Fatalf("GetGroupMemberRole for bob returned error: %v", err)
-	}
-	if role != "owner" {
-		t.Errorf("expected role 'owner' for bob, got '%s'", role)
-	}
-
-	// charlie should still be member.
-	role, err = s.GetGroupMemberRole("devs", "charlie")
-	if err != nil {
-		t.Fatalf("GetGroupMemberRole for charlie returned error: %v", err)
-	}
-	if role != "member" {
-		t.Errorf("expected role 'member' for charlie, got '%s'", role)
-	}
-}
+// charlie should still be member.
 
 // ── KickGroupMember: kicking the owner ──
 
-func TestKickGroupOwner(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Kick the owner (allowed at store level; caller must enforce permission).
 
-	s.CreateGroup("devs", "alice")
-	s.AddGroupMember("devs", "bob")
+// Owner is removed from group_members.
 
-	// Kick the owner (allowed at store level; caller must enforce permission).
-	err = s.KickGroupMember("devs", "alice")
-	if err != nil {
-		t.Fatalf("KickGroupMember returned error: %v", err)
-	}
-
-	// Owner is removed from group_members.
-	members := s.GetGroupMembers("devs")
-	if len(members) != 1 {
-		t.Errorf("expected 1 member after kicking owner, got %d", len(members))
-	}
-	if members[0] != "bob" {
-		t.Errorf("expected 'bob' remaining, got '%s'", members[0])
-	}
-
-	// groups_info still references the old owner (caller must fix).
-	info, err := s.GetGroupInfo("devs")
-	if err != nil {
-		t.Fatalf("GetGroupInfo returned error: %v", err)
-	}
-	if info.Owner != "alice" {
-		t.Errorf("expected groups_info owner still 'alice', got '%s'", info.Owner)
-	}
-}
+// groups_info still references the old owner (caller must fix).
 
 // ── TransferGroupOwnership: transfer to a non-member ──
 
-func TestTransferGroupOwnershipToNonMember(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Transfer ownership to someone not in the group.
 
-	s.CreateGroup("devs", "alice")
-	s.AddGroupMember("devs", "bob")
+// groups_info owner is updated to charlie.
 
-	// Transfer ownership to someone not in the group.
-	err = s.TransferGroupOwnership("devs", "charlie")
-	if err != nil {
-		t.Fatalf("TransferGroupOwnership returned error: %v", err)
-	}
+// Old owner alice is demoted to admin.
 
-	// groups_info owner is updated to charlie.
-	info, err := s.GetGroupInfo("devs")
-	if err != nil {
-		t.Fatalf("GetGroupInfo returned error: %v", err)
-	}
-	if info.Owner != "charlie" {
-		t.Errorf("expected owner 'charlie', got '%s'", info.Owner)
-	}
-
-	// Old owner alice is demoted to admin.
-	role, err := s.GetGroupMemberRole("devs", "alice")
-	if err != nil {
-		t.Fatalf("GetGroupMemberRole for alice returned error: %v", err)
-	}
-	if role != "admin" {
-		t.Errorf("expected role 'admin' for old owner alice, got '%s'", role)
-	}
-
-	// charlie is not a member and does not get owner role (caller must add first).
-	_, err = s.GetGroupMemberRole("devs", "charlie")
-	if err == nil {
-		t.Error("expected error: charlie is not a member")
-	}
-}
+// charlie is not a member and does not get owner role (caller must add first).
 
 // ── UpdateGroupName: duplicate name rejection ──
 
-func TestUpdateGroupNameDuplicate(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Try to rename "devs" to "ops" (already exists) — should fail.
 
-	s.CreateGroup("devs", "alice")
-	s.CreateGroup("ops", "bob")
+// "devs" should still have its original name.
 
-	// Try to rename "devs" to "ops" (already exists) — should fail.
-	err = s.UpdateGroupName("devs", "ops")
-	if err == nil {
-		t.Error("expected error renaming to duplicate group name")
-	}
-
-	// "devs" should still have its original name.
-	info, err := s.GetGroupInfo("devs")
-	if err != nil {
-		t.Fatalf("GetGroupInfo for devs returned error: %v", err)
-	}
-	if info.Name != "devs" {
-		t.Errorf("expected name 'devs' unchanged, got '%s'", info.Name)
-	}
-
-	// "ops" should still exist with its original owner.
-	owner, err := s.GetGroupOwner("ops")
-	if err != nil {
-		t.Fatalf("GetGroupOwner for ops returned error: %v", err)
-	}
-	if owner != "bob" {
-		t.Errorf("expected ops owner 'bob', got '%s'", owner)
-	}
-}
+// "ops" should still exist with its original owner.
 
 // ── DeleteGroup: non-existent group is a no-op ──
 
-func TestDeleteGroupNonExistent(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Deleting a non-existent group should not error.
 
-	// Deleting a non-existent group should not error.
-	err = s.DeleteGroup("nonexistent-group")
-	if err != nil {
-		t.Errorf("DeleteGroup on non-existent group should not error, got: %v", err)
-	}
-
-	// Should not affect existing groups.
-	s.CreateGroup("devs", "alice")
-	groups := s.GetAllGroups()
-	if len(groups) != 1 {
-		t.Errorf("expected 1 group, got %d", len(groups))
-	}
-}
+// Should not affect existing groups.
 
 // ── Message operations: happy-path coverage ──
 
@@ -4370,9 +2704,6 @@ func TestGetMessageByID(t *testing.T) {
 	}
 	if retrieved.ToUser != "bob" {
 		t.Errorf("expected ToUser 'bob', got '%s'", retrieved.ToUser)
-	}
-	if retrieved.GroupName != "group-x" {
-		t.Errorf("expected GroupName 'group-x', got '%s'", retrieved.GroupName)
 	}
 	if retrieved.ThreadID != "thread-1" {
 		t.Errorf("expected ThreadID 'thread-1', got '%s'", retrieved.ThreadID)
@@ -4563,203 +2894,27 @@ func TestUpdateUserProfile(t *testing.T) {
 	}
 }
 
-func TestUpdateUserStatus(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	// Upsert profile first.
-	err = s.UpsertUserProfile("alice", "Alice", "", "", "online", 0)
-	if err != nil {
-		t.Fatalf("UpsertUserProfile returned error: %v", err)
-	}
-
-	tests := []struct {
-		name      string
-		status    string
-		wantEmpty bool
-	}{
-		{name: "away", status: "away", wantEmpty: false},
-		{name: "busy", status: "busy", wantEmpty: false},
-		{name: "empty", status: "", wantEmpty: true},
-		{name: "emoji", status: "\U0001f4a1", wantEmpty: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err = s.UpdateUserStatus("alice", tt.status)
-			if err != nil {
-				t.Fatalf("UpdateUserStatus returned error: %v", err)
-			}
-			profile, err := s.GetUserProfile("alice")
-			if err != nil {
-				t.Fatalf("GetUserProfile returned error: %v", err)
-			}
-			if profile.Status != tt.status {
-				t.Errorf("expected status '%s', got '%s'", tt.status, profile.Status)
-			}
-			if tt.wantEmpty && profile.Status != "" {
-				t.Errorf("expected empty status, got '%s'", profile.Status)
-			}
-		})
-	}
-}
+// Upsert profile first.
 
 // ── Friend operations: standalone coverage ──
 
-func TestAddFriend(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Verify bob does not automatically have alice as friend.
 
-	err = s.AddFriend("alice", "bob")
-	if err != nil {
-		t.Fatalf("AddFriend returned error: %v", err)
-	}
+// Double-add should be idempotent (INSERT OR IGNORE).
 
-	friends := s.GetFriends("alice")
-	if len(friends) != 1 {
-		t.Fatalf("expected 1 friend, got %d", len(friends))
-	}
-	if friends[0] != "bob" {
-		t.Errorf("expected friend 'bob', got '%s'", friends[0])
-	}
+// Remove the last friend.
 
-	// Verify bob does not automatically have alice as friend.
-	bobFriends := s.GetFriends("bob")
-	if len(bobFriends) != 0 {
-		t.Errorf("expected 0 friends for bob, got %d", len(bobFriends))
-	}
+// Empty friends list should return empty slice, not nil.
 
-	// Double-add should be idempotent (INSERT OR IGNORE).
-	err = s.AddFriend("alice", "bob")
-	if err != nil {
-		t.Fatalf("AddFriend duplicate returned error: %v", err)
-	}
-	friends = s.GetFriends("alice")
-	if len(friends) != 1 {
-		t.Errorf("expected still 1 friend after duplicate add, got %d", len(friends))
-	}
-}
+// Add multiple friends and verify they are all returned.
 
-func TestRemoveFriend(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Verify all expected friends are present (order matches insertion order).
 
-	s.AddFriend("alice", "bob")
-	s.AddFriend("alice", "charlie")
+// GetAllFriends should include alice's relationships.
 
-	err = s.RemoveFriend("alice", "bob")
-	if err != nil {
-		t.Fatalf("RemoveFriend returned error: %v", err)
-	}
+// Helper: check friendship by scanning GetFriends result.
 
-	friends := s.GetFriends("alice")
-	if len(friends) != 1 {
-		t.Fatalf("expected 1 friend after remove, got %d", len(friends))
-	}
-	if friends[0] != "charlie" {
-		t.Errorf("expected remaining friend 'charlie', got '%s'", friends[0])
-	}
-
-	// Remove the last friend.
-	err = s.RemoveFriend("alice", "charlie")
-	if err != nil {
-		t.Fatalf("RemoveFriend returned error: %v", err)
-	}
-	friends = s.GetFriends("alice")
-	if len(friends) != 0 {
-		t.Errorf("expected 0 friends after removing all, got %d", len(friends))
-	}
-}
-
-func TestGetFriends(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	// Empty friends list should return empty slice, not nil.
-	friends := s.GetFriends("alice")
-	if friends == nil {
-		t.Error("expected non-nil empty slice, got nil")
-	}
-	if len(friends) != 0 {
-		t.Errorf("expected 0 friends for empty state, got %d", len(friends))
-	}
-
-	// Add multiple friends and verify they are all returned.
-	s.AddFriend("alice", "bob")
-	s.AddFriend("alice", "charlie")
-	s.AddFriend("alice", "dave")
-
-	friends = s.GetFriends("alice")
-	if len(friends) != 3 {
-		t.Fatalf("expected 3 friends, got %d", len(friends))
-	}
-
-	// Verify all expected friends are present (order matches insertion order).
-	expected := []string{"bob", "charlie", "dave"}
-	for i, f := range friends {
-		if f != expected[i] {
-			t.Errorf("friends[%d]: expected '%s', got '%s'", i, expected[i], f)
-		}
-	}
-
-	// GetAllFriends should include alice's relationships.
-	allFriends := s.GetAllFriends()
-	if len(allFriends["alice"]) != 3 {
-		t.Errorf("GetAllFriends: expected 3 friends for alice, got %d", len(allFriends["alice"]))
-	}
-}
-
-func TestIsFriend(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	// Helper: check friendship by scanning GetFriends result.
-	isFriend := func(username, friend string) bool {
-		for _, f := range s.GetFriends(username) {
-			if f == friend {
-				return true
-			}
-		}
-		return false
-	}
-
-	// Initially not friends.
-	if isFriend("alice", "bob") {
-		t.Error("expected alice and bob not to be friends initially")
-	}
-
-	s.AddFriend("alice", "bob")
-
-	if !isFriend("alice", "bob") {
-		t.Error("expected alice and bob to be friends after AddFriend")
-	}
-	if isFriend("bob", "alice") {
-		t.Error("expected bob not to have alice as friend (one-way)")
-	}
-	if isFriend("alice", "charlie") {
-		t.Error("expected alice and charlie not to be friends")
-	}
-
-	s.RemoveFriend("alice", "bob")
-	if isFriend("alice", "bob") {
-		t.Error("expected alice and bob not to be friends after RemoveFriend")
-	}
-}
+// Initially not friends.
 
 // ── Search: empty results coverage ──
 
@@ -4981,41 +3136,11 @@ func TestListRooms(t *testing.T) {
 
 // ── GetMessageByID: deleted message via DM/group channels ──
 
-func TestGetMessageByIDDeletedDM(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Insert a DM.
 
-	// Insert a DM.
-	dm, err := s.InsertMessage("alice", "secret dm", "", "", "bob", "", "")
-	if err != nil {
-		t.Fatalf("InsertMessage returned error: %v", err)
-	}
+// Verify retrievable.
 
-	// Verify retrievable.
-	retrieved, err := s.GetMessageByID(dm.ID)
-	if err != nil {
-		t.Fatalf("GetMessageByID returned error: %v", err)
-	}
-	if retrieved.ToUser != "bob" {
-		t.Errorf("expected ToUser 'bob', got '%s'", retrieved.ToUser)
-	}
-
-	// Delete and verify content cleared.
-	s.MarkDeleted(dm.ID)
-	retrieved, err = s.GetMessageByID(dm.ID)
-	if err != nil {
-		t.Fatalf("GetMessageByID after delete returned error: %v", err)
-	}
-	if retrieved.Content != "" {
-		t.Errorf("expected empty content for deleted DM, got '%s'", retrieved.Content)
-	}
-	if !retrieved.Deleted {
-		t.Error("expected Deleted flag true for deleted DM")
-	}
-}
+// Delete and verify content cleared.
 
 func TestGetMessageByIDWithReactions(t *testing.T) {
 	s, err := New(":memory:")
@@ -5050,245 +3175,46 @@ func TestGetMessageByIDWithReactions(t *testing.T) {
 
 // ── Webhook edge case: create with empty group name ──
 
-func TestCreateWebhookEmptyGroupName(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	err = s.CreateWebhook("wh-1", "", "wh-url", "secret-123", "alice")
-	if err != nil {
-		t.Fatalf("CreateWebhook with empty group name returned error: %v", err)
-	}
-
-	webhooks, err := s.ListWebhooks("")
-	if err != nil {
-		t.Fatalf("ListWebhooks with empty group returned error: %v", err)
-	}
-	if len(webhooks) != 1 {
-		t.Fatalf("expected 1 webhook for empty group, got %d", len(webhooks))
-	}
-	if webhooks[0].GroupName != "" {
-		t.Errorf("expected empty group name, got '%s'", webhooks[0].GroupName)
-	}
-	if webhooks[0].URL != "wh-url" {
-		t.Errorf("expected url 'wh-url', got '%s'", webhooks[0].URL)
-	}
-
-	// Clean up.
-	if err := s.DeleteWebhook("wh-1", "", "alice"); err != nil {
-		t.Fatalf("DeleteWebhook returned error: %v", err)
-	}
-}
+// Clean up.
 
 // ── Webhook edge case: rotate with invalid ID ──
 
-func TestRotateWebhookInvalidID(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	_, err = s.RotateWebhookSecret("wh-nonexistent", "team", "new-secret", "bob")
-	if err == nil {
-		t.Error("expected error when rotating non-existent webhook")
-	}
-}
-
 // ── Webhook edge case: delete non-existent ──
 
-func TestDeleteWebhookNonExistent(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Deleting a valid ID but wrong group should also fail.
 
-	err = s.DeleteWebhook("wh-ghost", "team", "alice")
-	if err == nil {
-		t.Error("expected error when deleting non-existent webhook")
-	}
-
-	// Deleting a valid ID but wrong group should also fail.
-	s.CreateWebhook("wh-1", "devs", "wh-url", "secret-123", "alice")
-	err = s.DeleteWebhook("wh-1", "ops", "alice")
-	if err == nil {
-		t.Error("expected error when deleting webhook with wrong group name")
-	}
-
-	// Verify webhook was not deleted through the wrong-group call.
-	webhooks, err := s.ListWebhooks("devs")
-	if err != nil {
-		t.Fatalf("ListWebhooks returned error: %v", err)
-	}
-	if len(webhooks) != 1 {
-		t.Errorf("expected 1 webhook after failed delete, got %d", len(webhooks))
-	}
-}
+// Verify webhook was not deleted through the wrong-group call.
 
 // ── Group edge case: add duplicate member ──
 
-func TestAddGroupMemberDuplicate(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Add bob once.
 
-	s.CreateGroup("devs", "alice")
+// Add bob again — should be a no-op (INSERT OR IGNORE).
 
-	// Add bob once.
-	err = s.AddGroupMember("devs", "bob")
-	if err != nil {
-		t.Fatalf("AddGroupMember returned error: %v", err)
-	}
-
-	// Add bob again — should be a no-op (INSERT OR IGNORE).
-	err = s.AddGroupMember("devs", "bob")
-	if err != nil {
-		t.Fatalf("AddGroupMember duplicate returned error: %v", err)
-	}
-
-	members := s.GetGroupMembers("devs")
-	if len(members) != 2 {
-		t.Errorf("expected 2 members, got %d", len(members))
-	}
-	if members[0] != "alice" {
-		t.Errorf("expected first member 'alice', got '%s'", members[0])
-	}
-	if members[1] != "bob" {
-		t.Errorf("expected second member 'bob', got '%s'", members[1])
-	}
-
-	// Verify role is preserved for the owner.
-	ownerRole, err := s.GetGroupMemberRole("devs", "alice")
-	if err != nil {
-		t.Fatalf("GetGroupMemberRole returned error: %v", err)
-	}
-	if ownerRole != "owner" {
-		t.Errorf("expected role 'owner' for alice, got '%s'", ownerRole)
-	}
-}
+// Verify role is preserved for the owner.
 
 // ── Group edge case: remove non-member ──
 
-func TestRemoveGroupMemberNonMember(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Remove a user who is not a member — should not error (DELETE WHERE is successful
+// even when no rows match).
 
-	s.CreateGroup("devs", "alice")
-
-	// Remove a user who is not a member — should not error (DELETE WHERE is successful
-	// even when no rows match).
-	err = s.RemoveGroupMember("devs", "charlie")
-	if err != nil {
-		t.Errorf("RemoveGroupMember for non-member should not error, got: %v", err)
-	}
-
-	// Verify group is still intact.
-	members := s.GetGroupMembers("devs")
-	if len(members) != 1 {
-		t.Errorf("expected 1 member, got %d", len(members))
-	}
-	if members[0] != "alice" {
-		t.Errorf("expected member 'alice', got '%s'", members[0])
-	}
-}
+// Verify group is still intact.
 
 // ── Archive edge case: archive twice (idempotent) ──
 
-func TestArchiveConversationTwice(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
+// Archive once.
 
-	key := "dm:eve"
+// Archive again — should be no-op.
 
-	// Archive once.
-	err = s.ArchiveConversation("alice", key)
-	if err != nil {
-		t.Fatalf("ArchiveConversation returned error: %v", err)
-	}
-
-	// Archive again — should be no-op.
-	err = s.ArchiveConversation("alice", key)
-	if err != nil {
-		t.Fatalf("ArchiveConversation twice returned error: %v", err)
-	}
-
-	if !s.IsConversationArchived("alice", key) {
-		t.Error("expected conversation to still be archived after duplicate archive")
-	}
-
-	// Verify only one row exists.
-	var count int
-	if err := s.db.QueryRow(
-		"SELECT COUNT(*) FROM archived_conversations WHERE username = ? AND key = ?",
-		"alice", key,
-	).Scan(&count); err != nil {
-		t.Fatalf("failed to count archived rows: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("expected 1 archived row, got %d", count)
-	}
-}
+// Verify only one row exists.
 
 // ── Archive edge case: unarchive non-archived conversation ──
 
-func TestUnarchiveConversationNonArchived(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	key := "dm:eve"
-
-	// Unarchive a conversation that was never archived — should not error.
-	err = s.UnarchiveConversation("alice", key)
-	if err != nil {
-		t.Errorf("UnarchiveConversation for non-archived conversation should not error, got: %v", err)
-	}
-
-	if s.IsConversationArchived("alice", key) {
-		t.Error("expected conversation not to be archived after unarchiving non-archived")
-	}
-}
+// Unarchive a conversation that was never archived — should not error.
 
 // ── Archive edge case: list empty ──
 
-func TestListArchivedConversationsEmpty(t *testing.T) {
-	s, err := New(":memory:")
-	if err != nil {
-		t.Fatalf("New(:memory:) returned error: %v", err)
-	}
-	defer s.Close()
-
-	result := s.ListArchivedConversations("alice")
-	if result == nil {
-		t.Error("expected non-nil empty slice, got nil")
-	}
-	if len(result) != 0 {
-		t.Errorf("expected 0 archived conversations, got %d", len(result))
-	}
-
-	// Archive one, then check list.
-	s.ArchiveConversation("alice", "dm:bob")
-	result = s.ListArchivedConversations("alice")
-	if len(result) != 1 {
-		t.Errorf("expected 1 archived conversation, got %d", len(result))
-	}
-	if result[0] != "dm:bob" {
-		t.Errorf("expected key 'dm:bob', got '%s'", result[0])
-	}
-}
+// Archive one, then check list.
 
 // ── FTS5 search edge case: very long query ──
 

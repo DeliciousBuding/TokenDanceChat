@@ -2,10 +2,8 @@ package store
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -23,13 +21,6 @@ import (
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
-
-const (
-	webhookSecretHashPrefix = "whsec_sha256:"
-	webhookSecretSaltBytes  = 16
-)
-
-var webhookSecretPepper = []byte("tokendancechat:webhook-secret:v1")
 
 // StoredMessage is the message model returned by the store.
 type StoredMessage struct {
@@ -95,72 +86,6 @@ type CustomEmoji struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
-// ScheduledMessage represents a message scheduled for future delivery.
-type ScheduledMessage struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	Content   string `json:"content"`
-	RoomID    string `json:"room_id"`
-	ToUser    string `json:"to_user"`
-	GroupName string `json:"group_name"`
-	ReplyToID string `json:"reply_to_id"`
-	ThreadID  string `json:"thread_id"`
-	SendAt    int64  `json:"send_at"`
-	CreatedAt int64  `json:"created_at"`
-	Sent      int    `json:"sent"`
-}
-
-// GroupInfo holds metadata about a group.
-type GroupInfo struct {
-	Name        string `json:"name"`
-	Owner       string `json:"owner"`
-	MemberCount int    `json:"member_count"`
-	CreatedAt   int64  `json:"created_at"`
-	Description string `json:"description"`
-	AvatarURL   string `json:"avatar_url"`
-}
-
-// Webhook represents an incoming webhook integration for a group.
-type Webhook struct {
-	ID        string `json:"id"`
-	GroupName string `json:"group_name"`
-	URL       string `json:"url"`
-	Secret    string `json:"-"` // Persisted versioned secret hash; never serialized.
-	CreatedBy string `json:"created_by"`
-	CreatedAt int64  `json:"created_at"`
-	RotatedAt int64  `json:"rotated_at,omitempty"`
-	RotatedBy string `json:"rotated_by,omitempty"`
-}
-
-// WebhookAuditLog is an append-only security event for group webhook lifecycle changes.
-type WebhookAuditLog struct {
-	ID        string `json:"id"`
-	WebhookID string `json:"webhook_id"`
-	GroupName string `json:"group_name"`
-	Action    string `json:"action"`
-	Actor     string `json:"actor"`
-	CreatedAt int64  `json:"created_at"`
-	Metadata  string `json:"-"`
-}
-
-// GroupMemberInfo represents a member with their role in a group.
-type GroupMemberInfo struct {
-	Username string `json:"username"`
-	Role     string `json:"role"`
-}
-
-// CallRecord represents a completed call history entry.
-type CallRecord struct {
-	ID        string `json:"id"`
-	Caller    string `json:"caller"`
-	Callee    string `json:"callee"`
-	CallType  string `json:"call_type"`
-	Status    string `json:"status"`
-	StartedAt int64  `json:"started_at"`
-	EndedAt   int64  `json:"ended_at"`
-	CreatedAt int64  `json:"created_at"`
-}
-
 // User represents a registered user account.
 type User struct {
 	Username     string `json:"username"`
@@ -176,23 +101,6 @@ type InviteCodeRecord struct {
 	MaxUses   int    `json:"max_uses"`
 	UseCount  int    `json:"use_count"`
 	CreatedAt int64  `json:"created_at"`
-}
-
-// ChatFolder represents a user-created conversation folder.
-type ChatFolder struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	SortOrder int    `json:"sort_order"`
-	CreatedAt int64  `json:"created_at"`
-	ItemCount int    `json:"item_count"`
-}
-
-// ChatFolderItem represents a conversation key within a folder.
-type ChatFolderItem struct {
-	FolderID  string `json:"folder_id"`
-	Key       string `json:"key"`
-	SortOrder int    `json:"sort_order"`
 }
 
 // Store handles SQLite message persistence.
@@ -271,8 +179,8 @@ func (s *Store) seedWelcomeMessages() error {
 	for _, seed := range seeds {
 		ts := now + seed.offset
 		if _, err := s.db.Exec(
-			"INSERT INTO messages (id, username, content, timestamp, reply_to_id, room_id, to_user, group_name, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			seed.id, "TokenBot", seed.content, ts, "", "", "", "", "",
+			"INSERT INTO messages (id, username, content, timestamp, reply_to_id, room_id, to_user, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			seed.id, "TokenBot", seed.content, ts, "", "", "", "",
 		); err != nil {
 			return err
 		}
@@ -297,7 +205,9 @@ func (s *Store) migrate() error {
 				reply_to_id TEXT DEFAULT '',
 				room_id TEXT DEFAULT '',
 				deleted INTEGER NOT NULL DEFAULT 0,
-				edited INTEGER NOT NULL DEFAULT 0
+				edited INTEGER NOT NULL DEFAULT 0,
+				to_user TEXT DEFAULT '',
+				thread_id TEXT DEFAULT ''
 			);
 			CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
 			CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, timestamp DESC);
@@ -309,27 +219,6 @@ func (s *Store) migrate() error {
 				FOREIGN KEY (message_id) REFERENCES messages(id)
 			);
 			CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id);
-
-			CREATE TABLE IF NOT EXISTS friends (
-				username TEXT NOT NULL,
-				friend TEXT NOT NULL,
-				PRIMARY KEY (username, friend)
-			);
-
-			CREATE TABLE IF NOT EXISTS group_members (
-				group_name TEXT NOT NULL,
-				username TEXT NOT NULL,
-				role TEXT DEFAULT 'member',
-				PRIMARY KEY (group_name, username)
-			);
-
-			CREATE TABLE IF NOT EXISTS groups_info (
-				name TEXT PRIMARY KEY,
-				owner TEXT NOT NULL,
-				created_at INTEGER NOT NULL,
-				description TEXT DEFAULT '',
-				avatar_url TEXT DEFAULT ''
-			);
 
 				CREATE TABLE IF NOT EXISTS blocked_users (
 					username TEXT NOT NULL,
@@ -343,24 +232,6 @@ func (s *Store) migrate() error {
 					pinned_by TEXT NOT NULL,
 					pinned_at INTEGER NOT NULL,
 					PRIMARY KEY (room_id, message_id)
-				);
-
-				CREATE TABLE IF NOT EXISTS pinned_conversations (
-					username TEXT NOT NULL,
-					key TEXT NOT NULL,
-					PRIMARY KEY (username, key)
-				);
-
-				CREATE TABLE IF NOT EXISTS muted_conversations (
-					username TEXT NOT NULL,
-					key TEXT NOT NULL,
-					PRIMARY KEY (username, key)
-				);
-
-				CREATE TABLE IF NOT EXISTS archived_conversations (
-					username TEXT NOT NULL,
-					key TEXT NOT NULL,
-					PRIMARY KEY (username, key)
 				);
 
 				CREATE TABLE IF NOT EXISTS notification_prefs (
@@ -394,34 +265,6 @@ func (s *Store) migrate() error {
 					created_at INTEGER NOT NULL
 				);
 
-				CREATE TABLE IF NOT EXISTS scheduled_messages (
-					id TEXT PRIMARY KEY,
-					username TEXT NOT NULL,
-					content TEXT NOT NULL,
-					room_id TEXT DEFAULT '',
-					to_user TEXT DEFAULT '',
-					group_name TEXT DEFAULT '',
-					reply_to_id TEXT DEFAULT '',
-					thread_id TEXT DEFAULT '',
-					send_at INTEGER NOT NULL,
-					created_at INTEGER NOT NULL,
-					sent INTEGER DEFAULT 0
-				);
-				CREATE INDEX IF NOT EXISTS idx_scheduled_send_at ON scheduled_messages(send_at, sent);
-
-				CREATE TABLE IF NOT EXISTS call_history (
-					id TEXT PRIMARY KEY,
-					caller TEXT NOT NULL,
-					callee TEXT NOT NULL,
-					call_type TEXT DEFAULT 'video',
-					status TEXT DEFAULT 'missed',
-					started_at INTEGER,
-					ended_at INTEGER,
-					created_at INTEGER NOT NULL
-				);
-				CREATE INDEX IF NOT EXISTS idx_call_history_caller ON call_history(caller, created_at DESC);
-				CREATE INDEX IF NOT EXISTS idx_call_history_callee ON call_history(callee, created_at DESC);
-
 				CREATE TABLE IF NOT EXISTS custom_emojis (
 					id TEXT PRIMARY KEY,
 					name TEXT NOT NULL UNIQUE,
@@ -446,128 +289,15 @@ func (s *Store) migrate() error {
 					use_count INTEGER DEFAULT 0,
 					created_at INTEGER NOT NULL
 				);
-
-				CREATE TABLE IF NOT EXISTS chat_folders (
-					id TEXT PRIMARY KEY,
-					username TEXT NOT NULL,
-					name TEXT NOT NULL,
-					sort_order INTEGER DEFAULT 0,
-					created_at INTEGER NOT NULL,
-					UNIQUE(username, name)
-				);
-
-				CREATE TABLE IF NOT EXISTS chat_folder_items (
-					folder_id TEXT NOT NULL,
-					key TEXT NOT NULL,
-					sort_order INTEGER DEFAULT 0,
-					PRIMARY KEY (folder_id, key),
-					FOREIGN KEY (folder_id) REFERENCES chat_folders(id)
-				);
-
-			CREATE TABLE IF NOT EXISTS webhooks (
-				id TEXT PRIMARY KEY,
-				group_name TEXT NOT NULL,
-				url TEXT NOT NULL,
-				secret TEXT NOT NULL,
-				created_by TEXT NOT NULL,
-				created_at INTEGER NOT NULL,
-				rotated_at INTEGER NOT NULL DEFAULT 0,
-				rotated_by TEXT NOT NULL DEFAULT ''
-			);
-			CREATE TABLE IF NOT EXISTS webhook_audit_logs (
-				id TEXT PRIMARY KEY,
-				webhook_id TEXT NOT NULL,
-				group_name TEXT NOT NULL,
-				action TEXT NOT NULL,
-				actor TEXT NOT NULL,
-				created_at INTEGER NOT NULL,
-				metadata TEXT NOT NULL DEFAULT ''
-			);
-			CREATE INDEX IF NOT EXISTS idx_webhooks_group_created ON webhooks(group_name, created_at);
-				CREATE INDEX IF NOT EXISTS idx_webhooks_url ON webhooks(url);
-			CREATE INDEX IF NOT EXISTS idx_webhook_audit_group_created ON webhook_audit_logs(group_name, created_at DESC);
-			`
+	`
 	_, err := s.db.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	// Add columns if they don't exist (migration for existing DBs).
-	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0"); err != nil {
-		log.Printf("store: migrate add column deleted: %v", err)
-	}
-	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN reply_to_id TEXT DEFAULT ''"); err != nil {
-		log.Printf("store: migrate add column reply_to_id: %v", err)
-	}
-	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN room_id TEXT DEFAULT ''"); err != nil {
-		log.Printf("store: migrate add column room_id: %v", err)
-	}
-	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN edited INTEGER NOT NULL DEFAULT 0"); err != nil {
-		log.Printf("store: migrate add column edited: %v", err)
-	}
-	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN to_user TEXT DEFAULT ''"); err != nil {
-		log.Printf("store: migrate add column to_user: %v", err)
-	}
-	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN group_name TEXT DEFAULT ''"); err != nil {
-		log.Printf("store: migrate add column group_name: %v", err)
-	}
-	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN delivered INTEGER NOT NULL DEFAULT 0"); err != nil {
-		log.Printf("store: migrate add column delivered: %v", err)
-	}
-	if _, err := s.db.Exec("ALTER TABLE messages ADD COLUMN thread_id TEXT DEFAULT ''"); err != nil {
-		log.Printf("store: migrate add column thread_id: %v", err)
-	}
-	if _, err := s.db.Exec("ALTER TABLE webhooks ADD COLUMN rotated_at INTEGER NOT NULL DEFAULT 0"); err != nil {
-		log.Printf("store: migrate add column rotated_at to webhooks: %v", err)
-	}
-	if _, err := s.db.Exec("ALTER TABLE webhooks ADD COLUMN rotated_by TEXT NOT NULL DEFAULT ''"); err != nil {
-		log.Printf("store: migrate add column rotated_by to webhooks: %v", err)
-	}
-	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS webhook_audit_logs (
-		id TEXT PRIMARY KEY,
-		webhook_id TEXT NOT NULL,
-		group_name TEXT NOT NULL,
-		action TEXT NOT NULL,
-		actor TEXT NOT NULL,
-		created_at INTEGER NOT NULL,
-		metadata TEXT NOT NULL DEFAULT ''
-	)`); err != nil {
-		log.Printf("store: migrate create webhook_audit_logs: %v", err)
-	}
-	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_webhooks_group_created ON webhooks(group_name, created_at)"); err != nil {
-		log.Printf("store: idx_webhooks_group_created: %v", err)
-	}
-	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_webhook_audit_group_created ON webhook_audit_logs(group_name, created_at DESC)"); err != nil {
-		log.Printf("store: idx_webhook_audit_group_created: %v", err)
-	}
-
-	// Migration: add role column to group_members for existing DBs.
-	if _, err := s.db.Exec("ALTER TABLE group_members ADD COLUMN role TEXT DEFAULT 'member'"); err != nil {
-		log.Printf("store: migrate add column role to group_members: %v", err)
-	}
-
-	// Migration: create groups_info table for existing DBs.
-	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS groups_info (
-		name TEXT PRIMARY KEY,
-		owner TEXT NOT NULL,
-		created_at INTEGER NOT NULL,
-		description TEXT DEFAULT '',
-		avatar_url TEXT DEFAULT ''
-	)`); err != nil {
-		log.Printf("store: migrate create groups_info: %v", err)
-	}
-
-	// Add indexes for DM/group/delivery queries.
-	// These must be after all ALTER TABLE statements because the columns may
-	// have been added via ALTER TABLE (not present in original CREATE TABLE).
+	// Add indexes for DM/thread queries.
 	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_to_user ON messages(to_user, timestamp DESC)"); err != nil {
 		log.Printf("store: idx_messages_to_user: %v", err)
-	}
-	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_name, timestamp DESC)"); err != nil {
-		log.Printf("store: idx_messages_group: %v", err)
-	}
-	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_delivered ON messages(delivered, to_user)"); err != nil {
-		log.Printf("store: idx_messages_delivered: %v", err)
 	}
 	if _, err := s.db.Exec("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, timestamp)"); err != nil {
 		log.Printf("store: idx_messages_thread: %v", err)
@@ -583,10 +313,6 @@ func (s *Store) migrate() error {
 
 	// Populate FTS5 index for pre-existing messages not yet indexed.
 	s.populateFTS5()
-
-	if err := s.migrateWebhookSecrets(); err != nil {
-		return err
-	}
 
 	// Migration: oidc_users table for OIDC-authenticated users.
 	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS oidc_users (
@@ -614,7 +340,7 @@ func (s *Store) ensureDefaultRoom() {
 	}
 }
 
-func (s *Store) InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error) {
+func (s *Store) InsertMessage(username, content, replyToID, roomID, toUser string, _ string, threadID string) (StoredMessage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -622,8 +348,8 @@ func (s *Store) InsertMessage(username, content, replyToID, roomID, toUser, grou
 	ts := time.Now().UnixMilli()
 
 	_, err := s.db.Exec(
-		"INSERT INTO messages (id, username, content, timestamp, reply_to_id, room_id, to_user, group_name, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		id, username, content, ts, replyToID, roomID, toUser, groupName, threadID,
+		"INSERT INTO messages (id, username, content, timestamp, reply_to_id, room_id, to_user, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		id, username, content, ts, replyToID, roomID, toUser, threadID,
 	)
 	if err != nil {
 		return StoredMessage{}, err
@@ -660,24 +386,24 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 	if before > 0 {
 		if roomID != "" {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE room_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, thread_id FROM messages WHERE room_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
 				roomID, before, limit,
 			)
 		} else {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE to_user = '' AND group_name = '' AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, thread_id FROM messages WHERE to_user = '' AND timestamp < ? ORDER BY timestamp DESC LIMIT ?",
 				before, limit,
 			)
 		}
 	} else {
 		if roomID != "" {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE room_id = ? ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, thread_id FROM messages WHERE room_id = ? ORDER BY timestamp DESC LIMIT ?",
 				roomID, limit,
 			)
 		} else {
 			rows, err = s.db.Query(
-				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE to_user = '' AND group_name = '' ORDER BY timestamp DESC LIMIT ?",
+				"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, thread_id FROM messages WHERE to_user = '' ORDER BY timestamp DESC LIMIT ?",
 				limit,
 			)
 		}
@@ -692,7 +418,7 @@ func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []Stored
 	messages := make([]StoredMessage, 0, limit)
 	for rows.Next() {
 		var m StoredMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.ThreadID); err != nil {
 			log.Printf("store: scan error: %v", err)
 			continue
 		}
@@ -921,9 +647,9 @@ func (s *Store) GetMessageByID(messageID string) (StoredMessage, error) {
 func (s *Store) getMessageByIDLocked(messageID string) (StoredMessage, error) {
 	var m StoredMessage
 	err := s.db.QueryRow(
-		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE id = ?",
+		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, thread_id FROM messages WHERE id = ?",
 		messageID,
-	).Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID)
+	).Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.ThreadID)
 	if err != nil {
 		return StoredMessage{}, err
 	}
@@ -1052,7 +778,6 @@ func (s *Store) searchMessages(query, roomID, username string, limit int) ([]Sea
 						AND messages_fts MATCH ?
 						AND messages_fts.room_id = ?
 						AND m.to_user = ''
-						AND m.group_name = ''
 					ORDER BY rank LIMIT ?`, query, roomID, limit)
 		} else {
 			rows, err = s.db.Query(`
@@ -1074,18 +799,8 @@ func (s *Store) searchMessages(query, roomID, username string, limit int) ([]Sea
 					JOIN messages m ON m.rowid = messages_fts.rowid
 					WHERE m.deleted = 0
 						AND messages_fts MATCH ?
-						AND (
-							(m.to_user = '' AND m.group_name = '')
-							OR m.to_user = ?
-							OR (m.to_user != '' AND m.username = ?)
-							OR EXISTS (
-								SELECT 1
-								FROM group_members gm
-								WHERE gm.group_name = m.group_name
-									AND gm.username = ?
-							)
-						)
-					ORDER BY rank LIMIT ?`, query, username, username, username, limit)
+						AND m.to_user = ''
+					ORDER BY rank LIMIT ?`, query, limit)
 		} else {
 			rows, err = s.db.Query(`
 					SELECT m.id, m.username, m.content, m.timestamp,
@@ -1119,385 +834,6 @@ func (s *Store) searchMessages(query, roomID, username string, limit int) ([]Sea
 		results = []SearchResult{}
 	}
 	return results, nil
-}
-
-// --- Friends persistence ---
-
-func (s *Store) AddFriend(username, friend string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("INSERT OR IGNORE INTO friends (username, friend) VALUES (?, ?)", username, friend)
-	return err
-}
-
-func (s *Store) RemoveFriend(username, friend string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("DELETE FROM friends WHERE username = ? AND friend = ?", username, friend)
-	return err
-}
-
-func (s *Store) GetFriends(username string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows, err := s.db.Query("SELECT friend FROM friends WHERE username = ?", username)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var friends []string
-	for rows.Next() {
-		var f string
-		if err := rows.Scan(&f); err == nil {
-			friends = append(friends, f)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: rows iteration error: %v", err)
-	}
-	if friends == nil {
-		friends = []string{}
-	}
-	return friends
-}
-
-// --- Group persistence ---
-
-func (s *Store) CreateGroup(name, creator string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("INSERT OR IGNORE INTO group_members (group_name, username, role) VALUES (?, ?, 'owner')", name, creator)
-	if err != nil {
-		return err
-	}
-	_, err = s.db.Exec("INSERT OR IGNORE INTO groups_info (name, owner, created_at) VALUES (?, ?, ?)", name, creator, time.Now().UnixMilli())
-	return err
-}
-
-func (s *Store) AddGroupMember(groupName, username string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("INSERT OR IGNORE INTO group_members (group_name, username, role) VALUES (?, ?, 'member')", groupName, username)
-	return err
-}
-
-func (s *Store) RemoveGroupMember(groupName, username string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ? AND username = ?", groupName, username)
-	return err
-}
-
-func (s *Store) GetGroupMembers(groupName string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows, err := s.db.Query("SELECT username FROM group_members WHERE group_name = ?", groupName)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var members []string
-	for rows.Next() {
-		var m string
-		if err := rows.Scan(&m); err == nil {
-			members = append(members, m)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: rows iteration error: %v", err)
-	}
-	if members == nil {
-		members = []string{}
-	}
-	return members
-}
-
-// GetGroupMembersWithRoles returns all members of a group with their roles.
-func (s *Store) GetGroupMembersWithRoles(groupName string) []GroupMemberInfo {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows, err := s.db.Query("SELECT username, role FROM group_members WHERE group_name = ?", groupName)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var members []GroupMemberInfo
-	for rows.Next() {
-		var m GroupMemberInfo
-		if err := rows.Scan(&m.Username, &m.Role); err == nil {
-			members = append(members, m)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: rows iteration error: %v", err)
-	}
-	if members == nil {
-		members = []GroupMemberInfo{}
-	}
-	return members
-}
-
-// SetGroupMemberRole updates a member's role in a group.
-func (s *Store) SetGroupMemberRole(groupName, username, role string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("UPDATE group_members SET role = ? WHERE group_name = ? AND username = ?", role, groupName, username)
-	return err
-}
-
-// GetGroupMemberRole returns the role of a member in a group.
-func (s *Store) GetGroupMemberRole(groupName, username string) (string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var role string
-	err := s.db.QueryRow("SELECT role FROM group_members WHERE group_name = ? AND username = ?", groupName, username).Scan(&role)
-	if err != nil {
-		return "", err
-	}
-	return role, nil
-}
-
-// KickGroupMember removes a member from a group (permission check should be done by caller).
-func (s *Store) KickGroupMember(groupName, username string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ? AND username = ?", groupName, username)
-	return err
-}
-
-// UpdateGroupName renames a group in all tables.
-func (s *Store) UpdateGroupName(oldName, newName string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.Exec("UPDATE groups_info SET name = ? WHERE name = ?", newName, oldName); err != nil {
-		return err
-	}
-	if _, err := tx.Exec("UPDATE group_members SET group_name = ? WHERE group_name = ?", newName, oldName); err != nil {
-		return err
-	}
-	if _, err := tx.Exec("UPDATE messages SET group_name = ? WHERE group_name = ?", newName, oldName); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// TransferGroupOwnership changes the owner of a group.
-func (s *Store) TransferGroupOwnership(groupName, newOwner string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.Exec("UPDATE groups_info SET owner = ? WHERE name = ?", newOwner, groupName); err != nil {
-		return err
-	}
-	if _, err := tx.Exec("UPDATE group_members SET role = 'admin' WHERE group_name = ? AND role = 'owner'", groupName); err != nil {
-		return err
-	}
-	if _, err := tx.Exec("UPDATE group_members SET role = 'owner' WHERE group_name = ? AND username = ?", groupName, newOwner); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// LeaveGroup removes a user from a group. If the user is the owner, transfers
-// ownership to the oldest admin or deletes the group if no admin exists.
-func (s *Store) LeaveGroup(groupName, username string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	var owner string
-	err := s.db.QueryRow("SELECT owner FROM groups_info WHERE name = ?", groupName).Scan(&owner)
-	if err != nil {
-		return err
-	}
-
-	if username == owner {
-		var oldestAdmin string
-		err := s.db.QueryRow("SELECT username FROM group_members WHERE group_name = ? AND role = 'admin' AND username != ? ORDER BY rowid LIMIT 1", groupName, username).Scan(&oldestAdmin)
-		if err == nil && oldestAdmin != "" {
-			if _, err := s.db.Exec("UPDATE groups_info SET owner = ? WHERE name = ?", oldestAdmin, groupName); err != nil {
-				return err
-			}
-			if _, err := s.db.Exec("UPDATE group_members SET role = 'owner' WHERE group_name = ? AND username = ?", groupName, oldestAdmin); err != nil {
-				return err
-			}
-			if _, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ? AND username = ?", groupName, username); err != nil {
-				return err
-			}
-			return nil
-		}
-
-		var anyMember string
-		err = s.db.QueryRow("SELECT username FROM group_members WHERE group_name = ? AND username != ? ORDER BY rowid LIMIT 1", groupName, username).Scan(&anyMember)
-		if err == nil && anyMember != "" {
-			if _, err := s.db.Exec("UPDATE groups_info SET owner = ? WHERE name = ?", anyMember, groupName); err != nil {
-				return err
-			}
-			if _, err := s.db.Exec("UPDATE group_members SET role = 'owner' WHERE group_name = ? AND username = ?", groupName, anyMember); err != nil {
-				return err
-			}
-			if _, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ? AND username = ?", groupName, username); err != nil {
-				return err
-			}
-			return nil
-		}
-
-		if _, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ?", groupName); err != nil {
-			return err
-		}
-		if _, err := s.db.Exec("DELETE FROM groups_info WHERE name = ?", groupName); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	_, err = s.db.Exec("DELETE FROM group_members WHERE group_name = ? AND username = ?", groupName, username)
-	return err
-}
-
-// GetGroupInfo returns metadata for a group.
-func (s *Store) GetGroupInfo(groupName string) (*GroupInfo, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	var info GroupInfo
-	err := s.db.QueryRow("SELECT name, owner, created_at, description, avatar_url FROM groups_info WHERE name = ?", groupName).Scan(&info.Name, &info.Owner, &info.CreatedAt, &info.Description, &info.AvatarURL)
-	if err != nil {
-		return nil, err
-	}
-
-	var count int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM group_members WHERE group_name = ?", groupName).Scan(&count); err != nil {
-		log.Printf("store: GetGroupInfo count error: %v", err)
-	}
-	info.MemberCount = count
-	return &info, nil
-}
-
-// GetGroupOwner returns the owner of a group.
-func (s *Store) GetGroupOwner(groupName string) (string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var owner string
-	err := s.db.QueryRow("SELECT owner FROM groups_info WHERE name = ?", groupName).Scan(&owner)
-	return owner, err
-}
-
-// DeleteGroup completely removes a group and all its members.
-func (s *Store) DeleteGroup(groupName string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, err := s.db.Exec("DELETE FROM group_members WHERE group_name = ?", groupName); err != nil {
-		return err
-	}
-	_, err := s.db.Exec("DELETE FROM groups_info WHERE name = ?", groupName)
-	return err
-}
-
-func (s *Store) GetAllGroups() map[string][]string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows, err := s.db.Query("SELECT group_name, username FROM group_members ORDER BY group_name")
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	groups := make(map[string][]string)
-	for rows.Next() {
-		var g, u string
-		if err := rows.Scan(&g, &u); err == nil {
-			groups[g] = append(groups[g], u)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: rows iteration error: %v", err)
-	}
-	return groups
-}
-
-// GetAllFriends returns all friend relationships as (username, friend) pairs.
-func (s *Store) GetAllFriends() map[string][]string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows, err := s.db.Query("SELECT username, friend FROM friends")
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	result := make(map[string][]string)
-	for rows.Next() {
-		var u, f string
-		if err := rows.Scan(&u, &f); err == nil {
-			result[u] = append(result[u], f)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: rows iteration error: %v", err)
-	}
-	return result
-}
-
-// GetUndeliveredDMs returns recent DMs addressed to a user that haven't been delivered yet.
-func (s *Store) GetUndeliveredDMs(username string, limit int) []StoredMessage {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if limit <= 0 {
-		limit = 50
-	}
-	rows, err := s.db.Query(
-		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE to_user = ? AND deleted = 0 AND delivered = 0 ORDER BY timestamp ASC LIMIT ?",
-		username, limit,
-	)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var msgs []StoredMessage
-	for rows.Next() {
-		var m StoredMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
-			continue
-		}
-		msgs = append(msgs, m)
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: rows iteration error: %v", err)
-	}
-	if msgs == nil {
-		msgs = []StoredMessage{}
-	}
-	return msgs
-}
-
-// MarkMessagesDelivered marks a set of message IDs as delivered.
-func (s *Store) MarkMessagesDelivered(ids []string) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// Build a single batch UPDATE with IN clause.
-	placeholders := make([]string, len(ids))
-	args := make([]interface{}, len(ids))
-	for i, id := range ids {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-	query := "UPDATE messages SET delivered = 1 WHERE id IN (" + strings.Join(placeholders, ",") + ")"
-	_, err := s.db.Exec(query, args...)
-	return err
 }
 
 // --- User blocking ---
@@ -1574,7 +910,7 @@ func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	rows, err := s.db.Query(
-		"SELECT m.id, m.username, m.content, m.timestamp, m.reply_to_id, m.room_id, m.deleted, m.edited, m.to_user, m.group_name, m.thread_id FROM pinned_messages p JOIN messages m ON p.message_id = m.id WHERE p.room_id = ? ORDER BY p.pinned_at DESC",
+		"SELECT m.id, m.username, m.content, m.timestamp, m.reply_to_id, m.room_id, m.deleted, m.edited, m.to_user, m.thread_id FROM pinned_messages p JOIN messages m ON p.message_id = m.id WHERE p.room_id = ? ORDER BY p.pinned_at DESC",
 		roomID,
 	)
 	if err != nil {
@@ -1584,7 +920,7 @@ func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
 	var msgs []StoredMessage
 	for rows.Next() {
 		var m StoredMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.ThreadID); err != nil {
 			continue
 		}
 		if m.Deleted {
@@ -1603,145 +939,9 @@ func (s *Store) GetPinnedMessages(roomID string) []StoredMessage {
 
 // --- Conversation pinning ---
 
-func (s *Store) PinConversation(username, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("INSERT OR IGNORE INTO pinned_conversations (username, key) VALUES (?, ?)", username, key)
-	return err
-}
-
-func (s *Store) UnpinConversation(username, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("DELETE FROM pinned_conversations WHERE username = ? AND key = ?", username, key)
-	return err
-}
-
-func (s *Store) ListPinnedConversations(username string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows, err := s.db.Query("SELECT key FROM pinned_conversations WHERE username = ? ORDER BY rowid", username)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var keys []string
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err == nil {
-			keys = append(keys, k)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: rows iteration error: %v", err)
-	}
-	if keys == nil {
-		keys = []string{}
-	}
-	return keys
-}
-
 // --- Conversation muting ---
 
-func (s *Store) MuteConversation(username, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("INSERT OR IGNORE INTO muted_conversations (username, key) VALUES (?, ?)", username, key)
-	return err
-}
-
-func (s *Store) UnmuteConversation(username, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("DELETE FROM muted_conversations WHERE username = ? AND key = ?", username, key)
-	return err
-}
-
-func (s *Store) ListMutedConversations(username string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows, err := s.db.Query("SELECT key FROM muted_conversations WHERE username = ? ORDER BY rowid", username)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var keys []string
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err == nil {
-			keys = append(keys, k)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: rows iteration error: %v", err)
-	}
-	if keys == nil {
-		keys = []string{}
-	}
-	return keys
-}
-
-func (s *Store) IsConversationMuted(username, key string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var count int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM muted_conversations WHERE username = ? AND key = ?", username, key).Scan(&count); err != nil {
-		log.Printf("store: IsConversationMuted error: %v", err)
-		return false
-	}
-	return count > 0
-}
-
 // --- Conversation archiving ---
-
-func (s *Store) ArchiveConversation(username, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("INSERT OR IGNORE INTO archived_conversations (username, key) VALUES (?, ?)", username, key)
-	return err
-}
-
-func (s *Store) UnarchiveConversation(username, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("DELETE FROM archived_conversations WHERE username = ? AND key = ?", username, key)
-	return err
-}
-
-func (s *Store) ListArchivedConversations(username string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows, err := s.db.Query("SELECT key FROM archived_conversations WHERE username = ? ORDER BY rowid", username)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var keys []string
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err == nil {
-			keys = append(keys, k)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: rows iteration error: %v", err)
-	}
-	if keys == nil {
-		keys = []string{}
-	}
-	return keys
-}
-
-func (s *Store) IsConversationArchived(username, key string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var count int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM archived_conversations WHERE username = ? AND key = ?", username, key).Scan(&count); err != nil {
-		log.Printf("store: IsConversationArchived error: %v", err)
-		return false
-	}
-	return count > 0
-}
 
 // --- Threaded replies ---
 
@@ -1751,7 +951,7 @@ func (s *Store) GetThreadMessages(parentMessageID string) []StoredMessage {
 	defer s.mu.RUnlock()
 
 	rows, err := s.db.Query(
-		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE thread_id = ? AND deleted = 0 ORDER BY timestamp ASC",
+		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, thread_id FROM messages WHERE thread_id = ? AND deleted = 0 ORDER BY timestamp ASC",
 		parentMessageID,
 	)
 	if err != nil {
@@ -1763,7 +963,7 @@ func (s *Store) GetThreadMessages(parentMessageID string) []StoredMessage {
 	messages := make([]StoredMessage, 0)
 	for rows.Next() {
 		var m StoredMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.ThreadID); err != nil {
 			log.Printf("store: GetThreadMessages scan error: %v", err)
 			continue
 		}
@@ -1902,12 +1102,6 @@ func (s *Store) GetUserProfile(username string) (*UserProfile, error) {
 }
 
 // UpdateUserStatus updates the custom status for a user.
-func (s *Store) UpdateUserStatus(username, status string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("UPDATE user_profiles SET status = ? WHERE username = ?", status, username)
-	return err
-}
 
 // UpdateUserLastSeen updates the last seen timestamp for a user.
 func (s *Store) UpdateUserLastSeen(username string) error {
@@ -2041,101 +1235,9 @@ func (s *Store) ClosePoll(pollID string) error {
 	return err
 }
 
-// --- Scheduled messages ---
-
-// ScheduleMessage inserts a new scheduled message.
-func (s *Store) ScheduleMessage(msg ScheduledMessage) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec(
-		"INSERT INTO scheduled_messages (id, username, content, room_id, to_user, group_name, reply_to_id, thread_id, send_at, created_at, sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
-		msg.ID, msg.Username, msg.Content, msg.RoomID, msg.ToUser, msg.GroupName, msg.ReplyToID, msg.ThreadID, msg.SendAt, msg.CreatedAt,
-	)
-	return err
-}
-
-// GetPendingScheduledMessages returns unsent messages where send_at <= now.
-func (s *Store) GetPendingScheduledMessages(ctx context.Context) ([]ScheduledMessage, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	now := time.Now().UnixMilli()
-	rows, err := s.db.Query(
-		"SELECT id, username, content, room_id, to_user, group_name, reply_to_id, thread_id, send_at, created_at, sent FROM scheduled_messages WHERE sent = 0 AND send_at <= ? ORDER BY send_at ASC",
-		now,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var msgs []ScheduledMessage
-	for rows.Next() {
-		var m ScheduledMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.RoomID, &m.ToUser, &m.GroupName, &m.ReplyToID, &m.ThreadID, &m.SendAt, &m.CreatedAt, &m.Sent); err != nil {
-			log.Printf("store: scheduled message scan error: %v", err)
-			continue
-		}
-		msgs = append(msgs, m)
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: scheduled messages iteration error: %v", err)
-	}
-	if msgs == nil {
-		msgs = []ScheduledMessage{}
-	}
-	return msgs, nil
-}
-
-// MarkScheduledSent marks a scheduled message as sent.
-func (s *Store) MarkScheduledSent(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("UPDATE scheduled_messages SET sent = 1 WHERE id = ?", id)
-	return err
-}
-
-// CancelScheduledMessage deletes a scheduled message. Only the owner can cancel.
-func (s *Store) CancelScheduledMessage(id, username string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec("DELETE FROM scheduled_messages WHERE id = ? AND username = ?", id, username)
-	return err
-}
-
-// GetUserScheduledMessages returns all scheduled messages for a user.
-func (s *Store) GetUserScheduledMessages(username string) ([]ScheduledMessage, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows, err := s.db.Query(
-		"SELECT id, username, content, room_id, to_user, group_name, reply_to_id, thread_id, send_at, created_at, sent FROM scheduled_messages WHERE username = ? AND sent = 0 ORDER BY send_at ASC",
-		username,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var msgs []ScheduledMessage
-	for rows.Next() {
-		var m ScheduledMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.RoomID, &m.ToUser, &m.GroupName, &m.ReplyToID, &m.ThreadID, &m.SendAt, &m.CreatedAt, &m.Sent); err != nil {
-			log.Printf("store: user scheduled message scan error: %v", err)
-			continue
-		}
-		msgs = append(msgs, m)
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("store: user scheduled messages iteration error: %v", err)
-	}
-	if msgs == nil {
-		msgs = []ScheduledMessage{}
-	}
-	return msgs, nil
-}
-
 // ExportMessages returns messages for a specific conversation, ordered by timestamp ascending.
-// For room export: pass roomID; for group export: pass groupName;
-// for DM export: pass toUser (peer) and username (current user).
-// limit caps the result count; 0 or negative means no limit (max 10000).
-func (s *Store) ExportMessages(ctx context.Context, roomID string, toUser string, groupName string, username string, limit int) ([]StoredMessage, error) {
+// For room export: pass roomID; limit caps the result count; 0 or negative means no limit (max 10000).
+func (s *Store) ExportMessages(ctx context.Context, roomID string, toUser string, _ string, username string, limit int) ([]StoredMessage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -2147,25 +1249,20 @@ func (s *Store) ExportMessages(ctx context.Context, roomID string, toUser string
 	var err error
 
 	switch {
-	case groupName != "":
-		rows, err = s.db.Query(
-			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE group_name = ? AND deleted = 0 ORDER BY timestamp ASC LIMIT ?",
-			groupName, limit,
-		)
 	case toUser != "" && username != "":
 		rows, err = s.db.Query(
-			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE deleted = 0 AND ((username = ? AND to_user = ?) OR (username = ? AND to_user = ?)) ORDER BY timestamp ASC LIMIT ?",
+			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, thread_id FROM messages WHERE deleted = 0 AND ((username = ? AND to_user = ?) OR (username = ? AND to_user = ?)) ORDER BY timestamp ASC LIMIT ?",
 			username, toUser, toUser, username, limit,
 		)
 	case roomID != "":
 		rows, err = s.db.Query(
-			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE room_id = ? AND deleted = 0 ORDER BY timestamp ASC LIMIT ?",
+			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, thread_id FROM messages WHERE room_id = ? AND deleted = 0 ORDER BY timestamp ASC LIMIT ?",
 			roomID, limit,
 		)
 	default:
-		// Public chat (no to_user, no group_name, no specific room_id).
+		// Public chat (no to_user, no specific room_id).
 		rows, err = s.db.Query(
-			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, group_name, thread_id FROM messages WHERE to_user = '' AND group_name = '' AND deleted = 0 ORDER BY timestamp ASC LIMIT ?",
+			"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, thread_id FROM messages WHERE to_user = '' AND deleted = 0 ORDER BY timestamp ASC LIMIT ?",
 			limit,
 		)
 	}
@@ -2178,7 +1275,7 @@ func (s *Store) ExportMessages(ctx context.Context, roomID string, toUser string
 	messages := make([]StoredMessage, 0, limit)
 	for rows.Next() {
 		var m StoredMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.GroupName, &m.ThreadID); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.ThreadID); err != nil {
 			log.Printf("store: ExportMessages scan error: %v", err)
 			continue
 		}
@@ -2300,474 +1397,6 @@ func (s *Store) SearchCustomEmojis(query string) ([]CustomEmoji, error) {
 		result = append(result, e)
 	}
 	return result, rows.Err()
-}
-
-// LogCall inserts a new call history record.
-func (s *Store) LogCall(call CallRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec(
-		"INSERT INTO call_history (id, caller, callee, call_type, status, started_at, ended_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		call.ID, call.Caller, call.Callee, call.CallType, call.Status, call.StartedAt, call.EndedAt, call.CreatedAt,
-	)
-	return err
-}
-
-// UpdateCallRecord updates the status and timestamps of an existing call record.
-func (s *Store) UpdateCallRecord(id, status string, startedAt, endedAt int64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec(
-		"UPDATE call_history SET status = ?, started_at = ?, ended_at = ? WHERE id = ?",
-		status, startedAt, endedAt, id,
-	)
-	return err
-}
-
-// GetCallHistory returns recent call history for a user (as caller or callee).
-func (s *Store) GetCallHistory(username string, limit int) ([]CallRecord, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if limit <= 0 {
-		limit = 50
-	}
-	rows, err := s.db.Query(
-		"SELECT id, caller, callee, call_type, status, started_at, ended_at, created_at FROM call_history WHERE caller = ? OR callee = ? ORDER BY created_at DESC LIMIT ?",
-		username, username, limit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var calls []CallRecord
-	for rows.Next() {
-		var c CallRecord
-		var startedAt, endedAt sql.NullInt64
-		if err := rows.Scan(&c.ID, &c.Caller, &c.Callee, &c.CallType, &c.Status, &startedAt, &endedAt, &c.CreatedAt); err != nil {
-			continue
-		}
-		if startedAt.Valid {
-			c.StartedAt = startedAt.Int64
-		}
-		if endedAt.Valid {
-			c.EndedAt = endedAt.Int64
-		}
-		calls = append(calls, c)
-	}
-	if calls == nil {
-		calls = []CallRecord{}
-	}
-	return calls, rows.Err()
-}
-
-// --- Chat Folders ---
-
-// CreateChatFolder creates a new folder for a user.
-func (s *Store) CreateChatFolder(username, name string) (*ChatFolder, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	id := uuid.New().String()
-	now := time.Now().UnixMilli()
-	_, err := s.db.Exec(
-		"INSERT INTO chat_folders (id, username, name, created_at) VALUES (?, ?, ?, ?)",
-		id, username, name, now,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &ChatFolder{ID: id, Username: username, Name: name, CreatedAt: now}, nil
-}
-
-// DeleteChatFolder removes a folder and its items.
-func (s *Store) DeleteChatFolder(username, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	_, err = tx.Exec("DELETE FROM chat_folder_items WHERE folder_id = ?", id)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec("DELETE FROM chat_folders WHERE id = ? AND username = ?", id, username)
-	if err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// RenameChatFolder renames a folder owned by the user.
-func (s *Store) RenameChatFolder(username, id, newName string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	_, err := s.db.Exec(
-		"UPDATE chat_folders SET name = ? WHERE id = ? AND username = ?",
-		newName, id, username,
-	)
-	return err
-}
-
-// AddToFolder adds a conversation key to a folder.
-func (s *Store) AddToFolder(folderID, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	_, err := s.db.Exec(
-		"INSERT OR IGNORE INTO chat_folder_items (folder_id, key) VALUES (?, ?)",
-		folderID, key,
-	)
-	return err
-}
-
-// RemoveFromFolder removes a conversation key from a folder.
-func (s *Store) RemoveFromFolder(folderID, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	_, err := s.db.Exec(
-		"DELETE FROM chat_folder_items WHERE folder_id = ? AND key = ?",
-		folderID, key,
-	)
-	return err
-}
-
-// ListFolders returns all folders for a user with item counts.
-func (s *Store) ListFolders(username string) ([]ChatFolder, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	rows, err := s.db.Query(
-		`SELECT f.id, f.username, f.name, f.sort_order, f.created_at,
-			(SELECT COUNT(*) FROM chat_folder_items WHERE folder_id = f.id) as item_count
-		FROM chat_folders f WHERE f.username = ? ORDER BY f.sort_order, f.created_at`,
-		username,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var folders []ChatFolder
-	for rows.Next() {
-		var f ChatFolder
-		if err := rows.Scan(&f.ID, &f.Username, &f.Name, &f.SortOrder, &f.CreatedAt, &f.ItemCount); err != nil {
-			return nil, err
-		}
-		folders = append(folders, f)
-	}
-	if folders == nil {
-		folders = []ChatFolder{}
-	}
-	return folders, rows.Err()
-}
-
-// GetFolderItems returns all conversation keys in a folder.
-func (s *Store) GetFolderItems(folderID string) ([]string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	rows, err := s.db.Query(
-		"SELECT key FROM chat_folder_items WHERE folder_id = ? ORDER BY sort_order",
-		folderID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var keys []string
-	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
-			return nil, err
-		}
-		keys = append(keys, key)
-	}
-	return keys, rows.Err()
-}
-
-// --- Webhooks ---
-
-// CreateWebhook inserts a new webhook for a group.
-func (s *Store) CreateWebhook(id, groupName, url, secret, createdBy string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	secretHash, err := hashWebhookSecret(secret)
-	if err != nil {
-		return err
-	}
-	now := time.Now().UnixMilli()
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err = tx.Exec(
-		"INSERT INTO webhooks (id, group_name, url, secret, created_by, created_at, rotated_at, rotated_by) VALUES (?, ?, ?, ?, ?, ?, 0, '')",
-		id, groupName, url, secretHash, createdBy, now,
-	); err != nil {
-		return err
-	}
-	if err := insertWebhookAuditLog(tx, id, groupName, "created", createdBy, now, webhookAuditMetadata(url)); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// DeleteWebhook removes a webhook by ID and group name.
-func (s *Store) DeleteWebhook(id, groupName, deletedBy string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	var url string
-	if err := tx.QueryRow("SELECT url FROM webhooks WHERE id = ? AND group_name = ?", id, groupName).Scan(&url); err != nil {
-		return err
-	}
-	if _, err := tx.Exec("DELETE FROM webhooks WHERE id = ? AND group_name = ?", id, groupName); err != nil {
-		return err
-	}
-	if err := insertWebhookAuditLog(tx, id, groupName, "deleted", deletedBy, time.Now().UnixMilli(), webhookAuditMetadata(url)); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// RotateWebhookSecret replaces a webhook secret hash and records who rotated it.
-func (s *Store) RotateWebhookSecret(id, groupName, secret, rotatedBy string) (*Webhook, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	secretHash, err := hashWebhookSecret(secret)
-	if err != nil {
-		return nil, err
-	}
-	now := time.Now().UnixMilli()
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	var w Webhook
-	if err := tx.QueryRow(
-		"SELECT id, group_name, url, secret, created_by, created_at, rotated_at, rotated_by FROM webhooks WHERE id = ? AND group_name = ?",
-		id, groupName,
-	).Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt, &w.RotatedAt, &w.RotatedBy); err != nil {
-		return nil, err
-	}
-	if _, err := tx.Exec(
-		"UPDATE webhooks SET secret = ?, rotated_at = ?, rotated_by = ? WHERE id = ? AND group_name = ?",
-		secretHash, now, rotatedBy, id, groupName,
-	); err != nil {
-		return nil, err
-	}
-	if err := insertWebhookAuditLog(tx, id, groupName, "rotated", rotatedBy, now, webhookAuditMetadata(w.URL)); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	w.Secret = secretHash
-	w.RotatedAt = now
-	w.RotatedBy = rotatedBy
-	return &w, nil
-}
-
-// ListWebhooks returns all webhooks for a group.
-func (s *Store) ListWebhooks(groupName string) ([]Webhook, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	rows, err := s.db.Query(
-		"SELECT id, group_name, url, secret, created_by, created_at, rotated_at, rotated_by FROM webhooks WHERE group_name = ? ORDER BY created_at",
-		groupName,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var result []Webhook
-	for rows.Next() {
-		var w Webhook
-		if err := rows.Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt, &w.RotatedAt, &w.RotatedBy); err != nil {
-			return nil, err
-		}
-		result = append(result, w)
-	}
-	if result == nil {
-		result = []Webhook{}
-	}
-	return result, rows.Err()
-}
-
-// GetWebhookByURL looks up a webhook by its URL path.
-func (s *Store) GetWebhookByURL(url string) (*Webhook, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var w Webhook
-	err := s.db.QueryRow(
-		"SELECT id, group_name, url, secret, created_by, created_at, rotated_at, rotated_by FROM webhooks WHERE url = ?",
-		url,
-	).Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt, &w.RotatedAt, &w.RotatedBy)
-	if err != nil {
-		return nil, err
-	}
-	return &w, nil
-}
-
-// VerifyWebhookSecret returns the matching webhook when the supplied secret is valid.
-func (s *Store) VerifyWebhookSecret(url, secret string) (*Webhook, bool, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	var w Webhook
-	err := s.db.QueryRow(
-		"SELECT id, group_name, url, secret, created_by, created_at, rotated_at, rotated_by FROM webhooks WHERE url = ?",
-		url,
-	).Scan(&w.ID, &w.GroupName, &w.URL, &w.Secret, &w.CreatedBy, &w.CreatedAt, &w.RotatedAt, &w.RotatedBy)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return &w, verifyWebhookSecretHash(w.Secret, secret), nil
-}
-
-// ListWebhookAuditLogs returns recent webhook lifecycle events for a group.
-func (s *Store) ListWebhookAuditLogs(groupName string, limit int) ([]WebhookAuditLog, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
-	rows, err := s.db.Query(
-		`SELECT id, webhook_id, group_name, action, actor, created_at, metadata
-		FROM webhook_audit_logs
-		WHERE group_name = ?
-		ORDER BY created_at DESC
-		LIMIT ?`,
-		groupName, limit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var result []WebhookAuditLog
-	for rows.Next() {
-		var item WebhookAuditLog
-		if err := rows.Scan(&item.ID, &item.WebhookID, &item.GroupName, &item.Action, &item.Actor, &item.CreatedAt, &item.Metadata); err != nil {
-			return nil, err
-		}
-		result = append(result, item)
-	}
-	if result == nil {
-		result = []WebhookAuditLog{}
-	}
-	return result, rows.Err()
-}
-
-func insertWebhookAuditLog(tx *sql.Tx, webhookID, groupName, action, actor string, createdAt int64, metadata string) error {
-	_, err := tx.Exec(
-		"INSERT INTO webhook_audit_logs (id, webhook_id, group_name, action, actor, created_at, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		uuid.New().String(), webhookID, groupName, action, actor, createdAt, metadata,
-	)
-	return err
-}
-
-func webhookAuditMetadata(url string) string {
-	payload, err := json.Marshal(map[string]string{"url": url})
-	if err != nil {
-		return "{}"
-	}
-	return string(payload)
-}
-
-func (s *Store) migrateWebhookSecrets() error {
-	rows, err := s.db.Query("SELECT id, secret FROM webhooks")
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	type legacyWebhookSecret struct {
-		id     string
-		secret string
-	}
-	var legacy []legacyWebhookSecret
-	for rows.Next() {
-		var item legacyWebhookSecret
-		if err := rows.Scan(&item.id, &item.secret); err != nil {
-			return err
-		}
-		if !isWebhookSecretHash(item.secret) {
-			legacy = append(legacy, item)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	for _, item := range legacy {
-		secretHash, err := hashWebhookSecret(item.secret)
-		if err != nil {
-			return err
-		}
-		if _, err := s.db.Exec("UPDATE webhooks SET secret = ? WHERE id = ?", secretHash, item.id); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func isWebhookSecretHash(value string) bool {
-	return strings.HasPrefix(value, webhookSecretHashPrefix)
-}
-
-func hashWebhookSecret(secret string) (string, error) {
-	if secret == "" {
-		return "", fmt.Errorf("webhook secret is required")
-	}
-	salt := make([]byte, webhookSecretSaltBytes)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
-	}
-	digest := webhookSecretDigest(salt, secret)
-	return webhookSecretHashPrefix + hex.EncodeToString(salt) + ":" + hex.EncodeToString(digest), nil
-}
-
-func verifyWebhookSecretHash(storedHash, secret string) bool {
-	if secret == "" || !isWebhookSecretHash(storedHash) {
-		return false
-	}
-	encoded := strings.TrimPrefix(storedHash, webhookSecretHashPrefix)
-	saltHex, digestHex, ok := strings.Cut(encoded, ":")
-	if !ok {
-		return false
-	}
-	salt, err := hex.DecodeString(saltHex)
-	if err != nil || len(salt) != webhookSecretSaltBytes {
-		return false
-	}
-	expected, err := hex.DecodeString(digestHex)
-	if err != nil || len(expected) != sha256.Size {
-		return false
-	}
-	actual := webhookSecretDigest(salt, secret)
-	return subtle.ConstantTimeCompare(actual, expected) == 1
-}
-
-func webhookSecretDigest(salt []byte, secret string) []byte {
-	key := make([]byte, 0, len(webhookSecretPepper)+len(salt))
-	key = append(key, webhookSecretPepper...)
-	key = append(key, salt...)
-	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(secret))
-	return mac.Sum(nil)
 }
 
 // --- User registration and authentication ---

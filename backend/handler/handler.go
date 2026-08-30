@@ -742,14 +742,12 @@ func (h *Handler) ExportMessages(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
 		return
 	}
-	authUsername, ok := h.requireSession(w, r)
-	if !ok {
+	if _, ok := h.requireSession(w, r); !ok {
 		return
 	}
 
 	conversation := r.URL.Query().Get("conversation")
 	format := r.URL.Query().Get("format")
-
 	if format == "" {
 		format = "json"
 	}
@@ -776,17 +774,6 @@ func (h *Handler) ExportMessages(w http.ResponseWriter, r *http.Request) {
 
 	// Parse conversation key.
 	switch {
-	case strings.HasPrefix(conversation, "dm:"):
-		toUser = strings.TrimPrefix(conversation, "dm:")
-		currentUser = authUsername
-		displayName = toUser
-	case strings.HasPrefix(conversation, "group:"):
-		groupName = strings.TrimPrefix(conversation, "group:")
-		if _, err := h.store.GetGroupMemberRole(groupName, authUsername); err != nil {
-			writeJSONError(w, http.StatusForbidden, "not a member of this group", "NOT_IN_GROUP", requestID)
-			return
-		}
-		displayName = groupName
 	case conversation != "" && conversation != "public":
 		roomID = conversation
 		displayName = conversation
@@ -1065,106 +1052,13 @@ func (h *Handler) InviteGenerate(w http.ResponseWriter, r *http.Request) {
 
 // WebhookHandler handles incoming webhook POST requests.
 // POST /api/webhook/{url}
-func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	// Extract webhook URL from path: /api/webhook/{url}
-	url := strings.TrimPrefix(r.URL.Path, "/api/webhook/")
-	if url == "" {
-		http.Error(w, "missing webhook URL", http.StatusBadRequest)
-		return
-	}
-	// Verify secret from the Authorization header. Do not accept query-string
-	// secrets; URLs are commonly logged and copied.
-	const bearerPrefix = "Bearer "
-	auth := strings.TrimSpace(r.Header.Get("Authorization"))
-	if !strings.HasPrefix(auth, bearerPrefix) {
-		http.Error(w, "missing secret", http.StatusUnauthorized)
-		return
-	}
-	secret := strings.TrimSpace(strings.TrimPrefix(auth, bearerPrefix))
-	if secret == "" {
-		http.Error(w, "missing secret", http.StatusUnauthorized)
-		return
-	}
-	webhook, ok, err := h.store.VerifyWebhookSecret(url, secret)
-	if err != nil || !ok {
-		http.Error(w, "invalid webhook URL or secret", http.StatusNotFound)
-		return
-	}
-	// Parse JSON body
-	r.Body = http.MaxBytesReader(w, r.Body, maxWebhookBodySize)
-	var body struct {
-		Content string `json:"content"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
-			http.Error(w, "webhook body too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		http.Error(w, "invalid body: content required", http.StatusBadRequest)
-		return
-	}
-	content := strings.TrimSpace(body.Content)
-	if content == "" {
-		http.Error(w, "invalid body: content required", http.StatusBadRequest)
-		return
-	}
-	if len([]rune(content)) > maxWebhookContentLength {
-		http.Error(w, "webhook content too long", http.StatusBadRequest)
-		return
-	}
-	storedMsg, err := h.store.InsertMessage("webhook", content, "", "", "", webhook.GroupName, "")
-	if err != nil {
-		log.Printf("webhook: failed to insert group message: %v", err)
-		http.Error(w, "failed to save webhook message", http.StatusInternalServerError)
-		return
-	}
 
-	msg := hub.Message{
-		Type:      "group_message",
-		ID:        storedMsg.ID,
-		Group:     webhook.GroupName,
-		Username:  "webhook",
-		Content:   content,
-		Timestamp: storedMsg.Timestamp,
-	}
-	data, err := json.Marshal(msg)
-	if err != nil {
-		log.Printf("webhook: failed to marshal group message: %v", err)
-		http.Error(w, "failed to send webhook message", http.StatusInternalServerError)
-		return
-	}
-	h.hub.SendToGroup(webhook.GroupName, data)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
-}
+// Extract webhook URL from path: /api/webhook/{url}
 
-// AdminStats handles GET /api/admin/stats — returns server statistics.
-func (h *Handler) AdminStats(w http.ResponseWriter, r *http.Request) {
-	requestID := requestIDFromContext(r.Context())
-	if r.Method != http.MethodGet {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed", "METHOD_NOT_ALLOWED", requestID)
-		return
-	}
-	if _, ok := h.requireSession(w, r); !ok {
-		return
-	}
-	stats := map[string]interface{}{
-		"total_messages":     h.store.TotalMessages(),
-		"active_connections": h.hub.ConnectionCount(),
-		"rooms":              len(h.store.ListRooms()),
-		"groups":             len(h.store.GetAllGroups()),
-		"friends":            len(h.store.GetAllFriends()),
-		"registered_users":   h.store.TotalUsers(),
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
-}
+// Verify secret from the Authorization header. Do not accept query-string
+// secrets; URLs are commonly logged and copied.
+
+// Parse JSON body
 
 // InviteList handles GET /api/invite/list?username=xxx.
 func (h *Handler) InviteList(w http.ResponseWriter, r *http.Request) {

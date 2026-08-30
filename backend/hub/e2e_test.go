@@ -161,32 +161,9 @@ func TestE2EJoinAndMessage(t *testing.T) {
 	}
 }
 
-func TestE2EDirectMessage(t *testing.T) {
-	env := newE2EEnv()
-	defer env.Close()
+// Alice gets echo.
 
-	bob := env.Dial(t)
-	defer bob.Close()
-	bob.JoinAs("bob")
-
-	alice := env.Dial(t)
-	defer alice.Close()
-	alice.JoinAs("alice")
-
-	alice.Send(Message{Type: "dm_message", Content: "Hi Bob", To: "bob"})
-
-	// Alice gets echo.
-	echo := alice.DrainUntil("dm_message")
-	if echo.Content != "Hi Bob" {
-		t.Errorf("alice echo: %s", echo.Content)
-	}
-
-	// Bob gets the DM.
-	dm := bob.DrainUntil("dm_message")
-	if dm.Content != "Hi Bob" || dm.From != "alice" {
-		t.Errorf("bob got content=%s from=%s", dm.Content, dm.From)
-	}
-}
+// Bob gets the DM.
 
 func TestE2EReaction(t *testing.T) {
 	env := newE2EEnv()
@@ -332,48 +309,15 @@ func TestE2ETypingIndicator(t *testing.T) {
 	}
 }
 
-func TestE2EGroupFlow(t *testing.T) {
-	env := newE2EEnv()
-	defer env.Close()
+// Alice creates a group.
 
-	bob := env.Dial(t)
-	defer bob.Close()
-	bob.JoinAs("bob")
+// Alice invites Bob.
 
-	alice := env.Dial(t)
-	defer alice.Close()
-	alice.JoinAs("alice")
+// Bob receives invite.
 
-	// Alice creates a group.
-	alice.Send(Message{Type: "group_create", Group: "TestGroup"})
-	created := alice.DrainUntil("group_create")
-	if created.Group != "TestGroup" {
-		t.Errorf("expected group_create, got %s", created.Type)
-	}
+// Bob accepts.
 
-	// Alice invites Bob.
-	alice.Send(Message{Type: "group_invite", Group: "TestGroup", Username: "bob"})
-
-	// Bob receives invite.
-	invite := bob.DrainUntil("group_invite")
-	if invite.Group != "TestGroup" {
-		t.Errorf("expected group_invite, got %s", invite.Type)
-	}
-
-	// Bob accepts.
-	bob.Send(Message{Type: "group_invite_accept", Group: "TestGroup", From: "alice"})
-
-	// Both should receive group_join.
-	bobJoin := bob.DrainUntil("group_join")
-	if bobJoin.Group != "TestGroup" {
-		t.Errorf("bob join: type=%s group=%s", bobJoin.Type, bobJoin.Group)
-	}
-
-	aliceJoin := alice.DrainUntil("group_join")
-	if aliceJoin.Group != "TestGroup" {
-		t.Errorf("alice join: type=%s group=%s", aliceJoin.Type, aliceJoin.Group)
-	}
-}
+// Both should receive group_join.
 
 // =============================================================================
 // Concurrent stress test

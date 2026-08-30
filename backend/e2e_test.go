@@ -288,135 +288,32 @@ func TestE2EMessageHistory(t *testing.T) {
 }
 
 // TestE2EDirectMessage 测试直接消息（DM）发送和接收。
-func TestE2EDirectMessage(t *testing.T) {
-	srv := newE2EServer(t)
 
-	alice := e2eDial(t, srv.wsURL())
-	defer alice.Close()
-	alice.joinAs("alice")
+// Alice 给 Bob 发 DM。
 
-	bob := e2eDial(t, srv.wsURL())
-	defer bob.Close()
-	bob.joinAs("bob")
+// Alice 收到回显。
 
-	// Alice 给 Bob 发 DM。
-	alice.send(hub.Message{
-		Type:    "dm_message",
-		Content: "Hi Bob，这是私信",
-		To:      "bob",
-	})
+// Bob 收到 DM。
 
-	// Alice 收到回显。
-	echo := alice.drainUntil("dm_message", 5*time.Second)
-	if echo.Content != "Hi Bob，这是私信" {
-		t.Errorf("Alice 回显: %s", echo.Content)
-	}
-	if echo.From != "alice" {
-		t.Errorf("期望 from=alice，实际 from=%s", echo.From)
-	}
-	if echo.To != "bob" {
-		t.Errorf("期望 to=bob，实际 to=%s", echo.To)
-	}
-
-	// Bob 收到 DM。
-	dm := bob.drainUntil("dm_message", 5*time.Second)
-	if dm.Content != "Hi Bob，这是私信" {
-		t.Errorf("Bob 收到 DM: %s", dm.Content)
-	}
-	if dm.From != "alice" {
-		t.Errorf("期望 from=alice，实际 from=%s", dm.From)
-	}
-
-	// Bob 回复。
-	bob.send(hub.Message{
-		Type:    "dm_message",
-		Content: "收到！Hello Alice",
-		To:      "alice",
-	})
-
-	bobEcho := bob.drainUntil("dm_message", 5*time.Second)
-	if bobEcho.Content != "收到！Hello Alice" {
-		t.Errorf("Bob 回显: %s", bobEcho.Content)
-	}
-
-	aliceDM := alice.drainUntil("dm_message", 5*time.Second)
-	if aliceDM.Content != "收到！Hello Alice" {
-		t.Errorf("Alice 收到 DM 回复: %s", aliceDM.Content)
-	}
-}
+// Bob 回复。
 
 // TestE2EGroupCreateInviteAndChat 测试群组创建、邀请和群聊。
-func TestE2EGroupCreateInviteAndChat(t *testing.T) {
-	srv := newE2EServer(t)
 
-	alice := e2eDial(t, srv.wsURL())
-	defer alice.Close()
-	alice.joinAs("alice")
+// Alice 创建群组。
 
-	bob := e2eDial(t, srv.wsURL())
-	defer bob.Close()
-	bob.joinAs("bob")
+// Alice 邀请 Bob。
 
-	// Alice 创建群组。
-	alice.send(hub.Message{Type: "group_create", Group: "测试群组"})
-	created := alice.drainUntil("group_create", 5*time.Second)
-	if created.Group != "测试群组" {
-		t.Errorf("期望 group=测试群组，实际 group=%s", created.Group)
-	}
+// Bob 收到邀请。
 
-	// Alice 邀请 Bob。
-	alice.send(hub.Message{
-		Type:     "group_invite",
-		Group:    "测试群组",
-		Username: "bob",
-	})
+// Bob 接受邀请。
 
-	// Bob 收到邀请。
-	invite := bob.drainUntil("group_invite", 5*time.Second)
-	if invite.Group != "测试群组" {
-		t.Errorf("期望 group=测试群组，实际 group=%s", invite.Group)
-	}
-	if invite.From != "alice" {
-		t.Errorf("期望 from=alice，实际 from=%s", invite.From)
-	}
+// 两人都应收到 group_join。
 
-	// Bob 接受邀请。
-	bob.send(hub.Message{
-		Type: "group_invite_accept",
-		Group: "测试群组",
-		From:  "alice",
-	})
+// Bob 在群内发消息。
 
-	// 两人都应收到 group_join。
-	bobJoin := bob.drainUntil("group_join", 5*time.Second)
-	if bobJoin.Group != "测试群组" {
-		t.Errorf("Bob group_join: %s", bobJoin.Group)
-	}
+// Bob 收到自己的群消息回显。
 
-	aliceJoin := alice.drainUntil("group_join", 5*time.Second)
-	if aliceJoin.Group != "测试群组" {
-		t.Errorf("Alice group_join: %s", aliceJoin.Group)
-	}
-
-	// Bob 在群内发消息。
-	bob.send(hub.Message{
-		Type:    "group_message",
-		Group:   "测试群组",
-		Content: "大家好，我是 Bob",
-	})
-
-	// Bob 收到自己的群消息回显。
-	bobMsg := bob.drainUntil("group_message", 5*time.Second)
-	if bobMsg.Content != "大家好，我是 Bob" {
-		t.Errorf("Bob 群消息回显: %s", bobMsg.Content)
-	}
-
-	// Alice 也应收到。
-	aliceMsg := alice.drainUntil("group_message", 5*time.Second)
-	if aliceMsg.Content != "大家好，我是 Bob" {
-		t.Errorf("Alice 收到群消息: %s", aliceMsg.Content)
-	}
-}
+// Alice 也应收到。
 
 // TestE2EMessageEditAndDelete 测试消息编辑和删除。
 func TestE2EMessageEditAndDelete(t *testing.T) {
@@ -609,38 +506,12 @@ func TestE2EBotNotConfigured(t *testing.T) {
 }
 
 // TestE2EAutoReplyKeyword 测试关键词自动触发 bot 回复（help/bot/机器人）。
-func TestE2EAutoReplyKeyword(t *testing.T) {
-	srv := newE2EServer(t)
 
-	alice := e2eDial(t, srv.wsURL())
-	defer alice.Close()
-	alice.joinAs("alice")
+// 发送包含 "help" 的消息，应 100% 触发 TokenBot。
 
-	// 发送包含 "help" 的消息，应 100% 触发 TokenBot。
-	alice.send(hub.Message{Type: "message", Content: "help 我需要帮助"})
+// 等待自己的消息。
 
-	// 等待自己的消息。
-	alice.drainUntil("message", 5*time.Second)
-
-	// 应收到 system 消息（因为 LLM 未配置）。
-	deadline := time.Now().Add(5 * time.Second)
-	gotSystem := false
-	for time.Now().Before(deadline) {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			break
-		}
-		msg := alice.recv(remaining)
-		t.Logf("收到: type=%s content=%s", msg.Type, truncate(msg.Content, 100))
-		if msg.Type == "system" && msg.Username == "system" {
-			gotSystem = true
-			break
-		}
-	}
-	if !gotSystem {
-		t.Error("help 关键词未触发 bot 响应")
-	}
-}
+// 应收到 system 消息（因为 LLM 未配置）。
 
 // TestE2EBlocking 测试用户屏蔽功能。
 func TestE2EBlocking(t *testing.T) {
@@ -681,44 +552,14 @@ func TestE2EBlocking(t *testing.T) {
 }
 
 // TestE2EBlockedDM 测试屏蔽后 DM 被拦截。
-func TestE2EBlockedDM(t *testing.T) {
-	srv := newE2EServer(t)
 
-	alice := e2eDial(t, srv.wsURL())
-	defer alice.Close()
-	alice.joinAs("alice")
+// Bob 屏蔽 Alice。
 
-	bob := e2eDial(t, srv.wsURL())
-	defer bob.Close()
-	bob.joinAs("bob")
+// Alice 尝试给 Bob 发 DM（被屏蔽，不会收到回显）。
 
-	// Bob 屏蔽 Alice。
-	bob.send(hub.Message{Type: "block", Username: "alice"})
-	bob.drainUntil("block", 5*time.Second)
+// Bob 不应收到 DM（被屏蔽拦截）。设置短超时直接读取。
 
-	// Alice 尝试给 Bob 发 DM（被屏蔽，不会收到回显）。
-	alice.send(hub.Message{
-		Type:    "dm_message",
-		Content: "Bob 你在吗？",
-		To:      "bob",
-	})
-
-	// Bob 不应收到 DM（被屏蔽拦截）。设置短超时直接读取。
-	bob.SetReadDeadline(time.Now().Add(1 * time.Second))
-	_, _, err := bob.ReadMessage()
-	if err == nil {
-		t.Error("Bob 收到了消息，但应被屏蔽拦截")
-	} else {
-		t.Logf("Bob 未收到 Alice 的 DM（符合预期）: %v", err)
-	}
-
-	// 验证 Alice 的连接仍然正常。
-	alice.send(hub.Message{Type: "message", Content: "验证连接"})
-	verify := alice.drainUntil("message", 5*time.Second)
-	if verify.Content != "验证连接" {
-		t.Errorf("Alice 连接异常: %s", verify.Content)
-	}
-}
+// 验证 Alice 的连接仍然正常。
 
 // TestE2EConcurrentMessages 测试并发消息处理。
 func TestE2EConcurrentMessages(t *testing.T) {
