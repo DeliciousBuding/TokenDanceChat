@@ -104,6 +104,7 @@ export interface WSStreamEvent extends WSMessage {
   username: string;
   content: string;
   done?: boolean;
+  private?: boolean;
 }
 
 export interface WSJoinRequest {
@@ -432,7 +433,7 @@ class ChatAPI {
     }
   }
 
-  sendMessage(content: string, replyTo?: ChatMessage, clientMessageId?: string): void {
+  sendMessage(content: string, replyTo?: ChatMessage, clientMessageId?: string, to?: string): void {
     if (replyTo) {
       this.send({
         type: "message",
@@ -441,9 +442,15 @@ class ChatAPI {
         reply_to_id: replyTo.id,
         reply_to_content: replyTo.content,
         reply_to_user: replyTo.username,
+        ...(to ? { to } : {}),
       });
     } else {
-      this.send({ type: "message", client_message_id: clientMessageId, content });
+      this.send({
+        type: "message",
+        client_message_id: clientMessageId,
+        content,
+        ...(to ? { to } : {}),
+      });
     }
   }
 
@@ -635,6 +642,23 @@ class ChatAPI {
       if (!resp.ok) return [];
       const data = await resp.json();
       return data.results ?? data as SearchResult[];
+    } catch {
+      return [];
+    }
+  }
+
+  // fetchMessagesBetween loads the private 1:1 thread with a user (e.g. the
+  // private TokenBot conversation). Requires an authenticated session.
+  async fetchMessagesBetween(username: string): Promise<ChatMessage[]> {
+    try {
+      const params = new URLSearchParams({ to: username, limit: "100" });
+      const resp = await fetch(`/api/messages?${params}`, {
+        headers: getSessionAuthHeaders(),
+        redirect: "manual",
+      });
+      if (!resp.ok) return [];
+      const data = await resp.json();
+      return data.messages ?? [];
     } catch {
       return [];
     }

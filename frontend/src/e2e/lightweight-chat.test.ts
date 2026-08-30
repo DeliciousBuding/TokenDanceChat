@@ -44,7 +44,9 @@ test.describe("lightweight chat surface", () => {
     await composer.fill(tokenBotText);
     await page.locator("[data-visual='composer-send']").click();
     await expect(page.getByText(tokenBotText).first()).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText(/@TokenBot/).last()).toBeVisible({ timeout: 15000 });
+    // Private 1:1: the message is sent as a direct message (to: TokenBot) and is
+    // NOT prefixed with an @mention.
+    await expect(page.getByText(/@TokenBot/)).toHaveCount(0);
   });
 
   test("mobile sidebar and composer stay compact", async ({ page }) => {

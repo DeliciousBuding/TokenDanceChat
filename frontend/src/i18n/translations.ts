@@ -57,6 +57,7 @@ export interface TranslationDict {
   chat: {
     roomName: string;
     subtitle: string;
+    dmLabel: string;
     leave: string;
     disconnect: string;
     publicChat: string;
@@ -99,6 +100,8 @@ export interface TranslationDict {
     cancel: string;
     save: string;
     editingMessage: string;
+    send: string;
+    pasteFileUnsupported: string;
   };
   message: {
     edited: string;
@@ -341,6 +344,7 @@ const zhCN: TranslationDict = {
   chat: {
     roomName: "公共聊天",
     subtitle: "在线聊天室",
+    dmLabel: "私聊",
     leave: "离开",
     disconnect: "断开连接",
     publicChat: "公共聊天",
@@ -353,7 +357,7 @@ const zhCN: TranslationDict = {
     you: "你",
     assistants: "助手",
     online: "在线",
-    aiAssistants: "AI 助手",
+    aiAssistants: "私人助手",
     closeSidebar: "关闭侧边栏",
     connecting: "连接中...",
     guestMode: "游客模式",
@@ -375,7 +379,7 @@ const zhCN: TranslationDict = {
     copySelected: "复制选中",
   },
   input: {
-    placeholder: "输入消息... (Shift+Enter 换行)",
+    placeholder: "输入消息...",
     assistantPlaceholder: "发消息给 {{name}}...",
     replyTo: "回复",
     characters: "{{current}}/{{max}}",
@@ -383,6 +387,8 @@ const zhCN: TranslationDict = {
     cancel: "取消",
     save: "保存",
     editingMessage: "编辑消息",
+    send: "发送",
+    pasteFileUnsupported: "暂不支持发送图片或文件",
   },
   message: {
     edited: "（已编辑）",
@@ -628,6 +634,7 @@ const enUS: TranslationDict = {
   chat: {
     roomName: "Public Chat",
     subtitle: "Online Chat Room",
+    dmLabel: "Direct message",
     leave: "Leave",
     disconnect: "Disconnect",
     publicChat: "Public Chat",
@@ -640,7 +647,7 @@ const enUS: TranslationDict = {
     you: "You",
     assistants: "Assistants",
     online: "Online",
-    aiAssistants: "AI Assistants",
+    aiAssistants: "Private Assistant",
     closeSidebar: "Close sidebar",
     connecting: "Connecting...",
     guestMode: "Guest mode",
@@ -662,7 +669,7 @@ const enUS: TranslationDict = {
     copySelected: "Copy Selected",
   },
   input: {
-    placeholder: "Type a message... (Shift+Enter for new line)",
+    placeholder: "Type a message...",
     assistantPlaceholder: "Message {{name}}...",
     replyTo: "Reply to",
     characters: "{{current}}/{{max}}",
@@ -670,6 +677,8 @@ const enUS: TranslationDict = {
     cancel: "Cancel",
     save: "Save",
     editingMessage: "Edit message",
+    send: "Send",
+    pasteFileUnsupported: "Sending images or files is not supported",
   },
   message: {
     edited: "(edited)",

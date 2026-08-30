@@ -609,15 +609,17 @@ export const MessageBubble = memo(function MessageBubble({
         </div>
       )}
 
-      {/* Avatar for others */}
+      {/* Avatar for others — fixed 32px column so grouped/ungrouped bubbles
+          always share the same left edge. The touch target extends into a
+          transparent padding instead of widening the column. */}
       {!isOwn && !hideAvatar && (
-        <div className="mt-0.5 flex-shrink-0">
+        <div className="mt-0.5 flex w-8 flex-shrink-0 items-start">
           <Avatar
             src={messageAvatarUrl}
             name={messageDisplayName}
             size="md"
             onClick={handleAvatarClick}
-            className="ring-1 ring-white/10 hover:ring-white/30 hover:scale-110 transition-all"
+            className="!h-8 !w-8 !min-h-8 !min-w-8 ring-1 ring-white/10 hover:ring-white/30 hover:scale-110 transition-all"
           />
         </div>
       )}
@@ -628,8 +630,7 @@ export const MessageBubble = memo(function MessageBubble({
 
       <div
         className={cn(
-          "td-ah-message-stack flex min-w-0 flex-col",
-          "max-w-[82%] sm:max-w-[76%] xl:max-w-[68%]",
+          "td-ah-message-stack flex min-w-0 w-full flex-col",
           isOwn ? "items-end" : "items-start",
         )}
       >
@@ -701,7 +702,7 @@ export const MessageBubble = memo(function MessageBubble({
         <div
           data-visual="message-bubble-surface"
           className={cn(
-            "td-chat-bubble relative border text-[15px] leading-relaxed",
+            "td-chat-bubble relative w-full border text-[15px] leading-relaxed",
             "px-3.5 py-2",
             isOwn
               ? "td-chat-bubble-own"

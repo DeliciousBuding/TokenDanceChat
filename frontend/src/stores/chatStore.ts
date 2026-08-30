@@ -62,6 +62,8 @@ interface ChatState {
   messages: ChatMessage[];
   messageWindowRevision: number;
   historyLoaded: boolean;
+  // Private 1:1 with the assistant (TokenBot) — separate from the public room.
+  privateBotMessages: ChatMessage[];
   // Lookup maps for O(1) reaction and read receipt updates (avoid O(n) array copies)
   reactionsByMessageId: Record<string, Record<string, string[]>>;
   readByMessageId: Record<string, string[]>;
@@ -143,6 +145,8 @@ interface ChatState {
   deleteMessage: (id: string) => void;
   addSystemMessage: (content: string, timestamp: number, dedupeKey?: string) => void;
   setHistory: (messages: ChatMessage[]) => void;
+  setPrivateBotHistory: (messages: ChatMessage[]) => void;
+  addPrivateBotMessage: (message: ChatMessage) => void;
   prependHistory: (messages: ChatMessage[]) => void;
   setOnlineUsers: (users: string[]) => void;
   setUserStatusList: (users: UserStatus[]) => void;
@@ -201,6 +205,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   messageWindowRevision: 0,
   historyLoaded: false,
+  // Private 1:1 with the assistant (TokenBot) — kept separate from the public
+  // room list so the public chat and private assistant never mix.
+  privateBotMessages: [],
   reactionsByMessageId: {},
   readByMessageId: {},
   lastPreviews: {},
@@ -310,6 +317,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messageWindowRevision: result.revision,
         historyLoaded: true,
       };
+    }),
+  setPrivateBotHistory: (incoming) =>
+    set((state) => {
+      const result = mergeMessageWindow(state.privateBotMessages, incoming, "append", MESSAGE_CAP);
+      return { privateBotMessages: result.messages };
+    }),
+  addPrivateBotMessage: (message) =>
+    set((state) => {
+      // mergeMessageWindow replaces an optimistic twin (matched by
+      // client_message_id) with the persisted echo, avoiding duplicates.
+      const result = mergeMessageWindow(state.privateBotMessages, [message], "append", MESSAGE_CAP);
+      return { privateBotMessages: result.messages };
     }),
   prependHistory: (incoming) =>
     set((state) => {

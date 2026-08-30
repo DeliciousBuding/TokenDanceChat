@@ -80,6 +80,7 @@ export function useWebSocket() {
     setConnected,
     addMessage,
     setHistory,
+    addPrivateBotMessage,
     setOnlineUsers,
     setUserStatusList,
     addSystemMessage,
@@ -136,7 +137,7 @@ export function useWebSocket() {
   }, [setConnected]);
 
   const sendMessage = useCallback(
-    (content: string) => {
+    (content: string, to?: string) => {
       const state = useChatStore.getState();
       // Optimistic: add message to store immediately so it appears without
       // waiting for the server echo. The real message replaces it via dedup.
@@ -149,9 +150,15 @@ export function useWebSocket() {
         timestamp: Date.now(),
         edited: false,
       };
-      addMessage(optimistic);
-      window.dispatchEvent(new CustomEvent("tdchat:optimistic-message", { detail: { id: tempId } }));
-      chatAPI.sendMessage(content, state.replyTo || undefined, tempId);
+      if (to) {
+        // Private bot thread — optimistic into the separate private list.
+        useChatStore.getState().addPrivateBotMessage(optimistic);
+        chatAPI.sendMessage(content, state.replyTo || undefined, tempId, to);
+      } else {
+        addMessage(optimistic);
+        window.dispatchEvent(new CustomEvent("tdchat:optimistic-message", { detail: { id: tempId } }));
+        chatAPI.sendMessage(content, state.replyTo || undefined, tempId);
+      }
       // Clear reply after sending.
       useChatStore.getState().setReplyTo(null);
     },
@@ -200,8 +207,23 @@ export function useWebSocket() {
     // Public chat message
     unsubs.push(
       chatAPI.on("message", (msg: WSMessage) => {
-        const { id, client_message_id, username, content, timestamp, reply_to_id, reply_to_content, reply_to_user } =
+        const { id, client_message_id, username, content, timestamp, reply_to_id, reply_to_content, reply_to_user, private: isPrivate } =
           msg as WSChatMessage;
+        // Private message (personal bot thread) → separate list, never the room.
+        if (isPrivate) {
+          useChatStore.getState().addPrivateBotMessage({
+            id,
+            client_message_id,
+            username,
+            content,
+            timestamp: timestamp || Date.now(),
+            reply_to_id,
+            reply_to_content,
+            reply_to_user,
+          } as ChatMessage);
+          removeTypingUser(username);
+          return;
+        }
         addMessage({
           id,
           client_message_id,
@@ -584,10 +606,12 @@ export function useWebSocket() {
       }),
     );
 
-    // Streaming bot response — accumulate and throttle chunks.
+    // Streaming bot response — accumulate and throttle chunks. Private streams
+    // (the personal TokenBot 1:1) write to privateBotMessages, keeping them out
+    // of the public room transcript.
     unsubs.push(
       chatAPI.on("stream", (msg: WSMessage) => {
-        const { username: streamUser, content, done } = msg as import("@/lib/api").WSStreamEvent;
+        const { username: streamUser, content, done, private: isPrivate } = msg as import("@/lib/api").WSStreamEvent;
         if (!streamUser || streamUser === useChatStore.getState().username) return;
         const streamId = `stream-${streamUser}`;
 
@@ -595,11 +619,20 @@ export function useWebSocket() {
         if (!acc) {
           // New stream: clear any stale message from previous stream.
           const freshState = useChatStore.getState();
-          const existing = freshState.messages.find((m) => m.id === streamId);
-          if (existing) {
-            useChatStore.setState({
-              messages: freshState.messages.filter((m) => m.id !== streamId),
-            });
+          if (isPrivate) {
+            const existing = freshState.privateBotMessages.find((m) => m.id === streamId);
+            if (existing) {
+              useChatStore.setState({
+                privateBotMessages: freshState.privateBotMessages.filter((m) => m.id !== streamId),
+              });
+            }
+          } else {
+            const existing = freshState.messages.find((m) => m.id === streamId);
+            if (existing) {
+              useChatStore.setState({
+                messages: freshState.messages.filter((m) => m.id !== streamId),
+              });
+            }
           }
           acc = { content: "", lastFlush: 0 };
           streamAcc.current.set(streamId, acc);
@@ -611,28 +644,53 @@ export function useWebSocket() {
         if (done || now - acc.lastFlush > 80) {
           acc.lastFlush = now;
           const freshState = useChatStore.getState();
-          const existing = freshState.messages.find((m) => m.id === streamId);
-          if (existing) {
-            const updated = { ...existing, content: acc.content };
-            useChatStore.setState({
-              messages: freshState.messages.map((m) => (m.id === streamId ? updated : m)),
-            });
-          } else if (acc.content) {
-            addMessage({
-              id: streamId,
-              username: streamUser,
-              content: acc.content,
-              timestamp: Date.now(),
-            });
-          }
-          if (done) {
-            removeTypingUser(streamUser);
-            streamAcc.current.delete(streamId);
-            // Remove the stream placeholder so only the persisted
-            // message card remains — otherwise the user sees two cards.
-            useChatStore.setState({
-              messages: useChatStore.getState().messages.filter((m) => m.id !== streamId),
-            });
+          if (isPrivate) {
+            const existing = freshState.privateBotMessages.find((m) => m.id === streamId);
+            if (existing) {
+              const updated = { ...existing, content: acc.content };
+              useChatStore.setState({
+                privateBotMessages: freshState.privateBotMessages.map((m) => (m.id === streamId ? updated : m)),
+              });
+            } else if (acc.content) {
+              useChatStore.getState().addPrivateBotMessage({
+                id: streamId,
+                username: streamUser,
+                content: acc.content,
+                timestamp: Date.now(),
+              });
+            }
+            if (done) {
+              removeTypingUser(streamUser);
+              streamAcc.current.delete(streamId);
+              // Remove the stream placeholder so only the persisted message card remains.
+              useChatStore.setState({
+                privateBotMessages: useChatStore.getState().privateBotMessages.filter((m) => m.id !== streamId),
+              });
+            }
+          } else {
+            const existing = freshState.messages.find((m) => m.id === streamId);
+            if (existing) {
+              const updated = { ...existing, content: acc.content };
+              useChatStore.setState({
+                messages: freshState.messages.map((m) => (m.id === streamId ? updated : m)),
+              });
+            } else if (acc.content) {
+              addMessage({
+                id: streamId,
+                username: streamUser,
+                content: acc.content,
+                timestamp: Date.now(),
+              });
+            }
+            if (done) {
+              removeTypingUser(streamUser);
+              streamAcc.current.delete(streamId);
+              // Remove the stream placeholder so only the persisted
+              // message card remains — otherwise the user sees two cards.
+              useChatStore.setState({
+                messages: useChatStore.getState().messages.filter((m) => m.id !== streamId),
+              });
+            }
           }
         }
       }),
@@ -811,7 +869,7 @@ export function useWebSocket() {
       typingTimers.current.clear();
     };
     return releaseSharedWebSocketSubscription;
-  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setNotificationPrefs, setTranslation, updatePoll, disconnect]);
+  }, [addMessage, setHistory, setOnlineUsers, addSystemMessage, addTypingUser, removeTypingUser, updateMessageReactions, editMessageInPlace, setUnreadCount, deleteMessage, markMessagesReadBy, setLatestMention, setBlockedUsers, setPinnedMessages, setPinnedConversations, setMutedConversations, setArchivedConversations, setCustomEmojis, addCustomEmoji, removeCustomEmoji, setNotificationPrefs, setTranslation, updatePoll, disconnect, addPrivateBotMessage]);
 
   return { connect, disconnect, sendMessage, markRead, sendReaction, sendMessageEdit };
 }

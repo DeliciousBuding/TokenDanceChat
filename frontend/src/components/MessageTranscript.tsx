@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
-import { Reply, Copy, Trash2 } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
 import { usePullDownGesture } from "@/hooks/useTouchGestures";
@@ -21,6 +21,12 @@ interface MessageTranscriptProps {
   highlight?: string;
   /** Ref that will be set to the scrollable container element. */
   scrollContainerRef?: React.MutableRefObject<HTMLDivElement | null>;
+  /** Override message list (used for the private bot thread). */
+  messages?: ChatMessage[];
+  /** Conversation key for scroll-restore + unread scoping. Defaults to public. */
+  conversationKey?: string;
+  /** Disable scroll-to-top pagination (private threads are fully loaded). */
+  disableInfiniteScroll?: boolean;
 }
 
 interface UserMessageGroup {
@@ -36,14 +42,6 @@ interface SystemMessageGroup {
 }
 
 type MessageGroup = UserMessageGroup | SystemMessageGroup;
-
-interface ContextMenuState {
-  visible: boolean;
-  x: number;
-  y: number;
-  message: ChatMessage | null;
-  isOwn: boolean;
-}
 
 function buildMessageGroups(messages: ChatMessage[], currentUsername: string): MessageGroup[] {
   const groups: MessageGroup[] = [];
@@ -80,10 +78,13 @@ export function MessageTranscript({
   onOpenThread,
   highlight,
   scrollContainerRef,
+  messages: messagesProp,
+  conversationKey: conversationKeyProp = "public",
+  disableInfiniteScroll = false,
 }: MessageTranscriptProps) {
   const { t } = useTranslation();
   const {
-    messages,
+    messages: storeMessages,
     messageWindowRevision,
     username,
     historyLoaded,
@@ -91,6 +92,8 @@ export function MessageTranscript({
     lastReadTimestamps,
     customEmojis,
   } = useChatStore();
+  const messages = messagesProp ?? storeMessages;
+  const conversationKey = conversationKeyProp;
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -103,7 +106,6 @@ export function MessageTranscript({
   const pendingScrollRestore = useRef(0);
   const firstMessageIdBeforeLoad = useRef("");
   const scrollPositions = useRef<Map<string, number>>(new Map());
-  const conversationKey = "public";
 
   // Track new messages that arrived while user is scrolled up for the FAB badge.
   const [newMessageCount, setNewMessageCount] = useState(0);
@@ -146,10 +148,6 @@ export function MessageTranscript({
 
   const effectiveMessages = messages;
 
-  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
-    visible: false, x: 0, y: 0, message: null, isOwn: false,
-  });
-
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -182,8 +180,9 @@ export function MessageTranscript({
     const { scrollTop, scrollHeight, clientHeight } = container;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     setShouldAutoScroll(distanceFromBottom < 120);
-    // Infinite scroll: load older messages when near top.
-    if (scrollTop < 80 && hasMoreRef.current && !loadingOlder && effectiveMessages.length > 0) {
+    // Infinite scroll: load older messages when near top. Disabled for the
+    // private bot thread (fully loaded) — no scroll-to-top pagination.
+    if (scrollTop < 80 && hasMoreRef.current && !loadingOlder && effectiveMessages.length > 0 && !disableInfiniteScroll) {
       const oldest = effectiveMessages[0];
       if (oldest) {
         setLoadingOlder(true);
@@ -384,34 +383,6 @@ export function MessageTranscript({
 
   const pullDownHandlers = usePullDownGesture(containerRef, { onPullDown: handleLoadOlder }, isLoadingMore);
 
-  const closeContextMenu = useCallback(() => {
-    setContextMenu((prev) => ({ ...prev, visible: false }));
-  }, []);
-
-  const handleContextReply = useCallback(() => {
-    if (contextMenu.message && onReply) onReply(contextMenu.message);
-    closeContextMenu();
-  }, [contextMenu.message, onReply, closeContextMenu]);
-
-  const handleContextCopy = useCallback(() => {
-    if (contextMenu.message) {
-      const time = formatFullTime(contextMenu.message.timestamp);
-      const text = `[${contextMenu.message.username}] ${time}\n${contextMenu.message.content}`;
-      navigator.clipboard.writeText(text).catch(() => {});
-    }
-    closeContextMenu();
-  }, [contextMenu.message, closeContextMenu]);
-
-  const handleContextDelete = useCallback(() => {
-    if (contextMenu.message && onDelete) onDelete(contextMenu.message.id);
-    closeContextMenu();
-  }, [contextMenu.message, onDelete, closeContextMenu]);
-
-  const enterSelectMode = useCallback((messageId: string) => {
-    setSelectMode(true);
-    setSelectedIds(new Set([messageId]));
-  }, []);
-
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
     setSelectedIds(new Set());
@@ -457,11 +428,6 @@ export function MessageTranscript({
     } catch { /* Clipboard API may not be available */ }
   }, [effectiveMessages, selectedIds]);
 
-  const handleContextSelect = useCallback(() => {
-    if (contextMenu.message) enterSelectMode(contextMenu.message.id);
-    closeContextMenu();
-  }, [contextMenu.message, enterSelectMode, closeContextMenu]);
-
   const handleContainerClick = useCallback(
     (e: React.MouseEvent) => {
       if (!selectMode) return;
@@ -499,17 +465,6 @@ export function MessageTranscript({
     window.addEventListener("tdchat:exit-select-mode", handler);
     return () => window.removeEventListener("tdchat:exit-select-mode", handler);
   }, [exitSelectMode]);
-
-  const menuStyle = useMemo(() => {
-    const menuWidth = 180;
-    const menuHeight = 200;
-    let { x, y } = contextMenu;
-    if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 8;
-    if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 8;
-    if (x < 8) x = 8;
-    if (y < 8) y = 8;
-    return { left: x, top: y };
-  }, [contextMenu]);
 
   return (
     <>
@@ -569,7 +524,7 @@ export function MessageTranscript({
         </div>
       )}
 
-      {paginationError && !loadingOlder && (
+      {paginationError && !loadingOlder && !disableInfiniteScroll && (
         <div className="flex justify-center py-3">
           <button
             onClick={() => {
@@ -810,37 +765,6 @@ export function MessageTranscript({
 
           <div ref={bottomRef} className="h-1" />
         </div>
-      )}
-
-      {/* Context menu */}
-      {contextMenu.visible && (
-        <>
-          <div className="context-menu-backdrop" onClick={closeContextMenu} onTouchEnd={closeContextMenu} />
-          <div className="td-chat-popover context-menu" style={menuStyle}>
-            <button onClick={handleContextSelect} className="td-chat-list-row flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:text-foreground touch-target">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
-                <path d="M9 11l3 3L22 4"/>
-                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
-              </svg>
-              <span>{t("transcript.contextSelect")}</span>
-            </button>
-            <div className="mx-3 border-t border-[var(--chat-stream-card-border)]" />
-            <button onClick={handleContextReply} className="td-chat-list-row flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:text-foreground touch-target">
-              <Reply className="h-4 w-4 text-muted-foreground" />
-              <span>{t("input.replyTo")}</span>
-            </button>
-            <button onClick={handleContextCopy} className="td-chat-list-row flex w-full items-center gap-3 px-4 py-3 text-sm text-foreground/80 hover:text-foreground touch-target">
-              <Copy className="h-4 w-4 text-muted-foreground" />
-              <span>{t("transcript.contextCopy")}</span>
-            </button>
-            {contextMenu.isOwn && (
-              <button onClick={handleContextDelete} className="td-chat-list-row flex w-full items-center gap-3 px-4 py-3 text-sm text-destructive/80 hover:text-destructive touch-target">
-                <Trash2 className="h-4 w-4" />
-                <span>{t("transcript.contextDelete")}</span>
-              </button>
-            )}
-          </div>
-        </>
       )}
     </div>
     <ScrollToBottom containerRef={containerRef as React.RefObject<HTMLDivElement | null>} newCount={newMessageCount} onClearCount={() => setNewMessageCount(0)} />

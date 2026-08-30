@@ -475,7 +475,10 @@ function scenarioIssues(metrics) {
   const isSettingsScenario = metrics.scenarioName.includes("settings");
   const isAssistantScenario = metrics.scenarioName.includes("tokenbot");
   const isSidebarScenario = metrics.scenarioName.includes("sidebar-open");
-  const isPrimaryChatScenario = !isAuthScenario && !isSettingsScenario && !isSidebarScenario;
+  // The assistant scenario is a private 1:1 (naturally sparse — own message +
+  // bot reply), not the populated public room, so it is exempt from the room
+  // density thresholds below.
+  const isPrimaryChatScenario = !isAuthScenario && !isSettingsScenario && !isSidebarScenario && !isAssistantScenario;
 
   if (metrics.horizontalOverflow) issues.push("horizontal overflow");
   if (metrics.consoleErrors.length > 0) issues.push("console/page errors");
@@ -632,6 +635,12 @@ async function main() {
       if (scenario.sidebarOpen) await openMobileSidebar(page);
       if (scenario.settingsOpen) await openSettingsPanel(page, scenario);
       if (scenario.authOpen) await openAuthModal(page, scenario);
+
+      // Assistant scenarios test the private 1:1: allow the bot's streaming
+      // reply (a reasoning model) to land before collecting metrics.
+      if (scenario.assistant) {
+        await wait(6000);
+      }
 
       await page.waitForTimeout(350);
       const screenshot = path.join(outputDir, `${scenario.name}.png`);

@@ -26,7 +26,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { useServerConfig } from "@/hooks/useServerConfig";
 import { useTranslation } from "@/i18n/context";
 import type { Language } from "@/i18n/translations";
-import { chatAPI } from "@/lib/api";
+import { chatAPI, getSessionToken } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 import { assistants, modelDisplayName, tokenBot } from "@/lib/assistantRegistry";
 import { cn } from "@/lib/utils";
@@ -70,6 +70,8 @@ export function ChatLayout() {
     lightboxImage,
     username,
     setShowAuthModal,
+    privateBotMessages,
+    setPrivateBotHistory,
   } = useChatStore();
   const currentChat = useChatStore((s) => s.currentChat as LegacyChatInput);
   const unauthenticated = !username;
@@ -80,6 +82,20 @@ export function ChatLayout() {
     [assistantId],
   );
   const assistantMode = activeSpace !== "public";
+
+  // Load the private bot thread history whenever the user enters the
+  // assistant space (kept separate from the public room list). Guests have no
+  // session, so the history endpoint would 401 — skip it and let the private
+  // thread populate from live WS traffic instead.
+  useEffect(() => {
+    if (!assistantMode) return;
+    if (!getSessionToken()) return;
+    let cancelled = false;
+    chatAPI.fetchMessagesBetween(activeAssistant.name).then((msgs) => {
+      if (!cancelled) setPrivateBotHistory(msgs);
+    });
+    return () => { cancelled = true; };
+  }, [assistantMode, activeAssistant.name, setPrivateBotHistory]);
 
   // Real model name comes from the backend (CHAT_LLM_MODEL) via /api/config;
   // fall back to the static registry display name when unavailable.
@@ -230,21 +246,17 @@ export function ChatLayout() {
     [setCurrentChat],
   );
 
-  const buildOutgoingContent = useCallback(
-    (content: string) => {
-      if (!assistantMode) return content;
-      const trimmed = content.trim();
-      if (trimmed.startsWith(activeAssistant.mention)) return trimmed;
-      return `${activeAssistant.mention} ${trimmed}`;
-    },
-    [activeAssistant.mention, assistantMode],
-  );
-
   const sendHandler = useCallback(
     (content: string) => {
-      sendMessage(buildOutgoingContent(content));
+      // In the assistant space, send as a private 1:1 to the bot (to: botName)
+      // so it never hits the public room. In the public room, broadcast.
+      if (assistantMode) {
+        sendMessage(content, activeAssistant.name);
+      } else {
+        sendMessage(content);
+      }
     },
-    [buildOutgoingContent, sendMessage],
+    [assistantMode, activeAssistant.name, sendMessage],
   );
 
   const handleExport = useCallback(
@@ -299,7 +311,7 @@ export function ChatLayout() {
   const headerTitle = assistantMode ? activeAssistant.name : t("chat.roomName");
   const modelLabel = modelDisplayName(serverConfig?.model || activeAssistant.model.id);
   const headerSubtitle = assistantMode
-    ? `${activeAssistant.label} · ${modelLabel}`
+    ? `${t("chat.dmLabel")} · ${modelLabel}`
     : t("chat.subtitle");
 
   const reconnectLabel = reconnectFailed
@@ -600,6 +612,9 @@ export function ChatLayout() {
                 onOpenThread={handleOpenThread}
                 highlight={searchHighlight}
                 scrollContainerRef={transcriptContainerRef}
+                messages={assistantMode ? privateBotMessages : undefined}
+                conversationKey={assistantMode ? `dm-${activeAssistant.name}` : "public"}
+                disableInfiniteScroll={assistantMode}
               />
             </ErrorBoundary>
           </div>
@@ -607,7 +622,6 @@ export function ChatLayout() {
           <ErrorBoundary fallback={<div className="p-4 text-sm text-muted-foreground/50">Chat input unavailable</div>}>
             <ChatInput
               onSend={sendHandler}
-              disabled={unauthenticated || !connected}
               assistantContext={assistantMode ? { assistant: activeAssistant, modelLabel } : null}
             />
           </ErrorBoundary>

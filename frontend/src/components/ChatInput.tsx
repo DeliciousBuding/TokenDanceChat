@@ -12,7 +12,6 @@ const EmojiPicker = lazy(() => import("@/components/EmojiPicker").then((m) => ({
 
 interface ChatInputProps {
   onSend: (content: string) => void;
-  disabled?: boolean;
   assistantContext?: {
     assistant: AssistantDefinition;
     modelLabel: string;
@@ -23,7 +22,6 @@ const INPUT_MIN_HEIGHT = 44;
 const INPUT_MAX_HEIGHT = 120;
 export function ChatInput({
   onSend,
-  disabled,
   assistantContext = null,
 }: ChatInputProps) {
   const { t } = useTranslation();
@@ -32,6 +30,8 @@ export function ChatInput({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const draftStorageKey = "tdchat-draft-public";
   const draftLoadedRef = useRef(false);
+  // Draft stashed while editing a previous message, restored on cancel/send.
+  const editStashRef = useRef<string | null>(null);
 
   // Load draft when conversation changes.
   useEffect(() => {
@@ -66,6 +66,7 @@ export function ChatInput({
   const [pulseButton, setPulseButton] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [disconnectFeedback, setDisconnectFeedback] = useState(false);
+  const [pasteHint, setPasteHint] = useState(false);
   const hadContentRef = useRef(false);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
   const sendingRef = useRef(false);
@@ -171,31 +172,25 @@ export function ChatInput({
     [content, adjustHeight],
   );
 
-  // Compute typing context from current chat
-  const typingContext = useMemo((): TypingContext => {
-    const base: TypingContext = { channel: "public" };
-    const trimmed = content.trim();
-    if (trimmed) {
-      base.preview = trimmed.slice(0, 30);
-    }
-    return base;
-  }, [content]);
+  // Typing context: channel only — never broadcast draft previews to the room.
+  const typingContext = useMemo((): TypingContext => ({ channel: "public" }), []);
 
   // Track latest typing context for unmount cleanup
   const typingContextRef = useRef(typingContext);
   typingContextRef.current = typingContext;
 
-  // Dispatch typing_start / typing_stop events
+  // Dispatch typing_start / typing_stop events. Stop is also sent when the
+  // connection drops mid-typing so the room never sees a ghost indicator.
   useEffect(() => {
     const hasContent = content.trim().length > 0;
-    if (hasContent && !isComposing && !disabled && !typingSentRef.current) {
+    if (hasContent && !isComposing && connected && !typingSentRef.current) {
       chatAPI.sendTypingStart(typingContext);
       typingSentRef.current = true;
-    } else if (!hasContent && typingSentRef.current) {
+    } else if ((!hasContent || !connected) && typingSentRef.current) {
       chatAPI.sendTypingStop(typingContext);
       typingSentRef.current = false;
     }
-  }, [content, isComposing, disabled, typingContext]);
+  }, [content, isComposing, connected, typingContext]);
 
   // Focus textarea when component mounts
   useEffect(() => {
@@ -247,12 +242,21 @@ export function ChatInput({
     }
   }, [content]);
 
+  // Cancel edit mode and restore the stashed draft (Escape / X button).
+  const cancelEdit = useCallback(() => {
+    setEditingMessageId(null);
+    const stash = editStashRef.current;
+    editStashRef.current = null;
+    setContent(stash ?? "");
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, []);
+
   const handleSend = useCallback((immediateContent?: string) => {
     // Prevent double-send from rapid clicks or Enter+click firing.
     if (sendingRef.current) return;
     const rawContent = immediateContent ?? textareaRef.current?.value ?? content;
     const trimmed = rawContent.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed) return;
 
     // Unauthenticated: show auth modal instead of sending.
     const { username } = useChatStore.getState();
@@ -279,13 +283,16 @@ export function ChatInput({
       onSend(trimmed);
     }
     import("@/lib/sound").then((m) => m.playSentSound());
-    setContent("");
+    // After an edit send, restore the stashed draft (if any); otherwise clear.
+    const stash = editingMessageId ? editStashRef.current : null;
+    editStashRef.current = null;
+    setContent(stash ?? "");
     // Clear reply indicator after send
     setReplyTo(null);
     // Pulse the send button as visual confirmation of sent message.
     setPulseButton(true);
     setTimeout(() => setPulseButton(false), 400);
-    // Clear draft.
+    // Clear draft (the debounced saver re-persists a restored stash).
     try { localStorage.removeItem(draftStorageKey); } catch { /* ignore */ }
     // Clear typing state.
     if (typingSentRef.current) {
@@ -301,7 +308,7 @@ export function ChatInput({
       sendingRef.current = false;
       if (mountedRef.current) setIsSubmitting(false);
     }, 500);
-  }, [content, disabled, connected, onSend, typingContext, draftStorageKey, editingMessageId]);
+  }, [content, connected, onSend, typingContext, draftStorageKey, editingMessageId]);
 
   // Insert @username at cursor position.
   const insertMention = useCallback(
@@ -330,6 +337,11 @@ export function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      // IME composition (Chinese/Japanese/Korean input): never intercept keys
+      // while the IME candidate window is active. nativeEvent.isComposing is
+      // more reliable than the React state around compositionend timing.
+      const composing = isComposing || e.nativeEvent.isComposing;
+
       // @mention autocomplete keyboard handling
       if (mentionActive) {
         if (e.key === "ArrowDown") {
@@ -344,7 +356,7 @@ export function ChatInput({
           setMentionIndex((prev) => Math.max(prev - 1, 0));
           return;
         }
-        if (e.key === "Enter" && !e.shiftKey && !isComposing) {
+        if (e.key === "Enter" && !e.shiftKey && !composing) {
           e.preventDefault();
           if (mentionFiltered[mentionIndex]) {
             insertMention(mentionFiltered[mentionIndex]);
@@ -358,7 +370,21 @@ export function ChatInput({
         }
       }
 
-      if (e.key === "Enter" && !e.shiftKey && !isComposing) {
+      // Escape cascade: cancel edit (restores stashed draft) → clear reply.
+      if (e.key === "Escape") {
+        if (editingMessageId) {
+          e.preventDefault();
+          cancelEdit();
+          return;
+        }
+        if (replyTo) {
+          e.preventDefault();
+          setReplyTo(null);
+          return;
+        }
+      }
+
+      if (e.key === "Enter" && !e.shiftKey && !composing) {
         e.preventDefault();
         handleSend(e.currentTarget.value);
       }
@@ -371,6 +397,8 @@ export function ChatInput({
           const m = allMessages[i];
           if (m.username !== username || m.deleted) continue;
           if (m.to) continue;
+          // Stash the current draft so cancel/send can restore it.
+          editStashRef.current = content;
           setContent(m.content);
           setEditingMessageId(m.id);
           // Edit mode cancels reply.
@@ -385,11 +413,6 @@ export function ChatInput({
           break;
         }
       }
-
-      // Clear editing state if user types something different
-      if (editingMessageId && e.key !== "ArrowUp" && e.key !== "ArrowDown" && e.key !== "Shift" && e.key !== "Control" && e.key !== "Alt" && e.key !== "Meta") {
-        // Will be cleared by the onChange handler
-      }
     },
     [
       handleSend,
@@ -401,7 +424,23 @@ export function ChatInput({
       content,
       username,
       editingMessageId,
+      replyTo,
+      cancelEdit,
+      setReplyTo,
     ],
+  );
+
+  // File upload is retired: intercept file pastes with a clear hint instead
+  // of silently dropping them.
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      if (e.clipboardData.files.length > 0) {
+        e.preventDefault();
+        setPasteHint(true);
+        setTimeout(() => { if (mountedRef.current) setPasteHint(false); }, 3000);
+      }
+    },
+    [],
   );
 
   const handleSendPointerDown = useCallback(
@@ -466,7 +505,7 @@ export function ChatInput({
             </span>
           </div>
           <button
-            onClick={() => { setEditingMessageId(null); setContent(""); }}
+            onClick={cancelEdit}
             aria-label={t("input.cancel")}
             className="flex size-11 flex-shrink-0 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
           >
@@ -561,6 +600,7 @@ export function ChatInput({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
               placeholder={placeholder}
@@ -578,10 +618,8 @@ export function ChatInput({
               ref={sendBtnRef}
               onPointerDown={handleSendPointerDown}
               onClick={() => handleSend()}
-              disabled={disabled || isSubmitting || !hasContent}
-              aria-label={
-                disabled ? t("join.buttonConnecting") : t("input.placeholder")
-              }
+              disabled={isSubmitting || !hasContent}
+              aria-label={t("input.send")}
               data-visual="composer-send"
               data-submitting={isSubmitting ? "true" : "false"}
               className={cn(
@@ -593,7 +631,7 @@ export function ChatInput({
                 pulseButton && "animate-pulse-once",
               )}
             >
-              {disabled || isSubmitting ? (
+              {isSubmitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" data-visual="composer-submit-state" />
               ) : (
                 <ArrowUp size={16} strokeWidth={2.5} />
@@ -623,6 +661,15 @@ export function ChatInput({
             <div className="animate-fade-in mt-1">
               <p className="text-xs text-[var(--danger)]/70">
                 {t("system.disconnected")}
+              </p>
+            </div>
+          )}
+
+          {/* Paste-file hint (upload retired) */}
+          {pasteHint && (
+            <div className="animate-fade-in mt-1">
+              <p className="text-xs text-[var(--text-tertiary)]">
+                {t("input.pasteFileUnsupported")}
               </p>
             </div>
           )}

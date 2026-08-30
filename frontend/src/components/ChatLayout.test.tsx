@@ -59,7 +59,9 @@ vi.mock("@/lib/api", () => {
       exportChat: vi.fn().mockResolvedValue(new Blob(["[]"], { type: "application/json" })),
       fetchLinkPreview: vi.fn(),
       fetchServerConfig: vi.fn().mockResolvedValue(null),
+      fetchMessagesBetween: vi.fn().mockResolvedValue([]),
     },
+    getSessionToken: vi.fn().mockReturnValue("test-session"),
     ChatError: class ChatError extends Error {
       code: string;
       constructor(code: string, message: string) {
@@ -168,7 +170,7 @@ describe("ChatLayout lightweight chat contract", () => {
     expect(useChatStore.getState().currentChat).toEqual({ type: "public" });
   });
 
-  it("selects TokenBot context and prefixes outgoing messages", () => {
+  it("selects TokenBot context and sends a private 1:1 message", () => {
     renderChatLayout();
     fireEvent.click(screen.getByText("TokenBot"));
 
@@ -180,8 +182,9 @@ describe("ChatLayout lightweight chat contract", () => {
 
     typeAndSend("总结一下");
 
-    expect(wsMocks.sendMessage).toHaveBeenCalledWith("@TokenBot 总结一下");
-    expect(useChatStore.getState().currentChat).toEqual({ type: "public" });
+    // Private channel: message is addressed to the bot (to: TokenBot), never
+    // prefixed with @mention or broadcast to the public room.
+    expect(wsMocks.sendMessage).toHaveBeenCalledWith("总结一下", "TokenBot");
   });
 
   it("keeps plain public sends unprefixed", () => {

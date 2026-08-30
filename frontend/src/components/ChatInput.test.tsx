@@ -78,7 +78,8 @@ import type { ChatMessage } from "@/lib/api";
 
 function renderChatInput(props?: {
   onSend?: (content: string) => void;
-  disabled?: boolean;
+  connected?: boolean;
+  username?: string;
   replyTo?: ChatMessage | null;
 }) {
   const onSend = props?.onSend ?? vi.fn();
@@ -86,12 +87,15 @@ function renderChatInput(props?: {
   if (props?.replyTo !== undefined) {
     useChatStore.getState().setReplyTo(props.replyTo);
   }
+  if (props?.connected !== undefined || props?.username !== undefined) {
+    useChatStore.setState({
+      ...(props?.connected !== undefined ? { connected: props.connected } : {}),
+      ...(props?.username !== undefined ? { username: props.username } : {}),
+    });
+  }
   const result = render(
     <I18nProvider>
-      <ChatInput
-        onSend={onSend}
-        disabled={props?.disabled ?? false}
-      />
+      <ChatInput onSend={onSend} />
     </I18nProvider>,
   );
   return { ...result, onSend };
@@ -117,11 +121,11 @@ describe("ChatInput", () => {
   describe("消息发送 (message sending)", () => {
     it("点击发送按钮调用 onSend", () => {
       const { onSend } = renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
       typeInTextarea(textarea, "Hello world");
 
       // Send button uses the current placeholder as its accessible label.
-      fireEvent.click(screen.getByRole("button", { name: "输入消息... (Shift+Enter 换行)" }));
+      fireEvent.click(screen.getByRole("button", { name: "发送" }));
 
       expect(onSend).toHaveBeenCalledTimes(1);
       expect(onSend).toHaveBeenCalledWith("Hello world");
@@ -129,7 +133,7 @@ describe("ChatInput", () => {
 
     it("按 Enter 键发送消息", () => {
       const { onSend } = renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
       typeInTextarea(textarea, "Hello");
 
       fireEvent.keyDown(textarea, { key: "Enter" });
@@ -140,7 +144,7 @@ describe("ChatInput", () => {
 
     it("Shift+Enter 换行不触发发送", () => {
       const { onSend } = renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
       typeInTextarea(textarea, "Line1");
 
       fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
@@ -150,7 +154,7 @@ describe("ChatInput", () => {
 
     it("空消息不发送", () => {
       const { onSend } = renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
 
       fireEvent.keyDown(textarea, { key: "Enter" });
 
@@ -159,7 +163,7 @@ describe("ChatInput", () => {
 
     it("输入中文时 IME 组成状态不发送", () => {
       const { onSend } = renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
       typeInTextarea(textarea, "测试");
 
       // Simulate IME composition
@@ -171,7 +175,7 @@ describe("ChatInput", () => {
 
     it("发送后清空输入框", () => {
       const { onSend } = renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
       typeInTextarea(textarea, "Hello");
 
       fireEvent.keyDown(textarea, { key: "Enter" });
@@ -184,12 +188,12 @@ describe("ChatInput", () => {
       vi.useFakeTimers();
       try {
         const { onSend } = renderChatInput();
-        const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+        const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
         typeInTextarea(textarea, "Hello");
 
         fireEvent.keyDown(textarea, { key: "Enter" });
 
-        const sendButton = screen.getByRole("button", { name: "输入消息... (Shift+Enter 换行)" });
+        const sendButton = screen.getByRole("button", { name: "发送" });
         expect(sendButton.getAttribute("data-submitting")).toBe("true");
         expect(document.querySelector("[data-visual='composer-submit-state']")).toBeTruthy();
 
@@ -209,7 +213,7 @@ describe("ChatInput", () => {
     it("disconnected 时不发送消息", () => {
       useChatStore.setState({ connected: false });
       const { onSend } = renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
       typeInTextarea(textarea, "Hello");
 
       fireEvent.keyDown(textarea, { key: "Enter" });
@@ -220,7 +224,7 @@ describe("ChatInput", () => {
     it("disconnected 时显示断连反馈消息", () => {
       useChatStore.setState({ connected: false, username: "testuser" });
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
       typeInTextarea(textarea, "Hello");
 
       fireEvent.keyDown(textarea, { key: "Enter" });
@@ -231,28 +235,28 @@ describe("ChatInput", () => {
       expect(textarea.value).toBe("Hello");
     });
 
-    it("disabled 时不发送消息", () => {
-      const { onSend } = renderChatInput({ disabled: true });
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+    it("未登录时 Enter 不发送而是打开登录弹窗", () => {
+      const { onSend } = renderChatInput({ username: "" });
+      const textarea = screen.getByPlaceholderText("输入消息...");
       typeInTextarea(textarea, "Hello");
 
       fireEvent.keyDown(textarea, { key: "Enter" });
 
       expect(onSend).not.toHaveBeenCalled();
+      expect(useChatStore.getState().showAuthModal).toBe(true);
     });
 
-    it("禁用状态下点击发送不会触发 onSend", () => {
-      const { onSend } = renderChatInput({ disabled: true });
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
-      typeInTextarea(textarea, "Hello world");
-      expect(onSend).not.toHaveBeenCalled();
+    it("空内容时发送按钮被禁用", () => {
+      renderChatInput();
+      const sendBtn = screen.getByLabelText("发送");
+      expect(sendBtn).toHaveProperty("disabled", true);
     });
 
     it("未登录预览态聚焦输入框时不渲染全屏格式化遮罩", () => {
       useChatStore.setState({ username: "", connected: false });
       renderChatInput();
 
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
       fireEvent.focus(textarea);
 
       expect(document.querySelector(".fixed.inset-0.z-40")).toBeNull();
@@ -279,7 +283,7 @@ describe("ChatInput", () => {
 
     it("字符计数器显示", () => {
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
       typeInTextarea(textarea, "Hello");
 
       expect(screen.getByText("5/2000")).toBeTruthy();
@@ -302,7 +306,7 @@ describe("ChatInput", () => {
   describe("@mention 补全 (mention autocomplete)", () => {
     it("输入 @ 触发 mention 下拉菜单", () => {
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.change(textarea, { target: { value: "@" } });
       Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
@@ -313,7 +317,7 @@ describe("ChatInput", () => {
 
     it("@后输入部分关键字过滤 mention 列表", () => {
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.change(textarea, { target: { value: "@Tok" } });
       Object.defineProperty(textarea, "selectionStart", { value: 4, writable: true });
@@ -324,7 +328,7 @@ describe("ChatInput", () => {
 
     it("点击 mention 项插入 @name", () => {
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.change(textarea, { target: { value: "@" } });
       Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
@@ -336,7 +340,7 @@ describe("ChatInput", () => {
 
     it("按 Escape 键关闭 mention 下拉", () => {
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.change(textarea, { target: { value: "@" } });
       Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
@@ -350,7 +354,7 @@ describe("ChatInput", () => {
 
     it("ArrowDown/ArrowUp 导航 mention 列表", () => {
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.change(textarea, { target: { value: "@" } });
       Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
@@ -369,7 +373,7 @@ describe("ChatInput", () => {
 
     it("Enter 在 mention 下拉中选择当前项", () => {
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.change(textarea, { target: { value: "@" } });
       Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
@@ -381,7 +385,7 @@ describe("ChatInput", () => {
 
     it("assistant 标签显示在 mention 列表中", () => {
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.change(textarea, { target: { value: "@" } });
       Object.defineProperty(textarea, "selectionStart", { value: 1, writable: true });
@@ -451,7 +455,7 @@ describe("ChatInput", () => {
       });
 
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.keyDown(textarea, { key: "ArrowUp" });
 
@@ -470,7 +474,7 @@ describe("ChatInput", () => {
       });
 
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.keyDown(textarea, { key: "ArrowUp" });
 
@@ -489,7 +493,7 @@ describe("ChatInput", () => {
       });
 
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.keyDown(textarea, { key: "ArrowUp" });
 
@@ -527,7 +531,7 @@ describe("ChatInput", () => {
       });
 
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
       typeInTextarea(textarea, "current content");
       (textarea as any).selectionStart = "current content".length;
       (textarea as any).selectionEnd = "current content".length;
@@ -548,7 +552,7 @@ describe("ChatInput", () => {
       });
 
       const { onSend } = renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.keyDown(textarea, { key: "ArrowUp" });
       expect(textarea.value).toBe("original text");
@@ -567,7 +571,7 @@ describe("ChatInput", () => {
     it("public 会话挂载时从 tdchat-draft-public 恢复草稿", () => {
       localStorageMock.setItem("tdchat-draft-public", "saved draft");
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
       expect(textarea.value).toBe("saved draft");
     });
 
@@ -592,7 +596,7 @@ describe("ChatInput", () => {
     it("内容变化后防抖 500ms 自动保存草稿", () => {
       vi.useFakeTimers();
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
       typeInTextarea(textarea, "auto saved draft");
 
       // 防抖未到时不应保存
@@ -607,7 +611,7 @@ describe("ChatInput", () => {
       vi.useFakeTimers();
       localStorageMock.setItem("tdchat-draft-public", "existing draft");
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
 
       // Clear the restored draft content
       typeInTextarea(textarea, "");
@@ -620,7 +624,7 @@ describe("ChatInput", () => {
     it("发送消息后同步清除草稿", () => {
       localStorageMock.setItem("tdchat-draft-public", "draft before send");
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)");
+      const textarea = screen.getByPlaceholderText("输入消息...");
       typeInTextarea(textarea, "draft before send");
 
       fireEvent.keyDown(textarea, { key: "Enter" });
@@ -662,7 +666,7 @@ describe("ChatInput", () => {
       });
 
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       fireEvent.keyDown(textarea, { key: "ArrowUp" });
 
@@ -682,7 +686,7 @@ describe("ChatInput", () => {
       });
 
       renderChatInput();
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       // Enter editing mode
       fireEvent.keyDown(textarea, { key: "ArrowUp" });
@@ -714,7 +718,7 @@ describe("ChatInput", () => {
       };
 
       renderChatInput({ replyTo });
-      const textarea = screen.getByPlaceholderText("输入消息... (Shift+Enter 换行)") as HTMLTextAreaElement;
+      const textarea = screen.getByPlaceholderText("输入消息...") as HTMLTextAreaElement;
 
       // Reply indicator should be visible before ArrowUp
       expect(screen.getByText("alice")).toBeTruthy();
