@@ -7,6 +7,9 @@ import { fetchPublicMessages, getSessionToken, persistSessionToken } from "@/lib
 
 const USERNAME_STORAGE_KEY = "tokendance:username";
 const AUTH_STORAGE_KEY = "tokendance:auth";
+// Persisted guest identity — a returning anonymous user keeps the same name
+// instead of getting a fresh random one on every visit.
+const GUEST_STORAGE_KEY = "tokendance:guestName";
 
 function generateGuestName(): string {
   return `guest_${Math.random().toString(36).slice(2, 10)}`;
@@ -52,11 +55,16 @@ function App() {
     }
 
     async function tryGuestConnect() {
-      const name = generateGuestName();
+      // Reuse a persisted guest identity across visits (stable anonymous user),
+      // generating one only on first visit.
+      let name = localStorage.getItem(GUEST_STORAGE_KEY);
+      if (!name) {
+        name = generateGuestName();
+        try { localStorage.setItem(GUEST_STORAGE_KEY, name); } catch { /* quota */ }
+      }
       try {
         if (cancelled) return;
         localStorage.removeItem(AUTH_STORAGE_KEY);
-        localStorage.removeItem(USERNAME_STORAGE_KEY);
         persistSessionToken(null);
         clearOidcAuth();
         setStoreUsername(name);

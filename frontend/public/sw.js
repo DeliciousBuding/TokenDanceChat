@@ -1,4 +1,4 @@
-const CACHE_NAME = "tdchat-v7";
+const CACHE_NAME = "tdchat-v8";
 const STATIC_ASSETS = [
   "/offline.html",
   "/manifest.json",
