@@ -372,6 +372,59 @@ func (s *Store) GetMessages(limit int, before int64) []StoredMessage {
 	return s.GetRoomMessages("", limit, before)
 }
 
+// GetMessagesBetween returns the 1:1 private thread between two users (both
+// directions, oldest-first). Used for the private TokenBot conversation. Each
+// row is a DM: room_id = '' and to_user points at the recipient.
+func (s *Store) GetMessagesBetween(userA, userB string, limit int) []StoredMessage {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	rows, err := s.db.Query(
+		"SELECT id, username, content, timestamp, reply_to_id, room_id, deleted, edited, to_user, thread_id FROM messages WHERE ((username = ? AND to_user = ?) OR (username = ? AND to_user = ?)) AND deleted = 0 ORDER BY timestamp DESC LIMIT ?",
+		userA, userB, userB, userA, limit,
+	)
+	if err != nil {
+		log.Printf("store: query messages-between error: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	messages := make([]StoredMessage, 0, limit)
+	for rows.Next() {
+		var m StoredMessage
+		if err := rows.Scan(&m.ID, &m.Username, &m.Content, &m.Timestamp, &m.ReplyToID, &m.RoomID, &m.Deleted, &m.Edited, &m.ToUser, &m.ThreadID); err != nil {
+			log.Printf("store: scan messages-between error: %v", err)
+			continue
+		}
+		messages = append(messages, m)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("store: messages-between rows error: %v", err)
+	}
+
+	// Query DESC (newest first), reverse to oldest-first.
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+
+	if len(messages) > 0 {
+		messageIDs := make([]string, len(messages))
+		for i, m := range messages {
+			messageIDs[i] = m.ID
+		}
+		reactions := s.GetReactionsForMessages(messageIDs)
+		for i := range messages {
+			messages[i].Reactions = reactions[messages[i].ID]
+		}
+	}
+
+	return messages
+}
+
 func (s *Store) GetRoomMessages(roomID string, limit int, before int64) []StoredMessage {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

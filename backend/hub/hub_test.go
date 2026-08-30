@@ -68,6 +68,12 @@ func (m *mockStore) GetMessages(limit int, before int64) []StoredMessage {
 	return append([]StoredMessage(nil), m.messages...)
 }
 
+func (m *mockStore) GetMessagesBetween(userA, userB string, limit int) []StoredMessage {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]StoredMessage(nil), m.messages...)
+}
+
 func (m *mockStore) GetRoomMessages(roomID string, limit int, before int64) []StoredMessage {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -2061,6 +2067,43 @@ func TestHandleChatMessageScopesRoomFanout(t *testing.T) {
 	case payload := <-bob.send:
 		t.Fatalf("bob is in room-2 and should not receive room-1 payload: %s", string(payload))
 	default:
+	}
+}
+
+// TestHandlePrivateBotMessageDoesNotBroadcast verifies that a DM to the bot
+// (To == BotName) is never broadcast to the room — it is echoed to the sender
+// privately and other clients receive nothing.
+func TestHandlePrivateBotMessageDoesNotBroadcast(t *testing.T) {
+	ms := &mockStore{}
+	h := New(ms, nil, "TokenBot")
+
+	alice := &Client{hub: h, username: "alice", send: make(chan []byte, 10), currentRoomID: ""}
+	bob := &Client{hub: h, username: "bob", send: make(chan []byte, 10), currentRoomID: ""}
+	h.mu.Lock()
+	h.clients[alice] = true
+	h.clients[bob] = true
+	h.mu.Unlock()
+
+	alice.handleChatMessage(Message{Content: "private hi", To: "TokenBot"})
+
+	select {
+	case payload := <-alice.send:
+		var got Message
+		if err := json.Unmarshal(payload, &got); err != nil {
+			t.Fatalf("alice: decode private echo error: %v", err)
+		}
+		if got.Type != "message" || !got.Private || got.To != "TokenBot" || got.Content != "private hi" {
+			t.Fatalf("expected private echo, got %+v", got)
+		}
+	default:
+		t.Fatal("alice should receive the private echo")
+	}
+
+	select {
+	case payload := <-bob.send:
+		t.Fatalf("bob should NOT receive the bot DM, got %s", string(payload))
+	default:
+		// ok — no room broadcast
 	}
 }
 

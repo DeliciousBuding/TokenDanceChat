@@ -324,7 +324,7 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, authenticated, ok := h.optionalSession(w, r)
+	username, authenticated, ok := h.optionalSession(w, r)
 	if !ok {
 		return
 	}
@@ -354,6 +354,25 @@ func (h *Handler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		if parsed, err := strconv.ParseInt(b, 10, 64); err == nil {
 			before = parsed
 		}
+	}
+
+	// Private thread: ?to=<username> returns the 1:1 conversation between the
+	// authenticated user and <username> (e.g. the private TokenBot chat). This
+	// only works for authenticated requests.
+	if to := r.URL.Query().Get("to"); to != "" {
+		if !authenticated {
+			writeJSONError(w, http.StatusUnauthorized, "authentication required", "AUTH_REQUIRED", requestID)
+			return
+		}
+		messages := h.store.GetMessagesBetween(username, to, limit)
+		if messages == nil {
+			messages = []hub.StoredMessage{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"messages": messages,
+		})
+		return
 	}
 
 	messages := h.store.GetMessages(limit, before)

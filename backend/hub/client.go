@@ -357,6 +357,15 @@ func (c *Client) handleChatMessage(msg Message) {
 
 	currentRoom := c.getCurrentRoomID()
 
+	// Private DM to the assistant (TokenBot): never broadcast to the room,
+	// streamed only back to the sender. This separates the public chat room
+	// from a private 1:1 bot conversation. Guard on a non-empty To so standard
+	// room messages (To == "") never match even when botName is empty in tests.
+	if msg.To != "" && msg.To == c.hub.BotName() {
+		c.handlePrivateBotMessage(msg, content)
+		return
+	}
+
 	// Save to store.
 	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID, currentRoom, "", "", msg.ThreadID)
 	if err != nil {
@@ -1005,6 +1014,120 @@ func (c *Client) handleMarkRead(msg Message) {
 	select {
 	case c.hub.broadcast <- data:
 	default:
+	}
+}
+
+// handlePrivateBotMessage handles a DM to the assistant (To == BotName). The
+// message is persisted as a private thread row (room_id='', to_user=bot) and
+// echoed only to the sender; it is never broadcast to the room.
+func (c *Client) handlePrivateBotMessage(msg Message, content string) {
+	storedMsg, err := c.hub.store.InsertMessage(c.username, content, msg.ReplyToID, "", c.hub.BotName(), "", msg.ThreadID)
+	if err != nil {
+		log.Printf("failed to insert private message: %v", err)
+		c.hub.SendToClient(c, Message{
+			Type:      "error",
+			Content:   "failed to save message, please try again",
+			ErrorCode: "SERVER_ERROR",
+		})
+		return
+	}
+
+	// Echo the user's own message back privately (keeps multiple tabs in sync).
+	c.hub.SendToClient(c, Message{
+		Type:            "message",
+		ID:              storedMsg.ID,
+		ClientMessageID: msg.ClientMessageID,
+		Username:        storedMsg.Username,
+		Content:         storedMsg.Content,
+		Timestamp:       storedMsg.Timestamp,
+		RoomID:          "",
+		To:              c.hub.BotName(),
+		Private:         true,
+	})
+
+	// Store the user message in LLM memory.
+	if mem := c.hub.Memory(); mem != nil {
+		mem.Add(llm.Message{Role: "user", Content: content, Username: c.username})
+	}
+
+	// Trigger the private bot response (per-user cooldown + CAS to avoid overlap).
+	if c.hub.LLMClient() == nil {
+		c.hub.SendToClient(c, Message{
+			Type:      "system",
+			Content:   c.hub.BotName() + " is not configured on this server.",
+			Private:   true,
+		})
+		return
+	}
+	if !c.hub.CheckBotCooldown("dm:" + c.username) {
+		return
+	}
+	if c.tokenBotResponding.CompareAndSwap(false, true) {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		go func() {
+			defer cancel()
+			defer c.tokenBotResponding.Store(false)
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("private bot response panic recovered: %v", r)
+				}
+			}()
+			c.handlePrivateBotResponse(ctx, content)
+		}()
+	}
+}
+
+// handlePrivateBotResponse streams the assistant's reply to the sender only.
+// No broadcast, no room typing — the streaming card itself is the indicator.
+func (c *Client) handlePrivateBotResponse(ctx context.Context, userContent string) {
+	var messages []llm.Message
+	if mem := c.hub.Memory(); mem != nil {
+		messages = mem.GetMessages()
+	}
+
+	client := c.hub.LLMClient()
+	systemPrompt := c.hub.BuildSystemPrompt()
+
+	var fullResponse strings.Builder
+	err := client.ChatStream(ctx, systemPrompt, messages, func(chunk string) error {
+		fullResponse.WriteString(chunk)
+		c.hub.SendStreamChunkToClient(c, c.hub.BotName(), chunk, false, true)
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("LLM stream error (private): %v", err)
+		errorContent := "Sorry, I encountered an error while generating a response."
+		c.hub.SendStreamChunkToClient(c, c.hub.BotName(), errorContent, true, true)
+		return
+	}
+
+	response := sanitizeBotContent(fullResponse.String())
+	if response == "" {
+		return
+	}
+
+	// Done signal for the stream (removes the streaming placeholder card).
+	c.hub.SendStreamChunkToClient(c, c.hub.BotName(), "", true, true)
+
+	// Persist the bot reply as a private thread row (to_user = sender).
+	storedMsg, err := c.hub.store.InsertMessage(c.hub.BotName(), response, "", "", c.username, "", "")
+	if err == nil && storedMsg.ID != "" {
+		c.hub.SendToClient(c, Message{
+			Type:      "message",
+			ID:        storedMsg.ID,
+			Username:  storedMsg.Username,
+			Content:   storedMsg.Content,
+			Timestamp: storedMsg.Timestamp,
+			RoomID:    "",
+			To:        c.username,
+			Private:   true,
+		})
+	}
+
+	// Update memory with the bot response.
+	if mem := c.hub.Memory(); mem != nil {
+		mem.Add(llm.Message{Role: "assistant", Content: response, Username: c.hub.BotName()})
 	}
 }
 

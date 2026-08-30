@@ -48,6 +48,7 @@ type CustomEmoji = store.CustomEmoji
 type Store interface {
 	InsertMessage(username, content, replyToID, roomID, toUser, groupName, threadID string) (StoredMessage, error)
 	GetMessages(limit int, before int64) []StoredMessage
+	GetMessagesBetween(userA, userB string, limit int) []StoredMessage
 	TotalUsers() int64
 	TotalMessages() int64
 	MarkDeleted(messageID string) error
@@ -166,6 +167,10 @@ type Message struct {
 	ReplyToID      string `json:"reply_to_id,omitempty"`
 	ReplyToContent string `json:"reply_to_content,omitempty"`
 	ReplyToUser    string `json:"reply_to_user,omitempty"`
+
+	// Private channel — message is delivered only to the sender's own client
+	// (used by the private TokenBot 1:1 conversation, not broadcast to the room).
+	Private bool `json:"private,omitempty"`
 
 	// Delete system
 	Deleted bool `json:"deleted,omitempty"`
@@ -747,6 +752,45 @@ func (h *Hub) SendToUserInRoom(username, roomID string, data []byte) bool {
 		}
 	}
 	return false
+}
+
+// SendToClient delivers a marshaled message to a single client's outgoing
+// channel. Used for the private TokenBot 1:1 thread so replies never leak to
+// the room. The client's send channel is only closed after it is removed from
+// h.clients, so membership is checked under the same RLock that guards the
+// send — this prevents a "send on closed channel" panic when a client
+// disconnects mid-stream.
+func (h *Hub) SendToClient(c *Client, msg Message) {
+	if c == nil {
+		return
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("marshal private message error: %v", err)
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if _, ok := h.clients[c]; !ok {
+		return
+	}
+	select {
+	case c.send <- data:
+	default:
+		h.droppedMessages.Add(1)
+	}
+}
+
+// SendStreamChunkToClient streams a bot response chunk to a single client
+// (private channel, never broadcast).
+func (h *Hub) SendStreamChunkToClient(c *Client, username, content string, done, private bool) {
+	h.SendToClient(c, Message{
+		Type:     "stream",
+		Username: username,
+		Content:  content,
+		Done:     done,
+		Private:  private,
+	})
 }
 
 // SendToGroup sends a marshaled message to all group members who are online.

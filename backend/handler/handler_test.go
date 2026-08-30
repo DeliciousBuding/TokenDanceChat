@@ -53,6 +53,10 @@ func (m *mockStore) GetMessages(limit int, before int64) []hub.StoredMessage {
 	return m.messages
 }
 
+func (m *mockStore) GetMessagesBetween(userA, userB string, limit int) []hub.StoredMessage {
+	return m.messages
+}
+
 func (m *mockStore) GetRoomMessages(roomID string, limit int, before int64) []hub.StoredMessage {
 	return m.messages
 }
