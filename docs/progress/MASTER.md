@@ -1,7 +1,7 @@
 # MASTER.md — TokenDanceChat UIUX/清理/单 agent 改造
 
-最后更新：2026-08-30
-状态：已收官并部署生产（镜像 sha 60c61c2，commit 1699110）
+最后更新：2026-08-31
+状态：Wave2 收官（公共聊天室 / 私聊 TokenBot 分离），待部署（commit 29c0e6a）
 
 ## 目标（领导原话收口）
 
@@ -65,7 +65,21 @@ git diff --check
 - 生产：模型 deepseek-v4-flash-vision-exp 生效，`/api/config` 契约正确，容器 healthy。
 - 迟到分析报告的增量修复：`.env.local.example` gitignore 白名单 + OIDC issuer 刷新、CHAT-SR-014 死行号引用清除（commit 1699110）。
 
-## 后续 backlog（分析 lane 产出，本轮未做）
+## Wave2 收官记录（2026-08-31）
+
+- **公共聊天室 /** 私聊 TokenBot **分离**：后端 `to==BotName` 走私聊通道（不广播、只回发起者）；前端选助手进入独立 1:1 视图，独立消息列表 `privateBotMessages`，composer 用 `to` 而非 @mention。
+- **屎山**：后端 legacy IM（friend/group/dm/call/folder/webhook/schedule/HubCommand/AdminStats）切除 ~10k 行；bot 只响应 @TokenBot mention（删关键词/50% 抢答）。
+- **健壮性**：私聊流式单发在客户端断连时不再 panic（SendToClient RLock 成员校验）；bot goroutine 加 recover。
+- **UIUX**：composer IME/转义/草稿暂存/粘贴提示、占位符单行、头像列 32px 对齐、气泡全宽对齐、删并行右键菜单、侧边栏「公共聊天 / 私人助手」分栏。
+- 全验收绿：backend go test、frontend vitest 627、tsc、build、e2e、visual-acceptance 10 场景（零 issues）。
+
+## 已完成的 backlog（Wave2 清掉）
+
+- ❌ P1 遗留 IM 协议切除（Batch B）→ 已完成（~10k 行，含 AdminStats 路由删除）
+- ❌ P2 双 contextMenu 去重 → 已完成
+- ❌ P1 AdminStats 无鉴权 → 已删除路由
+
+## 后续 backlog（剩余未做）
 
 | 优先 | 项 | 说明 |
 |---|---|---|
