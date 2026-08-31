@@ -1,7 +1,7 @@
 # MASTER.md — TokenDanceChat UIUX/清理/单 agent 改造
 
 最后更新：2026-08-31
-状态：Wave2 已部署生产（2026-08-31，镜像 sha 39f5409）；部署主机迁移由运维流推进，本仓不涉（主机名细节在 ops SSOT）。本地含设计打磨 pass 3 + 私聊记忆隔离，已随本次推送合入
+状态：Wave2 + 设计 pass 3 + 私聊记忆隔离均已合入并部署生产（2026-08-31，镜像 sha f2514ba）；部署主机已迁移（运行平台 aarch64，compose 需 platform linux/amd64）
 
 ## 目标（领导原话收口）
 
