@@ -197,10 +197,9 @@ export function useWebSocket() {
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
-    // Request notification permission on first interaction.
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      Notification.requestPermission().catch(() => {});
-    }
+    // Notification permission is requested only from an explicit user action
+    // (Settings → 桌面通知), never on connect — Chrome silently rejects
+    // gesture-less requests and a surprise prompt on load is hostile UX.
 
     const unsubs: (() => void)[] = [];
 

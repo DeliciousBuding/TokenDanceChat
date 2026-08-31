@@ -1,4 +1,5 @@
-import { X, VolumeX, Bell, BellOff, Clock, Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
+import { X, VolumeX, Bell, BellOff, BellRing, Clock, Eye, EyeOff } from "lucide-react";
 import { useChatStore } from "@/stores/chatStore";
 import { useTranslation } from "@/i18n/context";
 import { chatAPI } from "@/lib/api";
@@ -22,6 +23,16 @@ function formatMuteExpiry(mutedUntil: number): string {
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const { t } = useTranslation();
   const { notificationPrefs, mutedConversations } = useChatStore();
+
+  // Desktop notification permission is only ever requested from this explicit
+  // user action (a real gesture), satisfying browser autoplay/permission rules.
+  const [notifPermission, setNotifPermission] = useState<string>(
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+  );
+  const requestNotifications = () => {
+    if (typeof Notification === "undefined") return;
+    Notification.requestPermission().then((p) => setNotifPermission(p));
+  };
 
   const conversationKeys = new Set<string>();
   conversationKeys.add("public");
@@ -95,6 +106,29 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-4 py-3" data-visual="settings-content">
+          {/* Desktop notifications master control (explicit user gesture) */}
+          {notifPermission !== "unsupported" && (
+            <div className="td-chat-list-row mb-4 flex items-center gap-3 px-3 py-2.5">
+              <BellRing className="h-4 w-4 text-muted-foreground/60 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-foreground">{t("settings.desktopNotifications")}</p>
+                {notifPermission === "denied" && (
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">{t("settings.notificationsDenied")}</p>
+                )}
+              </div>
+              {notifPermission === "granted" ? (
+                <span className="text-[11px] text-[var(--success)]">{t("settings.notificationsGranted")}</span>
+              ) : (
+                <button
+                  onClick={requestNotifications}
+                  className="min-h-9 rounded-[var(--radius-control)] bg-[var(--accent)]/10 px-3 text-[11px] font-medium text-[var(--accent)] hover:bg-[var(--accent)]/18 transition-colors"
+                >
+                  {t("settings.notificationsEnable")}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Muted conversations list */}
           <h3 className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-2 px-1">
             {t("settings.mutedConversations")}

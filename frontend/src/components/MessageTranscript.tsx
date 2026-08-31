@@ -602,8 +602,8 @@ export function MessageTranscript({
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
               </div>
-              <h3 className="text-sm font-semibold text-foreground/80 mb-1.5">{t("transcript.emptyTitle")}</h3>
-              <p className="text-xs text-muted-foreground/50 text-center max-w-xs leading-relaxed">{t("transcript.emptyDescription")}</p>
+              <h3 className="text-sm font-semibold text-foreground/80 mb-1.5">{t(conversationKey.startsWith("dm-") ? "transcript.emptyDmTitle" : "transcript.emptyTitle")}</h3>
+              <p className="text-xs text-muted-foreground/50 text-center max-w-xs leading-relaxed">{t(conversationKey.startsWith("dm-") ? "transcript.emptyDmDescription" : "transcript.emptyDescription")}</p>
             </div>
         )
       ) : (

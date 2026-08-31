@@ -79,6 +79,8 @@ export interface TranslationDict {
     loading: string;
     emptyTitle: string;
     emptyDescription: string;
+    emptyDmTitle: string;
+    emptyDmDescription: string;
     newMessages: string;
     loadingOlder: string;
     loadErrorRetry: string;
@@ -201,6 +203,10 @@ export interface TranslationDict {
     unmute: string;
     mutedConversations: string;
     noMutedConversations: string;
+    desktopNotifications: string;
+    notificationsEnable: string;
+    notificationsGranted: string;
+    notificationsDenied: string;
     previewOn: string;
     previewOff: string;
     profile: string;
@@ -366,6 +372,8 @@ const zhCN: TranslationDict = {
     loading: "加载消息中...",
     emptyTitle: "暂无消息",
     emptyDescription: "成为第一个发送消息的人吧！",
+    emptyDmTitle: "开始私聊",
+    emptyDmDescription: "这是你和 TokenBot 的私人对话，消息不会出现在公共聊天室。",
     newMessages: "{{count}} 条新消息",
     loadingOlder: "加载更早的消息...",
     loadErrorRetry: "加载失败，点击重试",
@@ -488,6 +496,10 @@ const zhCN: TranslationDict = {
     unmute: "取消静音",
     mutedConversations: "已静音会话",
     noMutedConversations: "暂无静音会话",
+    desktopNotifications: "桌面通知",
+    notificationsEnable: "开启通知",
+    notificationsGranted: "通知已开启",
+    notificationsDenied: "被浏览器阻止，请在站点设置中允许通知",
     previewOn: "预览已开启",
     previewOff: "预览已关闭",
     profile: "个人资料",
@@ -656,6 +668,8 @@ const enUS: TranslationDict = {
     loading: "Loading messages...",
     emptyTitle: "No messages yet",
     emptyDescription: "Be the first to send a message!",
+    emptyDmTitle: "Start your private chat",
+    emptyDmDescription: "This is your private conversation with TokenBot. Messages never appear in the public room.",
     newMessages: "{{count}} new messages",
     loadingOlder: "Loading older messages...",
     loadErrorRetry: "Failed to load — tap to retry",
@@ -778,6 +792,10 @@ const enUS: TranslationDict = {
     unmute: "Unmute",
     mutedConversations: "Muted Conversations",
     noMutedConversations: "No muted conversations",
+    desktopNotifications: "Desktop Notifications",
+    notificationsEnable: "Enable notifications",
+    notificationsGranted: "Notifications enabled",
+    notificationsDenied: "Blocked by the browser — allow notifications in site settings",
     previewOn: "Preview on",
     previewOff: "Preview off",
     profile: "Profile",
