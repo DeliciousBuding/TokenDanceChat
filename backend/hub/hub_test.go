@@ -2070,6 +2070,25 @@ func TestHandleChatMessageScopesRoomFanout(t *testing.T) {
 	}
 }
 
+// TestPrivateMemoryIsolatedPerUser verifies the private 1:1 assistant channel
+// keeps a separate conversation context per user so one user's private context
+// can never leak into another's bot replies.
+func TestPrivateMemoryIsolatedPerUser(t *testing.T) {
+	h := New(&mockStore{}, nil, "TokenBot")
+
+	alice := h.PrivateMemoryFor("alice")
+	bob := h.PrivateMemoryFor("bob")
+	if alice == nil || bob == nil {
+		t.Fatal("expected non-nil private memories")
+	}
+	if alice == bob {
+		t.Fatal("alice and bob must not share the same private memory")
+	}
+	if again := h.PrivateMemoryFor("alice"); again != alice {
+		t.Fatal("same user must get the same private memory instance")
+	}
+}
+
 // TestHandlePrivateBotMessageDoesNotBroadcast verifies that a DM to the bot
 // (To == BotName) is never broadcast to the room — it is echoed to the sender
 // privately and other clients receive nothing.

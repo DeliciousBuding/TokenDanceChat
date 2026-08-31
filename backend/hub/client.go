@@ -1045,10 +1045,10 @@ func (c *Client) handlePrivateBotMessage(msg Message, content string) {
 		Private:         true,
 	})
 
-	// Store the user message in LLM memory.
-	if mem := c.hub.Memory(); mem != nil {
-		mem.Add(llm.Message{Role: "user", Content: content, Username: c.username})
-	}
+	// Store the user message in the per-user private memory (never the shared
+	// room memory, so private context stays isolated per user).
+	mem := c.hub.PrivateMemoryFor(c.username)
+	mem.Add(llm.Message{Role: "user", Content: content, Username: c.username})
 
 	// Trigger the private bot response (per-user cooldown + CAS to avoid overlap).
 	if c.hub.LLMClient() == nil {
@@ -1080,10 +1080,9 @@ func (c *Client) handlePrivateBotMessage(msg Message, content string) {
 // handlePrivateBotResponse streams the assistant's reply to the sender only.
 // No broadcast, no room typing — the streaming card itself is the indicator.
 func (c *Client) handlePrivateBotResponse(ctx context.Context, userContent string) {
+	mem := c.hub.PrivateMemoryFor(c.username)
 	var messages []llm.Message
-	if mem := c.hub.Memory(); mem != nil {
-		messages = mem.GetMessages()
-	}
+	messages = mem.GetMessages()
 
 	client := c.hub.LLMClient()
 	systemPrompt := c.hub.BuildSystemPrompt()
@@ -1125,10 +1124,8 @@ func (c *Client) handlePrivateBotResponse(ctx context.Context, userContent strin
 		})
 	}
 
-	// Update memory with the bot response.
-	if mem := c.hub.Memory(); mem != nil {
-		mem.Add(llm.Message{Role: "assistant", Content: response, Username: c.hub.BotName()})
-	}
+	// Update the per-user private memory with the bot response.
+	mem.Add(llm.Message{Role: "assistant", Content: response, Username: c.hub.BotName()})
 }
 
 // This runs in its own goroutine and streams the response.

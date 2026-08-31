@@ -272,6 +272,13 @@ type Hub struct {
 	botName   string
 	llmCfg    *llm.Config
 
+	// privateMemory is a per-user in-memory conversation context for the
+	// private 1:1 assistant channel. It is intentionally separate from the
+	// shared room memory so one user's private context never leaks into
+	// another user's (or the public room's) bot replies. Not persisted.
+	privateMemory   map[string]*llm.Memory
+	privateMemoryMu sync.Mutex
+
 	// typingRateLimit tracks the last time a typing broadcast was sent per username.
 	typingRateLimit map[string]time.Time
 
@@ -611,6 +618,31 @@ func (h *Hub) LLMClient() *llm.Client {
 // Memory returns the LLM context memory, or nil if not configured.
 func (h *Hub) Memory() *llm.Memory {
 	return h.memory
+}
+
+// PrivateMemoryFor returns the per-user private conversation memory, creating
+// it on first use. Bounded to keep long-running servers' memory in check;
+// when the cap is hit the whole table is reset (private context is ephemeral
+// and non-critical, so a coarse eviction is acceptable).
+func (h *Hub) PrivateMemoryFor(username string) *llm.Memory {
+	h.privateMemoryMu.Lock()
+	defer h.privateMemoryMu.Unlock()
+	if h.privateMemory == nil {
+		h.privateMemory = make(map[string]*llm.Memory)
+	}
+	if mem, ok := h.privateMemory[username]; ok {
+		return mem
+	}
+	if len(h.privateMemory) >= 256 {
+		h.privateMemory = make(map[string]*llm.Memory)
+	}
+	size := 20
+	if h.llmCfg != nil && h.llmCfg.MemorySize > 0 {
+		size = h.llmCfg.MemorySize
+	}
+	mem := llm.NewMemory(size)
+	h.privateMemory[username] = mem
+	return mem
 }
 
 // SetMemoryPath sets the MEMORY.md path for the bot's memory if configured.

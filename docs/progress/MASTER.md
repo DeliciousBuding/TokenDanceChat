@@ -1,7 +1,7 @@
 # MASTER.md — TokenDanceChat UIUX/清理/单 agent 改造
 
 最后更新：2026-08-31
-状态：Wave2 收官并已部署生产（2026-08-31，镜像 sha 39f5409）；部署主机迁移（gz2→jp1）由运维流另行推进，本仓不涉
+状态：Wave2 已部署生产（2026-08-31，镜像 sha 39f5409）；部署主机迁移由运维流推进，本仓不涉（主机名细节在 ops SSOT）。本地含设计打磨 pass 3 + 私聊记忆隔离，已随本次推送合入
 
 ## 目标（领导原话收口）
 
@@ -77,8 +77,6 @@ git diff --check
 
 | 优先 | 项 | 说明 |
 |---|---|---|
-| P1 | Hub 级 bot 记忆跨房间/跨用户共享 | `handleBotResponse`/`handlePrivateBotResponse` 取 Hub 单例 memory，公共与私聊上下文可能串人；应按用户/会话作用域拆分 |
 | P2 | 消息列表虚拟化 | 500 条 × ReactMarkdown 全量渲染，大列表必卡（MessageTranscript） |
-| P2 | 通知权限改用户手势触发 | useWebSocket 挂载即 requestPermission，Chrome 会静默拒绝 |
-| P3 | 前端杂项 | class-variance-authority 未用依赖、chatStore DM/group 遗留字段、@lobehub/icons 仅 1 处 |
+| P3 | 前端杂项 | chatStore DM/group 遗留字段、@lobehub/icons 仅 1 处 |
 | P3 | 25 个 Dependabot 依赖漏洞 | 6 high，pre-existing 依赖面，待专项升级 |
