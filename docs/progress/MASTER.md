@@ -1,7 +1,7 @@
 # MASTER.md — TokenDanceChat UIUX/清理/单 agent 改造
 
 最后更新：2026-08-31
-状态：Wave2 + 设计 pass 3 + 私聊记忆隔离均已合入并部署生产（2026-08-31，镜像 sha f2514ba）；部署主机已迁移（运行平台 aarch64，compose 需 platform linux/amd64）
+状态：Wave2 + 设计 pass 3 + 私聊记忆隔离均已合入并部署生产（2026-08-31，镜像 sha d6c8f15）；部署主机已迁移（运行平台 aarch64，compose 需 platform linux/amd64）
 
 ## 目标（领导原话收口）
 
@@ -72,6 +72,13 @@ git diff --check
 - **健壮性**：私聊流式单发在客户端断连时不再 panic（SendToClient RLock 成员校验）；bot goroutine 加 recover。
 - **UIUX**：composer IME/转义/草稿暂存/粘贴提示、占位符单行、头像列 32px 对齐、气泡全宽对齐、删并行右键菜单、侧边栏「公共聊天 / 私人助手」分栏。
 - 全验收绿：backend go test、frontend vitest 627、tsc、build、e2e、visual-acceptance 10 场景（零 issues）。
+
+## Wave3 记录（2026-08-31，镜像 d6c8f15）
+
+- **健壮性**：私聊空响应（reasoning 模型 content 为空）不再静默 return → 补发 stream done，消除前端"生成中"永久卡（client.go）。
+- **健壮性**：前端 WS 断连（CLOSED）时消息改入队、重连后重发，不再"显示已发但后端未收到"（api.ts send）。
+- 修复后全量验证 + 部署 + 端到端回归全绿：私聊 TokenBot 回复完整、公共 @TokenBot mention 回复完整、guest join 顺畅。
+- 遗留备注：reasoning 模型思考阶段（content 出正文前）前端暂无"思考中"提示，属次要体验项。
 
 ## 后续 backlog（剩余未做）
 
