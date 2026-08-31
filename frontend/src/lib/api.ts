@@ -410,18 +410,18 @@ class ChatAPI {
   send(data: Record<string, unknown>): void {
     if (this.ws?.readyState === WebSocket.OPEN && (!this.pendingJoin || data.type === "join")) {
       this.ws.send(JSON.stringify(data));
-    } else if (
-      this.ws &&
-      (this.ws.readyState === WebSocket.CONNECTING ||
-        this.ws.readyState === WebSocket.OPEN) &&
-      data.type !== "join"
-    ) {
+      return;
+    }
+    // Queue anything that isn't a join while the socket is connecting, open-but-
+    // pending, or already closed — instead of dropping it. This is what stopped a
+    // message showing as "sent" in the UI while the server never received it (a
+    // guest typing during a brief reconnect). The queue flushes on the next onopen
+    // (flushOutboundQueue) and is capped to bound staleness.
+    if (data.type !== "join") {
       this.outboundQueue.push(data);
       if (this.outboundQueue.length > 100) {
         this.outboundQueue.shift();
       }
-    } else {
-      console.warn("WebSocket not connected, cannot send", { type: (data as { type?: string }).type });
     }
   }
 

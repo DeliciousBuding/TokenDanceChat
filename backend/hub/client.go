@@ -1103,6 +1103,12 @@ func (c *Client) handlePrivateBotResponse(ctx context.Context, userContent strin
 
 	response := sanitizeBotContent(fullResponse.String())
 	if response == "" {
+		// The model produced no text — silently returning here left a permanent
+		// "generating…" placeholder card on the client, so the user saw the bot
+		// "hang" even though the stream had already ended. Close the stream so the
+		// placeholder is removed and the UI doesn't spin forever.
+		log.Printf("private bot returned empty response for %s: %q", c.username, userContent)
+		c.hub.SendStreamChunkToClient(c, c.hub.BotName(), "", true, true)
 		return
 	}
 
