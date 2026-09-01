@@ -1,5 +1,5 @@
 # ---- Stage 1: Build frontend ----
-FROM node:22-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -10,7 +10,8 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---- Stage 2: Build backend ----
-FROM golang:1.25-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS backend-builder
+ARG TARGETOS TARGETARCH
 
 WORKDIR /app/backend
 
@@ -18,7 +19,7 @@ COPY backend/go.mod backend/go.sum* ./
 RUN go mod download
 
 COPY backend/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/server .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /app/server .
 
 # ---- Stage 3: Runtime ----
 FROM alpine:3.21
