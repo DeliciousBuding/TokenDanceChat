@@ -93,9 +93,9 @@ cd backend && go run .
 cd frontend && npm install && npm run dev
 # → http://localhost:5173
 
-# 3. 单二进制构建 Single-binary build
+# 3. 单二进制构建 Single-binary build（生产 jp1 = arm64；x86 主机改 GOARCH=amd64）
 cd backend
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancechat .
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o tokendancechat .
 ```
 
 ---

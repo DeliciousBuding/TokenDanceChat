@@ -1,7 +1,9 @@
 # MASTER.md — TokenDanceChat UIUX/清理/单 agent 改造
 
 最后更新：2026-08-31
-状态：Wave2 + 设计 pass 3 + 私聊记忆隔离均已合入并部署生产（2026-08-31，镜像 sha d6c8f15）；部署主机已迁移（运行平台 aarch64，compose 需 platform linux/amd64）
+状态：Wave2 + 设计 pass 3 + 私聊记忆隔离均已合入；生产 = jp1 `td-chat`，live 镜像 `3bd2ad9`（GHCR multi-arch）。
+
+部署铁律：jp1 = **aarch64 且无 qemu/binfmt**，compose 必须 `platform: linux/arm64`（或省略该字段让 docker 按主机架构选）。写 `linux/amd64` 会 `exec format error` 崩溃循环——2026-09-01 因此公网 502 达 29h，2026-09-02 修复并复验。
 
 ## 目标（领导原话收口）
 

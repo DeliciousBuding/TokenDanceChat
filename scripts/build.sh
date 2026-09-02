@@ -26,10 +26,15 @@ npm run build
 echo "Frontend build complete."
 
 # ------------------------------------------------
-# Step 2: Build backend (cross-compile for Linux amd64)
+# Step 2: Build backend (cross-compile for Linux)
 # ------------------------------------------------
+# Production host jp1 is aarch64 and has NO qemu/binfmt registered, so an amd64
+# binary cannot exec there at all. Default to arm64; override when targeting an
+# x86 host:  GOARCH=amd64 bash scripts/build.sh
+TARGET_GOARCH="${GOARCH:-arm64}"
+
 echo ""
-echo "[2/2] Building backend (linux/amd64)..."
+echo "[2/2] Building backend (linux/${TARGET_GOARCH})..."
 cd "$PROJECT_DIR/backend"
 
 if [ ! -f "go.mod" ]; then
@@ -37,7 +42,7 @@ if [ ! -f "go.mod" ]; then
     exit 1
 fi
 
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BINARY_NAME" .
+GOOS=linux GOARCH="${TARGET_GOARCH}" CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BINARY_NAME" .
 
 echo "Backend build complete."
 

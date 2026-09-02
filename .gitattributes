@@ -1,0 +1,7 @@
+# Deploy-critical files must keep LF: they are executed by bash / make / docker on
+# Linux hosts, where a CRLF working copy fails with `$'\r': command not found`.
+# (core.autocrlf=true is set globally on the operator workstation.)
+*.sh         text eol=lf
+Makefile     text eol=lf
+Dockerfile   text eol=lf
+Dockerfile.* text eol=lf
