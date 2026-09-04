@@ -70,6 +70,16 @@ cd frontend && npx tsc --noEmit && npm test && npm run build
 
 提交前再跑 `git diff --check`。每次有意义的前端打磨须用真实浏览器截图验收（视觉验收流程见 `docs/visual-acceptance.md`）。
 
+## 已知坑（改前必读）
+
+- **arm64 宿主禁止 `platform: linux/amd64`**：qemu/binfmt 模拟层已退役，写死 amd64 必然 `exec format error`（曾导致容器崩溃循环 + 公网 502）。构建或拉取 arm64 产物，部署前断言架构（`file` 对比 `uname -m`）。
+- **Service Worker 缓存**：返回用户会跑旧包——「UI 没生效」先查 `CACHE_NAME` 是否 bump；导航请求必须 network-first。
+- **`git commit -m` 含反引号**会触发 shell 命令替换、截断提交信息；提交信息用单引号或写进文件（`-F`）。
+- **`go run .` 后台易失 + 旧进程占端口**：用 `netstat -ano` 找真占用者再 `taskkill`，不要盲目换端口。
+- **Go 单发 channel 给已断开客户端会 panic**（send on closed channel）——发送前在锁内校验成员集。
+- **Playwright `isVisible()` 对 `translate-x` 离屏元素误报 true**：断言用 `boundingBox()`。
+- 部署宿主上普通用户可能无 `docker.sock` 权限 → `sudo -n docker ...`；本机缺 `sqlite3` 客户端时，用挂载 db 文件的 alpine 容器跑查询。
+
 ## 安全约定
 
 - secret 不进仓：`.env*`、`.env.local` 均被 `.gitignore` 忽略，示例值只在 `.env.example`。
